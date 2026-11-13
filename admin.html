@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>관리자 페이지 - 출발! 탐험대! (광릉내교회 어린이부)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@500;700;900&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Noto Sans KR', sans-serif; background: #0f172a; color: #f8fafc; }
+    .font-jua { font-family: 'Jua', sans-serif; }
+    .mc-card { background: #1e293b; border: 2px solid #475569; box-shadow: 0 8px 20px rgba(0,0,0,0.4); }
+    .mc-btn { border: 2px solid #0f172a; box-shadow: inset 0 -3px 0 rgba(0,0,0,0.35), inset 0 2px 0 rgba(255,255,255,0.25); transition: transform 0.08s; }
+    .mc-btn:active { transform: translateY(2px); }
+  </style>
+</head>
+<body class="min-h-screen p-4 sm:p-6">
+
+  <!-- 1. 비밀번호 잠금 화면 -->
+  <div id="login-screen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 p-4">
+    <div class="mc-card max-w-sm w-full rounded-2xl p-6 text-center border-4 border-amber-500">
+      <div class="text-5xl mb-3">🔐</div>
+      <h1 class="font-jua text-2xl text-amber-300 mb-1">어린이부 관리자 페이지</h1>
+      <p class="text-xs text-slate-300 mb-4">선생님 전용 비밀번호를 입력하세요</p>
+      <input id="admin-pw-input" type="password" placeholder="비밀번호 입력"
+        class="w-full px-4 py-3 rounded-xl bg-slate-900 border-2 border-slate-600 text-center font-jua text-xl text-white focus:outline-none focus:border-amber-400 mb-3"
+        onkeydown="if(event.key==='Enter') checkAdminPassword()" />
+      <p id="login-err" class="text-xs font-bold text-rose-400 mb-3 hidden">❌ 비밀번호가 일치하지 않습니다.</p>
+      <button onclick="checkAdminPassword()" class="mc-btn w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-jua text-lg">
+        입장하기 ▶
+      </button>
+      <a href="index.html" class="block mt-4 text-xs text-slate-400 hover:text-white underline">◀ 게임 메인 화면으로 돌아가기</a>
+    </div>
+  </div>
+
+  <!-- 2. 관리자 메인 대시보드 -->
+  <div id="admin-main" class="max-w-6xl mx-auto hidden space-y-6">
+    <!-- 상단 헤더 -->
+    <div class="mc-card rounded-2xl p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <span class="text-3xl">🛠️</span>
+        <div>
+          <h1 class="font-jua text-xl sm:text-2xl text-amber-300">출발! 탐험대! 관리자 시스템</h1>
+          <p class="text-xs text-slate-400">광릉내교회 어린이부 · 스테이지 즉시 이동 및 플레이어 기록 조회</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <a href="index.html" class="mc-btn px-3.5 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-xs font-bold">🎮 게임 홈으로</a>
+        <button onclick="logoutAdmin()" class="mc-btn px-3.5 py-2 rounded-xl bg-rose-700 hover:bg-rose-600 text-xs font-bold">🔒 잠금</button>
+      </div>
+    </div>
+
+    <!-- 섹션 A: 각 레벨·스테이지 바로가기 런처 -->
+    <section class="mc-card rounded-2xl p-4 sm:p-5">
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-4 border-b border-slate-700 pb-3">
+        <div>
+          <h2 class="font-jua text-lg sm:text-xl text-cyan-300">🚀 레벨 & 스테이지 바로가기 (테스트 런처)</h2>
+          <p class="text-xs text-slate-400">원하는 에피소드, 반(레벨), 스테이지를 클릭하면 오프닝 없이 즉시 해당 구간으로 진입합니다.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <label class="text-xs font-bold text-slate-300">테스트 이름:</label>
+          <input id="test-player-name" type="text" value="관리자" maxlength="10"
+            class="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-600 text-xs font-bold text-amber-300 w-28 text-center" />
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4" id="launcher-grid"></div>
+    </section>
+
+    <!-- 섹션 B: 접속자 및 플레이 기록 조회 -->
+    <section class="mc-card rounded-2xl p-4 sm:p-5 space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-700 pb-3">
+        <div>
+          <h2 class="font-jua text-lg sm:text-xl text-emerald-300">📊 플레이어 접속 & 클리어 기록 조회</h2>
+          <p class="text-xs text-slate-400">구글 스프레드시트에 실시간 저장된 어린이부 참여 내역입니다.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="fetchSheetRecords()" class="mc-btn px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-bold">🔄 기록 새로고침</button>
+          <button onclick="downloadCsv()" class="mc-btn px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold">📥 엑셀(CSV) 저장</button>
+        </div>
+      </div>
+
+      <!-- 요약 통계 카드 -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="bg-slate-900/90 border border-slate-700 rounded-xl p-3 text-center">
+          <div class="text-xs text-slate-400">총 기록(이벤트) 수</div>
+          <div id="stat-total-logs" class="font-jua text-2xl text-white mt-1">0건</div>
+        </div>
+        <div class="bg-slate-900/90 border border-slate-700 rounded-xl p-3 text-center">
+          <div class="text-xs text-slate-400">참여 어린이 수(고유 이름)</div>
+          <div id="stat-unique-users" class="font-jua text-2xl text-cyan-300 mt-1">0명</div>
+        </div>
+        <div class="bg-slate-900/90 border border-slate-700 rounded-xl p-3 text-center">
+          <div class="text-xs text-slate-400">완주(인증서 발급) 성공</div>
+          <div id="stat-clear-count" class="font-jua text-2xl text-emerald-400 mt-1">0회</div>
+        </div>
+        <div class="bg-slate-900/90 border border-slate-700 rounded-xl p-3 text-center">
+          <div class="text-xs text-slate-400">최대 플레이 횟수</div>
+          <div id="stat-max-plays" class="font-jua text-2xl text-amber-300 mt-1">0회</div>
+        </div>
+      </div>
+
+      <!-- 검색 및 필터 -->
+      <div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
+        <input id="filter-name" type="text" placeholder="🔍 어린이 이름 검색..." oninput="renderRecordsTable()"
+          class="px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white" />
+        <select id="filter-ep" onchange="renderRecordsTable()" class="px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white">
+          <option value="all">모든 에피소드</option>
+          <option value="noah">⛵ 에피소드 1 (노아의 방주)</option>
+          <option value="exodus">🌊 에피소드 2 (출애굽·시내산)</option>
+        </select>
+        <select id="filter-mode" onchange="renderRecordsTable()" class="px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white">
+          <option value="all">모든 반(레벨)</option>
+          <option value="kinder">🐣 유치반</option>
+          <option value="junior">🌱 유년반</option>
+          <option value="senior">🍎 소년반</option>
+          <option value="timeattack">⚡ 타임어택</option>
+        </select>
+        <select id="filter-status" onchange="renderRecordsTable()" class="px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white">
+          <option value="all">모든 상태</option>
+          <option value="완주">🏆 완주성공만</option>
+          <option value="클리어">🎉 스테이지 클리어</option>
+          <option value="재도전">🔄 재도전</option>
+          <option value="시작">▶ 게임시작</option>
+        </select>
+      </div>
+
+      <!-- 기록 테이블 -->
+      <div class="overflow-x-auto rounded-xl border border-slate-700 bg-slate-900/70 max-h-96">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-800 text-slate-300 sticky top-0">
+            <tr>
+              <th class="p-3">일시</th>
+              <th class="p-3">이름</th>
+              <th class="p-3">반(레벨)</th>
+              <th class="p-3">에피소드</th>
+              <th class="p-3">스테이지</th>
+              <th class="p-3">상태/결과</th>
+              <th class="p-3">누적 플레이</th>
+              <th class="p-3">인증코드</th>
+            </tr>
+          </thead>
+          <tbody id="records-tbody" class="divide-y divide-slate-800">
+            <tr><td colspan="8" class="p-6 text-center text-slate-400">기록을 불러오는 중입니다...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    // =========================================================================
+    // [관리자 설정] 비밀번호와 구글 스프레드시트 웹앱 URL을 설정하세요
+    // =========================================================================
+    const ADMIN_PASSWORD = '1234'; // 원하는 관리자 비밀번호로 수정하세요
+    const GOOGLE_SHEET_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbzDNecO6FM2ZXkdGwhp_XSR3wJ3fX17a029betjsm8sMOWgqeHWsB2rRMtROmB1NUQ-/exec';
+
+    let allRecords = [];
+
+    const EPISODES = [
+      { key: 'noah', title: '⛵ 에피소드 1 : 노아의 방주', color: 'border-amber-500/60', btnBg: 'bg-amber-500 hover:bg-amber-400 text-slate-950' },
+      { key: 'exodus', title: '🌊 에피소드 2 : 출애굽과 시내산 언약', color: 'border-cyan-500/60', btnBg: 'bg-cyan-400 hover:bg-cyan-300 text-slate-950' }
+    ];
+    const MODES = [
+      { key: 'kinder', label: '🐣 유치반' },
+      { key: 'junior', label: '🌱 유년반' },
+      { key: 'senior', label: '🍎 소년반' },
+      { key: 'timeattack', label: '⚡ 타임어택' }
+    ];
+
+    function checkAdminPassword() {
+      const val = document.getElementById('admin-pw-input').value;
+      if (val === ADMIN_PASSWORD) {
+        sessionStorage.setItem('bible_admin_auth', '1');
+        unlockAdminPage();
+      } else {
+        document.getElementById('login-err').classList.remove('hidden');
+      }
+    }
+
+    function logoutAdmin() {
+      sessionStorage.removeItem('bible_admin_auth');
+      location.reload();
+    }
+
+    function unlockAdminPage() {
+      document.getElementById('login-screen').classList.add('hidden');
+      document.getElementById('admin-main').classList.remove('hidden');
+      renderStageLauncher();
+      fetchSheetRecords();
+    }
+
+    function renderStageLauncher() {
+      const grid = document.getElementById('launcher-grid');
+      grid.innerHTML = EPISODES.map(ep => `
+        <div class="bg-slate-900/90 border-2 ${ep.color} rounded-xl p-4 space-y-3">
+          <h3 class="font-jua text-base text-white">${ep.title}</h3>
+          <div class="space-y-2">
+            ${MODES.map(m => `
+              <div class="flex flex-wrap items-center justify-between gap-2 bg-slate-800/80 p-2 rounded-lg">
+                <span class="font-jua text-xs text-amber-200 w-24">${m.label}</span>
+                <div class="flex flex-wrap gap-1.5 flex-1 justify-end">
+                  ${[1, 2, 3, 4].map(st => `
+                    <button onclick="jumpToStage('${ep.key}', '${m.key}', ${st})"
+                      class="mc-btn px-2.5 py-1 rounded-lg ${st === 4 ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950' : ep.btnBg} font-jua text-xs">
+                      ${st === 4 ? '🏆엔딩' : '스테이지 ' + st}
+                    </button>
+                  `).join('')}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function jumpToStage(ep, mode, stage) {
+      const name = document.getElementById('test-player-name').value.trim() || '관리자';
+      const params = new URLSearchParams({ ep, mode, stage, name });
+      window.location.href = `index.html?${params.toString()}`;
+    }
+
+    async function fetchSheetRecords() {
+      const tbody = document.getElementById('records-tbody');
+      if (!GOOGLE_SHEET_WEBAPP_URL || GOOGLE_SHEET_WEBAPP_URL.includes('여기에_')) {
+        tbody.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-amber-300 font-bold">
+          ⚠️ admin.html과 core.js의 GOOGLE_SHEET_WEBAPP_URL 변수에 구글 스프레드시트 웹앱 URL을 입력해 주세요.
+        </td></tr>`;
+        return;
+      }
+      tbody.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-slate-400">데이터를 불러오는 중...</td></tr>`;
+      try {
+        const res = await fetch(GOOGLE_SHEET_WEBAPP_URL);
+        const data = await res.json();
+        allRecords = data.list || [];
+        updateSummaryStats();
+        renderRecordsTable();
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-rose-400">데이터 로드 실패: 웹앱 URL과 배포 권한(모든 사용자)을 확인해 주세요.</td></tr>`;
+      }
+    }
+
+    function updateSummaryStats() {
+      document.getElementById('stat-total-logs').textContent = `${allRecords.length}건`;
+      const uniqueNames = new Set(allRecords.map(r => r.name).filter(Boolean));
+      document.getElementById('stat-unique-users').textContent = `${uniqueNames.size}명`;
+      const clears = allRecords.filter(r => String(r.status).includes('완주')).length;
+      document.getElementById('stat-clear-count').textContent = `${clears}회`;
+      const maxPlay = allRecords.reduce((max, r) => Math.max(max, parseInt(r.playCount || 1, 10)), 0);
+      document.getElementById('stat-max-plays').textContent = `${maxPlay}회`;
+    }
+
+    function renderRecordsTable() {
+      const tbody = document.getElementById('records-tbody');
+      const nameQ = document.getElementById('filter-name').value.trim().toLowerCase();
+      const epQ = document.getElementById('filter-ep').value;
+      const modeQ = document.getElementById('filter-mode').value;
+      const statusQ = document.getElementById('filter-status').value;
+
+      const modeMap = { kinder: '🐣유치반', junior: '🌱유년반', senior: '🍎소년반', timeattack: '⚡타임어택' };
+      const epMap = { noah: '⛵노아의방주', exodus: '🌊출애굽·시내산' };
+
+      const filtered = allRecords.filter(r => {
+        if (nameQ && !String(r.name).toLowerCase().includes(nameQ)) return false;
+        if (epQ !== 'all' && r.episode !== epQ) return false;
+        if (modeQ !== 'all' && r.mode !== modeQ) return false;
+        if (statusQ !== 'all' && !String(r.status).includes(statusQ)) return false;
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-slate-400">조건에 맞는 기록이 없습니다.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(r => `
+        <tr class="hover:bg-slate-800/60">
+          <td class="p-3 text-slate-400 whitespace-nowrap">${r.time || '-'}</td>
+          <td class="p-3 font-bold text-white">${r.name || '-'}</td>
+          <td class="p-3 text-amber-200">${modeMap[r.mode] || r.mode}</td>
+          <td class="p-3 text-cyan-200">${epMap[r.episode] || r.episode}</td>
+          <td class="p-3 font-bold">${r.stage === 4 ? '엔딩' : '스테이지 ' + r.stage}</td>
+          <td class="p-3 font-bold ${String(r.status).includes('완주') ? 'text-emerald-400' : 'text-slate-200'}">${r.status}</td>
+          <td class="p-3 text-center font-mono text-amber-300">${r.playCount || 1}회</td>
+          <td class="p-3 font-mono font-bold text-yellow-300">${r.certCode || '-'}</td>
+        </tr>
+      `).join('');
+    }
+
+    function downloadCsv() {
+      if (allRecords.length === 0) return;
+      const header = ['일시', '이름', '반', '에피소드', '스테이지', '상태', '누적플레이횟수', '인증코드'];
+      const rows = allRecords.map(r => [r.time, r.name, r.mode, r.episode, r.stage, r.status, r.playCount, r.certCode]);
+      const csvContent = '\uFEFF' + [header, ...rows].map(e => e.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `출발탐험대_플레이기록_${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+    }
+
+    if (sessionStorage.getItem('bible_admin_auth') === '1') {
+      unlockAdminPage();
+    }
+  </script>
+</body>
+</html>
