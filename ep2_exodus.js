@@ -1135,7 +1135,7 @@ function updateStage2Speedrun(dt, now) {
   });
 }
 // =========================================================================
-// [ep2_exodus.js - 파트 2/2] 스테이지 3 시내산 등반(정상 바위 아래 칸부터 구름바다 배치, 물주머니 +5초) 및 컷신
+// [ep2_exodus.js - 파트 2/2] 스테이지 3 시내산 등반(정상 바위 아래 칸부터 구름바다 배치, 소년반 연속 3개 장애물 방지, 물주머니 +5초) 및 컷신
 // =========================================================================
 
 function spawnSinaiWaterPouchItem(x, y, z) {
@@ -1498,10 +1498,13 @@ function buildExodusStage3World() {
         if (c === prevAdjacentType) continue;
         if (isSkyHazard(c) && isSkyHazard(prevAdjacentType)) continue;
       }
-      if (c === lastUsedType && Math.random() < 0.75) continue;
+      if (c === lastUsedType) continue;
       return c;
     }
-    return 'snake';
+    for (const c of candidates) {
+      if (c !== prevAdjacentType) return c;
+    }
+    return candidates[0];
   }
 
   let lastGlobalObsType = '';
@@ -1546,17 +1549,24 @@ function buildExodusStage3World() {
         lastGlobalObsType = picked;
       });
     } else {
-      const safeSlot = 1 + Math.floor(Math.random() * 3);
-      for (let k = 1; k < orderedCols.length; k++) {
-        if (k === safeSlot) {
-          rowTypes[k] = 'normal';
-        } else {
-          const prevAdj = rowTypes[k - 1];
-          const picked = pickNextObstacleType(prevAdj, lastGlobalObsType);
-          rowTypes[k] = picked;
-          lastGlobalObsType = picked;
-        }
-      }
+      // [소년반(senior) 요청사항] 연속 3개 장애물 금지: 하나 건너 하나씩 나오거나 최대 2개까지만 연달아 나오도록 배치
+      const seniorPatterns = [
+        [1, 3],       // 하나 건너 하나씩 (징검다리)
+        [2, 4],       // 하나 건너 하나씩 (징검다리)
+        [1, 4],       // 양끝 배치
+        [1, 2, 4],    // 2개 연속 + 1칸 건너 1개
+        [1, 3, 4],    // 1개 + 1칸 건너 2개 연속
+        [1, 2],       // 2개 연속
+        [2, 3],       // 2개 연속
+        [3, 4]        // 2개 연속
+      ];
+      const chosenSlots = seniorPatterns[Math.floor(Math.random() * seniorPatterns.length)];
+      chosenSlots.forEach(slotIdx => {
+        const prevAdj = rowTypes[slotIdx - 1];
+        const picked = pickNextObstacleType(prevAdj, lastGlobalObsType);
+        rowTypes[slotIdx] = picked;
+        lastGlobalObsType = picked;
+      });
     }
 
     let waterPouchCol = -1;
@@ -1615,7 +1625,7 @@ function buildExodusStage3World() {
     });
   }
 
-  // [스테이지 3 요청사항] 정상 뒤편 구름을 정상 바위 아래 칸(belowSummitY) 높이부터 채워 십계명이 가려지지 않게 구성
+  // 정상 뒤편 구름을 정상 바위 아래 칸(belowSummitY) 높이부터 채워 십계명이 가려지지 않게 구성
   const belowSummitY = summitY - rowRise;
   const seaOfCloudsGroup = new THREE.Group();
   const cloudSeaBaseMat = new THREE.MeshLambertMaterial({ color: 0xe0f2fe });
