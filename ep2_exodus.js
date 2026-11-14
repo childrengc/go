@@ -1110,7 +1110,7 @@ function updateStage2Speedrun(dt, now) {
   });
 }
 // =========================================================================
-// [ep2_exodus.js - 파트 2/2] 스테이지 3 시내산 등반(바위 위 구름 이동, 시작 12초, 물주머니 +7.8초) 및 컷신
+// [ep2_exodus.js - 파트 2/2] 스테이지 3 시내산 등반(전 구간 물주머니 배치 & +7.5초, 구름 이동) 및 컷신
 // =========================================================================
 
 function spawnSinaiWaterPouchItem(x, y, z) {
@@ -1142,7 +1142,7 @@ function spawnSinaiWaterPouchItem(x, y, z) {
   grp.position.set(x, y, z);
   worldGroup.add(grp);
 
-  const lbl = createWorldLabel('💧 고대 물주머니 (마시면 +7.8초 연장!)');
+  const lbl = createWorldLabel('💧 고대 물주머니 (마시면 +7.5초 연장!)');
   sinaiClocks.push({ group: grp, pos: new THREE.Vector3(x, y + 0.8, z), collected: false, label: lbl });
 }
 
@@ -1227,7 +1227,6 @@ function buildExodusStage3World() {
   const isTimeAttack = (currentMode === 'timeattack');
   const isSeniorMap = (currentMode === 'senior' || isTimeAttack);
 
-  // [요청사항 2] 타임어택 시작 시 제한 시간을 기존 10초에서 +2초 더한 12.0초로 설정
   if (isTimeAttack) {
     timeRemaining = 12.0;
     const timerValEl = document.getElementById('hud-timer-val');
@@ -1535,8 +1534,9 @@ function buildExodusStage3World() {
       }
     }
 
+    // [타임어택 요청사항] 물주머니가 없던 줄까지 포함해 모든 줄(r = 0 ~ 11)의 일반 바위에 물주머니 배치
     let waterPouchCol = -1;
-    if (isTimeAttack && (r % 2 === 1 || r === 4)) {
+    if (isTimeAttack) {
       const normalCols = [];
       for (let k = 1; k < orderedCols.length; k++) {
         if (rowTypes[k] === 'normal') normalCols.push(k);
@@ -1569,7 +1569,6 @@ function buildExodusStage3World() {
   const summitMinClimbY = Number((totalRows * rowRise - 0.35).toFixed(2));
   createMountainRockBlock(0, summitZ, pathHalfLimit * 2, 10.5, summitY, 'summit', totalRows + 1, summitNodeIdx, summitMinClimbY);
 
-  // [요청사항 1] 구름이 바위 속에 묻히지 않고 각 층 바위 바로 위에서 좌우로 선명하게 움직이도록 배치
   const cloudRowStep = isKinder ? 2 : 1;
   for (let r = 0; r < totalRows; r += cloudRowStep) {
     const sz = firstStepZ - r * stepDz;
@@ -1699,7 +1698,7 @@ function updateStage3Sinai(dt, now) {
     sp.mesh.rotation.x += dt * 3;
   });
 
-  // [요청사항 2] 각 물주머니 획득 시 시간을 +0.5초 더 추가하여 총 +7.8초 연장
+  // [타임어택 요청사항] 각 물주머니 획득 시간을 0.3초 줄여 +7.5초 연장
   sinaiClocks.forEach(ck => {
     if (ck.collected) return;
     ck.group.rotation.y += dt * 2.4;
@@ -1709,9 +1708,9 @@ function updateStage3Sinai(dt, now) {
       ck.collected = true;
       ck.group.visible = false;
       ck.label.style.opacity = '0';
-      timeRemaining += 7.8;
+      timeRemaining += 7.5;
       playSfx('clock');
-      showToast('💧 시원한 물주머니 획득! 제한 시간이 +7.8초 연장되었어요!');
+      showToast('💧 시원한 물주머니 획득! 제한 시간이 +7.5초 연장되었어요!');
     }
   });
 
@@ -1802,7 +1801,6 @@ function updateStage3Sinai(dt, now) {
     }
   });
 
-  // [요청사항 1] 바위 바로 위에서 구름이 좌우로 넓게 왕복 이동
   const tSec = now * 0.001;
   sinaiCloudLayers.forEach(cl => {
     cl.group.position.x = cl.baseX + Math.sin(tSec * (cl.speed || 1.5) + cl.phase) * (cl.ampX || 6.5);
