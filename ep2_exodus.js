@@ -1110,7 +1110,7 @@ function updateStage2Speedrun(dt, now) {
   });
 }
 // =========================================================================
-// [ep2_exodus.js - 파트 2/2] 스테이지 3 시내산 등반(전 구간 물주머니 배치 & +7.5초, 구름 이동) 및 컷신
+// [ep2_exodus.js - 파트 2/2] 스테이지 3 시내산 등반(전 구간 물주머니 배치 & +7.0초, 구름 이동) 및 컷신
 // =========================================================================
 
 function spawnSinaiWaterPouchItem(x, y, z) {
@@ -1142,7 +1142,7 @@ function spawnSinaiWaterPouchItem(x, y, z) {
   grp.position.set(x, y, z);
   worldGroup.add(grp);
 
-  const lbl = createWorldLabel('💧 고대 물주머니 (마시면 +7.5초 연장!)');
+  const lbl = createWorldLabel('💧 고대 물주머니 (마시면 +7초 연장!)');
   sinaiClocks.push({ group: grp, pos: new THREE.Vector3(x, y + 0.8, z), collected: false, label: lbl });
 }
 
