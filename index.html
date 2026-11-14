@@ -2,7 +2,10 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>출발! 성경 탐험대! - 3D 복셀 어드벤처</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -145,7 +148,7 @@
     </div>
   </div>
 
-  <!-- 상단 HUD (얇고 슬림한 디자인 & 반투명 그림자) -->
+  <!-- 상단 HUD (얇고 슬림한 디자인 & 반투명 그림자 & 전체화면 토글 버튼 포함) -->
   <div id="hud-top" class="hidden fixed top-1.5 left-2 right-2 z-20 flex flex-col gap-1 pointer-events-none">
     <div class="flex items-center justify-between gap-1">
       <div class="mc-panel px-2 py-0.5 rounded-lg flex items-center gap-1 pointer-events-auto">
@@ -174,8 +177,11 @@
         <button id="hud-mode-btn" type="button" onclick="openScreen('screen-map')" class="mc-btn-slim px-2 py-0.5 rounded-lg bg-amber-500/90 hover:bg-amber-400 text-slate-950 font-jua text-[11px]">
           🗺️맵
         </button>
-        <button id="bgm-btn" type="button" onclick="toggleBgm()" class="mc-btn-slim w-6 h-6 rounded-lg bg-slate-800/85 text-white text-xs flex items-center justify-center">
+        <button id="bgm-btn" type="button" onclick="toggleBgm()" class="mc-btn-slim w-6 h-6 rounded-lg bg-slate-800/85 text-white text-xs flex items-center justify-center" title="배경음악 켜기/끄기">
           🎵
+        </button>
+        <button id="fullscreen-btn" type="button" onclick="toggleGameFullscreen()" class="mc-btn-slim w-6 h-6 rounded-lg bg-slate-800/85 text-white text-xs flex items-center justify-center" title="전체화면 전환">
+          ⛶
         </button>
       </div>
     </div>
@@ -233,7 +239,7 @@
 
       <div class="bg-amber-100/80 border-2 border-amber-400 rounded-2xl p-3.5 mb-4 text-left">
         <label for="opening-name-input" class="block font-jua text-amber-900 text-sm mb-1.5">🎖️ 탐험 대원 이름을 입력해 주세요</label>
-        <input id="opening-name-input" type="text" maxlength="10" placeholder="예: 김다윗"
+        <input id="opening-name-input" type="text" maxlength="10" placeholder="예: 김광릉내"
                onkeydown="if(event.key==='Enter'){event.preventDefault(); safeGoToClassSelect();}"
                style="user-select: text; -webkit-user-select: text; touch-action: auto;"
                class="w-full px-3.5 py-2.5 rounded-xl border-2 border-amber-500 bg-white font-bold text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
@@ -265,19 +271,19 @@
       <p class="text-xs text-slate-600 mb-3">나에게 맞는 난이도를 선택해 주세요!</p>
 
       <div class="grid grid-cols-2 gap-2.5 mb-3 text-left">
-        <button type="button" onclick="selectClassAndShowMap('kinder')" class="mc-btn p-3 rounded-2xl bg-yellow-100 hover:bg-yellow-200 border-amber-400">
+        <button type="button" onclick="requestGameFullscreen(); selectClassAndShowMap('kinder');" class="mc-btn p-3 rounded-2xl bg-yellow-100 hover:bg-yellow-200 border-amber-400">
           <div class="font-jua text-base text-amber-900">🐣 유치반</div>
           <p class="text-[11px] text-slate-600 mt-0.5">미취학 · 쉬운 길 안내 & 퀴즈 면제</p>
         </button>
-        <button type="button" onclick="selectClassAndShowMap('junior')" class="mc-btn p-3 rounded-2xl bg-emerald-100 hover:bg-emerald-200 border-emerald-500">
+        <button type="button" onclick="requestGameFullscreen(); selectClassAndShowMap('junior');" class="mc-btn p-3 rounded-2xl bg-emerald-100 hover:bg-emerald-200 border-emerald-500">
           <div class="font-jua text-base text-emerald-950">🌱 유년반</div>
           <p class="text-[11px] text-slate-600 mt-0.5">초등 1~3학년 · 표준 모험 & 말씀 퀴즈</p>
         </button>
-        <button type="button" onclick="selectClassAndShowMap('senior')" class="mc-btn p-3 rounded-2xl bg-sky-100 hover:bg-sky-200 border-sky-500">
+        <button type="button" onclick="requestGameFullscreen(); selectClassAndShowMap('senior');" class="mc-btn p-3 rounded-2xl bg-sky-100 hover:bg-sky-200 border-sky-500">
           <div class="font-jua text-base text-sky-950">🍎 소년반</div>
           <p class="text-[11px] text-slate-600 mt-0.5">초등 4~6학년 · 화살표 숨김 & 심화 코스</p>
         </button>
-        <button type="button" onclick="selectClassAndShowMap('timeattack')" class="mc-btn p-3 rounded-2xl bg-rose-100 hover:bg-rose-200 border-rose-500">
+        <button type="button" onclick="requestGameFullscreen(); selectClassAndShowMap('timeattack');" class="mc-btn p-3 rounded-2xl bg-rose-100 hover:bg-rose-200 border-rose-500">
           <div class="font-jua text-base text-rose-950">⚡ 타임어택</div>
           <p class="text-[11px] text-slate-600 mt-0.5">스피드 도전 · 시간 연장 아이템 모드</p>
         </button>
@@ -315,6 +321,9 @@
           <button type="button" onclick="openScreen('screen-class')" class="mc-btn px-2.5 py-0.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-jua text-[10px] sm:text-xs">
             ◀ 반 변경
           </button>
+          <button type="button" onclick="toggleGameFullscreen()" class="mc-btn px-2 py-0.5 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-950 font-jua text-[10px] sm:text-xs" title="전체화면 전환">
+            ⛶
+          </button>
         </div>
       </div>
 
@@ -323,7 +332,7 @@
         <canvas id="pixel-world-map" width="360" height="210" class="pixel-canvas w-full h-full block"></canvas>
 
         <!-- 지도 위 에피소드 1 선택 핀 (좌상단: 아라랏산 & 방주 - 21%, 22%) -->
-        <button type="button" onclick="launchEpisode('noah')" style="left: 21%; top: 22%;" class="map-pin-node map-pin-card rounded-xl bg-amber-50/95 hover:bg-white px-2 py-1 text-left">
+        <button type="button" onclick="requestGameFullscreen(); launchEpisode('noah');" style="left: 21%; top: 22%;" class="map-pin-node map-pin-card rounded-xl bg-amber-50/95 hover:bg-white px-2 py-1 text-left">
           <div class="flex items-center gap-1.5">
             <span class="text-base sm:text-lg leading-none">🛶</span>
             <div>
@@ -334,7 +343,7 @@
         </button>
 
         <!-- 지도 위 에피소드 2 선택 핀 (좌하단: 피라미드·홍해·시내산 - 26%, 78%) -->
-        <button type="button" onclick="launchEpisode('exodus')" style="left: 26%; top: 78%;" class="map-pin-node map-pin-card rounded-xl bg-sky-50/95 hover:bg-white px-2 py-1 text-left">
+        <button type="button" onclick="requestGameFullscreen(); launchEpisode('exodus');" style="left: 26%; top: 78%;" class="map-pin-node map-pin-card rounded-xl bg-sky-50/95 hover:bg-white px-2 py-1 text-left">
           <div class="flex items-center gap-1.5">
             <span class="text-base sm:text-lg leading-none">🌊</span>
             <div>
@@ -345,7 +354,7 @@
         </button>
 
         <!-- 지도 위 에피소드 3 선택 핀 (우하단: 베들레헴 성전·엘라 골짜기 - 67%, 75%) -->
-        <button type="button" onclick="launchEpisode('david')" style="left: 67%; top: 75%;" class="map-pin-node map-pin-card rounded-xl bg-slate-100/95 px-2 py-1 text-left opacity-92">
+        <button type="button" onclick="requestGameFullscreen(); launchEpisode('david');" style="left: 67%; top: 75%;" class="map-pin-node map-pin-card rounded-xl bg-slate-100/95 px-2 py-1 text-left opacity-92">
           <div class="flex items-center gap-1.5">
             <span class="text-base sm:text-lg leading-none">🪨</span>
             <div>
@@ -356,7 +365,7 @@
         </button>
 
         <!-- 지도 위 에피소드 4 선택 핀 (우상단: 갈릴리 호수·푸른 숲 - 77%, 24%) -->
-        <button type="button" onclick="launchEpisode('miracle')" style="left: 77%; top: 24%;" class="map-pin-node map-pin-card rounded-xl bg-slate-100/95 px-2 py-1 text-left opacity-92">
+        <button type="button" onclick="requestGameFullscreen(); launchEpisode('miracle');" style="left: 77%; top: 24%;" class="map-pin-node map-pin-card rounded-xl bg-slate-100/95 px-2 py-1 text-left opacity-92">
           <div class="flex items-center gap-1.5">
             <span class="text-base sm:text-lg leading-none">🍞</span>
             <div>
@@ -462,13 +471,44 @@
   <script src="ep1_noah.js"></script>
   <script src="ep2_exodus.js"></script>
 
-  <!-- 화면 전환 보장 스크립트 & 16비트 도트(픽셀아트) 월드맵 렌더링 엔진 -->
+  <!-- 전체화면 자동 전환 & 화면 전환 보장 & 16비트 도트 월드맵 엔진 -->
   <script>
+    // 전체화면 자동 진입 함수
+    function requestGameFullscreen() {
+      const docEl = document.documentElement;
+      try {
+        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+          if (docEl.requestFullscreen) {
+            docEl.requestFullscreen().catch(() => {});
+          } else if (docEl.webkitRequestFullscreen) {
+            docEl.webkitRequestFullscreen();
+          }
+        }
+      } catch (e) {}
+    }
+
+    // 전체화면 켜기/끄기 토글 함수 (상단 ⛶ 버튼용)
+    function toggleGameFullscreen() {
+      const docEl = document.documentElement;
+      try {
+        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+          if (docEl.requestFullscreen) docEl.requestFullscreen().catch(() => {});
+          else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen();
+        } else {
+          if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+          else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+        }
+      } catch (e) {}
+    }
+
     let _lastStartTap = 0;
     function safeGoToClassSelect() {
       const now = Date.now();
       if (now - _lastStartTap < 250) return;
       _lastStartTap = now;
+
+      // 탐험 출발하기 터치 즉시 전체화면 전환 시도
+      requestGameFullscreen();
 
       const inputEl = document.getElementById('opening-name-input');
       if (inputEl) inputEl.blur();
@@ -542,7 +582,6 @@
         }
       }
 
-      // 대륙 모양 판별 함수 (도트 섬/대륙 지형 & 우상단 초록 숲 지대)
       const landMask = new Uint8Array(W * H);
       const greenMask = new Uint8Array(W * H);
       const waterMask = new Uint8Array(W * H);
@@ -570,7 +609,6 @@
             const d = ((x - bx) / rx) ** 2 + ((y - by) / ry) ** 2;
             if (d < 1.0) v += (1.0 - d);
           }
-          // 해안선 자연스러운 굴곡 노이즈
           const wave = Math.sin(x * 0.11) * Math.cos(y * 0.13) * 0.08;
           const isSubIsle = (((x - smallIsland[0]) / smallIsland[2]) ** 2 + ((y - smallIsland[1]) / smallIsland[3]) ** 2) < 1.0;
 
@@ -589,7 +627,6 @@
         }
       }
 
-      // 내륙 오아시스 호수, 나일/시내 강줄기, 갈릴리 호수 수역 마킹
       function markWaterDisk(cx, cy, rx, ry) {
         for (let y = Math.max(0, Math.floor(cy - ry)); y <= Math.min(H - 1, Math.ceil(cy + ry)); y++) {
           for (let x = Math.max(0, Math.floor(cx - rx)); x <= Math.min(W - 1, Math.ceil(cx + rx)); x++) {
@@ -599,28 +636,21 @@
           }
         }
       }
-      // 좌중단 오아시스 연못
       markWaterDisk(122, 92, 18, 11);
-      // 우상단 갈릴리 호수 (EP 4)
       markWaterDisk(264, 62, 19, 12);
 
-      // 대륙을 가로지르는 강줄기 & 홍해 바닷길 수로
       for (let t = 0; t <= 120; t++) {
         const p = t / 120;
-        // 남서쪽 홍해/나일 수로 (바다 -> 오아시스 -> 내륙)
         const rx1 = Math.round(138 + Math.sin(p * 5) * 8 + p * 35);
         const ry1 = Math.round(192 - p * 84);
         markWaterDisk(rx1, ry1, 2.2, 2.2);
 
-        // 북동쪽 요단강 줄기 (갈릴리 호수 -> 엘라 골짜기 인근)
         const rx2 = Math.round(235 + Math.sin(p * 6) * 6 + p * 38);
         const ry2 = Math.round(28 + p * 74);
         markWaterDisk(rx2, ry2, 1.8, 1.8);
       }
 
-      // 1) 정적 도트 지형 베이스 렌더링
       function buildStaticPixelMap() {
-        // 바다 배경
         pRect(bctx, 0, 0, W, H, '#6fa0d0');
         for (let y = 0; y < H; y += 2) {
           for (let x = 0; x < W; x += 4) {
@@ -628,12 +658,10 @@
           }
         }
 
-        // 해안선 외곽 물거품 & 모래 절벽 테두리
         for (let y = 2; y < H - 2; y++) {
           for (let x = 2; x < W - 2; x++) {
             const idx = y * W + x;
             if (!landMask[idx]) {
-              // 주변에 육지가 있으면 얕은 바다/물거품 도트 표시
               let nearLand = false;
               for (let dy = -3; dy <= 3 && !nearLand; dy++) {
                 for (let dx = -3; dx <= 3; dx++) {
@@ -644,7 +672,6 @@
               continue;
             }
 
-            // 육지 테두리 판정
             const isEdge = !landMask[(y - 1) * W + x] || !landMask[(y + 1) * W + x] ||
                            !landMask[y * W + (x - 1)] || !landMask[y * W + (x + 1)];
             const isSouthCliff = !landMask[(y + 2) * W + x] || !landMask[(y + 3) * W + x];
@@ -669,14 +696,12 @@
           }
         }
 
-        // 사막 모래언덕 결 디테일
         const dunes = [[155, 76], [168, 92], [182, 82], [112, 128], [132, 136], [176, 118], [92, 152]];
         dunes.forEach(([dx, dy]) => {
           pLine(bctx, dx - 6, dy + 2, dx, dy - 2, '#d6a461', 1);
           pLine(bctx, dx, dy - 2, dx + 7, dy + 2, '#c48f4c', 1);
         });
 
-        // 바다 암초 바위들
         function drawSeaRocks(rx, ry) {
           pDisk(bctx, rx, ry + 2, 8, 2, '#abd0ec');
           pRect(bctx, rx - 5, ry - 2, 4, 4, '#5a6275');
@@ -689,11 +714,9 @@
         drawSeaRocks(126, 202);
         drawSeaRocks(338, 178);
 
-        // [EP 1 랜드마크: 좌상단 노아의 방주(난파선풍 거대 목선) & 아라랏산 & 무지개]
         drawPixelRainbow(bctx, 88, 34);
         drawPixelNoahArk(bctx, 98, 52);
 
-        // 오아시스 야자수 숲 & 낙타·코끼리
         drawPixelPalm(bctx, 88, 86);
         drawPixelPalm(bctx, 98, 96);
         drawPixelPalm(bctx, 106, 82);
@@ -704,24 +727,19 @@
         drawPixelCamel(bctx, 162, 68);
         drawPixelCamel(bctx, 106, 122);
 
-        // [EP 2 랜드마크: 좌하단 불타는 시내산 + 파라오 석상 + 갈라진 홍해 다리 + 피라미드 & 스핑크스]
         drawPixelSinaiMountain(bctx, 74, 136);
         drawPixelStatue(bctx, 108, 156);
         drawPixelStatue(bctx, 128, 158);
-        // 갈라진 홍해 도하 바닷길
         pRect(bctx, 145, 156, 16, 8, '#9bc6e6');
         pRect(bctx, 145, 158, 16, 4, '#e7bf7e');
-        // 피라미드 3기 & 스핑크스
         drawPixelPyramid(bctx, 204, 158, 22, 15);
         drawPixelPyramid(bctx, 226, 164, 28, 19);
         drawPixelPyramid(bctx, 248, 156, 20, 14);
         drawPixelSphinx(bctx, 192, 172);
 
-        // 선인장 & 고대 항아리들
         [[62, 126], [68, 162], [86, 168], [166, 182], [278, 162]].forEach(([cx, cy]) => drawPixelCactus(bctx, cx, cy));
         [[92, 176], [136, 178], [176, 148], [268, 168]].forEach(([px, py]) => drawPixelPot(bctx, px, py));
 
-        // [EP 3 랜드마크: 중앙·우하단 베들레헴 돔 성전 & 고대 마을 & 엘라 골짜기 천막]
         drawPixelGrandPalace(bctx, 226, 122);
         drawPixelHouse(bctx, 168, 118);
         drawPixelHouse(bctx, 178, 124);
@@ -731,7 +749,6 @@
         drawPixelTent(bctx, 280, 88, 13, 11);
         drawPixelTent(bctx, 286, 102, 12, 10);
 
-        // [EP 4 랜드마크: 우상단 갈릴리 숲과 나무들]
         [[222, 36], [236, 40], [274, 42], [292, 52], [302, 68], [298, 86], [242, 82], [228, 94]].forEach(([tx, ty]) => {
           drawPixelRoundTree(bctx, tx, ty);
         });
@@ -750,7 +767,6 @@
       }
 
       function drawPixelNoahArk(c, cx, cy) {
-        // 웅장한 도트 나무 방주 (대각선 정박 형태)
         for (let i = -28; i <= 28; i++) {
           const yOff = Math.round(-i * 0.38);
           const halfH = Math.max(3, Math.round(10 - (i * i) / 95));
@@ -759,7 +775,6 @@
           pRect(c, cx + i, cy + yOff + halfH - 1, 2, 2, '#4a2c18');
           if (i % 4 === 0) pRect(c, cx + i, cy + yOff - halfH + 2, 1, halfH * 2 - 4, '#5e381e');
         }
-        // 갑판 위 지붕 하우스 & 돛대
         pRect(c, cx - 12, cy - 10, 22, 8, '#9c6339');
         pRect(c, cx - 14, cy - 13, 26, 4, '#b87747');
         pRect(c, cx - 2, cy - 28, 3, 22, '#4a2c18');
@@ -774,7 +789,6 @@
           pRect(c, cx - w, cy - 12 + y, 2, 1, '#593b1f');
           pRect(c, cx + w - 2, cy - 12 + y, 2, 1, '#593b1f');
         }
-        // 봉우리 용암/불빛
         pRect(c, cx - 3, cy - 13, 6, 3, '#f97316');
         pRect(c, cx - 2, cy - 12, 4, 5, '#facc15');
       }
@@ -810,22 +824,18 @@
       }
 
       function drawPixelGrandPalace(c, cx, cy) {
-        // 성전 외곽 기둥과 본관
         pRect(c, cx - 26, cy - 8, 52, 22, '#f5d6ce');
         pRect(c, cx - 26, cy - 8, 52, 2, '#7c3f38');
         pRect(c, cx - 26, cy + 12, 52, 2, '#7c3f38');
-        // 아치 문
         pRect(c, cx - 6, cy - 2, 12, 14, '#c98c82');
         pRect(c, cx - 4, cy, 8, 12, '#8c4f47');
         pRect(c, cx - 18, cy, 5, 9, '#c98c82');
         pRect(c, cx + 13, cy, 5, 9, '#c98c82');
-        // 핑크빛 중앙 돔과 좌우 소형 돔
         pDisk(c, cx, cy - 14, 12, 8, '#d95b72');
         pDisk(c, cx - 3, cy - 15, 6, 5, '#f28fa1');
         pRect(c, cx - 1, cy - 24, 2, 3, '#fde047');
         pDisk(c, cx - 16, cy - 11, 6, 4, '#d95b72');
         pDisk(c, cx + 16, cy - 11, 6, 4, '#d95b72');
-        // 좌우 첨탑
         pRect(c, cx - 31, cy - 18, 4, 32, '#f5d6ce');
         pRect(c, cx + 27, cy - 18, 4, 32, '#f5d6ce');
         pRect(c, cx - 32, cy - 20, 6, 3, '#d95b72');
@@ -896,7 +906,6 @@
 
       buildStaticPixelMap();
 
-      // 구름 목록 및 1→2→3→4 이동 경로 제어점
       const clouds = [
         { x: 28, y: 22, s: 1.0, spd: 0.012 },
         { x: 145, y: 18, s: 1.2, spd: 0.015 },
@@ -912,7 +921,6 @@
         [24, 32], [186, 24], [32, 186], [308, 192]
       ];
 
-      // 에피소드 1(좌상) -> 2(좌하) -> 3(우하) -> 4(우상) 경로 샘플링
       const routePoints = [];
       const segments = [
         [[76, 48], [62, 105], [94, 162]],
@@ -931,10 +939,7 @@
 
       function drawPixelCloud(c, cx, cy, scale) {
         const r = Math.round(6 * scale);
-        // 구름 반투명 그림자
-        c.fillStyle = 'rgba(30, 58, 95, 0.22)';
         pDisk(c, cx + 2, cy + 5, r * 1.8, r * 0.7, 'rgba(30, 58, 95, 0.22)');
-        // 구름 본체
         pDisk(c, cx, cy + 1, r * 1.7, r * 0.75, '#dbeafe');
         pDisk(c, cx - r * 0.8, cy, r * 0.9, r * 0.8, '#ffffff');
         pDisk(c, cx + r * 0.8, cy, r * 0.85, r * 0.75, '#ffffff');
@@ -948,7 +953,6 @@
 
           const tick = Math.floor(now / 180);
 
-          // 1) 바다 소용돌이 애니메이션
           whirlpools.forEach(([wx, wy], idx) => {
             pDisk(ctx, wx, wy, 13, 8, '#87b5de');
             pDisk(ctx, wx, wy, 9, 5, '#6fa0d0');
@@ -956,18 +960,15 @@
             pRect(ctx, wx - 1, wy - 1, 3, 2, '#ffffff');
           });
 
-          // 2) 시내산 봉우리 불꽃 깜빡임 (EP 2)
           const flameH = 2 + (tick % 3);
           pRect(ctx, 72, 121 - flameH, 4, flameH, '#fef08a');
           pRect(ctx, 73, 118 - flameH, 2, 2, '#ef4444');
 
-          // 3) 갈릴리 호수 위 조각배 흔들림 (EP 4)
           const boatY = 61 + (tick % 2);
           pRect(ctx, 259, boatY, 10, 3, '#78350f');
           pRect(ctx, 263, boatY - 6, 1, 6, '#451a03');
           pRect(ctx, 264, boatY - 5, 4, 4, '#ffffff');
 
-          // 4) 에피소드 1 → 2 → 3 → 4 도트 이동 경로 애니메이션
           for (let i = 0; i < routePoints.length; i++) {
             const [rx, ry] = routePoints[i];
             pRect(ctx, rx - 1, ry - 1, 3, 3, '#fef08a');
@@ -976,7 +977,6 @@
             }
           }
 
-          // 구간별 진행 방향 화살표 도트 아이콘 (1→2, 2→3, 3→4)
           const arrowIndices = [12, 37, 62];
           arrowIndices.forEach(ai => {
             const [ax, ay] = routePoints[ai];
@@ -984,7 +984,6 @@
             pRect(ctx, ax - 1, ay - 1, 3, 3, '#fef08a');
           });
 
-          // 5) 둥실거리는 도트 구름
           clouds.forEach(cl => {
             cl.x += cl.spd;
             if (cl.x > W + 24) cl.x = -24;
