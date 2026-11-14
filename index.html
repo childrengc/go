@@ -18,6 +18,14 @@
     /* 게임 내 멀티터치 조작 영역에만 touch-action: none 적용 */
     .ingame-touch { touch-action: none; }
 
+    /* 도트 캔버스 전용 픽셀 선명화 렌더링 */
+    .pixel-canvas {
+      image-rendering: -moz-crisp-edges;
+      image-rendering: -webkit-optimize-contrast;
+      image-rendering: crisp-edges;
+      image-rendering: pixelated;
+    }
+
     /* 얇고 반투명한 그림자를 적용한 슬림 패널 (상단 HUD 및 라벨용) */
     .mc-panel {
       background: rgba(15, 23, 42, 0.74);
@@ -75,17 +83,11 @@
     .map-pin-node {
       position: absolute;
       transform: translate(-50%, -50%);
-      animation: floatPin 2.8s ease-in-out infinite;
+      animation: floatPin 2.6s ease-in-out infinite;
+      border: 2px solid #451a03;
+      box-shadow: 0 3px 0 rgba(69, 26, 3, 0.65), 0 4px 10px rgba(0,0,0,0.35);
     }
     .map-pin-node:hover { z-index: 30; }
-
-    @keyframes dashFlow {
-      to { stroke-dashoffset: -28; }
-    }
-    .map-route-line {
-      stroke-dasharray: 9 5;
-      animation: dashFlow 1.4s linear infinite;
-    }
 
     .modal-scroll {
       max-height: 92dvh;
@@ -111,7 +113,7 @@
       .landscape-compact-icon { font-size: 1.6rem !important; margin-bottom: 0.1rem !important; }
       .landscape-compact-verse { padding: 0.45rem !important; margin-bottom: 0 !important; font-size: 0.72rem !important; }
       .landscape-map-wrap { height: 70dvh !important; }
-      .map-pin-card { padding: 0.2rem 0.4rem !important; }
+      .map-pin-card { padding: 0.18rem 0.38rem !important; }
     }
   </style>
 </head>
@@ -224,7 +226,7 @@
   <div id="screen-opening" class="fixed inset-0 z-30 flex items-center justify-center p-3 bg-slate-950/45 backdrop-blur-[2px]">
     <div class="mc-card modal-scroll relative w-full max-w-md rounded-3xl p-5 sm:p-6 pb-5 text-center">
       <div class="inline-block px-3 py-1 rounded-full bg-amber-200 text-amber-900 font-jua text-xs mb-2">
-        ✨ 3D 성경 말씀 어드벤처
+        ✨ 3D 바이블 어드벤처
       </div>
       <h1 class="font-jua text-3xl sm:text-4xl text-amber-900 mb-1">출발! 성경 탐험대!</h1>
       <p class="text-xs sm:text-sm text-slate-600 mb-4">말씀 속 주인공이 되어 믿음의 모험을 떠나요!</p>
@@ -244,12 +246,10 @@
         🚀 탐험 출발하기!
       </button>
 
-      <!-- 하단 소속 표기 -->
       <p class="mt-3.5 text-[11px] sm:text-xs font-jua text-amber-900/70 tracking-wide">
         광릉내 재림교회 어린이부
       </p>
 
-      <!-- 우측 하단 반투명 소형 자물쇠 (그림자 없음) -->
       <a href="admin.html" title="관리자 모드" class="admin-lock-link absolute bottom-2 right-3 text-xs opacity-30 hover:opacity-70 transition-opacity leading-none p-1">
         🔒
       </a>
@@ -287,12 +287,10 @@
         ◀ 이름 다시 입력하기
       </button>
 
-      <!-- 하단 소속 표기 -->
       <p class="mt-2.5 text-[11px] sm:text-xs font-jua text-amber-900/70 tracking-wide">
         광릉내 재림교회 어린이부
       </p>
 
-      <!-- 우측 하단 반투명 소형 자물쇠 (그림자 없음) -->
       <a href="admin.html" title="관리자 모드" class="admin-lock-link absolute bottom-2 right-3 text-xs opacity-30 hover:opacity-70 transition-opacity leading-none p-1">
         🔒
       </a>
@@ -300,7 +298,7 @@
   </div>
 
   <!-- =================================================================== -->
-  <!-- 화면 3: 실제 성경 지형 기반 대륙 월드맵 & 에피소드 1~4 이동경로 -->
+  <!-- 화면 3: 도트(픽셀아트) 성경 월드맵 & 에피소드 1~4 이동경로 -->
   <!-- =================================================================== -->
   <div id="screen-map" class="hidden fixed inset-0 z-30 items-center justify-center p-2 sm:p-4 bg-slate-950/75 backdrop-blur-sm">
     <div class="mc-card w-full max-w-5xl rounded-3xl p-2.5 sm:p-4 flex flex-col">
@@ -308,8 +306,8 @@
         <div class="flex items-center gap-1.5">
           <span class="text-lg sm:text-xl">🗺️</span>
           <div>
-            <h2 class="font-jua text-sm sm:text-lg text-amber-950 leading-tight">성경 탐험 대륙 지도</h2>
-            <p class="text-[10px] sm:text-xs text-slate-600">탐험 경로(1→2→3→4)를 따라 원하는 에피소드를 선택하세요!</p>
+            <h2 class="font-jua text-sm sm:text-lg text-amber-950 leading-tight">성경 탐험 픽셀 월드맵</h2>
+            <p class="text-[10px] sm:text-xs text-slate-600">도트 지도 위의 탐험 경로(1→2→3→4)를 따라 에피소드를 선택하세요!</p>
           </div>
         </div>
         <div class="flex items-center gap-1.5">
@@ -320,195 +318,55 @@
         </div>
       </div>
 
-      <!-- 실제 고대 근동 대륙 지형도 영역 -->
-      <div class="landscape-map-wrap relative w-full h-[69dvh] max-h-[500px] min-h-[240px] rounded-2xl overflow-hidden border-4 border-amber-900 shadow-inner bg-[#e8d2a6]">
-        <svg viewBox="0 0 1000 560" preserveAspectRatio="xMidYMid slice" class="w-full h-full">
-          <defs>
-            <linearGradient id="landGrad" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stop-color="#f5e6c8" />
-              <stop offset="50%" stop-color="#e6ce9e" />
-              <stop offset="100%" stop-color="#d6b477" />
-            </linearGradient>
-            <linearGradient id="seaWater" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stop-color="#0369a1" />
-              <stop offset="65%" stop-color="#0284c7" />
-              <stop offset="100%" stop-color="#38bdf8" />
-            </linearGradient>
-            <radialGradient id="greenZone" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stop-color="#86efac" stop-opacity="0.65" />
-              <stop offset="100%" stop-color="#4ade80" stop-opacity="0" />
-            </radialGradient>
-            <radialGradient id="desertZone" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.48" />
-              <stop offset="100%" stop-color="#d97706" stop-opacity="0" />
-            </radialGradient>
-          </defs>
+      <!-- 가변형 도트(픽셀아트) 캔버스 지도 영역 -->
+      <div class="landscape-map-wrap relative w-full h-[69dvh] max-h-[500px] min-h-[240px] rounded-2xl overflow-hidden border-4 border-amber-900 shadow-inner bg-[#6495c8]">
+        <canvas id="pixel-world-map" width="360" height="210" class="pixel-canvas w-full h-full block"></canvas>
 
-          <!-- 1) 전체가 하나로 연결된 고대 근동 대륙 지형 베이스 -->
-          <rect width="1000" height="560" fill="url(#landGrad)" />
-
-          <!-- 기후대 지형 채색 (아라랏 초원, 갈릴리·엘라 녹지, 시내산 사막) -->
-          <ellipse cx="210" cy="125" rx="220" ry="110" fill="url(#greenZone)" />
-          <ellipse cx="770" cy="145" rx="210" ry="125" fill="url(#greenZone)" />
-          <ellipse cx="660" cy="400" rx="195" ry="125" fill="url(#greenZone)" />
-          <ellipse cx="290" cy="435" rx="240" ry="135" fill="url(#desertZone)" />
-
-          <!-- 지형 등고선 디테일 -->
-          <g fill="none" stroke="#92400e" stroke-opacity="0.18" stroke-width="1.5" stroke-dasharray="6 4">
-            <path d="M 40 60 Q 220 20 420 75 T 890 65" />
-            <path d="M 320 290 Q 520 240 710 310 T 960 280" />
-            <path d="M 80 510 Q 340 465 590 515 T 950 490" />
-          </g>
-
-          <!-- 경위도 지도 격자 -->
-          <g stroke="#78350f" stroke-opacity="0.15" stroke-width="1">
-            <line x1="0" y1="140" x2="1000" y2="140" />
-            <line x1="0" y1="280" x2="1000" y2="280" />
-            <line x1="0" y1="420" x2="1000" y2="420" />
-            <line x1="250" y1="0" x2="250" y2="560" />
-            <line x1="500" y1="0" x2="500" y2="560" />
-            <line x1="750" y1="0" x2="750" y2="560" />
-          </g>
-
-          <!-- 2) 서쪽 지중해 해안선 & 남쪽 홍해만 수역 -->
-          <path d="M 0 185 Q 105 190 155 235 Q 195 275 160 325 Q 115 350 0 345 Z" fill="url(#seaWater)" stroke="#92400e" stroke-width="3" />
-          <path d="M 205 560 L 238 380 Q 258 362 278 380 L 312 495 L 352 415 Q 368 400 382 418 L 405 560 Z" fill="url(#seaWater)" stroke="#92400e" stroke-width="3" />
-
-          <!-- 3) 대륙 강줄기와 호수 (유프라테스강, 나일강, 갈릴리 호수, 요단강, 사해) -->
-          <path d="M 55 85 Q 200 140 365 95 Q 485 65 585 115" fill="none" stroke="#0284c7" stroke-width="4" opacity="0.7" />
-          <path d="M 88 560 Q 108 470 102 405 L 75 345 M 102 405 L 106 344 M 102 405 L 132 348" fill="none" stroke="#0284c7" stroke-width="5.5" stroke-linecap="round" />
-          <path d="M 785 60 L 780 135 Q 765 255 695 345 L 545 470" fill="none" stroke="#0284c7" stroke-width="5" stroke-linecap="round" />
-          <ellipse cx="780" cy="140" rx="56" ry="32" fill="url(#seaWater)" stroke="#0369a1" stroke-width="3" />
-          <ellipse cx="535" cy="475" rx="34" ry="16" fill="#0369a1" stroke="#78350f" stroke-width="2" opacity="0.85" />
-
-          <!-- 4) 대륙 산맥과 구릉 일러스트 -->
-          <g fill="#a16207" fill-opacity="0.3" stroke="#78350f" stroke-width="2" stroke-linejoin="round">
-            <polygon points="85,105 115,52 145,105" />
-            <polygon points="265,98 298,46 330,98" />
-            <polygon points="455,215 488,162 520,215" />
-            <polygon points="495,232 530,175 565,232" />
-            <polygon points="855,285 888,230 920,285" />
-            <polygon points="885,308 920,248 955,308" />
-          </g>
-
-          <!-- 5) 에피소드 1~4 지형 랜드마크 -->
-          <g transform="translate(195, 92)">
-            <path d="M -62 12 A 62 62 0 0 1 62 12" fill="none" stroke="#ef4444" stroke-width="4" opacity="0.85" />
-            <path d="M -56 12 A 56 56 0 0 1 56 12" fill="none" stroke="#facc15" stroke-width="4" opacity="0.85" />
-            <path d="M -50 12 A 50 50 0 0 1 50 12" fill="none" stroke="#3b82f6" stroke-width="4" opacity="0.85" />
-            <polygon points="-44,24 0,-42 44,24" fill="#64748b" stroke="#334155" stroke-width="2.5" />
-            <polygon points="-16,-18 0,-42 16,-18" fill="#f8fafc" />
-            <polygon points="-20,-14 20,-14 15,-4 -15,-4" fill="#78350f" stroke="#451a03" stroke-width="1.5" />
-          </g>
-
-          <polygon points="115,445 148,388 180,445" fill="#eab308" stroke="#92400e" stroke-width="2.5" />
-          <polygon points="158,452 184,405 210,452" fill="#d97706" stroke="#78350f" stroke-width="2.5" />
-          <rect x="228" y="415" width="64" height="24" fill="#fef08a" stroke="#0284c7" stroke-width="2.5" stroke-dasharray="5 3" />
-          <polygon points="308,452 348,365 388,452" fill="#b45309" stroke="#78350f" stroke-width="2.5" />
-          <circle cx="348" cy="358" r="13" fill="#fef08a" stroke="#f97316" stroke-width="2.5" />
-
-          <g transform="translate(660, 365)">
-            <polygon points="-55,22 -20,-32 15,22" fill="#65a30d" stroke="#365314" stroke-width="2.5" />
-            <polygon points="5,24 40,-30 75,24" fill="#4d7c0f" stroke="#365314" stroke-width="2.5" />
-            <polygon points="-42,22 -28,4 -14,22" fill="#fef3c7" stroke="#b45309" stroke-width="2" />
-            <polygon points="22,24 36,6 50,24" fill="#fecaca" stroke="#991b1b" stroke-width="2" />
-          </g>
-
-          <g transform="translate(780, 136)">
-            <polygon points="-18,5 18,5 12,13 -12,13" fill="#78350f" />
-            <polygon points="0,-18 0,3 15,-2" fill="#ffffff" />
-          </g>
-
-          <!-- 6) 에피소드 1 → 2 → 3 → 4 연속 이동 경로 -->
-          <path d="M 195 125 C 145 235, 165 340, 265 425 C 395 485, 525 465, 660 400 C 745 340, 770 245, 780 148"
-                fill="none" stroke="#fef08a" stroke-width="9" stroke-linecap="round" opacity="0.8" />
-          <path d="M 195 125 C 145 235, 165 340, 265 425 C 395 485, 525 465, 660 400 C 745 340, 770 245, 780 148"
-                fill="none" stroke="#dc2626" stroke-width="4" stroke-linecap="round" class="map-route-line" />
-
-          <!-- 구간별 이동 화살표 배지 -->
-          <g transform="translate(172, 275) rotate(72)">
-            <polygon points="-8,-6 10,0 -8,6" fill="#dc2626" stroke="#fef08a" stroke-width="1.5" />
-          </g>
-          <g transform="translate(465, 456) rotate(-8)">
-            <polygon points="-8,-6 10,0 -8,6" fill="#dc2626" stroke="#fef08a" stroke-width="1.5" />
-          </g>
-          <g transform="translate(748, 275) rotate(-75)">
-            <polygon points="-8,-6 10,0 -8,6" fill="#dc2626" stroke="#fef08a" stroke-width="1.5" />
-          </g>
-
-          <!-- 지명 텍스트 라벨 -->
-          <text x="82" y="275" text-anchor="middle" fill="#e0f2fe" font-size="12" font-weight="bold">대해 (지중해)</text>
-          <text x="145" y="472" text-anchor="middle" fill="#78350f" font-size="11" font-weight="bold">나일강·고센</text>
-          <text x="348" y="472" text-anchor="middle" fill="#78350f" font-size="11" font-weight="bold">시내산 광야</text>
-          <text x="515" y="252" text-anchor="middle" fill="#78350f" font-size="11" font-weight="bold">가나안 중앙 산지</text>
-
-          <!-- 우측 하단 나침반 & 축척 -->
-          <g transform="translate(935, 495)">
-            <circle cx="0" cy="0" r="28" fill="#451a03" fill-opacity="0.75" stroke="#f59e0b" stroke-width="2.5" />
-            <polygon points="0,-22 6,-5 0,-9 -6,-5" fill="#ef4444" />
-            <polygon points="0,22 6,5 0,9 -6,5" fill="#fde047" />
-            <polygon points="-22,0 -5,-6 -9,0 -5,6" fill="#fde047" />
-            <polygon points="22,0 5,-6 9,0 5,6" fill="#fde047" />
-            <text x="0" y="-25" text-anchor="middle" fill="#78350f" font-size="10" font-weight="900">N</text>
-          </g>
-          <g transform="translate(815, 520)">
-            <line x1="0" y1="0" x2="70" y2="0" stroke="#451a03" stroke-width="2.5" />
-            <line x1="0" y1="-4" x2="0" y2="4" stroke="#451a03" stroke-width="2.5" />
-            <line x1="70" y1="-4" x2="70" y2="4" stroke="#451a03" stroke-width="2.5" />
-            <text x="35" y="-5" text-anchor="middle" fill="#451a03" font-size="9" font-weight="bold">100 km</text>
-          </g>
-        </svg>
-
-        <!-- 지도 위 에피소드 1 선택 핀 (좌상단: 20%, 22%) -->
-        <button type="button" onclick="launchEpisode('noah')" style="left: 20%; top: 22%;" class="map-pin-node map-pin-card mc-btn rounded-xl bg-amber-50/95 hover:bg-white border-2 border-amber-600 px-2.5 py-1.5 text-left shadow-md">
+        <!-- 지도 위 에피소드 1 선택 핀 (좌상단: 아라랏산 & 방주 - 21%, 22%) -->
+        <button type="button" onclick="launchEpisode('noah')" style="left: 21%; top: 22%;" class="map-pin-node map-pin-card rounded-xl bg-amber-50/95 hover:bg-white px-2 py-1 text-left">
           <div class="flex items-center gap-1.5">
-            <span class="text-lg sm:text-xl">🛶</span>
+            <span class="text-base sm:text-lg leading-none">🛶</span>
             <div>
-              <span class="inline-block px-1.5 py-0.2 rounded-full bg-emerald-600 text-white font-jua text-[9px] leading-tight">EP 1 · 출발</span>
-              <h3 class="font-jua text-amber-950 text-xs sm:text-sm leading-tight">노아의 방주</h3>
-              <p class="text-[9px] text-slate-600 hidden sm:block">아라랏산 · 동물 구조</p>
+              <span class="inline-block px-1.5 py-0.2 rounded bg-emerald-600 text-white font-jua text-[8px] sm:text-[9px] leading-tight">EP 1 · 출발</span>
+              <h3 class="font-jua text-amber-950 text-[11px] sm:text-xs leading-tight">노아의 방주</h3>
             </div>
           </div>
         </button>
 
-        <!-- 지도 위 에피소드 2 선택 핀 (좌하단: 27%, 76%) -->
-        <button type="button" onclick="launchEpisode('exodus')" style="left: 27%; top: 76%;" class="map-pin-node map-pin-card mc-btn rounded-xl bg-sky-50/95 hover:bg-white border-2 border-sky-600 px-2.5 py-1.5 text-left shadow-md">
+        <!-- 지도 위 에피소드 2 선택 핀 (좌하단: 피라미드·홍해·시내산 - 26%, 78%) -->
+        <button type="button" onclick="launchEpisode('exodus')" style="left: 26%; top: 78%;" class="map-pin-node map-pin-card rounded-xl bg-sky-50/95 hover:bg-white px-2 py-1 text-left">
           <div class="flex items-center gap-1.5">
-            <span class="text-lg sm:text-xl">🌊</span>
+            <span class="text-base sm:text-lg leading-none">🌊</span>
             <div>
-              <span class="inline-block px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950 font-jua text-[9px] leading-tight">EP 2 · 🔒오픈예정</span>
-              <h3 class="font-jua text-sky-950 text-xs sm:text-sm leading-tight">출애굽과 시내산</h3>
-              <p class="text-[9px] text-slate-600 hidden sm:block">홍해 도하 · 십계명</p>
+              <span class="inline-block px-1.5 py-0.2 rounded bg-amber-500 text-slate-950 font-jua text-[8px] sm:text-[9px] leading-tight">EP 2 · 🔒오픈예정</span>
+              <h3 class="font-jua text-sky-950 text-[11px] sm:text-xs leading-tight">출애굽과 시내산</h3>
             </div>
           </div>
         </button>
 
-        <!-- 지도 위 에피소드 3 선택 핀 (우하단: 66%, 73%) -->
-        <button type="button" onclick="launchEpisode('david')" style="left: 66%; top: 73%;" class="map-pin-node map-pin-card mc-btn rounded-xl bg-slate-100/95 border-2 border-slate-500 px-2.5 py-1.5 text-left shadow-md opacity-90">
+        <!-- 지도 위 에피소드 3 선택 핀 (우하단: 베들레헴 성전·엘라 골짜기 - 67%, 75%) -->
+        <button type="button" onclick="launchEpisode('david')" style="left: 67%; top: 75%;" class="map-pin-node map-pin-card rounded-xl bg-slate-100/95 px-2 py-1 text-left opacity-92">
           <div class="flex items-center gap-1.5">
-            <span class="text-lg sm:text-xl">🪨</span>
+            <span class="text-base sm:text-lg leading-none">🪨</span>
             <div>
-              <span class="inline-block px-1.5 py-0.2 rounded-full bg-slate-600 text-white font-jua text-[9px] leading-tight">EP 3 · 🔒잠김</span>
-              <h3 class="font-jua text-slate-800 text-xs sm:text-sm leading-tight">다윗과 골리앗</h3>
-              <p class="text-[9px] text-slate-500 hidden sm:block">엘라 골짜기 · 물맷돌</p>
+              <span class="inline-block px-1.5 py-0.2 rounded bg-slate-600 text-white font-jua text-[8px] sm:text-[9px] leading-tight">EP 3 · 🔒잠김</span>
+              <h3 class="font-jua text-slate-800 text-[11px] sm:text-xs leading-tight">다윗과 골리앗</h3>
             </div>
           </div>
         </button>
 
-        <!-- 지도 위 에피소드 4 선택 핀 (우상단: 78%, 25%) -->
-        <button type="button" onclick="launchEpisode('miracle')" style="left: 78%; top: 25%;" class="map-pin-node map-pin-card mc-btn rounded-xl bg-slate-100/95 border-2 border-slate-500 px-2.5 py-1.5 text-left shadow-md opacity-90">
+        <!-- 지도 위 에피소드 4 선택 핀 (우상단: 갈릴리 호수·푸른 숲 - 77%, 24%) -->
+        <button type="button" onclick="launchEpisode('miracle')" style="left: 77%; top: 24%;" class="map-pin-node map-pin-card rounded-xl bg-slate-100/95 px-2 py-1 text-left opacity-92">
           <div class="flex items-center gap-1.5">
-            <span class="text-lg sm:text-xl">🍞</span>
+            <span class="text-base sm:text-lg leading-none">🍞</span>
             <div>
-              <span class="inline-block px-1.5 py-0.2 rounded-full bg-slate-600 text-white font-jua text-[9px] leading-tight">EP 4 · 🔒잠김</span>
-              <h3 class="font-jua text-slate-800 text-xs sm:text-sm leading-tight">예수님의 기적</h3>
-              <p class="text-[9px] text-slate-500 hidden sm:block">갈릴리 호수 · 오병이어</p>
+              <span class="inline-block px-1.5 py-0.2 rounded bg-slate-600 text-white font-jua text-[8px] sm:text-[9px] leading-tight">EP 4 · 🔒잠김</span>
+              <h3 class="font-jua text-slate-800 text-[11px] sm:text-xs leading-tight">예수님의 기적</h3>
             </div>
           </div>
         </button>
       </div>
 
-      <!-- 월드맵 하단 소속 표기 -->
       <p class="mt-1.5 text-center text-[11px] sm:text-xs font-jua text-amber-900/70 tracking-wide">
         광릉내 재림교회 어린이부
       </p>
@@ -593,7 +451,6 @@
         </button>
       </div>
 
-      <!-- 인증서 하단 소속 표기 -->
       <p class="mt-2.5 text-[11px] sm:text-xs font-jua text-amber-900/70 tracking-wide">
         광릉내 재림교회 어린이부
       </p>
@@ -605,7 +462,7 @@
   <script src="ep1_noah.js"></script>
   <script src="ep2_exodus.js"></script>
 
-  <!-- 화면 전환 보장 안전 스크립트 -->
+  <!-- 화면 전환 보장 스크립트 & 16비트 도트(픽셀아트) 월드맵 렌더링 엔진 -->
   <script>
     let _lastStartTap = 0;
     function safeGoToClassSelect() {
@@ -636,6 +493,508 @@
         if (typeof playSfx === 'function') playSfx('rescue');
       } catch (e) {}
     }
+
+    // =====================================================================
+    // 도트(픽셀아트) 월드맵 생성 및 실시간 애니메이션 엔진 (360 x 210 도트 해상도)
+    // =====================================================================
+    (function initPixelWorldMap() {
+      const cvs = document.getElementById('pixel-world-map');
+      if (!cvs) return;
+      const ctx = cvs.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+
+      const W = 360, H = 210;
+      const baseCanvas = document.createElement('canvas');
+      baseCanvas.width = W; baseCanvas.height = H;
+      const bctx = baseCanvas.getContext('2d');
+      bctx.imageSmoothingEnabled = false;
+
+      function pRect(c, x, y, w, h, col) {
+        c.fillStyle = col;
+        c.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+      }
+
+      function pDisk(c, cx, cy, rx, ry, col) {
+        c.fillStyle = col;
+        const x0 = Math.floor(cx - rx), x1 = Math.ceil(cx + rx);
+        const y0 = Math.floor(cy - ry), y1 = Math.ceil(cy + ry);
+        for (let y = y0; y <= y1; y++) {
+          for (let x = x0; x <= x1; x++) {
+            const dx = (x - cx) / rx, dy = (y - cy) / ry;
+            if (dx * dx + dy * dy <= 1.0) c.fillRect(x, y, 1, 1);
+          }
+        }
+      }
+
+      function pLine(c, x0, y0, x1, y1, col, thick = 1) {
+        c.fillStyle = col;
+        x0 = Math.round(x0); y0 = Math.round(y0);
+        x1 = Math.round(x1); y1 = Math.round(y1);
+        const dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+        const dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+        let err = dx + dy;
+        while (true) {
+          c.fillRect(x0 - Math.floor(thick / 2), y0 - Math.floor(thick / 2), thick, thick);
+          if (x0 === x1 && y0 === y1) break;
+          const e2 = 2 * err;
+          if (e2 >= dy) { err += dy; x0 += sx; }
+          if (e2 <= dx) { err += dx; y0 += sy; }
+        }
+      }
+
+      // 대륙 모양 판별 함수 (도트 섬/대륙 지형 & 우상단 초록 숲 지대)
+      const landMask = new Uint8Array(W * H);
+      const greenMask = new Uint8Array(W * H);
+      const waterMask = new Uint8Array(W * H);
+
+      const blobs = [
+        [182, 108, 128, 76],
+        [118, 66, 72, 46],
+        [102, 142, 76, 48],
+        [205, 148, 88, 48],
+        [248, 72, 68, 50],
+        [258, 122, 68, 46]
+      ];
+      const greenBlobs = [
+        [244, 68, 64, 46],
+        [262, 108, 52, 36],
+        [210, 52, 36, 26]
+      ];
+      const smallIsland = [332, 24, 24, 15];
+
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          let v = 0;
+          for (let i = 0; i < blobs.length; i++) {
+            const [bx, by, rx, ry] = blobs[i];
+            const d = ((x - bx) / rx) ** 2 + ((y - by) / ry) ** 2;
+            if (d < 1.0) v += (1.0 - d);
+          }
+          // 해안선 자연스러운 굴곡 노이즈
+          const wave = Math.sin(x * 0.11) * Math.cos(y * 0.13) * 0.08;
+          const isSubIsle = (((x - smallIsland[0]) / smallIsland[2]) ** 2 + ((y - smallIsland[1]) / smallIsland[3]) ** 2) < 1.0;
+
+          if (v + wave > 0.28 || isSubIsle) {
+            landMask[y * W + x] = 1;
+            let gv = 0;
+            for (let j = 0; j < greenBlobs.length; j++) {
+              const [gx, gy, grx, gry] = greenBlobs[j];
+              const gd = ((x - gx) / grx) ** 2 + ((y - gy) / gry) ** 2;
+              if (gd < 1.0) gv += (1.0 - gd);
+            }
+            if (gv + wave * 0.5 > 0.25 || (isSubIsle && y < 24)) {
+              greenMask[y * W + x] = 1;
+            }
+          }
+        }
+      }
+
+      // 내륙 오아시스 호수, 나일/시내 강줄기, 갈릴리 호수 수역 마킹
+      function markWaterDisk(cx, cy, rx, ry) {
+        for (let y = Math.max(0, Math.floor(cy - ry)); y <= Math.min(H - 1, Math.ceil(cy + ry)); y++) {
+          for (let x = Math.max(0, Math.floor(cx - rx)); x <= Math.min(W - 1, Math.ceil(cx + rx)); x++) {
+            if (((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1.0) {
+              waterMask[y * W + x] = 1;
+            }
+          }
+        }
+      }
+      // 좌중단 오아시스 연못
+      markWaterDisk(122, 92, 18, 11);
+      // 우상단 갈릴리 호수 (EP 4)
+      markWaterDisk(264, 62, 19, 12);
+
+      // 대륙을 가로지르는 강줄기 & 홍해 바닷길 수로
+      for (let t = 0; t <= 120; t++) {
+        const p = t / 120;
+        // 남서쪽 홍해/나일 수로 (바다 -> 오아시스 -> 내륙)
+        const rx1 = Math.round(138 + Math.sin(p * 5) * 8 + p * 35);
+        const ry1 = Math.round(192 - p * 84);
+        markWaterDisk(rx1, ry1, 2.2, 2.2);
+
+        // 북동쪽 요단강 줄기 (갈릴리 호수 -> 엘라 골짜기 인근)
+        const rx2 = Math.round(235 + Math.sin(p * 6) * 6 + p * 38);
+        const ry2 = Math.round(28 + p * 74);
+        markWaterDisk(rx2, ry2, 1.8, 1.8);
+      }
+
+      // 1) 정적 도트 지형 베이스 렌더링
+      function buildStaticPixelMap() {
+        // 바다 배경
+        pRect(bctx, 0, 0, W, H, '#6fa0d0');
+        for (let y = 0; y < H; y += 2) {
+          for (let x = 0; x < W; x += 4) {
+            if ((x + y) % 8 === 0) pRect(bctx, x, y, 2, 1, '#6393c3');
+          }
+        }
+
+        // 해안선 외곽 물거품 & 모래 절벽 테두리
+        for (let y = 2; y < H - 2; y++) {
+          for (let x = 2; x < W - 2; x++) {
+            const idx = y * W + x;
+            if (!landMask[idx]) {
+              // 주변에 육지가 있으면 얕은 바다/물거품 도트 표시
+              let nearLand = false;
+              for (let dy = -3; dy <= 3 && !nearLand; dy++) {
+                for (let dx = -3; dx <= 3; dx++) {
+                  if (landMask[(y + dy) * W + (x + dx)]) { nearLand = true; break; }
+                }
+              }
+              if (nearLand) pRect(bctx, x, y, 1, 1, '#9cc4e4');
+              continue;
+            }
+
+            // 육지 테두리 판정
+            const isEdge = !landMask[(y - 1) * W + x] || !landMask[(y + 1) * W + x] ||
+                           !landMask[y * W + (x - 1)] || !landMask[y * W + (x + 1)];
+            const isSouthCliff = !landMask[(y + 2) * W + x] || !landMask[(y + 3) * W + x];
+
+            if (isEdge) {
+              pRect(bctx, x, y, 1, 1, '#5c3c24');
+            } else if (isSouthCliff) {
+              pRect(bctx, x, y, 1, 1, '#c88c4b');
+            } else if (waterMask[idx]) {
+              pRect(bctx, x, y, 1, 1, '#5b94c6');
+              if (!waterMask[(y - 1) * W + x]) pRect(bctx, x, y, 1, 1, '#9bc6e6');
+            } else if (greenMask[idx]) {
+              const shade = ((x + y) % 7 === 0) ? '#59a94e' : '#4a9342';
+              pRect(bctx, x, y, 1, 1, shade);
+              if (!greenMask[(y + 1) * W + x] || !greenMask[y * W + (x - 1)]) {
+                pRect(bctx, x, y, 1, 1, '#366e31');
+              }
+            } else {
+              const sandCol = ((x * 3 + y * 5) % 11 === 0) ? '#eac07e' : '#f3cb8b';
+              pRect(bctx, x, y, 1, 1, sandCol);
+            }
+          }
+        }
+
+        // 사막 모래언덕 결 디테일
+        const dunes = [[155, 76], [168, 92], [182, 82], [112, 128], [132, 136], [176, 118], [92, 152]];
+        dunes.forEach(([dx, dy]) => {
+          pLine(bctx, dx - 6, dy + 2, dx, dy - 2, '#d6a461', 1);
+          pLine(bctx, dx, dy - 2, dx + 7, dy + 2, '#c48f4c', 1);
+        });
+
+        // 바다 암초 바위들
+        function drawSeaRocks(rx, ry) {
+          pDisk(bctx, rx, ry + 2, 8, 2, '#abd0ec');
+          pRect(bctx, rx - 5, ry - 2, 4, 4, '#5a6275');
+          pRect(bctx, rx - 4, ry - 4, 2, 2, '#737d94');
+          pRect(bctx, rx + 1, ry - 3, 5, 5, '#474e5e');
+          pRect(bctx, rx + 2, ry - 5, 3, 2, '#646d82');
+        }
+        drawSeaRocks(32, 68);
+        drawSeaRocks(46, 138);
+        drawSeaRocks(126, 202);
+        drawSeaRocks(338, 178);
+
+        // [EP 1 랜드마크: 좌상단 노아의 방주(난파선풍 거대 목선) & 아라랏산 & 무지개]
+        drawPixelRainbow(bctx, 88, 34);
+        drawPixelNoahArk(bctx, 98, 52);
+
+        // 오아시스 야자수 숲 & 낙타·코끼리
+        drawPixelPalm(bctx, 88, 86);
+        drawPixelPalm(bctx, 98, 96);
+        drawPixelPalm(bctx, 106, 82);
+        drawPixelPalm(bctx, 138, 84);
+        drawPixelPalm(bctx, 144, 96);
+        drawPixelPalm(bctx, 94, 108);
+        drawPixelElephant(bctx, 148, 92);
+        drawPixelCamel(bctx, 162, 68);
+        drawPixelCamel(bctx, 106, 122);
+
+        // [EP 2 랜드마크: 좌하단 불타는 시내산 + 파라오 석상 + 갈라진 홍해 다리 + 피라미드 & 스핑크스]
+        drawPixelSinaiMountain(bctx, 74, 136);
+        drawPixelStatue(bctx, 108, 156);
+        drawPixelStatue(bctx, 128, 158);
+        // 갈라진 홍해 도하 바닷길
+        pRect(bctx, 145, 156, 16, 8, '#9bc6e6');
+        pRect(bctx, 145, 158, 16, 4, '#e7bf7e');
+        // 피라미드 3기 & 스핑크스
+        drawPixelPyramid(bctx, 204, 158, 22, 15);
+        drawPixelPyramid(bctx, 226, 164, 28, 19);
+        drawPixelPyramid(bctx, 248, 156, 20, 14);
+        drawPixelSphinx(bctx, 192, 172);
+
+        // 선인장 & 고대 항아리들
+        [[62, 126], [68, 162], [86, 168], [166, 182], [278, 162]].forEach(([cx, cy]) => drawPixelCactus(bctx, cx, cy));
+        [[92, 176], [136, 178], [176, 148], [268, 168]].forEach(([px, py]) => drawPixelPot(bctx, px, py));
+
+        // [EP 3 랜드마크: 중앙·우하단 베들레헴 돔 성전 & 고대 마을 & 엘라 골짜기 천막]
+        drawPixelGrandPalace(bctx, 226, 122);
+        drawPixelHouse(bctx, 168, 118);
+        drawPixelHouse(bctx, 178, 124);
+        drawPixelHouse(bctx, 286, 126);
+        drawPixelHouse(bctx, 294, 136);
+        drawPixelTent(bctx, 258, 92, 18, 15);
+        drawPixelTent(bctx, 280, 88, 13, 11);
+        drawPixelTent(bctx, 286, 102, 12, 10);
+
+        // [EP 4 랜드마크: 우상단 갈릴리 숲과 나무들]
+        [[222, 36], [236, 40], [274, 42], [292, 52], [302, 68], [298, 86], [242, 82], [228, 94]].forEach(([tx, ty]) => {
+          drawPixelRoundTree(bctx, tx, ty);
+        });
+      }
+
+      function drawPixelRainbow(c, cx, cy) {
+        const cols = ['#ef4444', '#f97316', '#facc15', '#22c55e', '#38bdf8'];
+        cols.forEach((col, i) => {
+          const r = 26 - i * 2;
+          for (let a = Math.PI; a <= Math.PI * 2; a += 0.04) {
+            const x = Math.round(cx + Math.cos(a) * r);
+            const y = Math.round(cy + Math.sin(a) * (r * 0.65));
+            pRect(c, x, y, 2, 2, col);
+          }
+        });
+      }
+
+      function drawPixelNoahArk(c, cx, cy) {
+        // 웅장한 도트 나무 방주 (대각선 정박 형태)
+        for (let i = -28; i <= 28; i++) {
+          const yOff = Math.round(-i * 0.38);
+          const halfH = Math.max(3, Math.round(10 - (i * i) / 95));
+          pRect(c, cx + i, cy + yOff - halfH, 2, halfH * 2, '#7c4d2b');
+          pRect(c, cx + i, cy + yOff - halfH, 2, 2, '#4a2c18');
+          pRect(c, cx + i, cy + yOff + halfH - 1, 2, 2, '#4a2c18');
+          if (i % 4 === 0) pRect(c, cx + i, cy + yOff - halfH + 2, 1, halfH * 2 - 4, '#5e381e');
+        }
+        // 갑판 위 지붕 하우스 & 돛대
+        pRect(c, cx - 12, cy - 10, 22, 8, '#9c6339');
+        pRect(c, cx - 14, cy - 13, 26, 4, '#b87747');
+        pRect(c, cx - 2, cy - 28, 3, 22, '#4a2c18');
+        pRect(c, cx - 14, cy - 25, 14, 10, '#cbd5e1');
+        pRect(c, cx - 12, cy - 23, 10, 6, '#94a3b8');
+      }
+
+      function drawPixelSinaiMountain(c, cx, cy) {
+        for (let y = 0; y < 18; y++) {
+          const w = 4 + Math.floor(y * 1.35);
+          pRect(c, cx - w, cy - 12 + y, w * 2, 1, '#8c6239');
+          pRect(c, cx - w, cy - 12 + y, 2, 1, '#593b1f');
+          pRect(c, cx + w - 2, cy - 12 + y, 2, 1, '#593b1f');
+        }
+        // 봉우리 용암/불빛
+        pRect(c, cx - 3, cy - 13, 6, 3, '#f97316');
+        pRect(c, cx - 2, cy - 12, 4, 5, '#facc15');
+      }
+
+      function drawPixelStatue(c, cx, cy) {
+        pRect(c, cx - 5, cy + 8, 10, 4, '#b88b4a');
+        pRect(c, cx - 4, cy - 10, 8, 18, '#d9ab66');
+        pRect(c, cx - 4, cy - 10, 2, 18, '#efca8c');
+        pRect(c, cx + 2, cy - 10, 2, 18, '#a6793b');
+        pRect(c, cx - 3, cy - 15, 6, 5, '#d9ab66');
+        pRect(c, cx - 1, cy - 13, 2, 2, '#4a2c18');
+      }
+
+      function drawPixelPyramid(c, cx, cy, halfW, h) {
+        for (let y = 0; y < h; y++) {
+          const w = Math.max(1, Math.round((y / h) * halfW));
+          pRect(c, cx - w, cy - h + y, w, 1, '#f3ca82');
+          pRect(c, cx, cy - h + y, w, 1, '#d19e54');
+          pRect(c, cx - w, cy - h + y, 1, 1, '#7c5325');
+          pRect(c, cx + w - 1, cy - h + y, 1, 1, '#7c5325');
+        }
+        pRect(c, cx - 2, cy - h, 4, 3, '#fef08a');
+      }
+
+      function drawPixelSphinx(c, cx, cy) {
+        pRect(c, cx - 12, cy, 22, 8, '#d9ab66');
+        pRect(c, cx - 12, cy, 22, 2, '#efca8c');
+        pRect(c, cx - 16, cy + 4, 6, 4, '#c4934e');
+        pRect(c, cx - 11, cy - 8, 9, 9, '#e5b873');
+        pRect(c, cx - 9, cy - 6, 5, 6, '#f3ca82');
+        pRect(c, cx - 8, cy - 4, 1, 1, '#4a2c18');
+        pRect(c, cx - 6, cy - 4, 1, 1, '#4a2c18');
+      }
+
+      function drawPixelGrandPalace(c, cx, cy) {
+        // 성전 외곽 기둥과 본관
+        pRect(c, cx - 26, cy - 8, 52, 22, '#f5d6ce');
+        pRect(c, cx - 26, cy - 8, 52, 2, '#7c3f38');
+        pRect(c, cx - 26, cy + 12, 52, 2, '#7c3f38');
+        // 아치 문
+        pRect(c, cx - 6, cy - 2, 12, 14, '#c98c82');
+        pRect(c, cx - 4, cy, 8, 12, '#8c4f47');
+        pRect(c, cx - 18, cy, 5, 9, '#c98c82');
+        pRect(c, cx + 13, cy, 5, 9, '#c98c82');
+        // 핑크빛 중앙 돔과 좌우 소형 돔
+        pDisk(c, cx, cy - 14, 12, 8, '#d95b72');
+        pDisk(c, cx - 3, cy - 15, 6, 5, '#f28fa1');
+        pRect(c, cx - 1, cy - 24, 2, 3, '#fde047');
+        pDisk(c, cx - 16, cy - 11, 6, 4, '#d95b72');
+        pDisk(c, cx + 16, cy - 11, 6, 4, '#d95b72');
+        // 좌우 첨탑
+        pRect(c, cx - 31, cy - 18, 4, 32, '#f5d6ce');
+        pRect(c, cx + 27, cy - 18, 4, 32, '#f5d6ce');
+        pRect(c, cx - 32, cy - 20, 6, 3, '#d95b72');
+        pRect(c, cx + 26, cy - 20, 6, 3, '#d95b72');
+      }
+
+      function drawPixelTent(c, cx, cy, halfW, h) {
+        for (let y = 0; y < h; y++) {
+          const w = Math.max(1, Math.round((y / h) * halfW));
+          pRect(c, cx - w, cy - h + y, w, 1, '#d69e6b');
+          pRect(c, cx, cy - h + y, w, 1, '#ab7446');
+        }
+        pRect(c, cx - 3, cy - 6, 6, 6, '#3b2313');
+      }
+
+      function drawPixelHouse(c, cx, cy) {
+        pRect(c, cx - 5, cy - 4, 10, 8, '#f5dec4');
+        pRect(c, cx - 5, cy - 4, 10, 2, '#d4a67a');
+        pRect(c, cx + 1, cy - 3, 4, 7, '#d9b591');
+        pRect(c, cx - 3, cy - 1, 2, 2, '#5c3c24');
+        pRect(c, cx + 2, cy, 2, 4, '#5c3c24');
+      }
+
+      function drawPixelPalm(c, cx, cy) {
+        pLine(c, cx, cy, cx - 1, cy - 8, '#7c4d2b', 2);
+        pDisk(c, cx - 5, cy - 9, 4, 2, '#2e7d32');
+        pDisk(c, cx + 3, cy - 9, 4, 2, '#388e3c');
+        pDisk(c, cx - 1, cy - 11, 5, 2, '#4caf50');
+      }
+
+      function drawPixelRoundTree(c, cx, cy) {
+        pRect(c, cx - 1, cy, 3, 5, '#5c3c24');
+        pDisk(c, cx, cy - 4, 6, 5, '#2e6b27');
+        pDisk(c, cx - 1, cy - 5, 5, 4, '#4caf50');
+      }
+
+      function drawPixelCamel(c, cx, cy) {
+        pRect(c, cx - 4, cy - 3, 8, 4, '#c89250');
+        pRect(c, cx - 2, cy - 6, 4, 3, '#b82d46');
+        pRect(c, cx - 6, cy - 7, 2, 5, '#c89250');
+        pRect(c, cx - 8, cy - 7, 3, 2, '#c89250');
+        pRect(c, cx - 4, cy + 1, 1, 4, '#8c5e2a');
+        pRect(c, cx + 3, cy + 1, 1, 4, '#8c5e2a');
+      }
+
+      function drawPixelElephant(c, cx, cy) {
+        pDisk(c, cx, cy - 3, 6, 5, '#64748b');
+        pRect(c, cx - 3, cy - 7, 6, 3, '#dc2626');
+        pRect(c, cx - 8, cy - 5, 4, 4, '#64748b');
+        pRect(c, cx - 9, cy - 2, 2, 4, '#64748b');
+        pRect(c, cx - 4, cy + 1, 2, 3, '#475569');
+        pRect(c, cx + 2, cy + 1, 2, 3, '#475569');
+      }
+
+      function drawPixelCactus(c, cx, cy) {
+        pRect(c, cx - 1, cy - 6, 3, 7, '#2e7d32');
+        pRect(c, cx - 4, cy - 4, 3, 2, '#2e7d32');
+        pRect(c, cx - 4, cy - 6, 2, 3, '#2e7d32');
+        pRect(c, cx + 2, cy - 3, 3, 2, '#2e7d32');
+        pRect(c, cx + 3, cy - 5, 2, 3, '#2e7d32');
+      }
+
+      function drawPixelPot(c, cx, cy) {
+        pDisk(c, cx, cy, 3, 3, '#d97706');
+        pRect(c, cx - 3, cy - 1, 6, 1, '#38bdf8');
+        pRect(c, cx - 2, cy - 4, 4, 2, '#b45309');
+      }
+
+      buildStaticPixelMap();
+
+      // 구름 목록 및 1→2→3→4 이동 경로 제어점
+      const clouds = [
+        { x: 28, y: 22, s: 1.0, spd: 0.012 },
+        { x: 145, y: 18, s: 1.2, spd: 0.015 },
+        { x: 285, y: 16, s: 0.9, spd: 0.010 },
+        { x: 52, y: 105, s: 0.85, spd: 0.014 },
+        { x: 245, y: 74, s: 1.0, spd: 0.011 },
+        { x: 155, y: 136, s: 0.9, spd: 0.013 },
+        { x: 318, y: 148, s: 1.1, spd: 0.012 },
+        { x: 64, y: 188, s: 1.0, spd: 0.016 }
+      ];
+
+      const whirlpools = [
+        [24, 32], [186, 24], [32, 186], [308, 192]
+      ];
+
+      // 에피소드 1(좌상) -> 2(좌하) -> 3(우하) -> 4(우상) 경로 샘플링
+      const routePoints = [];
+      const segments = [
+        [[76, 48], [62, 105], [94, 162]],
+        [[94, 162], [172, 182], [242, 156]],
+        [[242, 156], [282, 112], [276, 52]]
+      ];
+      segments.forEach(seg => {
+        const [p0, p1, p2] = seg;
+        for (let t = 0; t <= 24; t++) {
+          const u = t / 24, inv = 1 - u;
+          const rx = inv * inv * p0[0] + 2 * inv * u * p1[0] + u * u * p2[0];
+          const ry = inv * inv * p0[1] + 2 * inv * u * p1[1] + u * u * p2[1];
+          routePoints.push([Math.round(rx), Math.round(ry)]);
+        }
+      });
+
+      function drawPixelCloud(c, cx, cy, scale) {
+        const r = Math.round(6 * scale);
+        // 구름 반투명 그림자
+        c.fillStyle = 'rgba(30, 58, 95, 0.22)';
+        pDisk(c, cx + 2, cy + 5, r * 1.8, r * 0.7, 'rgba(30, 58, 95, 0.22)');
+        // 구름 본체
+        pDisk(c, cx, cy + 1, r * 1.7, r * 0.75, '#dbeafe');
+        pDisk(c, cx - r * 0.8, cy, r * 0.9, r * 0.8, '#ffffff');
+        pDisk(c, cx + r * 0.8, cy, r * 0.85, r * 0.75, '#ffffff');
+        pDisk(c, cx, cy - r * 0.35, r * 1.1, r * 0.95, '#ffffff');
+      }
+
+      function renderPixelMapFrame(now) {
+        const screenMap = document.getElementById('screen-map');
+        if (screenMap && !screenMap.classList.contains('hidden')) {
+          ctx.drawImage(baseCanvas, 0, 0);
+
+          const tick = Math.floor(now / 180);
+
+          // 1) 바다 소용돌이 애니메이션
+          whirlpools.forEach(([wx, wy], idx) => {
+            pDisk(ctx, wx, wy, 13, 8, '#87b5de');
+            pDisk(ctx, wx, wy, 9, 5, '#6fa0d0');
+            pDisk(ctx, wx + ((tick + idx) % 3 - 1), wy, 5, 3, '#b8dcf5');
+            pRect(ctx, wx - 1, wy - 1, 3, 2, '#ffffff');
+          });
+
+          // 2) 시내산 봉우리 불꽃 깜빡임 (EP 2)
+          const flameH = 2 + (tick % 3);
+          pRect(ctx, 72, 121 - flameH, 4, flameH, '#fef08a');
+          pRect(ctx, 73, 118 - flameH, 2, 2, '#ef4444');
+
+          // 3) 갈릴리 호수 위 조각배 흔들림 (EP 4)
+          const boatY = 61 + (tick % 2);
+          pRect(ctx, 259, boatY, 10, 3, '#78350f');
+          pRect(ctx, 263, boatY - 6, 1, 6, '#451a03');
+          pRect(ctx, 264, boatY - 5, 4, 4, '#ffffff');
+
+          // 4) 에피소드 1 → 2 → 3 → 4 도트 이동 경로 애니메이션
+          for (let i = 0; i < routePoints.length; i++) {
+            const [rx, ry] = routePoints[i];
+            pRect(ctx, rx - 1, ry - 1, 3, 3, '#fef08a');
+            if ((i - (tick % 4) + 400) % 4 < 2) {
+              pRect(ctx, rx, ry, 2, 2, '#dc2626');
+            }
+          }
+
+          // 구간별 진행 방향 화살표 도트 아이콘 (1→2, 2→3, 3→4)
+          const arrowIndices = [12, 37, 62];
+          arrowIndices.forEach(ai => {
+            const [ax, ay] = routePoints[ai];
+            pDisk(ctx, ax, ay, 4, 4, '#dc2626');
+            pRect(ctx, ax - 1, ay - 1, 3, 3, '#fef08a');
+          });
+
+          // 5) 둥실거리는 도트 구름
+          clouds.forEach(cl => {
+            cl.x += cl.spd;
+            if (cl.x > W + 24) cl.x = -24;
+            drawPixelCloud(ctx, Math.round(cl.x), cl.y, cl.s);
+          });
+        }
+        requestAnimationFrame(renderPixelMapFrame);
+      }
+      requestAnimationFrame(renderPixelMapFrame);
+    })();
   </script>
 </body>
 </html>
