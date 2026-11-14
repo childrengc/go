@@ -1110,7 +1110,7 @@ function updateStage2Speedrun(dt, now) {
   });
 }
 // =========================================================================
-// [ep2_exodus.js - 파트 2/2] 스테이지 3 시내산 등반(한 줄 아래 이동 통일, 대형 사각형 판정, 뱀 원형 영역) 및 컷신
+// [ep2_exodus.js - 파트 2/2] 스테이지 3 시내산 등반(바위 위 구름 이동, 시작 12초, 물주머니 +7.8초) 및 컷신
 // =========================================================================
 
 function spawnSinaiWaterPouchItem(x, y, z) {
@@ -1142,7 +1142,7 @@ function spawnSinaiWaterPouchItem(x, y, z) {
   grp.position.set(x, y, z);
   worldGroup.add(grp);
 
-  const lbl = createWorldLabel('💧 고대 물주머니 (마시면 +7.3초 연장!)');
+  const lbl = createWorldLabel('💧 고대 물주머니 (마시면 +7.8초 연장!)');
   sinaiClocks.push({ group: grp, pos: new THREE.Vector3(x, y + 0.8, z), collected: false, label: lbl });
 }
 
@@ -1198,7 +1198,6 @@ function createZigzagLightningBolt() {
   return boltGroup;
 }
 
-// [스테이지 3 요청사항] 타임어택을 제외한 모든 레벨에서 장애물에 걸리면 무조건 한 줄 아랫줄(stepIdx - 1)로 이동
 function relocateSinaiPlayerOnHit(stepIdx, nodeIdx, msgPrefix = '⚠️ 장애물에 닿아') {
   if (currentMode === 'timeattack' && sinaiStepNodes.length > 0) {
     const backIdx = Math.max(0, (nodeIdx || 1) - 1);
@@ -1227,6 +1226,13 @@ function buildExodusStage3World() {
   const isJunior = (currentMode === 'junior');
   const isTimeAttack = (currentMode === 'timeattack');
   const isSeniorMap = (currentMode === 'senior' || isTimeAttack);
+
+  // [요청사항 2] 타임어택 시작 시 제한 시간을 기존 10초에서 +2초 더한 12.0초로 설정
+  if (isTimeAttack) {
+    timeRemaining = 12.0;
+    const timerValEl = document.getElementById('hud-timer-val');
+    if (timerValEl) timerValEl.textContent = '12.0초';
+  }
 
   scene.background = new THREE.Color(0x2563eb);
   scene.fog = new THREE.Fog(0x38bdf8, 65, 250);
@@ -1563,16 +1569,26 @@ function buildExodusStage3World() {
   const summitMinClimbY = Number((totalRows * rowRise - 0.35).toFixed(2));
   createMountainRockBlock(0, summitZ, pathHalfLimit * 2, 10.5, summitY, 'summit', totalRows + 1, summitNodeIdx, summitMinClimbY);
 
-  if (isSeniorMap) {
-    for (let cIdx = 0; cIdx < 8; cIdx++) {
-      const cy = 7.5 + cIdx * 4.8;
-      const cz = 14.0 - cIdx * 7.2;
-      const cx = (cIdx % 2 === 0 ? -3.2 : 3.2);
-      const cGrp = createFluffyCloudGroup(1.15, true);
-      cGrp.position.set(cx, cy, cz);
-      worldGroup.add(cGrp);
-      sinaiCloudLayers.push({ group: cGrp, baseX: cx, phase: cIdx * 1.1 });
-    }
+  // [요청사항 1] 구름이 바위 속에 묻히지 않고 각 층 바위 바로 위에서 좌우로 선명하게 움직이도록 배치
+  const cloudRowStep = isKinder ? 2 : 1;
+  for (let r = 0; r < totalRows; r += cloudRowStep) {
+    const sz = firstStepZ - r * stepDz;
+    const rowTopRockY = (r + 1) * rowRise;
+    const cy = rowTopRockY + 1.35;
+    const cz = sz + 0.35;
+    const cScale = isSeniorMap ? 0.92 : 0.82;
+    const cGrp = createFluffyCloudGroup(cScale, true);
+    const startX = (r % 2 === 0 ? -1 : 1) * (pathHalfLimit * 0.45);
+    cGrp.position.set(startX, cy, cz);
+    worldGroup.add(cGrp);
+    sinaiCloudLayers.push({
+      group: cGrp,
+      baseX: 0,
+      baseY: cy,
+      ampX: pathHalfLimit - 2.6,
+      speed: (isSeniorMap ? 1.85 : 1.35) + (r % 3) * 0.3,
+      phase: r * 1.4
+    });
   }
 
   [
@@ -1666,8 +1682,6 @@ function buildExodusStage3World() {
 }
 
 function updateStage3Sinai(dt, now) {
-  const isSenior = (currentMode === 'senior' || currentMode === 'timeattack');
-
   sinaiWaitingPeople.forEach(p => {
     const wave = Math.sin(now * 0.008 + p.phase) * 0.45;
     p.mesh.userData.lArm.rotation.x = -2.2 + wave;
@@ -1685,6 +1699,7 @@ function updateStage3Sinai(dt, now) {
     sp.mesh.rotation.x += dt * 3;
   });
 
+  // [요청사항 2] 각 물주머니 획득 시 시간을 +0.5초 더 추가하여 총 +7.8초 연장
   sinaiClocks.forEach(ck => {
     if (ck.collected) return;
     ck.group.rotation.y += dt * 2.4;
@@ -1694,9 +1709,9 @@ function updateStage3Sinai(dt, now) {
       ck.collected = true;
       ck.group.visible = false;
       ck.label.style.opacity = '0';
-      timeRemaining += 7.3;
+      timeRemaining += 7.8;
       playSfx('clock');
-      showToast('💧 시원한 물주머니 획득! 제한 시간이 +7.3초 연장되었어요!');
+      showToast('💧 시원한 물주머니 획득! 제한 시간이 +7.8초 연장되었어요!');
     }
   });
 
@@ -1787,9 +1802,13 @@ function updateStage3Sinai(dt, now) {
     }
   });
 
-  const cloudSpd = isSenior ? 0.0032 : 0.0016;
+  // [요청사항 1] 바위 바로 위에서 구름이 좌우로 넓게 왕복 이동
+  const tSec = now * 0.001;
   sinaiCloudLayers.forEach(cl => {
-    cl.group.position.x = cl.baseX + Math.sin(now * cloudSpd + cl.phase) * 4.8;
+    cl.group.position.x = cl.baseX + Math.sin(tSec * (cl.speed || 1.5) + cl.phase) * (cl.ampX || 6.5);
+    if (cl.baseY !== undefined) {
+      cl.group.position.y = cl.baseY + Math.cos(tSec * 2.2 + cl.phase) * 0.16;
+    }
   });
 
   sinaiHazardZones.forEach(hz => {
