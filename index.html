@@ -110,7 +110,7 @@
       .landscape-compact-title { font-size: 1.1rem !important; margin-bottom: 0.15rem !important; }
       .landscape-compact-icon { font-size: 1.6rem !important; margin-bottom: 0.1rem !important; }
       .landscape-compact-verse { padding: 0.45rem !important; margin-bottom: 0 !important; font-size: 0.72rem !important; }
-      .landscape-map-wrap { height: 74dvh !important; }
+      .landscape-map-wrap { height: 70dvh !important; }
       .map-pin-card { padding: 0.2rem 0.4rem !important; }
     }
   </style>
@@ -219,12 +219,12 @@
   </div>
 
   <!-- =================================================================== -->
-  <!-- 화면 1: 오프닝 화면 (우측 하단 그림자 없는 반투명 소형 자물쇠 포함) -->
+  <!-- 화면 1: 오프닝 화면 (하단 교회명 & 우측 하단 반투명 소형 자물쇠 포함) -->
   <!-- =================================================================== -->
   <div id="screen-opening" class="fixed inset-0 z-30 flex items-center justify-center p-3 bg-slate-950/45 backdrop-blur-[2px]">
-    <div class="mc-card modal-scroll relative w-full max-w-md rounded-3xl p-5 sm:p-6 pb-7 text-center">
+    <div class="mc-card modal-scroll relative w-full max-w-md rounded-3xl p-5 sm:p-6 pb-5 text-center">
       <div class="inline-block px-3 py-1 rounded-full bg-amber-200 text-amber-900 font-jua text-xs mb-2">
-        ✨ 3D 바이블 어드벤처
+        ✨ 3D 성경 말씀 어드벤처
       </div>
       <h1 class="font-jua text-3xl sm:text-4xl text-amber-900 mb-1">출발! 성경 탐험대!</h1>
       <p class="text-xs sm:text-sm text-slate-600 mb-4">말씀 속 주인공이 되어 믿음의 모험을 떠나요!</p>
@@ -244,6 +244,11 @@
         🚀 탐험 출발하기!
       </button>
 
+      <!-- 하단 소속 표기 -->
+      <p class="mt-3.5 text-[11px] sm:text-xs font-jua text-amber-900/70 tracking-wide">
+        광릉내 재림교회 어린이부
+      </p>
+
       <!-- 우측 하단 반투명 소형 자물쇠 (그림자 없음) -->
       <a href="admin.html" title="관리자 모드" class="admin-lock-link absolute bottom-2 right-3 text-xs opacity-30 hover:opacity-70 transition-opacity leading-none p-1">
         🔒
@@ -252,10 +257,10 @@
   </div>
 
   <!-- =================================================================== -->
-  <!-- 화면 2: 반(난이도) 선택 화면 (우측 하단 그림자 없는 반투명 소형 자물쇠 포함) -->
+  <!-- 화면 2: 반(난이도) 선택 화면 (하단 교회명 & 우측 하단 반투명 소형 자물쇠 포함) -->
   <!-- =================================================================== -->
   <div id="screen-class" class="hidden fixed inset-0 z-30 items-center justify-center p-3 bg-slate-950/55 backdrop-blur-[2px]">
-    <div class="mc-card modal-scroll relative w-full max-w-lg rounded-3xl p-4 sm:p-6 pb-7 text-center">
+    <div class="mc-card modal-scroll relative w-full max-w-lg rounded-3xl p-4 sm:p-6 pb-5 text-center">
       <p id="class-hello-name" class="font-jua text-xl sm:text-2xl text-amber-900 mb-1">🙌 대원님, 환영해요!</p>
       <p class="text-xs text-slate-600 mb-3">나에게 맞는 난이도를 선택해 주세요!</p>
 
@@ -281,6 +286,11 @@
       <button type="button" onclick="openScreen('screen-opening')" class="mc-btn px-4 py-1.5 rounded-xl bg-slate-200 text-slate-700 font-jua text-xs">
         ◀ 이름 다시 입력하기
       </button>
+
+      <!-- 하단 소속 표기 -->
+      <p class="mt-2.5 text-[11px] sm:text-xs font-jua text-amber-900/70 tracking-wide">
+        광릉내 재림교회 어린이부
+      </p>
 
       <!-- 우측 하단 반투명 소형 자물쇠 (그림자 없음) -->
       <a href="admin.html" title="관리자 모드" class="admin-lock-link absolute bottom-2 right-3 text-xs opacity-30 hover:opacity-70 transition-opacity leading-none p-1">
@@ -311,7 +321,7 @@
       </div>
 
       <!-- 실제 고대 근동 대륙 지형도 영역 -->
-      <div class="landscape-map-wrap relative w-full h-[72dvh] max-h-[520px] min-h-[250px] rounded-2xl overflow-hidden border-4 border-amber-900 shadow-inner bg-[#e8d2a6]">
+      <div class="landscape-map-wrap relative w-full h-[69dvh] max-h-[500px] min-h-[240px] rounded-2xl overflow-hidden border-4 border-amber-900 shadow-inner bg-[#e8d2a6]">
         <svg viewBox="0 0 1000 560" preserveAspectRatio="xMidYMid slice" class="w-full h-full">
           <defs>
             <linearGradient id="landGrad" x1="0" y1="0" x2="1" y2="1">
@@ -497,6 +507,11 @@
           </div>
         </button>
       </div>
+
+      <!-- 월드맵 하단 소속 표기 -->
+      <p class="mt-1.5 text-center text-[11px] sm:text-xs font-jua text-amber-900/70 tracking-wide">
+        광릉내 재림교회 어린이부
+      </p>
     </div>
   </div>
 
@@ -577,6 +592,11 @@
           🗺️ 월드맵으로 이동
         </button>
       </div>
+
+      <!-- 인증서 하단 소속 표기 -->
+      <p class="mt-2.5 text-[11px] sm:text-xs font-jua text-amber-900/70 tracking-wide">
+        광릉내 재림교회 어린이부
+      </p>
     </div>
   </div>
 
@@ -585,7 +605,7 @@
   <script src="ep1_noah.js"></script>
   <script src="ep2_exodus.js"></script>
 
-  <!-- 화면 전환 보장 안전 스크립트 (키보드 열림·사운드 예외 시에도 즉시 진행 보장) -->
+  <!-- 화면 전환 보장 안전 스크립트 -->
   <script>
     let _lastStartTap = 0;
     function safeGoToClassSelect() {
@@ -598,6 +618,7 @@
 
       const val = inputEl ? inputEl.value.trim() : '';
       window.explorerName = val || '믿음의용사';
+      if (typeof explorerName !== 'undefined') explorerName = window.explorerName;
 
       const helloEl = document.getElementById('class-hello-name');
       if (helloEl) helloEl.textContent = '🙌 ' + window.explorerName + ' 대원님, 환영해요!';
