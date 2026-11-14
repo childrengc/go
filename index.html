@@ -14,25 +14,49 @@
       font-family: 'Noto Sans KR', sans-serif; background: #0f172a;
     }
     .font-jua { font-family: 'Jua', sans-serif; }
+
+    /* 게임 내 멀티터치 조작 영역에만 touch-action: none 적용 */
+    .ingame-touch { touch-action: none; }
+
+    /* 얇고 반투명한 그림자를 적용한 슬림 패널 (상단 HUD 및 라벨용) */
     .mc-panel {
-      background: rgba(15, 23, 42, 0.88);
-      border: 3px solid #f59e0b;
-      box-shadow: 0 6px 0 #78350f, 0 10px 20px rgba(0,0,0,0.45);
+      background: rgba(15, 23, 42, 0.74);
+      border: 1.5px solid rgba(245, 158, 11, 0.78);
+      box-shadow: 0 2px 0 rgba(120, 53, 15, 0.38), 0 4px 8px rgba(0, 0, 0, 0.22);
+      backdrop-filter: blur(2px);
     }
     .mc-card {
       background: #fffbeb;
       border: 4px solid #b45309;
-      box-shadow: 0 8px 0 #78350f, 0 14px 28px rgba(0,0,0,0.5);
+      box-shadow: 0 6px 0 rgba(120, 53, 15, 0.65), 0 12px 24px rgba(0,0,0,0.45);
     }
     .mc-btn {
-      border: 2px solid rgba(0,0,0,0.35);
-      box-shadow: 0 4px 0 rgba(0,0,0,0.45);
-      transition: transform 0.08s ease, box-shadow 0.08s ease;
+      border: 2px solid rgba(0,0,0,0.32);
+      box-shadow: 0 3px 0 rgba(0,0,0,0.38);
+      transition: transform 0.06s ease, box-shadow 0.06s ease;
+      cursor: pointer;
     }
     .mc-btn:active {
-      transform: translateY(3px);
-      box-shadow: 0 1px 0 rgba(0,0,0,0.45);
+      transform: translateY(2px);
+      box-shadow: 0 1px 0 rgba(0,0,0,0.38);
     }
+    .mc-btn-slim {
+      border: 1.5px solid rgba(255,255,255,0.22);
+      box-shadow: 0 1.5px 0 rgba(0,0,0,0.35), 0 2px 5px rgba(0,0,0,0.2);
+      transition: transform 0.06s ease;
+      cursor: pointer;
+    }
+    .mc-btn-slim:active { transform: translateY(1.5px); }
+
+    /* 우측 하단 반투명 소형 자물쇠 (그림자·테두리 완전 제거) */
+    .admin-lock-link {
+      box-shadow: none !important;
+      text-shadow: none !important;
+      filter: none !important;
+      border: none !important;
+      background: transparent !important;
+    }
+
     .world-label {
       position: absolute; transform: translate(-50%, -100%);
       pointer-events: none; transition: opacity 0.15s ease; z-index: 15;
@@ -46,7 +70,7 @@
 
     @keyframes floatPin {
       0%, 100% { transform: translate(-50%, -50%) translateY(0px); }
-      50% { transform: translate(-50%, -50%) translateY(-4px); }
+      50% { transform: translate(-50%, -50%) translateY(-3px); }
     }
     .map-pin-node {
       position: absolute;
@@ -56,24 +80,25 @@
     .map-pin-node:hover { z-index: 30; }
 
     @keyframes dashFlow {
-      to { stroke-dashoffset: -32; }
+      to { stroke-dashoffset: -28; }
     }
     .map-route-line {
-      stroke-dasharray: 10 6;
-      animation: dashFlow 1.5s linear infinite;
+      stroke-dasharray: 9 5;
+      animation: dashFlow 1.4s linear infinite;
     }
 
     .modal-scroll {
       max-height: 92dvh;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
+      touch-action: pan-y;
     }
 
     /* 휴대폰 가로모드(높이 540px 이하) 최적화 */
     @media (max-height: 540px) and (orientation: landscape) {
       .landscape-modal-card {
         max-width: 44rem !important;
-        padding: 0.75rem 1rem !important;
+        padding: 0.7rem 1rem !important;
         max-height: 94dvh !important;
       }
       .landscape-split {
@@ -82,18 +107,18 @@
         gap: 0.75rem;
         align-items: center;
       }
-      .landscape-compact-title { font-size: 1.15rem !important; margin-bottom: 0.2rem !important; }
-      .landscape-compact-icon { font-size: 1.75rem !important; margin-bottom: 0.15rem !important; }
-      .landscape-compact-verse { padding: 0.5rem !important; margin-bottom: 0 !important; font-size: 0.75rem !important; }
+      .landscape-compact-title { font-size: 1.1rem !important; margin-bottom: 0.15rem !important; }
+      .landscape-compact-icon { font-size: 1.6rem !important; margin-bottom: 0.1rem !important; }
+      .landscape-compact-verse { padding: 0.45rem !important; margin-bottom: 0 !important; font-size: 0.72rem !important; }
       .landscape-map-wrap { height: 74dvh !important; }
-      .map-pin-card { padding: 0.25rem 0.45rem !important; min-width: 108px !important; }
+      .map-pin-card { padding: 0.2rem 0.4rem !important; }
     }
   </style>
 </head>
 <body class="relative w-full h-full select-none">
 
   <!-- 3D 캔버스 & 월드 라벨 -->
-  <div id="canvas-container" class="absolute inset-0 z-0"></div>
+  <div id="canvas-container" class="ingame-touch absolute inset-0 z-0"></div>
   <div id="labels-container" class="absolute inset-0 pointer-events-none overflow-hidden z-10"></div>
 
   <!-- 피격 시 붉은 플래시 / 페이드 연출 -->
@@ -112,93 +137,92 @@
   </div>
 
   <!-- 토스트 알림 -->
-  <div id="toast-box" class="fixed top-20 left-1/2 -translate-x-1/2 z-40 pointer-events-none opacity-0 transition-opacity duration-300 w-[90%] max-w-md">
-    <div class="mc-panel px-4 py-2.5 rounded-2xl text-center">
-      <span id="toast-text" class="font-jua text-amber-200 text-xs sm:text-sm"></span>
+  <div id="toast-box" class="fixed top-14 left-1/2 -translate-x-1/2 z-40 pointer-events-none opacity-0 transition-opacity duration-300 w-[88%] max-w-md">
+    <div class="mc-panel px-3 py-1.5 rounded-xl text-center">
+      <span id="toast-text" class="font-jua text-amber-200 text-[11px] sm:text-xs"></span>
     </div>
   </div>
 
-  <!-- 상단 HUD -->
-  <div id="hud-top" class="hidden fixed top-2 left-2 right-2 z-20 flex flex-col gap-1.5 pointer-events-none">
-    <div class="flex items-center justify-between gap-1.5">
-      <div class="mc-panel px-2.5 py-1 rounded-xl flex items-center gap-1.5 pointer-events-auto">
-        <span id="hud-avatar-icon" class="text-lg">🧔🏻</span>
-        <span id="hud-player-tag" class="font-jua text-white text-xs sm:text-sm">대원</span>
-        <span class="text-amber-400">·</span>
-        <span id="hud-stage-badge" class="font-jua text-amber-300 text-xs sm:text-sm">스테이지 1</span>
+  <!-- 상단 HUD (얇고 슬림한 디자인 & 반투명 그림자) -->
+  <div id="hud-top" class="hidden fixed top-1.5 left-2 right-2 z-20 flex flex-col gap-1 pointer-events-none">
+    <div class="flex items-center justify-between gap-1">
+      <div class="mc-panel px-2 py-0.5 rounded-lg flex items-center gap-1 pointer-events-auto">
+        <span id="hud-avatar-icon" class="text-sm">🧔🏻</span>
+        <span id="hud-player-tag" class="font-jua text-white text-[11px] sm:text-xs">대원</span>
+        <span class="text-amber-400 text-xs">·</span>
+        <span id="hud-stage-badge" class="font-jua text-amber-300 text-[11px] sm:text-xs">스테이지 1</span>
       </div>
 
-      <div class="flex items-center gap-1.5 pointer-events-auto">
-        <div id="hud-block-box" class="hidden mc-panel px-2.5 py-1 rounded-xl items-center gap-1 bg-amber-950/90">
-          <span class="text-sm">🪵</span>
-          <span id="hud-block-text" class="font-jua text-amber-200 text-xs">통나무 0/2개</span>
+      <div class="flex items-center gap-1 pointer-events-auto">
+        <div id="hud-block-box" class="hidden mc-panel px-2 py-0.5 rounded-lg items-center gap-1 bg-amber-950/75">
+          <span class="text-xs">🪵</span>
+          <span id="hud-block-text" class="font-jua text-amber-200 text-[11px]">통나무 0/2개</span>
         </div>
 
-        <div id="hud-timer-box" class="hidden mc-panel px-2.5 py-1 rounded-xl items-center gap-1 bg-rose-950/90 border-rose-400">
-          <span class="text-sm">⏰</span>
-          <span id="hud-timer-val" class="font-jua text-rose-200 text-xs sm:text-sm">10.0초</span>
+        <div id="hud-timer-box" class="hidden mc-panel px-2 py-0.5 rounded-lg items-center gap-1 bg-rose-950/75 border-rose-400/80">
+          <span class="text-xs">⏰</span>
+          <span id="hud-timer-val" class="font-jua text-rose-200 text-[11px] sm:text-xs">10.0초</span>
         </div>
 
-        <div class="mc-panel px-2.5 py-1 rounded-xl flex items-center gap-1">
-          <span id="hud-counter-icon" class="text-sm">🐾</span>
-          <span id="hud-counter-text" class="font-jua text-emerald-300 text-xs sm:text-sm">0/7쌍</span>
+        <div class="mc-panel px-2 py-0.5 rounded-lg flex items-center gap-1">
+          <span id="hud-counter-icon" class="text-xs">🐾</span>
+          <span id="hud-counter-text" class="font-jua text-emerald-300 text-[11px] sm:text-xs">0/7쌍</span>
         </div>
 
-        <button id="hud-mode-btn" type="button" onclick="openScreen('screen-map')" class="mc-btn px-2.5 py-1 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-jua text-xs">
+        <button id="hud-mode-btn" type="button" onclick="openScreen('screen-map')" class="mc-btn-slim px-2 py-0.5 rounded-lg bg-amber-500/90 hover:bg-amber-400 text-slate-950 font-jua text-[11px]">
           🗺️맵
         </button>
-        <button id="bgm-btn" type="button" onclick="toggleBgm()" class="mc-btn w-8 h-8 rounded-xl bg-slate-800 text-white text-sm flex items-center justify-center">
+        <button id="bgm-btn" type="button" onclick="toggleBgm()" class="mc-btn-slim w-6 h-6 rounded-lg bg-slate-800/85 text-white text-xs flex items-center justify-center">
           🎵
         </button>
       </div>
     </div>
 
-    <div id="hud-mission-box" onclick="speakCurrentMission()" class="mc-panel px-3 py-1.5 rounded-xl self-center max-w-xl w-full text-center pointer-events-auto cursor-pointer">
-      <p class="text-amber-100 font-jua text-xs sm:text-sm truncate">
+    <div id="hud-mission-box" onclick="speakCurrentMission()" class="mc-panel px-2.5 py-0.5 rounded-lg self-center max-w-lg w-full text-center pointer-events-auto cursor-pointer">
+      <p class="text-amber-100 font-jua text-[11px] sm:text-xs truncate leading-tight">
         🔊 <span id="hud-mission-text">미션 안내</span>
       </p>
-      <p id="hud-compass-hint" class="text-[10px] text-amber-300/90">💛 캐릭터 머리 위 노란 화살표를 따라가 보세요! (터치 시 음성 안내)</p>
+      <p id="hud-compass-hint" class="text-[9px] text-amber-300/85 leading-tight">💛 머리 위 노란 화살표를 따라가 보세요! (터치 시 음성 안내)</p>
     </div>
   </div>
 
   <!-- 좌측 하단 가상 조이스틱 -->
-  <div id="joystick-zone" style="display:none;" class="fixed bottom-5 left-5 w-28 h-28 rounded-full bg-slate-900/55 border-2 border-amber-400/70 z-20 touch-none">
-    <div id="joystick-knob" class="w-12 h-12 rounded-full bg-amber-400/90 border-2 border-white shadow-lg absolute top-1/2 left-1/2 -mt-6 -ml-6 pointer-events-none"></div>
+  <div id="joystick-zone" style="display:none;" class="ingame-touch fixed bottom-4 left-4 w-28 h-28 rounded-full bg-slate-900/50 border-2 border-amber-400/65 z-20">
+    <div id="joystick-knob" class="w-12 h-12 rounded-full bg-amber-400/90 border-2 border-white shadow-md absolute top-1/2 left-1/2 -mt-6 -ml-6 pointer-events-none"></div>
   </div>
 
-  <!-- 하단 중앙 시점 회전 바 -->
-  <div id="cam-bottom-bar" style="display:none;" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-20 items-center gap-2">
-    <button type="button" onclick="rotateCameraDeg(-25)" class="mc-btn px-3 py-1.5 rounded-xl bg-slate-800/90 text-amber-200 font-jua text-xs">↺ 시점 좌회전</button>
-    <button type="button" onclick="rotateCameraDeg(25)" class="mc-btn px-3 py-1.5 rounded-xl bg-slate-800/90 text-amber-200 font-jua text-xs">시점 우회전 ↻</button>
+  <!-- 하단 중앙 시점 회전 바 (작고 슬림한 사이즈 + 멀티터치 즉시 반응) -->
+  <div id="cam-bottom-bar" style="display:none;" class="ingame-touch fixed bottom-3 left-1/2 -translate-x-1/2 z-20 items-center gap-1.5">
+    <button type="button" onpointerdown="event.preventDefault(); event.stopPropagation(); rotateCameraDeg(-25);" class="ingame-touch mc-btn-slim px-2 py-1 rounded-lg bg-slate-900/75 text-amber-200/95 font-jua text-[10px] sm:text-[11px]">
+      ↺ 좌회전
+    </button>
+    <button type="button" onpointerdown="event.preventDefault(); event.stopPropagation(); rotateCameraDeg(25);" class="ingame-touch mc-btn-slim px-2 py-1 rounded-lg bg-slate-900/75 text-amber-200/95 font-jua text-[10px] sm:text-[11px]">
+      우회전 ↻
+    </button>
   </div>
 
-  <!-- 우측 하단 액션 & 점프 버튼 -->
-  <div id="action-zone" style="display:none;" class="fixed bottom-5 right-5 z-20 flex flex-col items-end gap-2">
-    <button id="cert-open-btn" type="button" onclick="showEndingCertificate()" class="hidden mc-btn px-4 py-2 rounded-2xl bg-amber-400 text-slate-950 font-jua text-sm animate-bounce">
+  <!-- 우측 하단 액션 & 점프 버튼 (조이스틱 조작 중 동시 터치 즉시 작동) -->
+  <div id="action-zone" style="display:none;" class="ingame-touch fixed bottom-4 right-4 z-20 flex flex-col items-end gap-1.5">
+    <button id="cert-open-btn" type="button" onpointerdown="event.preventDefault(); event.stopPropagation(); showEndingCertificate();" class="ingame-touch hidden mc-btn px-3.5 py-1.5 rounded-xl bg-amber-400 text-slate-950 font-jua text-xs sm:text-sm animate-bounce">
       🏆 인증서 보기
     </button>
-    <button id="puzzle-build-btn" type="button" onclick="triggerPuzzleBuildOrSwitch()" class="hidden mc-btn px-4 py-2 rounded-2xl bg-sky-400 text-slate-950 font-jua text-xs sm:text-sm animate-pulse">
+    <button id="puzzle-build-btn" type="button" onpointerdown="event.preventDefault(); event.stopPropagation(); triggerPuzzleBuildOrSwitch();" class="ingame-touch hidden mc-btn px-3.5 py-1.5 rounded-xl bg-sky-400 text-slate-950 font-jua text-xs animate-pulse">
       🔨 다리 통나무 놓기!
     </button>
-    <button id="context-action-btn" type="button" onclick="triggerContextAction()" class="hidden mc-btn px-4 py-2.5 rounded-2xl bg-emerald-400 text-slate-950 font-jua text-sm animate-bounce">
+    <button id="context-action-btn" type="button" onpointerdown="event.preventDefault(); event.stopPropagation(); triggerContextAction();" class="ingame-touch hidden mc-btn px-3.5 py-2 rounded-xl bg-emerald-400 text-slate-950 font-jua text-xs sm:text-sm animate-bounce">
       ✨ 액션 실행!
     </button>
-    <button type="button" onclick="playerJump()" class="mc-btn w-20 h-20 rounded-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-jua text-base flex flex-col items-center justify-center">
-      <span class="text-xl leading-none">🦘</span>
-      <span>점프</span>
+    <button type="button" onpointerdown="event.preventDefault(); event.stopPropagation(); playerJump();" class="ingame-touch mc-btn w-20 h-20 rounded-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-jua text-base flex flex-col items-center justify-center">
+      <span class="text-xl leading-none pointer-events-none">🦘</span>
+      <span class="pointer-events-none">점프</span>
     </button>
   </div>
 
   <!-- =================================================================== -->
-  <!-- 화면 1: 오프닝 화면 (우측 상단 관리자 자물쇠 포함) -->
+  <!-- 화면 1: 오프닝 화면 (우측 하단 그림자 없는 반투명 소형 자물쇠 포함) -->
   <!-- =================================================================== -->
   <div id="screen-opening" class="fixed inset-0 z-30 flex items-center justify-center p-3 bg-slate-950/45 backdrop-blur-[2px]">
-    <div class="mc-card modal-scroll relative w-full max-w-md rounded-3xl p-5 sm:p-6 text-center">
-      <!-- 관리자 모드 진입 자물쇠 버튼 -->
-      <a href="admin.html" title="관리자 모드" class="mc-btn absolute top-3.5 right-3.5 w-8 h-8 rounded-xl bg-amber-100 hover:bg-amber-200 border border-amber-400 flex items-center justify-center text-sm opacity-75 hover:opacity-100">
-        🔒
-      </a>
-
+    <div class="mc-card modal-scroll relative w-full max-w-md rounded-3xl p-5 sm:p-6 pb-7 text-center">
       <div class="inline-block px-3 py-1 rounded-full bg-amber-200 text-amber-900 font-jua text-xs mb-2">
         ✨ 3D 바이블 어드벤처
       </div>
@@ -207,27 +231,33 @@
 
       <div class="bg-amber-100/80 border-2 border-amber-400 rounded-2xl p-3.5 mb-4 text-left">
         <label for="opening-name-input" class="block font-jua text-amber-900 text-sm mb-1.5">🎖️ 탐험 대원 이름을 입력해 주세요</label>
-        <input id="opening-name-input" type="text" maxlength="10" placeholder="예: 김다윗" class="w-full px-3.5 py-2.5 rounded-xl border-2 border-amber-500 bg-white font-bold text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
+        <input id="opening-name-input" type="text" maxlength="10" placeholder="예: 김다윗"
+               onkeydown="if(event.key==='Enter'){event.preventDefault(); safeGoToClassSelect();}"
+               style="user-select: text; -webkit-user-select: text; touch-action: auto;"
+               class="w-full px-3.5 py-2.5 rounded-xl border-2 border-amber-500 bg-white font-bold text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
       </div>
 
-      <button type="button" onclick="goToClassSelect()" class="mc-btn w-full py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-jua text-lg">
+      <button id="btn-start-explore" type="button"
+              onclick="safeGoToClassSelect()"
+              onpointerup="safeGoToClassSelect()"
+              class="mc-btn w-full py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-jua text-lg">
         🚀 탐험 출발하기!
       </button>
+
+      <!-- 우측 하단 반투명 소형 자물쇠 (그림자 없음) -->
+      <a href="admin.html" title="관리자 모드" class="admin-lock-link absolute bottom-2 right-3 text-xs opacity-30 hover:opacity-70 transition-opacity leading-none p-1">
+        🔒
+      </a>
     </div>
   </div>
 
   <!-- =================================================================== -->
-  <!-- 화면 2: 반(난이도) 선택 화면 (우측 상단 관리자 자물쇠 포함) -->
+  <!-- 화면 2: 반(난이도) 선택 화면 (우측 하단 그림자 없는 반투명 소형 자물쇠 포함) -->
   <!-- =================================================================== -->
   <div id="screen-class" class="hidden fixed inset-0 z-30 items-center justify-center p-3 bg-slate-950/55 backdrop-blur-[2px]">
-    <div class="mc-card modal-scroll relative w-full max-w-lg rounded-3xl p-4 sm:p-6 text-center">
-      <!-- 관리자 모드 진입 자물쇠 버튼 -->
-      <a href="admin.html" title="관리자 모드" class="mc-btn absolute top-3.5 right-3.5 w-8 h-8 rounded-xl bg-amber-100 hover:bg-amber-200 border border-amber-400 flex items-center justify-center text-sm opacity-75 hover:opacity-100">
-        🔒
-      </a>
-
-      <p id="class-hello-name" class="font-jua text-xl sm:text-2xl text-amber-900 mb-1 pr-6">🙌 대원님, 환영해요!</p>
-      <p class="text-xs text-slate-600 mb-3">나에게 맞는 부서(난이도)를 선택해 주세요!</p>
+    <div class="mc-card modal-scroll relative w-full max-w-lg rounded-3xl p-4 sm:p-6 pb-7 text-center">
+      <p id="class-hello-name" class="font-jua text-xl sm:text-2xl text-amber-900 mb-1">🙌 대원님, 환영해요!</p>
+      <p class="text-xs text-slate-600 mb-3">나에게 맞는 난이도를 선택해 주세요!</p>
 
       <div class="grid grid-cols-2 gap-2.5 mb-3 text-left">
         <button type="button" onclick="selectClassAndShowMap('kinder')" class="mc-btn p-3 rounded-2xl bg-yellow-100 hover:bg-yellow-200 border-amber-400">
@@ -251,6 +281,11 @@
       <button type="button" onclick="openScreen('screen-opening')" class="mc-btn px-4 py-1.5 rounded-xl bg-slate-200 text-slate-700 font-jua text-xs">
         ◀ 이름 다시 입력하기
       </button>
+
+      <!-- 우측 하단 반투명 소형 자물쇠 (그림자 없음) -->
+      <a href="admin.html" title="관리자 모드" class="admin-lock-link absolute bottom-2 right-3 text-xs opacity-30 hover:opacity-70 transition-opacity leading-none p-1">
+        🔒
+      </a>
     </div>
   </div>
 
@@ -259,85 +294,64 @@
   <!-- =================================================================== -->
   <div id="screen-map" class="hidden fixed inset-0 z-30 items-center justify-center p-2 sm:p-4 bg-slate-950/75 backdrop-blur-sm">
     <div class="mc-card w-full max-w-5xl rounded-3xl p-2.5 sm:p-4 flex flex-col">
-      <!-- 상단 헤더 바 -->
-      <div class="flex items-center justify-between gap-2 mb-2 px-1">
-        <div class="flex items-center gap-2">
-          <span class="text-lg sm:text-2xl">🗺️</span>
+      <div class="flex items-center justify-between gap-2 mb-1.5 px-1">
+        <div class="flex items-center gap-1.5">
+          <span class="text-lg sm:text-xl">🗺️</span>
           <div>
-            <h2 class="font-jua text-base sm:text-xl text-amber-950 leading-tight">성경 탐험 월드맵</h2>
+            <h2 class="font-jua text-sm sm:text-lg text-amber-950 leading-tight">성경 탐험 대륙 지도</h2>
             <p class="text-[10px] sm:text-xs text-slate-600">탐험 경로(1→2→3→4)를 따라 원하는 에피소드를 선택하세요!</p>
           </div>
         </div>
         <div class="flex items-center gap-1.5">
-          <span id="map-selected-badge" class="px-2.5 py-1 rounded-full bg-amber-200 border border-amber-500 font-jua text-amber-950 text-[11px] sm:text-xs">🌱 유년반</span>
-          <button type="button" onclick="openScreen('screen-class')" class="mc-btn px-2.5 py-1 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-jua text-[11px] sm:text-xs">
+          <span id="map-selected-badge" class="px-2 py-0.5 rounded-full bg-amber-200 border border-amber-500 font-jua text-amber-950 text-[10px] sm:text-xs">🌱 유년반</span>
+          <button type="button" onclick="openScreen('screen-class')" class="mc-btn px-2.5 py-0.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-jua text-[10px] sm:text-xs">
             ◀ 반 변경
           </button>
         </div>
       </div>
 
-      <!-- 실제 고대 지형도 스타일 월드맵 영역 -->
-      <div class="landscape-map-wrap relative w-full h-[72dvh] max-h-[530px] min-h-[260px] rounded-2xl overflow-hidden border-4 border-amber-900 shadow-inner bg-[#e6cfa3]">
+      <!-- 실제 고대 근동 대륙 지형도 영역 -->
+      <div class="landscape-map-wrap relative w-full h-[72dvh] max-h-[520px] min-h-[250px] rounded-2xl overflow-hidden border-4 border-amber-900 shadow-inner bg-[#e8d2a6]">
         <svg viewBox="0 0 1000 560" preserveAspectRatio="xMidYMid slice" class="w-full h-full">
           <defs>
-            <!-- 대륙 양피지 & 지형 그라데이션 -->
-            <linearGradient id="parchmentLand" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stop-color="#f3e3be" />
-              <stop offset="45%" stop-color="#e7cf9e" />
-              <stop offset="100%" stop-color="#d7b575" />
+            <linearGradient id="landGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#f5e6c8" />
+              <stop offset="50%" stop-color="#e6ce9e" />
+              <stop offset="100%" stop-color="#d6b477" />
             </linearGradient>
-            <linearGradient id="medSeaGrad" x1="0" y1="0" x2="1" y2="1">
+            <linearGradient id="seaWater" x1="0" y1="0" x2="1" y2="1">
               <stop offset="0%" stop-color="#0369a1" />
               <stop offset="65%" stop-color="#0284c7" />
               <stop offset="100%" stop-color="#38bdf8" />
             </linearGradient>
-            <radialGradient id="fertileGreen" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stop-color="#86efac" stop-opacity="0.72" />
-              <stop offset="70%" stop-color="#4ade80" stop-opacity="0.35" />
+            <radialGradient id="greenZone" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#86efac" stop-opacity="0.65" />
               <stop offset="100%" stop-color="#4ade80" stop-opacity="0" />
             </radialGradient>
-            <radialGradient id="desertGold" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.52" />
-              <stop offset="70%" stop-color="#d97706" stop-opacity="0.24" />
+            <radialGradient id="desertZone" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.48" />
               <stop offset="100%" stop-color="#d97706" stop-opacity="0" />
             </radialGradient>
-            <marker id="routeArrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-              <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#dc2626" />
-            </marker>
           </defs>
 
-          <!-- 1) 전체 대륙 베이스 (하나로 연결된 고대 근동 대륙 지형) -->
-          <rect width="1000" height="560" fill="url(#parchmentLand)" />
+          <!-- 1) 전체가 하나로 연결된 고대 근동 대륙 지형 베이스 -->
+          <rect width="1000" height="560" fill="url(#landGrad)" />
 
-          <!-- 지역별 생태 기후대 음영 (비옥한 초승달 지대, 가나안 구릉지, 시내산 사막) -->
-          <ellipse cx="220" cy="135" rx="210" ry="115" fill="url(#fertileGreen)" />
-          <ellipse cx="755" cy="185" rx="210" ry="135" fill="url(#fertileGreen)" />
-          <ellipse cx="640" cy="400" rx="175" ry="125" fill="url(#fertileGreen)" />
-          <ellipse cx="290" cy="445" rx="230" ry="135" fill="url(#desertGold)" />
+          <!-- 기후대 지형 채색 (아라랏 초원, 갈릴리·엘라 녹지, 시내산 사막) -->
+          <ellipse cx="210" cy="125" rx="220" ry="110" fill="url(#greenZone)" />
+          <ellipse cx="770" cy="145" rx="210" ry="125" fill="url(#greenZone)" />
+          <ellipse cx="660" cy="400" rx="195" ry="125" fill="url(#greenZone)" />
+          <ellipse cx="290" cy="435" rx="240" ry="135" fill="url(#desertZone)" />
 
-          <!-- 2) 서쪽 대해(지중해) 해안선 & 남쪽 홍해 바닷물 지형 -->
-          <!-- 지중해 (좌측 중부 해안만) -->
-          <path d="M 0 215 Q 115 210 165 245 Q 205 280 175 330 Q 130 355 0 350 Z" fill="url(#medSeaGrad)" stroke="#b45309" stroke-width="3.5" />
-          <path d="M 8 223 Q 110 218 156 250 Q 192 280 165 322 Q 124 344 8 342" fill="none" stroke="#bae6fd" stroke-width="2" opacity="0.65" />
+          <!-- 지형 등고선 디테일 -->
+          <g fill="none" stroke="#92400e" stroke-opacity="0.18" stroke-width="1.5" stroke-dasharray="6 4">
+            <path d="M 40 60 Q 220 20 420 75 T 890 65" />
+            <path d="M 320 290 Q 520 240 710 310 T 960 280" />
+            <path d="M 80 510 Q 340 465 590 515 T 950 490" />
+          </g>
 
-          <!-- 남쪽 홍해만 (이집트와 시내 광야 사이로 뻗은 실제 만 형태) -->
-          <path d="M 215 560 L 245 385 Q 262 365 282 385 L 315 505 L 355 415 Q 370 398 385 418 L 410 560 Z" fill="url(#medSeaGrad)" stroke="#b45309" stroke-width="3.5" />
-
-          <!-- 3) 주요 강줄기와 내륙 호수 (나일강, 갈릴리 호수, 요단강, 사해, 유프라테스강) -->
-          <!-- 나일강 & 삼각주 -->
-          <path d="M 95 560 Q 115 475 108 410 L 82 350 M 108 410 L 112 348 M 108 410 L 138 352" fill="none" stroke="#0284c7" stroke-width="6" stroke-linecap="round" />
-          <!-- 북부 아라랏 강줄기 -->
-          <path d="M 65 95 Q 195 145 355 110 Q 475 80 560 130" fill="none" stroke="#0284c7" stroke-width="4" stroke-dasharray="1 0" opacity="0.75" />
-          <!-- 갈릴리 호수 → 요단강 → 사해 (동부 내륙 수계) -->
-          <path d="M 780 95 L 775 165 Q 765 265 735 335 Q 690 400 635 435" fill="none" stroke="#0284c7" stroke-width="5.5" stroke-linecap="round" />
-          <!-- 갈릴리 호수 (EP 4) -->
-          <ellipse cx="775" cy="175" rx="58" ry="34" fill="url(#medSeaGrad)" stroke="#0369a1" stroke-width="3.5" />
-          <ellipse cx="775" cy="175" rx="48" ry="26" fill="none" stroke="#bae6fd" stroke-width="1.5" opacity="0.7" />
-          <!-- 사해 (남부 내륙 염호) -->
-          <ellipse cx="520" cy="475" rx="34" ry="18" fill="#0369a1" stroke="#78350f" stroke-width="2.5" opacity="0.85" />
-
-          <!-- 4) 고대 지도 경위도 격자 및 지형 등고선 -->
-          <g stroke="#92400e" stroke-opacity="0.16" stroke-width="1.2" stroke-dasharray="4 4">
+          <!-- 경위도 지도 격자 -->
+          <g stroke="#78350f" stroke-opacity="0.15" stroke-width="1">
             <line x1="0" y1="140" x2="1000" y2="140" />
             <line x1="0" y1="280" x2="1000" y2="280" />
             <line x1="0" y1="420" x2="1000" y2="420" />
@@ -346,76 +360,261 @@
             <line x1="750" y1="0" x2="750" y2="560" />
           </g>
 
-          <!-- 대륙 산맥과 사막 구릉 디테일 -->
-          <g fill="#a16207" fill-opacity="0.28" stroke="#78350f" stroke-width="2" stroke-linejoin="round">
-            <!-- 북부 아라랏 산맥 -->
-            <polygon points="90,115 120,62 150,115" />
-            <polygon points="240,110 272,58 304,110" />
-            <polygon points="340,125 368,78 396,125" />
-            <!-- 중앙 레바논·유다 산맥 -->
-            <polygon points="485,235 515,182 545,235" />
-            <polygon points="525,255 558,195 590,255" />
-            <polygon points="465,335 495,285 525,335" />
-            <!-- 동부 길르앗 산맥 -->
-            <polygon points="865,285 895,230 925,285" />
-            <polygon points="895,310 928,252 960,310" />
+          <!-- 2) 서쪽 지중해 해안선 & 남쪽 홍해만 수역 -->
+          <path d="M 0 185 Q 105 190 155 235 Q 195 275 160 325 Q 115 350 0 345 Z" fill="url(#seaWater)" stroke="#92400e" stroke-width="3" />
+          <path d="M 205 560 L 238 380 Q 258 362 278 380 L 312 495 L 352 415 Q 368 400 382 418 L 405 560 Z" fill="url(#seaWater)" stroke="#92400e" stroke-width="3" />
+
+          <!-- 3) 대륙 강줄기와 호수 (유프라테스강, 나일강, 갈릴리 호수, 요단강, 사해) -->
+          <path d="M 55 85 Q 200 140 365 95 Q 485 65 585 115" fill="none" stroke="#0284c7" stroke-width="4" opacity="0.7" />
+          <path d="M 88 560 Q 108 470 102 405 L 75 345 M 102 405 L 106 344 M 102 405 L 132 348" fill="none" stroke="#0284c7" stroke-width="5.5" stroke-linecap="round" />
+          <path d="M 785 60 L 780 135 Q 765 255 695 345 L 545 470" fill="none" stroke="#0284c7" stroke-width="5" stroke-linecap="round" />
+          <ellipse cx="780" cy="140" rx="56" ry="32" fill="url(#seaWater)" stroke="#0369a1" stroke-width="3" />
+          <ellipse cx="535" cy="475" rx="34" ry="16" fill="#0369a1" stroke="#78350f" stroke-width="2" opacity="0.85" />
+
+          <!-- 4) 대륙 산맥과 구릉 일러스트 -->
+          <g fill="#a16207" fill-opacity="0.3" stroke="#78350f" stroke-width="2" stroke-linejoin="round">
+            <polygon points="85,105 115,52 145,105" />
+            <polygon points="265,98 298,46 330,98" />
+            <polygon points="455,215 488,162 520,215" />
+            <polygon points="495,232 530,175 565,232" />
+            <polygon points="855,285 888,230 920,285" />
+            <polygon points="885,308 920,248 955,308" />
           </g>
 
-          <!-- 5) 에피소드 1~4 핵심 성경 랜드마크 일러스트 -->
-          <!-- [EP 1 지역: 아라랏산과 노아의 방주 (좌상단 x:185, y:120)] -->
-          <g transform="translate(185, 115)">
-            <!-- 무지개 -->
-            <path d="M -72 15 A 72 72 0 0 1 72 15" fill="none" stroke="#ef4444" stroke-width="4.5" opacity="0.85" />
-            <path d="M -66 15 A 66 66 0 0 1 66 15" fill="none" stroke="#facc15" stroke-width="4.5" opacity="0.85" />
-            <path d="M -60 15 A 60 60 0 0 1 60 15" fill="none" stroke="#22c55e" stroke-width="4.5" opacity="0.85" />
-            <path d="M -54 15 A 54 54 0 0 1 54 15" fill="none" stroke="#3b82f6" stroke-width="4.5" opacity="0.85" />
-            <!-- 아라랏산 설봉 -->
-            <polygon points="-50,28 0,-52 50,28" fill="#64748b" stroke="#334155" stroke-width="3" />
-            <polygon points="-20,-20 0,-52 20,-20" fill="#f8fafc" />
-            <!-- 산 위의 방주 -->
-            <polygon points="-24,-18 24,-18 18,-6 -18,-6" fill="#78350f" stroke="#451a03" stroke-width="2" />
-            <rect x="-15" y="-27" width="30" height="9" fill="#b45309" stroke="#451a03" stroke-width="2" />
+          <!-- 5) 에피소드 1~4 지형 랜드마크 -->
+          <g transform="translate(195, 92)">
+            <path d="M -62 12 A 62 62 0 0 1 62 12" fill="none" stroke="#ef4444" stroke-width="4" opacity="0.85" />
+            <path d="M -56 12 A 56 56 0 0 1 56 12" fill="none" stroke="#facc15" stroke-width="4" opacity="0.85" />
+            <path d="M -50 12 A 50 50 0 0 1 50 12" fill="none" stroke="#3b82f6" stroke-width="4" opacity="0.85" />
+            <polygon points="-44,24 0,-42 44,24" fill="#64748b" stroke="#334155" stroke-width="2.5" />
+            <polygon points="-16,-18 0,-42 16,-18" fill="#f8fafc" />
+            <polygon points="-20,-14 20,-14 15,-4 -15,-4" fill="#78350f" stroke="#451a03" stroke-width="1.5" />
           </g>
-          <text x="185" y="165" text-anchor="middle" fill="#451a03" font-size="13" font-weight="900" opacity="0.85">아라랏산 고원</text>
 
-          <!-- [EP 2 지역: 이집트 피라미드 · 갈라진 홍해 · 시내산 (좌하단 x:250, y:425)] -->
-          <!-- 이집트 피라미드 -->
-          <polygon points="118,455 152,395 186,455" fill="#eab308" stroke="#92400e" stroke-width="3" />
-          <polygon points="162,465 190,415 218,465" fill="#d97706" stroke="#78350f" stroke-width="3" />
-          <!-- 갈라진 홍해 바닷길 -->
-          <rect x="234" y="422" width="66" height="26" fill="#fef08a" stroke="#0284c7" stroke-width="3" stroke-dasharray="5 3" />
-          <line x1="234" y1="419" x2="300" y2="419" stroke="#e0f2fe" stroke-width="4" />
-          <line x1="234" y1="451" x2="300" y2="451" stroke="#e0f2fe" stroke-width="4" />
-          <!-- 시내산 봉우리 & 불기둥 -->
-          <polygon points="310,462 352,368 394,462" fill="#b45309" stroke="#78350f" stroke-width="3" />
-          <circle cx="352" cy="360" r="15" fill="#fef08a" stroke="#f97316" stroke-width="3" opacity="0.9" />
-          <text x="155" y="482" text-anchor="middle" fill="#78350f" font-size="12" font-weight="900">애굽(이집트)</text>
-          <text x="352" y="482" text-anchor="middle" fill="#78350f" font-size="12" font-weight="900">시내산 광야</text>
+          <polygon points="115,445 148,388 180,445" fill="#eab308" stroke="#92400e" stroke-width="2.5" />
+          <polygon points="158,452 184,405 210,452" fill="#d97706" stroke="#78350f" stroke-width="2.5" />
+          <rect x="228" y="415" width="64" height="24" fill="#fef08a" stroke="#0284c7" stroke-width="2.5" stroke-dasharray="5 3" />
+          <polygon points="308,452 348,365 388,452" fill="#b45309" stroke="#78350f" stroke-width="2.5" />
+          <circle cx="348" cy="358" r="13" fill="#fef08a" stroke="#f97316" stroke-width="2.5" />
 
-          <!-- [EP 3 지역: 유다 산지 엘라 골짜기 (우하단 x:645, y:405)] -->
-          <g transform="translate(645, 395)">
-            <polygon points="-65,25 -25,-38 15,25" fill="#65a30d" stroke="#365314" stroke-width="3" />
-            <polygon points="5,28 45,-35 85,28" fill="#4d7c0f" stroke="#365314" stroke-width="3" />
-            <!-- 이스라엘 진영 천막 -->
-            <polygon points="-52,26 -36,4 -20,26" fill="#fef3c7" stroke="#b45309" stroke-width="2" />
-            <polygon points="28,28 44,6 60,28" fill="#fecaca" stroke="#991b1b" stroke-width="2" />
+          <g transform="translate(660, 365)">
+            <polygon points="-55,22 -20,-32 15,22" fill="#65a30d" stroke="#365314" stroke-width="2.5" />
+            <polygon points="5,24 40,-30 75,24" fill="#4d7c0f" stroke="#365314" stroke-width="2.5" />
+            <polygon points="-42,22 -28,4 -14,22" fill="#fef3c7" stroke="#b45309" stroke-width="2" />
+            <polygon points="22,24 36,6 50,24" fill="#fecaca" stroke="#991b1b" stroke-width="2" />
           </g>
-          <text x="645" y="445" text-anchor="middle" fill="#365314" font-size="13" font-weight="900">엘라 골짜기 · 베들레헴</text>
 
-          <!-- [EP 4 지역: 갈릴리 호수와 벳새다 언덕 (우상단 x:775, y:175)] -->
-          <!-- 갈릴리 호수 위 조각배 -->
-          <g transform="translate(775, 172)">
-            <polygon points="-22,6 22,6 14,16 -14,16" fill="#78350f" stroke="#451a03" stroke-width="2" />
-            <polygon points="0,-22 0,4 18,-2" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" />
+          <g transform="translate(780, 136)">
+            <polygon points="-18,5 18,5 12,13 -12,13" fill="#78350f" />
+            <polygon points="0,-18 0,3 15,-2" fill="#ffffff" />
           </g>
-          <text x="775" y="226" text-anchor="middle" fill="#075985" font-size="13" font-weight="900">갈릴리 바다 · 가버나움</text>
 
-          <!-- 6) 에피소드 1 → 2 → 3 → 4 연속 이동 경로 (붉은 점선 + 방향 화살표) -->
-          <!-- 경로 배경 하이라이트 -->
-          <path d="M 185 128 C 125 235, 145 355, 250 432 C 375 495, 515 475, 640 408 C 725 360, 755 275, 775 182"
-                fill="none" stroke="#fef08a" stroke-width="10" stroke-linecap="round" opacity="0.75" />
-          <!-- 애니메이션 점선 경로 -->
-          <path d="M 185 128 C 125 235, 145 355, 250 432 C 375 495, 515 475, 640 408 C 725 360, 755 275, 775 182"
-                fill="none" stroke="#dc2626" stroke-width="4.5" stroke-linecap="round" class="map-route-line" />
+          <!-- 6) 에피소드 1 → 2 → 3 → 4 연속 이동 경로 -->
+          <path d="M 195 125 C 145 235, 165 340, 265 425 C 395 485, 525 465, 660 400 C 745 340, 770 245, 780 148"
+                fill="none" stroke="#fef08a" stroke-width="9" stroke-linecap="round" opacity="0.8" />
+          <path d="M 195 125 C 145 235, 165 340, 265 425 C 395 485, 525 465, 660 400 C 745 340, 770 245, 780 148"
+                fill="none" stroke="#dc2626" stroke-width="4" stroke-linecap="round" class="map-route-line" />
 
-          <!-- 구간별 진행 방향 화살표 배지 (1→2, 2→3, 3→4) -->
+          <!-- 구간별 이동 화살표 배지 -->
+          <g transform="translate(172, 275) rotate(72)">
+            <polygon points="-8,-6 10,0 -8,6" fill="#dc2626" stroke="#fef08a" stroke-width="1.5" />
+          </g>
+          <g transform="translate(465, 456) rotate(-8)">
+            <polygon points="-8,-6 10,0 -8,6" fill="#dc2626" stroke="#fef08a" stroke-width="1.5" />
+          </g>
+          <g transform="translate(748, 275) rotate(-75)">
+            <polygon points="-8,-6 10,0 -8,6" fill="#dc2626" stroke="#fef08a" stroke-width="1.5" />
+          </g>
+
+          <!-- 지명 텍스트 라벨 -->
+          <text x="82" y="275" text-anchor="middle" fill="#e0f2fe" font-size="12" font-weight="bold">대해 (지중해)</text>
+          <text x="145" y="472" text-anchor="middle" fill="#78350f" font-size="11" font-weight="bold">나일강·고센</text>
+          <text x="348" y="472" text-anchor="middle" fill="#78350f" font-size="11" font-weight="bold">시내산 광야</text>
+          <text x="515" y="252" text-anchor="middle" fill="#78350f" font-size="11" font-weight="bold">가나안 중앙 산지</text>
+
+          <!-- 우측 하단 나침반 & 축척 -->
+          <g transform="translate(935, 495)">
+            <circle cx="0" cy="0" r="28" fill="#451a03" fill-opacity="0.75" stroke="#f59e0b" stroke-width="2.5" />
+            <polygon points="0,-22 6,-5 0,-9 -6,-5" fill="#ef4444" />
+            <polygon points="0,22 6,5 0,9 -6,5" fill="#fde047" />
+            <polygon points="-22,0 -5,-6 -9,0 -5,6" fill="#fde047" />
+            <polygon points="22,0 5,-6 9,0 5,6" fill="#fde047" />
+            <text x="0" y="-25" text-anchor="middle" fill="#78350f" font-size="10" font-weight="900">N</text>
+          </g>
+          <g transform="translate(815, 520)">
+            <line x1="0" y1="0" x2="70" y2="0" stroke="#451a03" stroke-width="2.5" />
+            <line x1="0" y1="-4" x2="0" y2="4" stroke="#451a03" stroke-width="2.5" />
+            <line x1="70" y1="-4" x2="70" y2="4" stroke="#451a03" stroke-width="2.5" />
+            <text x="35" y="-5" text-anchor="middle" fill="#451a03" font-size="9" font-weight="bold">100 km</text>
+          </g>
+        </svg>
+
+        <!-- 지도 위 에피소드 1 선택 핀 (좌상단: 20%, 22%) -->
+        <button type="button" onclick="launchEpisode('noah')" style="left: 20%; top: 22%;" class="map-pin-node map-pin-card mc-btn rounded-xl bg-amber-50/95 hover:bg-white border-2 border-amber-600 px-2.5 py-1.5 text-left shadow-md">
+          <div class="flex items-center gap-1.5">
+            <span class="text-lg sm:text-xl">🛶</span>
+            <div>
+              <span class="inline-block px-1.5 py-0.2 rounded-full bg-emerald-600 text-white font-jua text-[9px] leading-tight">EP 1 · 출발</span>
+              <h3 class="font-jua text-amber-950 text-xs sm:text-sm leading-tight">노아의 방주</h3>
+              <p class="text-[9px] text-slate-600 hidden sm:block">아라랏산 · 동물 구조</p>
+            </div>
+          </div>
+        </button>
+
+        <!-- 지도 위 에피소드 2 선택 핀 (좌하단: 27%, 76%) -->
+        <button type="button" onclick="launchEpisode('exodus')" style="left: 27%; top: 76%;" class="map-pin-node map-pin-card mc-btn rounded-xl bg-sky-50/95 hover:bg-white border-2 border-sky-600 px-2.5 py-1.5 text-left shadow-md">
+          <div class="flex items-center gap-1.5">
+            <span class="text-lg sm:text-xl">🌊</span>
+            <div>
+              <span class="inline-block px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950 font-jua text-[9px] leading-tight">EP 2 · 🔒오픈예정</span>
+              <h3 class="font-jua text-sky-950 text-xs sm:text-sm leading-tight">출애굽과 시내산</h3>
+              <p class="text-[9px] text-slate-600 hidden sm:block">홍해 도하 · 십계명</p>
+            </div>
+          </div>
+        </button>
+
+        <!-- 지도 위 에피소드 3 선택 핀 (우하단: 66%, 73%) -->
+        <button type="button" onclick="launchEpisode('david')" style="left: 66%; top: 73%;" class="map-pin-node map-pin-card mc-btn rounded-xl bg-slate-100/95 border-2 border-slate-500 px-2.5 py-1.5 text-left shadow-md opacity-90">
+          <div class="flex items-center gap-1.5">
+            <span class="text-lg sm:text-xl">🪨</span>
+            <div>
+              <span class="inline-block px-1.5 py-0.2 rounded-full bg-slate-600 text-white font-jua text-[9px] leading-tight">EP 3 · 🔒잠김</span>
+              <h3 class="font-jua text-slate-800 text-xs sm:text-sm leading-tight">다윗과 골리앗</h3>
+              <p class="text-[9px] text-slate-500 hidden sm:block">엘라 골짜기 · 물맷돌</p>
+            </div>
+          </div>
+        </button>
+
+        <!-- 지도 위 에피소드 4 선택 핀 (우상단: 78%, 25%) -->
+        <button type="button" onclick="launchEpisode('miracle')" style="left: 78%; top: 25%;" class="map-pin-node map-pin-card mc-btn rounded-xl bg-slate-100/95 border-2 border-slate-500 px-2.5 py-1.5 text-left shadow-md opacity-90">
+          <div class="flex items-center gap-1.5">
+            <span class="text-lg sm:text-xl">🍞</span>
+            <div>
+              <span class="inline-block px-1.5 py-0.2 rounded-full bg-slate-600 text-white font-jua text-[9px] leading-tight">EP 4 · 🔒잠김</span>
+              <h3 class="font-jua text-slate-800 text-xs sm:text-sm leading-tight">예수님의 기적</h3>
+              <p class="text-[9px] text-slate-500 hidden sm:block">갈릴리 호수 · 오병이어</p>
+            </div>
+          </div>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =================================================================== -->
+  <!-- 스테이지 클리어 & 말씀 퀴즈 모달 (모바일 가로모드 2단 레이아웃 지원) -->
+  <!-- =================================================================== -->
+  <div id="stage-modal" class="hidden fixed inset-0 z-50 items-center justify-center p-2 sm:p-4 bg-slate-950/75 backdrop-blur-sm">
+    <div class="mc-card modal-scroll landscape-modal-card w-full max-w-md rounded-3xl p-4 sm:p-6 text-center">
+      <div class="landscape-split">
+        <div>
+          <div class="landscape-compact-icon text-4xl sm:text-5xl mb-1">🎉</div>
+          <h2 id="modal-title" class="landscape-compact-title font-jua text-xl sm:text-2xl text-amber-900 mb-1">스테이지 클리어!</h2>
+          <p id="modal-desc" class="text-xs text-slate-600 mb-2.5">미션을 멋지게 완수했어요!</p>
+
+          <div class="landscape-compact-verse bg-amber-100 border-2 border-amber-400 rounded-2xl p-3 mb-3 text-left">
+            <div class="font-jua text-amber-900 text-xs mb-1">📖 오늘의 말씀</div>
+            <p id="modal-scripture-text" class="text-xs sm:text-sm font-bold text-slate-800 leading-relaxed"></p>
+          </div>
+        </div>
+
+        <div class="flex flex-col justify-between">
+          <div id="modal-quiz-box" class="bg-white border-2 border-amber-300 rounded-2xl p-3 mb-3 text-left">
+            <p id="modal-quiz-q" class="font-jua text-slate-900 text-xs sm:text-sm mb-2">퀴즈 질문</p>
+            <div id="modal-quiz-opts" class="flex flex-col gap-1.5"></div>
+            <p id="modal-quiz-feedback" class="hidden text-xs font-bold mt-2"></p>
+          </div>
+
+          <button id="modal-next-btn" type="button" onclick="proceedNextStage()" class="sticky bottom-0 z-10 mc-btn w-full py-2.5 sm:py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-white font-jua text-base sm:text-lg shadow-lg">
+            다음 스테이지로 이동 ▶
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =================================================================== -->
+  <!-- 재도전 모달 -->
+  <!-- =================================================================== -->
+  <div id="retry-modal" class="hidden fixed inset-0 z-50 items-center justify-center p-3 bg-slate-950/75 backdrop-blur-sm">
+    <div class="mc-card modal-scroll w-full max-w-sm rounded-3xl p-5 text-center">
+      <div id="retry-modal-icon" class="text-4xl sm:text-5xl mb-2">⏰</div>
+      <h2 id="retry-modal-title" class="font-jua text-xl sm:text-2xl text-rose-700 mb-1">다시 도전해 볼까요?</h2>
+      <p id="retry-modal-desc" class="text-xs sm:text-sm text-slate-700 mb-4 leading-relaxed"></p>
+      <div class="flex flex-col gap-2">
+        <button type="button" onclick="retryCurrentStage()" class="mc-btn w-full py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-jua text-base">
+          🔄 이 스테이지 다시 도전하기!
+        </button>
+        <button type="button" onclick="closeRetryAndOpenClass()" class="mc-btn w-full py-2 rounded-2xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-jua text-xs">
+          🗺️ 월드맵으로 나가기
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =================================================================== -->
+  <!-- 엔딩 달란트 인증서 모달 -->
+  <!-- =================================================================== -->
+  <div id="ending-modal" class="hidden fixed inset-0 z-50 items-center justify-center p-2 sm:p-4 bg-slate-950/75 backdrop-blur-sm">
+    <div class="mc-card modal-scroll landscape-modal-card w-full max-w-md rounded-3xl p-4 sm:p-6 text-center">
+      <div class="inline-block px-3 py-0.5 rounded-full bg-amber-300 text-amber-950 font-jua text-xs mb-1" id="ending-ep-badge">
+        🌈 에피소드 완주!
+      </div>
+      <h2 id="ending-main-title" class="font-jua text-2xl sm:text-3xl text-amber-900 mb-1">말씀 탐험 완주 인증서</h2>
+      <p id="ending-main-verse" class="text-[11px] sm:text-xs text-slate-600 mb-3"></p>
+
+      <div class="bg-white border-2 border-amber-400 rounded-2xl p-3 mb-3 text-left text-xs space-y-1">
+        <div class="flex justify-between"><span class="text-slate-500">대원 이름</span><span id="cert-name-display" class="font-bold text-slate-900"></span></div>
+        <div class="flex justify-between"><span class="text-slate-500">선택 과정</span><span id="cert-dept" class="font-bold text-amber-800"></span></div>
+        <div class="flex justify-between"><span class="text-slate-500">완주 미션</span><span id="cert-mission-display" class="font-bold text-emerald-700"></span></div>
+        <div class="flex justify-between pt-1 border-t border-amber-200"><span class="text-slate-500">달란트 인증코드</span><span id="cert-code" class="font-jua text-base text-rose-600">ARK-000</span></div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2">
+        <button type="button" onclick="closeEndingToLookAround()" class="mc-btn py-2.5 rounded-2xl bg-sky-400 hover:bg-sky-300 text-slate-950 font-jua text-xs sm:text-sm">
+          👀 엔딩 세상 둘러보기
+        </button>
+        <button type="button" onclick="openScreen('screen-map')" class="mc-btn py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-jua text-xs sm:text-sm">
+          🗺️ 월드맵으로 이동
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 게임 스크립트 로드 -->
+  <script src="core.js"></script>
+  <script src="ep1_noah.js"></script>
+  <script src="ep2_exodus.js"></script>
+
+  <!-- 화면 전환 보장 안전 스크립트 (키보드 열림·사운드 예외 시에도 즉시 진행 보장) -->
+  <script>
+    let _lastStartTap = 0;
+    function safeGoToClassSelect() {
+      const now = Date.now();
+      if (now - _lastStartTap < 250) return;
+      _lastStartTap = now;
+
+      const inputEl = document.getElementById('opening-name-input');
+      if (inputEl) inputEl.blur();
+
+      const val = inputEl ? inputEl.value.trim() : '';
+      window.explorerName = val || '믿음의용사';
+
+      const helloEl = document.getElementById('class-hello-name');
+      if (helloEl) helloEl.textContent = '🙌 ' + window.explorerName + ' 대원님, 환영해요!';
+
+      if (typeof openScreen === 'function') {
+        openScreen('screen-class');
+      } else {
+        const sOpen = document.getElementById('screen-opening');
+        const sClass = document.getElementById('screen-class');
+        if (sOpen) { sOpen.classList.add('hidden'); sOpen.classList.remove('flex'); }
+        if (sClass) { sClass.classList.remove('hidden'); sClass.classList.add('flex'); }
+      }
+
+      try {
+        if (typeof playSfx === 'function') playSfx('rescue');
+      } catch (e) {}
+    }
+  </script>
+</body>
+</html>
