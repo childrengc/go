@@ -1,5 +1,5 @@
 // =========================================================================
-// [ep2_exodus.js - 파트 1/2] 에피소드 2 : 출애굽과 시내산 언약 (다리 X선 제거, 스테이지 1·2 랜덤 스폰)
+// [ep2_exodus.js - 파트 1/2] 에피소드 2 : 출애굽과 시내산 언약 (다리 미완성 구간만 투명 표시, 스테이지 1·2 랜덤 스폰)
 // =========================================================================
 
 EPISODE_SCRIPTURE.exodus = {
@@ -315,7 +315,7 @@ function createEgyptianSoldierMesh() {
 }
 
 // -------------------------------------------------------------------------
-// 2. 스테이지 1: 통나무 건축물 및 벌목 나무 완전 랜덤 스폰 & 다리 X 표시 제거
+// 2. 스테이지 1: 통나무 건축물 및 벌목 나무 완전 랜덤 스폰 & 다리 미완성 구간만 투명 표시
 // -------------------------------------------------------------------------
 function pickRandomStage1Spot(zoneBounds, existingSpots, minSpacing, checkEntryExitFn) {
   const scales = [1.0, 0.78, 0.58, 0.4];
@@ -474,40 +474,65 @@ function createChasmWithBridgePuzzle(zCenter, trenchDepthW, halfMapW, bridgeConf
     const bridgeCollider = { minX: bLeft - 0.2, maxX: bRight + 0.2, minZ: zNorthEdge - 0.4, maxZ: zSouthEdge + 0.4, active: true };
     colliders.push(bridgeCollider);
 
-    // [스테이지 1 요청사항] 대각선 X 표시가 생기던 wireframe: true 대신 EdgesGeometry로 외곽 테두리만 깔끔하게 표시
     const bpGroup = new THREE.Group();
-    const bpMesh = createBox(cfg.w, 0.35, trenchDepthW, new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.38 }), cfg.x, yMid + 0.12, zCenter, false);
-    const edgeGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(cfg.w + 0.06, 0.38, trenchDepthW + 0.06));
-    const bpOutline = new THREE.LineSegments(edgeGeo, new THREE.LineBasicMaterial({ color: 0xe0f2fe }));
-    bpOutline.position.set(cfg.x, yMid + 0.12, zCenter);
-    bpMesh.rotation.x = slopeAngle; bpOutline.rotation.x = slopeAngle;
-    bpGroup.add(bpMesh, bpOutline);
-
     const solidGroup = new THREE.Group();
     worldGroup.add(bpGroup, solidGroup);
 
     const reqCount = cfg.reqBlocks || 2;
     const lbl = createWorldLabel(`🪵 ${cfg.title} (0/${reqCount}개 · 통나무 모아 건설)`);
-    buildZones.push({
+    const zoneObj = {
       id: cfg.id, title: cfg.title, x: cfg.x, w: cfg.w, zCenter, zSouthEdge, zNorthEdge, ySouth, yNorth, yMid, trenchDepthW,
       pos: new THREE.Vector3(cfg.x, ySouth + 0.5, zSouthEdge + 1.4), centerPos: new THREE.Vector3(cfg.x, yMid + 0.5, zCenter),
       reqBlocks: reqCount, placedBlocks: 0, built: false, colliderRef: bridgeCollider, bpGroup, solidGroup, label: lbl,
       rebuildBridgeMesh: function () {
         while (this.solidGroup.children.length > 0) this.solidGroup.remove(this.solidGroup.children[0]);
-        if (this.placedBlocks <= 0) return;
-        const ratio = Math.min(1, this.placedBlocks / this.reqBlocks);
-        const builtLen = (this.trenchDepthW + 0.8) * ratio;
-        const curCenterZ = (this.zSouthEdge + 0.4) - builtLen / 2;
-        const curY = THREE.MathUtils.lerp(this.ySouth, this.yNorth, ratio * 0.5);
-        const plankMat = new THREE.MeshLambertMaterial({ map: makeLogBarkTex() });
-        const railMat = matVoxel('#5c2d0c', '#451a03');
-        const plank = createBox(this.w, 0.48, builtLen, plankMat, this.x, curY - 0.1, curCenterZ);
-        const railL = createBox(0.32, 0.65, builtLen, railMat, this.x - this.w / 2 + 0.18, curY + 0.28, curCenterZ);
-        const railR = createBox(0.32, 0.65, builtLen, railMat, this.x + this.w / 2 - 0.18, curY + 0.28, curCenterZ);
-        plank.rotation.x = slopeAngle; railL.rotation.x = slopeAngle; railR.rotation.x = slopeAngle;
-        this.solidGroup.add(plank, railL, railR);
+        while (this.bpGroup.children.length > 0) this.bpGroup.remove(this.bpGroup.children[0]);
+
+        const ratio = Math.min(1, Math.max(0, this.placedBlocks / this.reqBlocks));
+
+        // 1) 지어진 구간은 불투명 통나무 다리로 생성
+        let builtNorthZ = this.zSouthEdge;
+        if (ratio > 0) {
+          const builtLen = (this.trenchDepthW + 0.8) * ratio;
+          const curCenterZ = (this.zSouthEdge + 0.4) - builtLen / 2;
+          builtNorthZ = (this.zSouthEdge + 0.4) - builtLen;
+          const curY = THREE.MathUtils.lerp(this.ySouth, this.yNorth, ratio * 0.5);
+          const plankMat = new THREE.MeshLambertMaterial({ map: makeLogBarkTex() });
+          const railMat = matVoxel('#5c2d0c', '#451a03');
+          const plank = createBox(this.w, 0.48, builtLen, plankMat, this.x, curY - 0.1, curCenterZ);
+          const railL = createBox(0.32, 0.65, builtLen, railMat, this.x - this.w / 2 + 0.18, curY + 0.28, curCenterZ);
+          const railR = createBox(0.32, 0.65, builtLen, railMat, this.x + this.w / 2 - 0.18, curY + 0.28, curCenterZ);
+          plank.rotation.x = slopeAngle; railL.rotation.x = slopeAngle; railR.rotation.x = slopeAngle;
+          this.solidGroup.add(plank, railL, railR);
+        }
+
+        // 2) 미완성 구간만 반투명 청사진 박스로 표시 (지어진 부분은 투명 영역 제거)
+        if (ratio < 1) {
+          this.bpGroup.visible = true;
+          const remSouthZ = (ratio > 0) ? Math.min(this.zSouthEdge, builtNorthZ) : this.zSouthEdge;
+          const remLen = Math.max(0.2, remSouthZ - this.zNorthEdge);
+          const remCenterZ = (remSouthZ + this.zNorthEdge) * 0.5;
+          const tCenter = THREE.MathUtils.clamp((this.zSouthEdge - remCenterZ) / this.trenchDepthW, 0, 1);
+          const remY = THREE.MathUtils.lerp(this.ySouth, this.yNorth, tCenter);
+
+          const bpMesh = createBox(
+            this.w, 0.35, remLen,
+            new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.38 }),
+            this.x, remY + 0.12, remCenterZ, false
+          );
+          const edgeGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(this.w + 0.06, 0.38, remLen + 0.06));
+          const bpOutline = new THREE.LineSegments(edgeGeo, new THREE.LineBasicMaterial({ color: 0xe0f2fe }));
+          bpOutline.position.set(this.x, remY + 0.12, remCenterZ);
+          bpMesh.rotation.x = slopeAngle;
+          bpOutline.rotation.x = slopeAngle;
+          this.bpGroup.add(bpMesh, bpOutline);
+        } else {
+          this.bpGroup.visible = false;
+        }
       }
-    });
+    };
+    zoneObj.rebuildBridgeMesh();
+    buildZones.push(zoneObj);
   });
   if (halfMapW > curX + 0.5) colliders.push({ minX: curX, maxX: halfMapW, minZ: zNorthEdge - 0.4, maxZ: zSouthEdge + 0.4 });
 }
@@ -1110,7 +1135,7 @@ function updateStage2Speedrun(dt, now) {
   });
 }
 // =========================================================================
-// [ep2_exodus.js - 파트 2/2] 스테이지 3 시내산 등반(정상 뒤편 구름바다, 맑은 하늘색, 물주머니 +5초) 및 컷신
+// [ep2_exodus.js - 파트 2/2] 스테이지 3 시내산 등반(정상 바위 아래 칸부터 구름바다 배치, 물주머니 +5초) 및 컷신
 // =========================================================================
 
 function spawnSinaiWaterPouchItem(x, y, z) {
@@ -1233,7 +1258,6 @@ function buildExodusStage3World() {
     if (timerValEl) timerValEl.textContent = '12.0초';
   }
 
-  // [요청사항 2] 밝고 청량한 하늘색 배경 및 원경 안개 적용
   scene.background = new THREE.Color(0x38bdf8);
   scene.fog = new THREE.Fog(0xbae6fd, 85, 290);
 
@@ -1569,9 +1593,9 @@ function buildExodusStage3World() {
   const summitMinClimbY = Number((totalRows * rowRise - 0.35).toFixed(2));
   createMountainRockBlock(0, summitZ, pathHalfLimit * 2, 10.5, summitY, 'summit', totalRows + 1, summitNodeIdx, summitMinClimbY);
 
-  // 각 층 바위 바로 위에서 좌우로 움직이는 등반로 구름
+  // 각 층 바위 바로 위에서 좌우로 움직이는 등반로 구름 (정상 바로 앞 줄은 십계명 시야 확보를 위해 제외)
   const cloudRowStep = isKinder ? 2 : 1;
-  for (let r = 0; r < totalRows; r += cloudRowStep) {
+  for (let r = 0; r < totalRows - 1; r += cloudRowStep) {
     const sz = firstStepZ - r * stepDz;
     const rowTopRockY = (r + 1) * rowRise;
     const cy = rowTopRockY + 1.35;
@@ -1591,39 +1615,36 @@ function buildExodusStage3World() {
     });
   }
 
-  // [요청사항 1] 시내산 꼭대기 뒤편(북쪽)을 가득 채워 아래가 전혀 보이지 않게 하는 웅장한 구름바다(운해)
+  // [스테이지 3 요청사항] 정상 뒤편 구름을 정상 바위 아래 칸(belowSummitY) 높이부터 채워 십계명이 가려지지 않게 구성
+  const belowSummitY = summitY - rowRise;
   const seaOfCloudsGroup = new THREE.Group();
   const cloudSeaBaseMat = new THREE.MeshLambertMaterial({ color: 0xe0f2fe });
   const cloudSeaTopMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-  // 시내산 뒤편 허공을 완전히 가리는 넓은 구름 바닥층 2겹
   seaOfCloudsGroup.add(
-    createBox(190, 5.0, 96, cloudSeaBaseMat, 0, summitY - 5.2, summitZ - 49, false),
-    createBox(170, 3.8, 84, cloudSeaTopMat, 0, summitY - 2.8, summitZ - 44, false)
+    createBox(190, 5.0, 96, cloudSeaBaseMat, 0, belowSummitY - 6.0, summitZ - 52, false),
+    createBox(170, 3.8, 84, cloudSeaTopMat, 0, belowSummitY - 3.4, summitZ - 47, false)
   );
-  // 구름바다 위에 겹겹이 솟아오른 입체 구름 봉우리들
-  for (let cz = summitZ - 6; cz >= summitZ - 74; cz -= 9.5) {
+  for (let cz = summitZ - 11; cz >= summitZ - 76; cz -= 9.5) {
     for (let cx = -56; cx <= 56; cx += 14) {
       const jitterX = ((Math.abs(Math.round(cx + cz)) % 5) - 2) * 1.8;
-      const jitterZ = ((Math.abs(Math.round(cx * 2 - cz)) % 5) - 2) * 1.5;
-      const sc = 1.65 + (Math.abs(Math.round(cx + cz)) % 4) * 0.35;
+      const jitterZ = ((Math.abs(Math.round(cx * 2 - cz)) % 5) - 2) * 1.2;
+      const sc = 1.45 + (Math.abs(Math.round(cx + cz)) % 4) * 0.28;
       const clMound = createFluffyCloudGroup(sc, false);
-      const moundY = summitY - 1.4 + ((Math.abs(Math.round(cx * 3 + cz)) % 3) * 0.65);
+      const moundY = belowSummitY - 2.2 + ((Math.abs(Math.round(cx * 3 + cz)) % 3) * 0.45);
       clMound.position.set(cx + jitterX, moundY, cz + jitterZ);
       seaOfCloudsGroup.add(clMound);
     }
   }
   worldGroup.add(seaOfCloudsGroup);
 
-  // [요청사항 2] 계단 및 대기 중인 백성들 쪽(남쪽 하늘)에 떠 있는 구름들
+  // 계단 및 대기 중인 백성들 쪽(남쪽 하늘)에 떠 있는 구름들
   const southSkyClouds = [
-    // 계단 좌우 및 상공 구름
     [-26, summitY * 0.45 + 10, 18, 1.15],
     [ 27, summitY * 0.50 + 11, 14, 1.20],
     [-29, summitY * 0.65 + 9,   2, 1.25],
     [ 28, summitY * 0.70 + 10, -4, 1.15],
     [-25, summitY * 0.85 + 8, -16, 1.30],
     [ 26, summitY * 0.90 + 9, -20, 1.25],
-    // 백성들이 서 있는 남쪽 산기슭 하늘 구름
     [-32, 22, 34, 1.25],
     [ 32, 24, 36, 1.20],
     [-16, 27, 44, 1.10],
@@ -1631,10 +1652,9 @@ function buildExodusStage3World() {
     [  0, 30, 52, 1.35],
     [-36, 25, 48, 1.15],
     [ 36, 26, 50, 1.20],
-    // 시내산 정상 뒤편 높은 하늘 구름
-    [-22, summitY + 9,  summitZ - 18, 1.35],
-    [ 22, summitY + 10, summitZ - 16, 1.30],
-    [  0, summitY + 13, summitZ - 28, 1.50]
+    [-24, summitY + 11, summitZ - 26, 1.30],
+    [ 24, summitY + 12, summitZ - 24, 1.25],
+    [  0, summitY + 15, summitZ - 34, 1.40]
   ];
   southSkyClouds.forEach(([cx, cy, cz, sc]) => {
     const skyCloud = createFluffyCloudGroup(sc, false);
@@ -1648,10 +1668,13 @@ function buildExodusStage3World() {
   const altarBase = createBox(4.6, 0.9, 3.4, goldStepMat, 0, summitY + 0.45, summitZ);
   worldGroup.add(altarBase);
 
+  // 제단 주변 장식 구름도 정상 바위 아래 칸 높이로 배치하여 십계명 돌판 시야 확보
   [
-    [-5.8, 0.4, -1.2, 0.55], [5.8, 0.4, -1.2, 0.55],
-    [-4.5, 0.5, -3.8, 0.6],  [4.5, 0.5, -3.8, 0.6],
-    [0,    0.6, -4.5, 0.65]
+    [-7.2, -rowRise - 0.8, -6.5, 0.55],
+    [ 7.2, -rowRise - 0.8, -6.5, 0.55],
+    [-4.8, -rowRise - 0.6, -8.2, 0.60],
+    [ 4.8, -rowRise - 0.6, -8.2, 0.60],
+    [ 0.0, -rowRise - 0.5, -9.0, 0.65]
   ].forEach(([cx, cy, cz, sc]) => {
     const altarCloud = createFluffyCloudGroup(sc, true);
     altarCloud.position.set(cx, summitY + cy, summitZ + cz);
