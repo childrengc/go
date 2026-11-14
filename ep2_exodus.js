@@ -1698,7 +1698,7 @@ function updateStage3Sinai(dt, now) {
     sp.mesh.rotation.x += dt * 3;
   });
 
-  // [타임어택 요청사항] 각 물주머니 획득 시간을 0.3초 줄여 +7.5초 연장
+  // [타임어택 요청사항] 각 물주머니 획득 시간을 7초 연장
   sinaiClocks.forEach(ck => {
     if (ck.collected) return;
     ck.group.rotation.y += dt * 2.4;
@@ -1708,9 +1708,9 @@ function updateStage3Sinai(dt, now) {
       ck.collected = true;
       ck.group.visible = false;
       ck.label.style.opacity = '0';
-      timeRemaining += 7.5;
+      timeRemaining += 7.0;
       playSfx('clock');
-      showToast('💧 시원한 물주머니 획득! 제한 시간이 +7.5초 연장되었어요!');
+      showToast('💧 시원한 물주머니 획득! 제한 시간이 +7초 연장되었어요!');
     }
   });
 
