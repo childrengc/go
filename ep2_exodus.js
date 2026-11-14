@@ -1110,7 +1110,7 @@ function updateStage2Speedrun(dt, now) {
   });
 }
 // =========================================================================
-// [ep2_exodus.js - 파트 2/2] 스테이지 3 시내산 등반(전 구간 물주머니 배치 & +7.0초, 구름 이동) 및 컷신
+// [ep2_exodus.js - 파트 2/2] 스테이지 3 시내산 등반(정상 뒤편 구름바다, 맑은 하늘색, 물주머니 +5초) 및 컷신
 // =========================================================================
 
 function spawnSinaiWaterPouchItem(x, y, z) {
@@ -1142,7 +1142,7 @@ function spawnSinaiWaterPouchItem(x, y, z) {
   grp.position.set(x, y, z);
   worldGroup.add(grp);
 
-  const lbl = createWorldLabel('💧 고대 물주머니 (마시면 +7초 연장!)');
+  const lbl = createWorldLabel('💧 고대 물주머니 (마시면 +5초 연장!)');
   sinaiClocks.push({ group: grp, pos: new THREE.Vector3(x, y + 0.8, z), collected: false, label: lbl });
 }
 
@@ -1233,8 +1233,9 @@ function buildExodusStage3World() {
     if (timerValEl) timerValEl.textContent = '12.0초';
   }
 
-  scene.background = new THREE.Color(0x2563eb);
-  scene.fog = new THREE.Fog(0x38bdf8, 65, 250);
+  // [요청사항 2] 밝고 청량한 하늘색 배경 및 원경 안개 적용
+  scene.background = new THREE.Color(0x38bdf8);
+  scene.fog = new THREE.Fog(0xbae6fd, 85, 290);
 
   const halfW = 24;
   const totalRows = isKinder ? 8 : (isSeniorMap ? 12 : 9);
@@ -1534,7 +1535,6 @@ function buildExodusStage3World() {
       }
     }
 
-    // [타임어택 요청사항] 물주머니가 없던 줄까지 포함해 모든 줄(r = 0 ~ 11)의 일반 바위에 물주머니 배치
     let waterPouchCol = -1;
     if (isTimeAttack) {
       const normalCols = [];
@@ -1569,6 +1569,7 @@ function buildExodusStage3World() {
   const summitMinClimbY = Number((totalRows * rowRise - 0.35).toFixed(2));
   createMountainRockBlock(0, summitZ, pathHalfLimit * 2, 10.5, summitY, 'summit', totalRows + 1, summitNodeIdx, summitMinClimbY);
 
+  // 각 층 바위 바로 위에서 좌우로 움직이는 등반로 구름
   const cloudRowStep = isKinder ? 2 : 1;
   for (let r = 0; r < totalRows; r += cloudRowStep) {
     const sz = firstStepZ - r * stepDz;
@@ -1590,15 +1591,52 @@ function buildExodusStage3World() {
     });
   }
 
-  [
-    [-22, summitY + 6, summitZ - 14, 1.3],
-    [22,  summitY + 7, summitZ - 12, 1.25],
-    [-14, summitY + 10, summitZ - 24, 1.4],
-    [15,  summitY + 9,  summitZ - 22, 1.35],
-    [0,   summitY + 12, summitZ - 30, 1.5],
-    [-26, summitY + 4,  summitZ + 4,  1.2],
-    [26,  summitY + 5,  summitZ + 6,  1.2]
-  ].forEach(([cx, cy, cz, sc]) => {
+  // [요청사항 1] 시내산 꼭대기 뒤편(북쪽)을 가득 채워 아래가 전혀 보이지 않게 하는 웅장한 구름바다(운해)
+  const seaOfCloudsGroup = new THREE.Group();
+  const cloudSeaBaseMat = new THREE.MeshLambertMaterial({ color: 0xe0f2fe });
+  const cloudSeaTopMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  // 시내산 뒤편 허공을 완전히 가리는 넓은 구름 바닥층 2겹
+  seaOfCloudsGroup.add(
+    createBox(190, 5.0, 96, cloudSeaBaseMat, 0, summitY - 5.2, summitZ - 49, false),
+    createBox(170, 3.8, 84, cloudSeaTopMat, 0, summitY - 2.8, summitZ - 44, false)
+  );
+  // 구름바다 위에 겹겹이 솟아오른 입체 구름 봉우리들
+  for (let cz = summitZ - 6; cz >= summitZ - 74; cz -= 9.5) {
+    for (let cx = -56; cx <= 56; cx += 14) {
+      const jitterX = ((Math.abs(Math.round(cx + cz)) % 5) - 2) * 1.8;
+      const jitterZ = ((Math.abs(Math.round(cx * 2 - cz)) % 5) - 2) * 1.5;
+      const sc = 1.65 + (Math.abs(Math.round(cx + cz)) % 4) * 0.35;
+      const clMound = createFluffyCloudGroup(sc, false);
+      const moundY = summitY - 1.4 + ((Math.abs(Math.round(cx * 3 + cz)) % 3) * 0.65);
+      clMound.position.set(cx + jitterX, moundY, cz + jitterZ);
+      seaOfCloudsGroup.add(clMound);
+    }
+  }
+  worldGroup.add(seaOfCloudsGroup);
+
+  // [요청사항 2] 계단 및 대기 중인 백성들 쪽(남쪽 하늘)에 떠 있는 구름들
+  const southSkyClouds = [
+    // 계단 좌우 및 상공 구름
+    [-26, summitY * 0.45 + 10, 18, 1.15],
+    [ 27, summitY * 0.50 + 11, 14, 1.20],
+    [-29, summitY * 0.65 + 9,   2, 1.25],
+    [ 28, summitY * 0.70 + 10, -4, 1.15],
+    [-25, summitY * 0.85 + 8, -16, 1.30],
+    [ 26, summitY * 0.90 + 9, -20, 1.25],
+    // 백성들이 서 있는 남쪽 산기슭 하늘 구름
+    [-32, 22, 34, 1.25],
+    [ 32, 24, 36, 1.20],
+    [-16, 27, 44, 1.10],
+    [ 18, 26, 46, 1.15],
+    [  0, 30, 52, 1.35],
+    [-36, 25, 48, 1.15],
+    [ 36, 26, 50, 1.20],
+    // 시내산 정상 뒤편 높은 하늘 구름
+    [-22, summitY + 9,  summitZ - 18, 1.35],
+    [ 22, summitY + 10, summitZ - 16, 1.30],
+    [  0, summitY + 13, summitZ - 28, 1.50]
+  ];
+  southSkyClouds.forEach(([cx, cy, cz, sc]) => {
     const skyCloud = createFluffyCloudGroup(sc, false);
     skyCloud.position.set(cx, cy, cz);
     worldGroup.add(skyCloud);
@@ -1698,7 +1736,7 @@ function updateStage3Sinai(dt, now) {
     sp.mesh.rotation.x += dt * 3;
   });
 
-  // [타임어택 요청사항] 각 물주머니 획득 시간을 7초 연장
+  // 타임어택 물주머니 획득 시 +5초 연장
   sinaiClocks.forEach(ck => {
     if (ck.collected) return;
     ck.group.rotation.y += dt * 2.4;
@@ -1708,9 +1746,9 @@ function updateStage3Sinai(dt, now) {
       ck.collected = true;
       ck.group.visible = false;
       ck.label.style.opacity = '0';
-      timeRemaining += 7.0;
+      timeRemaining += 5.0;
       playSfx('clock');
-      showToast('💧 시원한 물주머니 획득! 제한 시간이 +7초 연장되었어요!');
+      showToast('💧 시원한 물주머니 획득! 제한 시간이 +5초 연장되었어요!');
     }
   });
 
