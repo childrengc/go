@@ -1111,7 +1111,7 @@ function updateStage2Speedrun(dt, now) {
   });
 }
 // =========================================================================
-// [ep2_exodus.js - 파트 2/2] 스테이지 3 시내산 등반(사각형 판정, 반별 랜덤 스폰, 백색화면 해결) 및 컷신
+// [ep2_exodus.js - 파트 2/2] 스테이지 3 시내산 등반(대형 사각형 판정, 대기중 X 제거, 뱀 원형 영역) 및 컷신
 // =========================================================================
 
 function spawnSinaiWaterPouchItem(x, y, z) {
@@ -1192,8 +1192,8 @@ function createZigzagLightningBolt() {
     boltGroup.add(segHolder);
   });
 
-  const impact1 = createBox(2.0, 0.28, 0.42, sparkMat, 0, 0.18, 0, false);
-  const impact2 = createBox(0.42, 0.28, 2.0, sparkMat, 0, 0.18, 0, false);
+  const impact1 = createBox(2.4, 0.28, 0.45, sparkMat, 0, 0.18, 0, false);
+  const impact2 = createBox(0.45, 0.28, 2.4, sparkMat, 0, 0.18, 0, false);
   boltGroup.add(impact1, impact2);
 
   return boltGroup;
@@ -1372,35 +1372,62 @@ function buildExodusStage3World() {
       topY: by, minClimbY, stepIdx, nodeIdx
     });
 
+    // [요청사항 3] 뱀 아래는 원래대로 원형 링(RingGeometry) 영역으로 복구
     if (bType === 'snake') {
       const snakeGrp = createSinaiSnakeMesh();
       snakeGrp.position.set(bx, by, bz);
       worldGroup.add(snakeGrp);
 
-      const snakeSq = createBox(
-        2.1, 0.06, 2.1,
-        new THREE.MeshBasicMaterial({ color: 0x22c55e, transparent: true, opacity: 0.35 }),
-        bx, by + 0.04, bz, false
+      const snakeRing = new THREE.Mesh(
+        new THREE.RingGeometry(0.85, 1.18, 24),
+        new THREE.MeshBasicMaterial({ color: 0x22c55e, side: THREE.DoubleSide, transparent: true, opacity: 0.48 })
       );
-      worldGroup.add(snakeSq);
+      snakeRing.rotation.x = -Math.PI / 2;
+      snakeRing.position.set(bx, by + 0.06, bz);
+      worldGroup.add(snakeRing);
 
       sinaiMagmaBlocks.push({
         mesh: snakeGrp, x: bx, y: by, z: bz,
-        rx: 1.05, rz: 1.05, stepIdx, nodeIdx, phase: nodeIdx * 0.9
+        radius: 1.15, stepIdx, nodeIdx, phase: nodeIdx * 0.9
       });
-    } else if (bType === 'lightning' || bType === 'rockfall') {
+    }
+    // [요청사항 1 & 2] 번개·낙석 사각형 영역을 바위 전체 폭으로 넓히고, 대기 시간 동안 내부 X선이 보이지 않도록 4변 테두리로 구성
+    else if (bType === 'lightning' || bType === 'rockfall') {
       const hKind = bType;
-      // [스테이지 3 요청사항 2] 원형 대신 사각형(2.35m x 2.35m) 경고 구간 생성 및 사각형 내부만 탈락 구간으로 한정
-      const sqSize = 2.35;
-      const warnMat = new THREE.MeshBasicMaterial({ color: 0xfacc15, transparent: true, opacity: 0.32 });
-      const warnSquare = createBox(sqSize, 0.07, sqSize, warnMat, bx, by + 0.05, bz, false);
-      const borderWire = createBox(
-        sqSize + 0.06, 0.09, sqSize + 0.06,
-        new THREE.MeshBasicMaterial({ color: 0xef4444, wireframe: true }),
-        0, 0, 0, false
+      const sqW = bw - 0.18;
+      const sqD = bd - 0.18;
+
+      const warnSquareGroup = new THREE.Group();
+      warnSquareGroup.position.set(bx, by + 0.05, bz);
+
+      const warnFillMat = new THREE.MeshBasicMaterial({ color: 0xfacc15, transparent: true, opacity: 0.26 });
+      const warnFill = createBox(sqW, 0.04, sqD, warnFillMat, 0, 0, 0, false);
+      warnSquareGroup.add(warnFill);
+
+      // 대각선(X)이 생기지 않는 깔끔한 4변 사각형 테두리
+      const borderMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+      const bThick = 0.12;
+      warnSquareGroup.add(
+        createBox(sqW, 0.06, bThick, borderMat, 0, 0.02, -sqD / 2 + bThick / 2, false),
+        createBox(sqW, 0.06, bThick, borderMat, 0, 0.02,  sqD / 2 - bThick / 2, false),
+        createBox(bThick, 0.06, sqD, borderMat, -sqW / 2 + bThick / 2, 0.02, 0, false),
+        createBox(bThick, 0.06, sqD, borderMat,  sqW / 2 - bThick / 2, 0.02, 0, false)
       );
-      warnSquare.add(borderWire);
-      worldGroup.add(warnSquare);
+
+      // 활성화 시에만 나타나는 위험 표시 (대기 시간에는 visible = false 유지)
+      const activeXGroup = new THREE.Group();
+      const diagLen = Math.hypot(sqW, sqD) * 0.88;
+      const diagAng = Math.atan2(sqD, sqW);
+      const xMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+      const bar1 = createBox(diagLen, 0.06, 0.16, xMat, 0, 0.03, 0, false);
+      bar1.rotation.y = diagAng;
+      const bar2 = createBox(diagLen, 0.06, 0.16, xMat, 0, 0.03, 0, false);
+      bar2.rotation.y = -diagAng;
+      activeXGroup.add(bar1, bar2);
+      activeXGroup.visible = false;
+      warnSquareGroup.add(activeXGroup);
+
+      worldGroup.add(warnSquareGroup);
 
       const boltGroup = createZigzagLightningBolt();
       boltGroup.position.set(bx, by + 11, bz);
@@ -1410,9 +1437,9 @@ function buildExodusStage3World() {
       const rockFallGroup = new THREE.Group();
       const gravelMat = matVoxel('#a8a29e', '#57534e');
       rockFallGroup.add(
-        createBox(1.35, 1.35, 1.35, gravelMat, -0.45, 0, -0.25, false),
-        createBox(1.10, 1.10, 1.10, yellowRock2, 0.55, 0.45, 0.35, false),
-        createBox(0.95, 0.95, 0.95, cliffStone, 0.1, -0.35, 0.25, false)
+        createBox(1.55, 1.55, 1.55, gravelMat, -0.55, 0, -0.3, false),
+        createBox(1.25, 1.25, 1.25, yellowRock2, 0.65, 0.45, 0.4, false),
+        createBox(1.10, 1.10, 1.10, cliffStone, 0.1, -0.35, 0.3, false)
       );
       rockFallGroup.position.set(bx, by + 13, bz);
       rockFallGroup.visible = false;
@@ -1421,20 +1448,22 @@ function buildExodusStage3World() {
       const interval = isSeniorMap ? (hKind === 'rockfall' ? 3.6 : 3.8) : 4.2;
       sinaiHazardZones.push({
         kind: hKind, x: bx, y: by, z: bz,
-        halfW: sqSize / 2, halfD: sqSize / 2,
+        // 번개·낙석 활성화 시 가장자리로도 넘어갈 수 없도록 판정 영역을 바위 전체 크기로 설정
+        halfW: bw / 2 - 0.04,
+        halfD: bd / 2 - 0.04,
         stepIdx, nodeIdx,
         timer: Math.random() * (interval * 0.7),
         interval,
-        warnRing: warnSquare,
-        boltMesh: boltGroup, // core.js의 hz.boltMesh.visible = false 호환용
+        warnRing: warnSquareGroup,
+        warnFill,
+        activeXGroup,
+        boltMesh: boltGroup,
         boltGroup,
         rockFallGroup
       });
     }
   }
 
-  // [스테이지 3 요청사항 2·3·4·5]
-  // 모든 레벨 매 로딩 시 장애물 위치/종류 랜덤 스폰 + 번개·낙석 연속 배치 금지 + 유년/타임어택 징검다리 배치
   const allObstacleTypes = ['snake', 'lightning', 'rockfall', 'crumble'];
   const isSkyHazard = (t) => (t === 'lightning' || t === 'rockfall');
 
@@ -1443,7 +1472,6 @@ function buildExodusStage3World() {
     for (const c of candidates) {
       if (prevAdjacentType && prevAdjacentType !== 'normal') {
         if (c === prevAdjacentType) continue;
-        // 번개와 낙석이 연속으로 나오지 않도록 차단
         if (isSkyHazard(c) && isSkyHazard(prevAdjacentType)) continue;
       }
       if (c === lastUsedType && Math.random() < 0.75) continue;
@@ -1468,14 +1496,12 @@ function buildExodusStage3World() {
     const rowTypes = Array(orderedCols.length).fill('normal');
 
     if (isKinder) {
-      // 유치반(3열: k=0, 1, 2): k=1 또는 k=2 중 매 층마다 랜덤 위치에 무너지는 바위 배치
       const rSlot = (Math.random() < 0.5) ? 1 : 2;
       rowTypes[rSlot] = 'crumble';
     } else if (isJunior) {
-      // 유년반(4열: k=0, 1, 2, 3): 장애물과 일반 바위를 번갈아 배치 (연속 장애물 절대 없음)
       const juniorPatterns = [
-        [1, 3], // 일반(0) -> 장애물(1) -> 일반(2) -> 장애물(3) -> 다음 줄 일반(0)
-        [2]     // 일반(0) -> 일반(1) -> 장애물(2) -> 일반(3)
+        [1, 3],
+        [2]
       ];
       const chosenSlots = juniorPatterns[Math.floor(Math.random() * juniorPatterns.length)];
       chosenSlots.forEach(slotIdx => {
@@ -1484,11 +1510,10 @@ function buildExodusStage3World() {
         lastGlobalObsType = picked;
       });
     } else if (isTimeAttack) {
-      // 타임어택(5열: k=0, 1, 2, 3, 4): 소년반 맵 크기이되 장애물이 연속되지 않고 일반 바위와 번갈아 랜덤 배치
       const taPatterns = [
-        [1, 3], // 일반(0) -> 장애물(1) -> 일반(2) -> 장애물(3) -> 일반(4)
-        [2, 4], // 일반(0) -> 일반(1) -> 장애물(2) -> 일반(3) -> 장애물(4) -> 다음 줄 일반(0)
-        [1, 4]  // 일반(0) -> 장애물(1) -> 일반(2) -> 일반(3) -> 장애물(4) -> 다음 줄 일반(0)
+        [1, 3],
+        [2, 4],
+        [1, 4]
       ];
       const chosenSlots = taPatterns[Math.floor(Math.random() * taPatterns.length)];
       chosenSlots.forEach(slotIdx => {
@@ -1497,8 +1522,7 @@ function buildExodusStage3World() {
         lastGlobalObsType = picked;
       });
     } else {
-      // 소년반(5열: k=0, 1, 2, 3, 4): k=0 안전, 나머지 4칸 중 랜덤 1칸은 일반 바위, 3칸은 장애물 (번개·낙석 연속 금지)
-      const safeSlot = 1 + Math.floor(Math.random() * 3); // k=1, 2, 3 중 랜덤 안전 징검다리
+      const safeSlot = 1 + Math.floor(Math.random() * 3);
       for (let k = 1; k < orderedCols.length; k++) {
         if (k === safeSlot) {
           rowTypes[k] = 'normal';
@@ -1511,7 +1535,6 @@ function buildExodusStage3World() {
       }
     }
 
-    // 타임어택 물주머니 배치할 안전 바위 인덱스 선정
     let waterPouchCol = -1;
     if (isTimeAttack && (r % 2 === 1 || r === 4)) {
       const normalCols = [];
@@ -1756,14 +1779,15 @@ function updateStage3Sinai(dt, now) {
     }
   });
 
-  // 독사(뱀) 애니메이션 및 피격 판정
+  // [요청사항 3] 독사(뱀) 원형 영역 반경 피격 판정
   sinaiMagmaBlocks.forEach(mb => {
     const sway = Math.sin(now * 0.007 + (mb.phase || 0));
     mb.mesh.rotation.y = sway * 0.35;
     if (mb.mesh.userData && mb.mesh.userData.tongue) {
       mb.mesh.userData.tongue.scale.z = 0.6 + Math.abs(Math.sin(now * 0.025 + (mb.phase || 0))) * 0.8;
     }
-    if (Math.abs(playerPos.x - mb.x) < mb.rx && Math.abs(playerPos.z - mb.z) < mb.rz && Math.abs(playerPos.y - mb.y) < 0.85) {
+    const hitRad = mb.radius || 1.15;
+    if (Math.hypot(playerPos.x - mb.x, playerPos.z - mb.z) < hitRad && Math.abs(playerPos.y - mb.y) < 0.85) {
       triggerDamageFlash();
       playSfx('hit');
       relocateSinaiPlayerOnHit(mb.stepIdx, mb.nodeIdx, 1, '🐍 광야 독사에게 물려');
@@ -1775,7 +1799,7 @@ function updateStage3Sinai(dt, now) {
     cl.group.position.x = cl.baseX + Math.sin(now * cloudSpd + cl.phase) * 4.8;
   });
 
-  // 번개(1.5초 모션) 및 낙석(1.5초 모션) 업데이트 + 사각형 영역(halfW x halfD) 내부만 피격 판정
+  // [요청사항 1 & 2] 번개·낙석 활성화 시에만 X 표시 & 바위 전체 사각형 영역을 막아 넘어가지 못하도록 판정
   sinaiHazardZones.forEach(hz => {
     hz.timer += dt;
     const isRockFall = (hz.kind === 'rockfall');
@@ -1783,8 +1807,11 @@ function updateStage3Sinai(dt, now) {
     const remain = hz.interval - hz.timer;
 
     if (remain <= motionDuration && remain > 0) {
-      hz.warnRing.material.opacity = 0.6 + Math.abs(Math.sin(now * 0.04)) * 0.35;
-      hz.warnRing.material.color.setHex(0xef4444);
+      if (hz.warnFill) {
+        hz.warnFill.material.opacity = 0.55 + Math.abs(Math.sin(now * 0.04)) * 0.35;
+        hz.warnFill.material.color.setHex(0xef4444);
+      }
+      if (hz.activeXGroup) hz.activeXGroup.visible = true;
 
       const dropProg = 1 - (remain / motionDuration);
 
@@ -1806,7 +1833,6 @@ function updateStage3Sinai(dt, now) {
         }
       }
 
-      // 바위 전체가 아니라 바닥에 표시된 사각형 영역(halfW x halfD)을 밟았을 때만 탈락 판정!
       const inSquareZone = Math.abs(playerPos.x - hz.x) < hz.halfW &&
                            Math.abs(playerPos.z - hz.z) < hz.halfD &&
                            Math.abs(playerPos.y - hz.y) < 1.25;
@@ -1822,8 +1848,12 @@ function updateStage3Sinai(dt, now) {
         );
       }
     } else {
-      hz.warnRing.material.opacity = 0.28;
-      hz.warnRing.material.color.setHex(0xfacc15);
+      // 대기 시간 동안에는 사각형 내부 X를 숨기고 노란색 바닥 테두리만 유지
+      if (hz.warnFill) {
+        hz.warnFill.material.opacity = 0.24;
+        hz.warnFill.material.color.setHex(0xfacc15);
+      }
+      if (hz.activeXGroup) hz.activeXGroup.visible = false;
       hz.boltGroup.visible = false;
       hz.rockFallGroup.visible = false;
     }
@@ -2008,7 +2038,6 @@ function updateExodusCutsceneFrame(dt, now) {
     const t = sinaiCutscene.timer;
     const sy = sinaiCutscene.summitY, sz = sinaiCutscene.summitZ;
 
-    // [스테이지 3 요청사항 1] 백색 전환 화면(#white-fade)이 남아 있지 않도록 확실히 해제
     if (t > 0.45) {
       const wf = document.getElementById('white-fade');
       if (wf && wf.style.opacity !== '0') wf.style.opacity = '0';
