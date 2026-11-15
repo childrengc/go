@@ -1,5 +1,5 @@
 // =========================================================================
-// [ep1_noah.js] 에피소드 1 : 노아의 방주 (core_2.js의 isSpawnSpotClear 재사용으로 중복 제거 완료)
+// [ep1_noah.js] 에피소드 1 : 노아의 방주 (스테이지 3 동물 대열 떨림 제거 & 소년반 동물 광역 분산 스폰)
 // =========================================================================
 
 EPISODE_SCRIPTURE.noah = {
@@ -30,7 +30,63 @@ EPISODE_SCRIPTURE.noah = {
 let noahStage3Trail = [];
 
 // -------------------------------------------------------------------------
-// [스테이지 1 보조] core_2.js의 isSpawnSpotClear를 재사용한 동물 반경 검사 & 조향 탐색
+// [공통 보조] 동물 7쌍 광역 분산 랜덤 스폰 (소년반은 구역별 분할 + 최대 이격 거리 보장)
+// -------------------------------------------------------------------------
+function pickWidelySpreadAnimalSpot(bounds, existingSpots, minSpacing, avoidPos, avoidRadius = 8.0, sectorBounds = null) {
+  const activeBounds = sectorBounds || bounds;
+  let bestSpot = null;
+  let bestMinDist = -1;
+
+  for (let attempt = 0; attempt < 180; attempt++) {
+    const searchB = (attempt < 110) ? activeBounds : bounds;
+    const rx = searchB.minX + Math.random() * (searchB.maxX - searchB.minX);
+    const rz = searchB.minZ + Math.random() * (searchB.maxZ - searchB.minZ);
+
+    if (avoidPos && Math.hypot(rx - avoidPos.x, rz - avoidPos.z) < avoidRadius) continue;
+    // 방주 본체 주변 제외 (스테이지 1)
+    if ( currentStage === 1 && rz < -9.5 && Math.abs(rx) < 11.5) continue;
+    if (!isSpawnSpotClear(rx, rz, 1.75)) continue;
+
+    let nearestDist = 9999;
+    for (const pt of existingSpots) {
+      const d = Math.hypot(rx - pt[0], rz - pt[1]);
+      if (d < nearestDist) nearestDist = d;
+    }
+
+    if (nearestDist > bestMinDist) {
+      bestMinDist = nearestDist;
+      bestSpot = [rx, rz];
+    }
+
+    // 충분한 이격 거리를 확보했으면 채택
+    if (nearestDist >= minSpacing && attempt >= 18) {
+      return bestSpot;
+    }
+  }
+
+  if (bestSpot) return bestSpot;
+  return findRandomSafeSpot(bounds, existingSpots, minSpacing * 0.6, avoidPos, avoidRadius);
+}
+
+function buildSpreadSectors(bounds) {
+  const midX = (bounds.minX + bounds.maxX) * 0.5;
+  const zSpan = (bounds.maxZ - bounds.minZ) / 3;
+  const z1 = bounds.minZ + zSpan;
+  const z2 = bounds.minZ + zSpan * 2;
+  const sectors = [
+    { minX: bounds.minX, maxX: midX - 2, minZ: bounds.minZ, maxZ: z1 },
+    { minX: midX + 2, maxX: bounds.maxX, minZ: bounds.minZ, maxZ: z1 },
+    { minX: bounds.minX, maxX: midX - 4, minZ: z1, maxZ: z2 },
+    { minX: midX + 4, maxX: bounds.maxX, minZ: z1, maxZ: z2 },
+    { minX: bounds.minX, maxX: -bounds.maxX * 0.3, minZ: z2, maxZ: bounds.maxZ },
+    { minX: -bounds.maxX * 0.3, maxX: bounds.maxX * 0.3, minZ: z2 + 2, maxZ: bounds.maxZ },
+    { minX: bounds.maxX * 0.3, maxX: bounds.maxX, minZ: z2, maxZ: bounds.maxZ }
+  ];
+  return sectors.sort(() => Math.random() - 0.5);
+}
+
+// -------------------------------------------------------------------------
+// [스테이지 1 보조] core.js의 isSpawnSpotClear를 재사용한 동물 반경 검사 & 조향 탐색
 // -------------------------------------------------------------------------
 function isStage1AnimalSpotClear(nx, nz, limit, radius = 1.25) {
   if (Math.abs(nx) > limit || nz > limit || nz < -10.2) return false;
@@ -102,9 +158,9 @@ function findBestAnimalSteerAngle(a, preferredAngle, awayFromNoahAngle, isFleein
 }
 
 // -------------------------------------------------------------------------
-// [스테이지 3 보조] 미로 벽 모서리 겹침 방지 & 노아 궤적 추종 헬퍼 (isSpawnSpotClear 재사용)
+// [스테이지 3 보조] 미로 벽 모서리 겹침 방지 & 떨림 없는 부드러운 대열 추종 헬퍼
 // -------------------------------------------------------------------------
-function getStage3CornerRepulsion(x, z, detectPad = 0.72) {
+function getStage3CornerRepulsion(x, z, detectPad = 0.65) {
   let pushX = 0;
   let pushZ = 0;
 
@@ -120,18 +176,8 @@ function getStage3CornerRepulsion(x, z, detectPad = 0.72) {
 
         if (dist > 0.0001 && dist < detectPad) {
           const strength = (detectPad - dist) / detectPad;
-          pushX += (dx / dist) * strength * 2.2;
-          pushZ += (dz / dist) * strength * 2.2;
-        } else if (dist <= 0.0001) {
-          const dLeft = Math.abs(x - b.minX);
-          const dRight = Math.abs(b.maxX - x);
-          const dTop = Math.abs(z - b.minZ);
-          const dBot = Math.abs(b.maxZ - z);
-          const minSide = Math.min(dLeft, dRight, dTop, dBot);
-          if (minSide === dLeft) pushX -= 2.5;
-          else if (minSide === dRight) pushX += 2.5;
-          else if (minSide === dTop) pushZ -= 2.5;
-          else pushZ += 2.5;
+          pushX += (dx / dist) * strength * 1.8;
+          pushZ += (dz / dist) * strength * 1.8;
         }
       }
     }
@@ -144,10 +190,10 @@ function getStage3CornerRepulsion(x, z, detectPad = 0.72) {
 
 function recordNoahStage3Trail() {
   const head = noahStage3Trail[0];
-  if (!head || Math.hypot(playerPos.x - head.x, playerPos.z - head.z) >= 0.22) {
-    const rep = getStage3CornerRepulsion(playerPos.x, playerPos.z, 0.58);
-    let tx = playerPos.x + Math.max(-0.35, Math.min(0.35, rep.pushX * 0.18));
-    let tz = playerPos.z + Math.max(-0.35, Math.min(0.35, rep.pushZ * 0.18));
+  if (!head || Math.hypot(playerPos.x - head.x, playerPos.z - head.z) >= 0.25) {
+    const rep = getStage3CornerRepulsion(playerPos.x, playerPos.z, 0.55);
+    let tx = playerPos.x + Math.max(-0.3, Math.min(0.3, rep.pushX * 0.16));
+    let tz = playerPos.z + Math.max(-0.3, Math.min(0.3, rep.pushZ * 0.16));
     if (!isSpawnSpotClear(tx, tz, 0.35)) {
       tx = playerPos.x;
       tz = playerPos.z;
@@ -184,105 +230,90 @@ function getNoahTrailTargetPos(targetArcDist) {
   return { x: last.x, z: last.z };
 }
 
-function moveStage3FollowerSafely(fa, idx, targetX, targetZ, dt, now) {
+function moveStage3FollowerSafely(fa, idx, targetX, targetZ, dt) {
   const curX = fa.group.position.x;
   const curZ = fa.group.position.z;
   const dx = targetX - curX;
   const dz = targetZ - curZ;
   const dist = Math.hypot(dx, dz);
 
-  const leaderPos = (idx === 0) ? playerPos : followingAnimals[idx - 1].group.position;
-  const distToLeader = Math.hypot(leaderPos.x - curX, leaderPos.z - curZ);
-  const minLeaderSpacing = (idx === 0) ? 1.85 : 1.65;
-
-  if (dist < 0.08 || distToLeader < minLeaderSpacing) {
-    fa.group.position.y = 0;
+  // 목표 지점에 거의 도착했으면 떨림 없이 부드럽게 착지
+  if (dist <= 0.14) {
+    fa.group.position.y = THREE.MathUtils.lerp(fa.group.position.y, 0, Math.min(1, dt * 12));
     return;
   }
 
-  const rep = getStage3CornerRepulsion(curX, curZ, 0.75);
-  const desiredAng = Math.atan2(dx + rep.pushX * 0.55, dz + rep.pushZ * 0.55);
+  // 기존처럼 거리에 비례하는 부드러운 감속 이동량 계산 (경계면 떨림 방지)
+  const moveRatio = Math.min(1, dist * 5.2 * dt);
+  const stepDist = dist * moveRatio;
 
-  const catchupSpeed = Math.min(13.5, Math.max(8.2, currentMoveSpeed * 1.15 + dist * 1.6));
-  const stepDist = Math.min(dist, catchupSpeed * dt);
+  const rep = getStage3CornerRepulsion(curX, curZ, 0.65);
+  const desiredAng = Math.atan2(dx + rep.pushX * 0.35, dz + rep.pushZ * 0.35);
 
   const nx = curX + Math.sin(desiredAng) * stepDist;
   const nz = curZ + Math.cos(desiredAng) * stepDist;
 
-  let moved = false;
-  let finalAng = desiredAng;
+  let movedDist = 0;
+  let finalAng = Math.atan2(dx, dz);
 
-  if (isSpawnSpotClear(nx, nz, 0.44)) {
+  if (isSpawnSpotClear(nx, nz, 0.40)) {
     fa.group.position.x = nx;
     fa.group.position.z = nz;
-    moved = true;
+    movedDist = stepDist;
   } else {
-    const steerOffsets = [0.45, -0.45, 0.88, -0.88, 1.32, -1.32, 1.75, -1.75];
+    // 모서리에 막혔을 때 좌우 우회 각도 탐색
+    const steerOffsets = [0.42, -0.42, 0.85, -0.85, 1.28, -1.28];
     for (const off of steerOffsets) {
-      const testAng = Math.atan2(dx, dz) + off;
+      const testAng = finalAng + off;
       const tx = curX + Math.sin(testAng) * stepDist;
       const tz = curZ + Math.cos(testAng) * stepDist;
-      if (isSpawnSpotClear(tx, tz, 0.40)) {
+      if (isSpawnSpotClear(tx, tz, 0.36)) {
         fa.group.position.x = tx;
         fa.group.position.z = tz;
         finalAng = testAng;
-        moved = true;
+        movedDist = stepDist;
         break;
       }
     }
 
-    if (!moved) {
-      const slideX = curX + Math.sign(dx) * Math.min(Math.abs(dx), stepDist);
-      const slideZ = curZ + Math.sign(dz) * Math.min(Math.abs(dz), stepDist);
-      if (Math.abs(dx) >= Math.abs(dz)) {
-        if (isSpawnSpotClear(slideX, curZ, 0.36)) {
-          fa.group.position.x = slideX;
-          finalAng = Math.atan2(slideX - curX, 0);
-          moved = true;
-        } else if (isSpawnSpotClear(curX, slideZ, 0.36)) {
-          fa.group.position.z = slideZ;
-          finalAng = Math.atan2(0, slideZ - curZ);
-          moved = true;
-        }
-      } else {
-        if (isSpawnSpotClear(curX, slideZ, 0.36)) {
-          fa.group.position.z = slideZ;
-          finalAng = Math.atan2(0, slideZ - curZ);
-          moved = true;
-        } else if (isSpawnSpotClear(slideX, curZ, 0.36)) {
-          fa.group.position.x = slideX;
-          finalAng = Math.atan2(slideX - curX, 0);
-          moved = true;
-        }
+    // X축 또는 Z축 벽면 슬라이딩
+    if (movedDist === 0) {
+      const slideX = curX + dx * moveRatio;
+      const slideZ = curZ + dz * moveRatio;
+      if (isSpawnSpotClear(slideX, curZ, 0.34)) {
+        movedDist = Math.abs(slideX - curX);
+        fa.group.position.x = slideX;
+      } else if (isSpawnSpotClear(curX, slideZ, 0.34)) {
+        movedDist = Math.abs(slideZ - curZ);
+        fa.group.position.z = slideZ;
       }
     }
   }
 
-  if (!moved) {
+  // 만약 벽 너머에 끼어 오래 멈춰 있거나 너무 멀어진 경우 트레일 위치로 부드럽게 합류
+  if (movedDist < 0.005) {
     fa.stuckTimer = (fa.stuckTimer || 0) + dt;
-    if (fa.stuckTimer > 0.25 || dist > 9.5) {
-      fa.group.position.x = THREE.MathUtils.lerp(curX, targetX, 0.35);
-      fa.group.position.z = THREE.MathUtils.lerp(curZ, targetZ, 0.35);
+    if (fa.stuckTimer > 0.30 || dist > 9.0) {
+      fa.group.position.x = THREE.MathUtils.lerp(curX, targetX, 0.25);
+      fa.group.position.z = THREE.MathUtils.lerp(curZ, targetZ, 0.25);
+      movedDist = stepDist;
       fa.stuckTimer = 0;
-      moved = true;
     }
   } else {
     fa.stuckTimer = 0;
   }
 
-  const postRep = getStage3CornerRepulsion(fa.group.position.x, fa.group.position.z, 0.52);
-  if (Math.hypot(postRep.pushX, postRep.pushZ) > 0.01) {
-    const pushedX = fa.group.position.x + postRep.pushX * dt * 3.5;
-    const pushedZ = fa.group.position.z + postRep.pushZ * dt * 3.5;
-    if (isSpawnSpotClear(pushedX, pushedZ, 0.32)) {
-      fa.group.position.x = pushedX;
-      fa.group.position.z = pushedZ;
-    }
-  }
-
-  fa.heading = lerpAngle(fa.heading, finalAng, dt * 11);
+  fa.heading = lerpAngle(fa.heading, finalAng, dt * 9.5);
   fa.group.rotation.y = fa.heading;
-  fa.group.position.y = moved ? Math.abs(Math.sin(now * 0.015 + idx)) * 0.22 : 0;
+
+  // 실제 이동 속도에 맞춰 자연스럽고 차분한 템포로 통통 튀도록 처리 (빠른 진동·떨림 방지)
+  if (movedDist > 0.01) {
+    fa.hopPhase = (fa.hopPhase || idx * 0.9) + dt * 7.2;
+    const targetHopY = Math.abs(Math.sin(fa.hopPhase)) * 0.18;
+    fa.group.position.y = THREE.MathUtils.lerp(fa.group.position.y, targetHopY, Math.min(1, dt * 14));
+  } else {
+    fa.group.position.y = THREE.MathUtils.lerp(fa.group.position.y, 0, Math.min(1, dt * 10));
+  }
 }
 
 // -------------------------------------------------------------------------
@@ -294,6 +325,7 @@ function buildNoahStage1World() {
   scene.fog = new THREE.Fog(0x7dd3fc, 52, 135);
 
   const isWide = (currentMode !== 'kinder');
+  const isHardSpread = (currentMode === 'senior' || currentMode === 'timeattack');
   const mapLimit = isWide ? 52 : 34;
 
   const groundMat = new THREE.MeshLambertMaterial({ map: makeGrassFieldTex() });
@@ -346,14 +378,24 @@ function buildNoahStage1World() {
   }
 
   const types = ['lion', 'sheep', 'elephant', 'giraffe', 'panda', 'rabbit', 'deer'];
-  const spawnRange = isWide ? (mapLimit - 7) : 20;
-  const spawnBounds = { minX: -spawnRange, maxX: spawnRange, minZ: -9, maxZ: spawnRange };
+  const spawnRange = isWide ? (mapLimit - 6.5) : 20;
+  const spawnBounds = { minX: -spawnRange, maxX: spawnRange, minZ: -8.5, maxZ: spawnRange };
+  const sectors = isHardSpread ? buildSpreadSectors(spawnBounds) : null;
   const chosenSpots = [];
   const startPos = { x: 0, z: 6 };
 
   rescuedPairs = 0;
   types.forEach((type, i) => {
-    const [ax, az] = findRandomSafeSpot(spawnBounds, chosenSpots, isWide ? 8.5 : 5.5, startPos, 7.0);
+    const minSpacing = isHardSpread ? 19.5 : (isWide ? 11.0 : 6.0);
+    const avoidRad = isHardSpread ? 11.5 : 7.0;
+    const [ax, az] = pickWidelySpreadAnimalSpot(
+      spawnBounds,
+      chosenSpots,
+      minSpacing,
+      startPos,
+      avoidRad,
+      sectors ? sectors[i % sectors.length] : null
+    );
     chosenSpots.push([ax, az]);
     const pairGroup = createAnimalPairGroup(type, 0xfde047);
     pairGroup.position.set(ax, 0, az);
@@ -367,7 +409,7 @@ function buildNoahStage1World() {
     stageAnimals.push({
       type, index: i, group: pairGroup, rescued: false, onArkDeck: false, label: lbl,
       heading: initHeading, targetHeading: initHeading,
-      avoidTimer: 0, wanderTimer: 1.2 + (i * 0.4), stuckTimer: 0,
+      avoidTimer: 0, wanderTimer: 1.2 + (i * 0.4), stuckTimer: 0, hopPhase: i * 0.9,
       fleeState: false, limit: mapLimit - 6,
       speedScale, fleeBias
     });
@@ -542,8 +584,19 @@ function buildNoahArkInteriorMaze(stageNum) {
     rescuedPairs = 0;
     const pairTypes = ['lion', 'sheep', 'elephant', 'giraffe', 'panda', 'rabbit', 'deer'];
     const pairSpots = [];
-    pairTypes.forEach((type) => {
-      const [px, pz] = findRandomSafeSpot(interiorBounds, [...pairSpots, ...allSpawnedInside], 7.5, startPos, 8.0);
+    const sectors = isHard ? buildSpreadSectors(interiorBounds) : null;
+
+    pairTypes.forEach((type, i) => {
+      const minSpacing = isHard ? 18.0 : 10.5;
+      // 응원 동물(allSpawnedInside)은 좁은 간격만 피하고, 구출 대상 7쌍(pairSpots)끼리는 최대한 멀리 퍼뜨림
+      const [px, pz] = pickWidelySpreadAnimalSpot(
+        interiorBounds,
+        pairSpots,
+        minSpacing,
+        startPos,
+        isHard ? 11.0 : 8.0,
+        sectors ? sectors[i % sectors.length] : null
+      );
       pairSpots.push([px, pz]);
       const pairGroup = createAnimalPairGroup(type, 0x38bdf8);
       pairGroup.position.set(px, 0, pz);
@@ -554,7 +607,7 @@ function buildNoahArkInteriorMaze(stageNum) {
       const lbl = createWorldLabel(`${ANIMAL_SPECS[type].icon} ${ANIMAL_SPECS[type].name} 한 쌍${bonusTxt}`);
       stageAnimals.push({
         type, group: pairGroup, rescued: false, label: lbl,
-        heading: 0, targetHeading: 0, avoidTimer: 0, stuckTimer: 0, fleeState: false, limit: halfW - 4
+        heading: 0, targetHeading: 0, avoidTimer: 0, stuckTimer: 0, hopPhase: i * 0.9, fleeState: false, limit: halfW - 4
       });
     });
 
@@ -792,7 +845,7 @@ function updateNoahStageFrame(dt, now) {
         }
 
         a.group.rotation.y = a.heading;
-        a.group.position.y = Math.abs(Math.sin(now * (isFleeing ? 0.016 : 0.01) + idx)) * 0.16;
+        a.group.position.y = Math.abs(Math.sin(now * (isFleeing ? 0.0085 : 0.006) + idx)) * 0.15;
       }
 
       const afterDist = Math.hypot(a.group.position.x - playerPos.x, a.group.position.z - playerPos.z);
@@ -902,7 +955,7 @@ function updateNoahStageFrame(dt, now) {
     followingAnimals.forEach((fa, idx) => {
       const targetArcDist = 2.1 + idx * 1.85;
       const trailPt = getNoahTrailTargetPos(targetArcDist);
-      moveStage3FollowerSafely(fa, idx, trailPt.x, trailPt.z, dt, now);
+      moveStage3FollowerSafely(fa, idx, trailPt.x, trailPt.z, dt);
     });
 
     if (targetObject && !targetObject.triggered) {
