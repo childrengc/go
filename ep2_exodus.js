@@ -1135,7 +1135,7 @@ function updateStage2Speedrun(dt, now) {
   });
 }
 // =========================================================================
-// [ep2_exodus.js - 파트 2/2] 스테이지 3 시내산 등반(정상·돌계단 겹침 제거 및 틈새 추락 방지, 소년반 연속 3개 장애물 방지, 물주머니 +5초) 및 컷신
+// [ep2_exodus.js - 파트 2/2] 스테이지 3 시내산 등반(계단 벽 깜박임 Z-fighting 제거, 정상·돌계단 겹침 해소, 소년반 연속 3개 장애물 방지, 물주머니 +5초) 및 컷신
 // =========================================================================
 
 function spawnSinaiWaterPouchItem(x, y, z) {
@@ -1274,7 +1274,7 @@ function buildExodusStage3World() {
   const stepBd = 4.56;
   const firstStepZ = 24.0;
 
-  // [요청사항 1·2] 마지막 돌계단 북쪽 끝면과 정상 바위 남쪽 끝면이 겹치지 않고 정확히 맞닿도록 배치
+  // 마지막 돌계단 북쪽 끝면과 정상 바위 남쪽 끝면이 겹치지 않고 맞닿도록 배치
   const summitDepth = 10.5;
   const lastRowCenterZ = firstStepZ - (totalRows - 1) * stepDz;
   const lastRowNorthEdgeZ = lastRowCenterZ - stepBd / 2;
@@ -1285,6 +1285,7 @@ function buildExodusStage3World() {
   currentMapRectBounds = { minX: -pathHalfLimit + 0.2, maxX: pathHalfLimit - 0.2, minZ: summitZ - 5, maxZ: 45 };
 
   const sandMat = new THREE.MeshLambertMaterial({ map: makeDesertSandTex() });
+  // 계단 전용 재질 (wallMeshes 투명화 영향을 받지 않도록 분리)
   const yellowRock1 = matVoxel('#eab308', '#ca8a04');
   const yellowRock2 = matVoxel('#d97706', '#b45309');
   const yellowRock3 = matVoxel('#b45309', '#78350f');
@@ -1311,7 +1312,7 @@ function buildExodusStage3World() {
     sinaiWaitingPeople.push({ mesh: person, phase: idx * 0.8 });
   });
 
-  // 3) 백성들 뒤 배경 바위산 병풍
+  // 3) 백성들 뒤 배경 바위산 병풍 (개별 clone 재질 사용으로 계단 깜박임 방지)
   const backMtnSpecs = [
     { x: -22, z: 50, w: 18, h: 19, d: 10, m: yellowRock2 },
     { x: -9,  z: 52, w: 16, h: 24, d: 11, m: yellowRock3 },
@@ -1320,13 +1321,13 @@ function buildExodusStage3World() {
     { x: 22,  z: 50, w: 18, h: 18, d: 10, m: yellowRock2 }
   ];
   backMtnSpecs.forEach(bm => {
-    const m1 = createBox(bm.w, bm.h, bm.d, bm.m, bm.x, bm.h / 2 - 1, bm.z);
-    const m2 = createBox(bm.w * 0.65, bm.h + 5, bm.d * 0.7, cliffStone, bm.x, (bm.h + 5) / 2 - 1, bm.z + 2);
+    const m1 = createBox(bm.w, bm.h, bm.d, bm.m.clone(), bm.x, bm.h / 2 - 1, bm.z);
+    const m2 = createBox(bm.w * 0.65, bm.h + 5, bm.d * 0.7, cliffStone.clone(), bm.x, (bm.h + 5) / 2 - 1, bm.z + 2);
     worldGroup.add(m1, m2);
     wallMeshes.push(m1, m2);
   });
 
-  // 4) 양옆을 바위산으로 빈틈없이 막아 옆으로 떨어지지 않게 완전 차폐
+  // 4) 양옆을 바위산으로 빈틈없이 막아 옆으로 떨어지지 않게 완전 차폐 (개별 clone 재질 사용)
   const maxSideMtnH = Math.max(12, summitY - 3.5);
   for (let z = summitZ + 4; z <= 28; z += 4.2) {
     const prog = Math.max(0, Math.min(1, (26 - z) / Math.max(1, 26 - summitZ)));
@@ -1338,9 +1339,9 @@ function buildExodusStage3World() {
       const cragX = sideDir * (pathHalfLimit + 2.8);
       const outerX = sideDir * (pathHalfLimit + 8.5);
 
-      const b1 = createBox(6.0, baseH, 4.5, (sIdx % 2 === 0 ? yellowRock2 : yellowRock3), cragX, baseH / 2 - 0.5, z);
-      const b2 = createBox(4.4, baseH + 1.8, 3.8, cliffStone, cragX + sideDir * 0.5, (baseH + 1.8) / 2 - 0.5, z + 0.6);
-      const b3 = createBox(10.0, outerH, 4.5, yellowRock1, outerX, outerH / 2 - 1.0, z);
+      const b1 = createBox(6.0, baseH, 4.5, (sIdx % 2 === 0 ? yellowRock2 : yellowRock3).clone(), cragX, baseH / 2 - 0.5, z);
+      const b2 = createBox(4.4, baseH + 1.8, 3.8, cliffStone.clone(), cragX + sideDir * 0.5, (baseH + 1.8) / 2 - 0.5, z + 0.6);
+      const b3 = createBox(10.0, outerH, 4.5, yellowRock1.clone(), outerX, outerH / 2 - 1.0, z);
       worldGroup.add(b1, b2, b3);
       wallMeshes.push(b1, b2, b3);
     });
@@ -1351,14 +1352,19 @@ function buildExodusStage3World() {
   );
 
   function createMountainRockBlock(bx, bz, bw, bd, by, bType, stepIdx, nodeIdx, minClimbY = undefined) {
+    const isGold = (bType === 'summit');
+    // 시각적 3D 메쉬는 인접 블록과 면이 겹쳐 깜박이지(Z-fighting) 않도록 미세한 유격을 둠 (물리 판정은 기존 폭 유지)
+    const meshW = isGold ? bw : (bw - 0.06);
+    const meshD = isGold ? (bd - 0.16) : (bd - 0.16);
+
     if (bType === 'crumble') {
-      const basePillarH = Math.max(0.5, by - 1.4);
-      worldGroup.add(createBox(bw, basePillarH, bd, yellowRock3, bx, basePillarH / 2, bz));
+      const basePillarH = Math.max(0.5, by - 1.44);
+      worldGroup.add(createBox(meshW, basePillarH, meshD, yellowRock3, bx, basePillarH / 2, bz));
 
       const ledgeH = 1.4;
       const ledgeMesh = new THREE.Group();
-      const rockBody = createBox(bw, ledgeH, bd, cliffStone, 0, -ledgeH / 2, 0);
-      const crackTop = createBox(bw * 0.88, 0.14, bd * 0.82, matVoxel('#b45309', '#451a03'), 0, 0.04, 0, false);
+      const rockBody = createBox(meshW, ledgeH, meshD, cliffStone, 0, -ledgeH / 2, 0);
+      const crackTop = createBox(meshW * 0.88, 0.14, meshD * 0.82, matVoxel('#b45309', '#451a03'), 0, 0.05, 0, false);
       ledgeMesh.add(rockBody, crackTop);
       ledgeMesh.position.set(bx, by, bz);
       worldGroup.add(ledgeMesh);
@@ -1368,8 +1374,8 @@ function buildExodusStage3World() {
       shatterGroup.visible = false;
       const pieces = [];
       for (let p = 0; p < 8; p++) {
-        const px = ((p % 4) - 1.5) * (bw * 0.22);
-        const pz = (Math.floor(p / 4) - 0.5) * (bd * 0.35);
+        const px = ((p % 4) - 1.5) * (meshW * 0.22);
+        const pz = (Math.floor(p / 4) - 0.5) * (meshD * 0.35);
         const piece = createBox(0.95, 0.65, 0.95, cliffStone, px, 0, pz, false);
         shatterGroup.add(piece);
         pieces.push({
@@ -1396,18 +1402,18 @@ function buildExodusStage3World() {
       return;
     }
 
-    const isGold = (bType === 'summit');
     const isTrap = (bType === 'snake' || bType === 'lightning' || bType === 'rockfall');
     const mainMat = isGold ? goldStepMat : (isTrap ? cliffStone : yellowRock1);
     const subMat = isTrap ? yellowRock3 : yellowRock2;
 
-    const mainRock = createBox(bw, by, bd, mainMat, bx, by / 2, bz);
-    // 앞쪽 장식 턱이 앞줄 돌계단 영역을 침범하지 않도록 안쪽으로 정렬
-    const trimZ = isGold ? (bz + bd / 2 - 0.18) : (bz + bd / 2 - 0.14);
-    const frontTrim = createBox(bw * 0.92, Math.max(0.8, by - 0.4), 0.28, subMat, bx, (by - 0.4) / 2, trimZ);
+    const mainRock = createBox(meshW, by, meshD, mainMat, bx, by / 2, bz);
+    // frontTrim의 앞면이 mainRock 앞면(bz + meshD / 2)보다 0.06 앞으로 돌출되도록 배치하여 Z-fighting 완벽 방지
+    const trimDepth = 0.10;
+    const trimH = Math.max(0.8, by - 0.42);
+    const trimZ = bz + meshD / 2 + 0.01;
+    const frontTrim = createBox(meshW * 0.90, trimH, trimDepth, subMat, bx, trimH / 2 + 0.02, trimZ);
     worldGroup.add(mainRock, frontTrim);
 
-    // 정상 블록은 core.js의 wallPad(0.26)가 마지막 줄 돌계단을 좁히지 않도록 maxZ를 보정하되, 지지대(supportPad=0.34)는 겹치게 유지
     const platMaxZ = isGold ? (bz + bd / 2 - 0.25) : (bz + bd / 2);
     platforms.push({
       minX: bx - bw / 2, maxX: bx + bw / 2,
@@ -1434,32 +1440,32 @@ function buildExodusStage3World() {
       });
     } else if (bType === 'lightning' || bType === 'rockfall') {
       const hKind = bType;
-      const sqW = bw - 0.18;
-      const sqD = bd - 0.18;
+      const sqW = meshW - 0.16;
+      const sqD = meshD - 0.16;
 
       const warnSquareGroup = new THREE.Group();
       warnSquareGroup.position.set(bx, by + 0.05, bz);
 
       const warnFillMat = new THREE.MeshBasicMaterial({ color: 0xfacc15, transparent: true, opacity: 0.26 });
-      const warnFill = createBox(sqW, 0.04, sqD, warnFillMat, 0, 0, 0, false);
+      const warnFill = createBox(sqW, 0.03, sqD, warnFillMat, 0, 0, 0, false);
       warnSquareGroup.add(warnFill);
 
       const borderMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
       const bThick = 0.12;
       warnSquareGroup.add(
-        createBox(sqW, 0.06, bThick, borderMat, 0, 0.02, -sqD / 2 + bThick / 2, false),
-        createBox(sqW, 0.06, bThick, borderMat, 0, 0.02,  sqD / 2 - bThick / 2, false),
-        createBox(bThick, 0.06, sqD, borderMat, -sqW / 2 + bThick / 2, 0.02, 0, false),
-        createBox(bThick, 0.06, sqD, borderMat,  sqW / 2 - bThick / 2, 0.02, 0, false)
+        createBox(sqW, 0.05, bThick, borderMat, 0, 0.03, -sqD / 2 + bThick / 2, false),
+        createBox(sqW, 0.05, bThick, borderMat, 0, 0.03,  sqD / 2 - bThick / 2, false),
+        createBox(bThick, 0.05, sqD - bThick * 2, borderMat, -sqW / 2 + bThick / 2, 0.03, 0, false),
+        createBox(bThick, 0.05, sqD - bThick * 2, borderMat,  sqW / 2 - bThick / 2, 0.03, 0, false)
       );
 
       const activeXGroup = new THREE.Group();
-      const diagLen = Math.hypot(sqW, sqD) * 0.88;
+      const diagLen = Math.hypot(sqW, sqD) * 0.86;
       const diagAng = Math.atan2(sqD, sqW);
       const xMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
-      const bar1 = createBox(diagLen, 0.06, 0.16, xMat, 0, 0.03, 0, false);
+      const bar1 = createBox(diagLen, 0.05, 0.16, xMat, 0, 0.04, 0, false);
       bar1.rotation.y = diagAng;
-      const bar2 = createBox(diagLen, 0.06, 0.16, xMat, 0, 0.03, 0, false);
+      const bar2 = createBox(diagLen, 0.05, 0.16, xMat, 0, 0.05, 0, false);
       bar2.rotation.y = -diagAng;
       activeXGroup.add(bar1, bar2);
       activeXGroup.visible = false;
