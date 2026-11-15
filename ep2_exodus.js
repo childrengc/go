@@ -1,5 +1,5 @@
 // =========================================================================
-// [ep2_exodus.js - 파트 1/2] 에피소드 2 : 출애굽과 시내산 언약 (다리 미완성 구간만 투명 표시, 스테이지 1·2 랜덤 스폰, 스테이지 2 렌더링 최적화)
+// [ep2_exodus.js - 파트 1/2] 에피소드 2 : 출애굽과 시내산 언약 (스테이지 1 백성 다리 공중부양 방지, 스테이지 2 번개 아이콘 제거 및 최적화)
 // =========================================================================
 
 EPISODE_SCRIPTURE.exodus = {
@@ -35,7 +35,6 @@ function shuffleArray(arr) {
   return copy;
 }
 
-// 정적 메쉬용 재질 캐시 (동일 색상 재질 중복 생성을 방지하여 스테이지 2 소년반 시작 렉 해소)
 const exodusStaticMatCache = {};
 function matVoxelCached(baseHex, noiseHex) {
   const key = noiseHex ? `${baseHex}_${noiseHex}` : baseHex;
@@ -284,7 +283,50 @@ function updateMosesFollowers(dt, now) {
     const anchor = mosesTrailHistory[histIdx] || { x: playerPos.x, y: playerPos.y, z: playerPos.z, facing: playerFacing };
     const perpX = Math.cos(anchor.facing) * (f.col * 0.95), perpZ = -Math.sin(anchor.facing) * (f.col * 0.95);
     const backX = -Math.sin(anchor.facing) * (0.85 + f.row * 0.65), backZ = -Math.cos(anchor.facing) * (0.85 + f.row * 0.65);
-    const targetX = anchor.x + perpX + backX, targetZ = anchor.z + perpZ + backZ;
+    let targetX = anchor.x + perpX + backX, targetZ = anchor.z + perpZ + backZ;
+
+    // [스테이지 1 요청사항] 백성들이 협곡 다리를 건널 때 허공으로 벗어나거나 대각선으로 절벽 위를 날아가지 않도록 경로 및 위치 고정
+    if (currentStage === 1 && buildZones.length > 0) {
+      const curX = f.mesh.position.x;
+      const curZ = f.mesh.position.z;
+
+      for (const bz of buildZones) {
+        const gapSouthZ = bz.zSouthEdge + 0.65;
+        const gapNorthZ = bz.zNorthEdge - 0.65;
+        const walkMinX = bz.x - bz.w / 2 + 0.68;
+        const walkMaxX = bz.x + bz.w / 2 - 0.68;
+        const ratio = Math.min(1, Math.max(0, (bz.placedBlocks || 0) / bz.reqBlocks));
+        const builtNorthZ = ratio > 0
+          ? (bz.zSouthEdge + 0.4) - (bz.trenchDepthW + 0.8) * ratio
+          : gapSouthZ;
+
+        // 1) 목표 지점이 협곡 Z 범위 안에 있으면 다리 폭 내부로 X를 제한하고 미완성 허공 진입 차단
+        if (targetZ < gapSouthZ && targetZ > gapNorthZ) {
+          targetX = THREE.MathUtils.clamp(targetX, walkMinX, walkMaxX);
+          if (ratio <= 0) {
+            targetZ = (curZ >= bz.zCenter) ? gapSouthZ + 0.15 : gapNorthZ - 0.15;
+          } else if (ratio < 1 && targetZ < builtNorthZ + 0.35) {
+            targetZ = (curZ < bz.zNorthEdge) ? gapNorthZ - 0.15 : Math.min(gapSouthZ, builtNorthZ + 0.35);
+          }
+        }
+
+        // 2) 절벽 위에서 다리로 진입할 때 X좌표가 다리 입구 밖이면 먼저 다리 입구 앞으로 이동한 뒤 건너가도록 유도
+        const isOutsideCorridorX = (curX < walkMinX - 0.15 || curX > walkMaxX + 0.15);
+        if (curZ >= gapSouthZ - 0.1 && targetZ < gapSouthZ && isOutsideCorridorX) {
+          targetX = THREE.MathUtils.clamp(bz.x + f.col * 0.75, walkMinX, walkMaxX);
+          targetZ = gapSouthZ + 0.15;
+        } else if (curZ <= gapNorthZ + 0.1 && targetZ > gapNorthZ && isOutsideCorridorX) {
+          targetX = THREE.MathUtils.clamp(bz.x + f.col * 0.75, walkMinX, walkMaxX);
+          targetZ = gapNorthZ - 0.15;
+        }
+
+        // 3) 현재 다리 위에 있는 동안에는 다리를 완전히 빠져나갈 때까지 다리 난간 안쪽 폭 유지
+        if (curZ < gapSouthZ - 0.05 && curZ > gapNorthZ + 0.05) {
+          targetX = THREE.MathUtils.clamp(targetX, walkMinX, walkMaxX);
+        }
+      }
+    }
+
     const dx = targetX - f.mesh.position.x, dz = targetZ - f.mesh.position.z, dist = Math.hypot(dx, dz);
 
     if (dist > 0.06) {
@@ -298,8 +340,36 @@ function updateMosesFollowers(dt, now) {
       f.mesh.userData.lLeg.rotation.x = 0; f.mesh.userData.rLeg.rotation.x = 0;
       f.mesh.userData.lArm.rotation.x = 0; f.mesh.userData.rArm.rotation.x = 0;
     }
+
+    // 이동 후에도 협곡 허공 영역에 위치하지 않도록 최종 안전 보정
+    let onBridgeSurface = false;
+    if (currentStage === 1 && buildZones.length > 0) {
+      for (const bz of buildZones) {
+        const gapSouthZ = bz.zSouthEdge + 0.60;
+        const gapNorthZ = bz.zNorthEdge - 0.60;
+        const walkMinX = bz.x - bz.w / 2 + 0.68;
+        const walkMaxX = bz.x + bz.w / 2 - 0.68;
+        const ratio = Math.min(1, Math.max(0, (bz.placedBlocks || 0) / bz.reqBlocks));
+        const builtNorthZ = ratio > 0
+          ? (bz.zSouthEdge + 0.4) - (bz.trenchDepthW + 0.8) * ratio
+          : gapSouthZ;
+
+        if (f.mesh.position.z < gapSouthZ && f.mesh.position.z > gapNorthZ) {
+          if (ratio <= 0) {
+            f.mesh.position.z = (f.mesh.position.z >= bz.zCenter) ? gapSouthZ : gapNorthZ;
+          } else {
+            f.mesh.position.x = THREE.MathUtils.clamp(f.mesh.position.x, walkMinX, walkMaxX);
+            if (ratio < 1 && f.mesh.position.z < builtNorthZ + 0.3) {
+              f.mesh.position.z = builtNorthZ + 0.3;
+            }
+            onBridgeSurface = true;
+          }
+        }
+      }
+    }
+
     const supportY = getSupportHeight(f.mesh.position.x, f.mesh.position.z, f.mesh.position.y + 0.8);
-    f.mesh.position.y = THREE.MathUtils.lerp(f.mesh.position.y, supportY, 0.38);
+    f.mesh.position.y = onBridgeSurface ? supportY : THREE.MathUtils.lerp(f.mesh.position.y, supportY, 0.45);
   });
 }
 
@@ -501,23 +571,21 @@ function createChasmWithBridgePuzzle(zCenter, trenchDepthW, halfMapW, bridgeConf
 
         const ratio = Math.min(1, Math.max(0, this.placedBlocks / this.reqBlocks));
 
-        // 1) 지어진 구간은 불투명 통나무 다리로 생성
         let builtNorthZ = this.zSouthEdge;
         if (ratio > 0) {
-          const builtLen = (this.trenchDepthW + 0.8) * ratio;
-          const curCenterZ = (this.zSouthEdge + 0.4) - builtLen / 2;
-          builtNorthZ = (this.zSouthEdge + 0.4) - builtLen;
+          const builtLen = (this.trenchDepthW + 1.1) * ratio;
+          const curCenterZ = (this.zSouthEdge + 0.55) - builtLen / 2;
+          builtNorthZ = (this.zSouthEdge + 0.55) - builtLen;
           const curY = THREE.MathUtils.lerp(this.ySouth, this.yNorth, ratio * 0.5);
           const plankMat = new THREE.MeshLambertMaterial({ map: makeLogBarkTex() });
           const railMat = matVoxelCached('#5c2d0c', '#451a03');
-          const plank = createBox(this.w, 0.48, builtLen, plankMat, this.x, curY - 0.1, curCenterZ);
-          const railL = createBox(0.32, 0.65, builtLen, railMat, this.x - this.w / 2 + 0.18, curY + 0.28, curCenterZ);
-          const railR = createBox(0.32, 0.65, builtLen, railMat, this.x + this.w / 2 - 0.18, curY + 0.28, curCenterZ);
+          const plank = createBox(this.w, 0.48, builtLen, plankMat, this.x, curY - 0.22, curCenterZ);
+          const railL = createBox(0.32, 0.65, builtLen, railMat, this.x - this.w / 2 + 0.18, curY + 0.22, curCenterZ);
+          const railR = createBox(0.32, 0.65, builtLen, railMat, this.x + this.w / 2 - 0.18, curY + 0.22, curCenterZ);
           plank.rotation.x = slopeAngle; railL.rotation.x = slopeAngle; railR.rotation.x = slopeAngle;
           this.solidGroup.add(plank, railL, railR);
         }
 
-        // 2) 미완성 구간만 반투명 청사진 박스로 표시 (지어진 부분은 투명 영역 제거)
         if (ratio < 1) {
           this.bpGroup.visible = true;
           const remSouthZ = (ratio > 0) ? Math.min(this.zSouthEdge, builtNorthZ) : this.zSouthEdge;
@@ -598,6 +666,15 @@ function buildExodusStage1World() {
     sandBox.receiveShadow = true;
     worldGroup.add(sandBox);
   }
+  // 협곡 절벽 벽면과 모래 지형 사이의 경계 틈새를 빈틈없이 메움
+  cliffDefinitions.forEach(c => {
+    const sCapZ = c.z + c.depth / 2 + 1.4;
+    const nCapZ = c.z - c.depth / 2 - 1.4;
+    const sCap = createBox(halfW * 2, 18.0, 1.3, sandMat, 0, getBaseGroundHeight(0, sCapZ) - 9.0, sCapZ, false);
+    const nCap = createBox(halfW * 2, 18.0, 1.3, sandMat, 0, getBaseGroundHeight(0, nCapZ) - 9.0, nCapZ, false);
+    sCap.receiveShadow = true; nCap.receiveShadow = true;
+    worldGroup.add(sCap, nCap);
+  });
 
   cliffDefinitions.forEach(c => {
     createChasmWithBridgePuzzle(c.z, c.depth, halfW, [{ id: c.id, x: c.x, w: 6.4, reqBlocks: c.req, title: c.title }], true);
@@ -778,7 +855,7 @@ function spawnSpeedPearl(x, z) {
   grp.position.set(x, by, z);
   worldGroup.add(grp);
 
-  const lbl = createWorldLabel('🦪 바다 진주 (먹으면 1초 초고속 가속!⚡)');
+  const lbl = createWorldLabel('🦪 바다 진주 (먹으면 1초 초고속 가속!)');
   stage2Pearls.push({ group: grp, core: pearlCore, pos: new THREE.Vector3(x, by + 0.5, z), collected: false, label: lbl });
 }
 
@@ -821,8 +898,8 @@ function startStage2Countdown() {
         }
         showToast(
           currentMode === 'timeattack'
-            ? '⚡ 출발! 진주를 먹으면 1초간 속도가 빨라져요! 불기둥까지 달리세요!'
-            : '⚡ 출발! 산호초와 바위는 점프하고 물구덩이는 피해 불기둥까지 달리세요!'
+            ? '🏃 출발! 진주를 먹으면 1초간 속도가 빨라져요! 불기둥까지 달리세요!'
+            : '🏃 출발! 산호초와 바위는 점프하고 물구덩이는 피해 불기둥까지 달리세요!'
         );
       }
     }, 950);
