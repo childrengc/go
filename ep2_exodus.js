@@ -1135,7 +1135,7 @@ function updateStage2Speedrun(dt, now) {
   });
 }
 // =========================================================================
-// [ep2_exodus.js - 파트 2/2] 스테이지 3 시내산 등반(정상 바위 아래 칸부터 구름바다 배치, 소년반 연속 3개 장애물 방지, 물주머니 +5초) 및 컷신
+// [ep2_exodus.js - 파트 2/2] 스테이지 3 시내산 등반(정상·돌계단 겹침 제거 및 틈새 추락 방지, 소년반 연속 3개 장애물 방지, 물주머니 +5초) 및 컷신
 // =========================================================================
 
 function spawnSinaiWaterPouchItem(x, y, z) {
@@ -1225,14 +1225,17 @@ function createZigzagLightningBolt() {
 
 function relocateSinaiPlayerOnHit(stepIdx, nodeIdx, msgPrefix = '⚠️ 장애물에 닿아') {
   if (currentMode === 'timeattack' && sinaiStepNodes.length > 0) {
-    const backIdx = Math.max(0, (nodeIdx || 1) - 1);
+    let backIdx = Math.max(0, (nodeIdx || 1) - 1);
+    while (backIdx > 0 && sinaiStepNodes[backIdx] && !sinaiStepNodes[backIdx].safe) {
+      backIdx--;
+    }
     const backNode = sinaiStepNodes[backIdx] || sinaiStepNodes[0];
     sinaiLastCheckpoint.set(backNode.x, backNode.y, backNode.z);
     playerPos.set(backNode.x, backNode.y + 0.12, backNode.z);
     lastGroundedY = backNode.y;
     playerVelY = 0;
     isGrounded = true;
-    showToast(`${msgPrefix} 바로 뒤 칸 바위로 이동했어요!`);
+    showToast(`${msgPrefix} 바로 뒤 안전 바위로 이동했어요!`);
   } else {
     const targetRowIdx = Math.max(0, (stepIdx || 1) - 1);
     const fallbackPt = sinaiSafeCheckpoints[targetRowIdx] || sinaiSafeCheckpoints[0];
@@ -1268,8 +1271,14 @@ function buildExodusStage3World() {
   const lateralStepRise = 0.80;
   const rowRise = colsX.length * lateralStepRise;
   const stepDz = 4.5;
+  const stepBd = 4.56;
   const firstStepZ = 24.0;
-  const summitZ = firstStepZ - totalRows * stepDz - 2.0;
+
+  // [요청사항 1·2] 마지막 돌계단 북쪽 끝면과 정상 바위 남쪽 끝면이 겹치지 않고 정확히 맞닿도록 배치
+  const summitDepth = 10.5;
+  const lastRowCenterZ = firstStepZ - (totalRows - 1) * stepDz;
+  const lastRowNorthEdgeZ = lastRowCenterZ - stepBd / 2;
+  const summitZ = Number((lastRowNorthEdgeZ - summitDepth / 2).toFixed(2));
   const summitY = Number((totalRows * rowRise + 0.80).toFixed(2));
 
   const pathHalfLimit = isKinder ? 9.0 : (isSeniorMap ? 12.0 : 10.0);
@@ -1286,7 +1295,7 @@ function buildExodusStage3World() {
   worldGroup.add(createBox(halfW * 2 + 16, 4, 34, sandMat, 0, -2, 37));
   sinaiLastCheckpoint.set(0, 0, 29);
   sinaiSafeCheckpoints.push(new THREE.Vector3(0, 0, 29));
-  sinaiStepNodes.push({ x: 0, y: 0, z: 29, stepIdx: 0, nodeIdx: 0 });
+  sinaiStepNodes.push({ x: 0, y: 0, z: 29, stepIdx: 0, nodeIdx: 0, safe: true });
 
   // 2) 남쪽 산기슭에서 응원하는 이스라엘 백성들
   const peoplePositions = [
@@ -1319,7 +1328,7 @@ function buildExodusStage3World() {
 
   // 4) 양옆을 바위산으로 빈틈없이 막아 옆으로 떨어지지 않게 완전 차폐
   const maxSideMtnH = Math.max(12, summitY - 3.5);
-  for (let z = summitZ + 5; z <= 28; z += 4.2) {
+  for (let z = summitZ + 4; z <= 28; z += 4.2) {
     const prog = Math.max(0, Math.min(1, (26 - z) / Math.max(1, 26 - summitZ)));
     const pathYAtZ = prog * (summitY - 2);
 
@@ -1337,8 +1346,8 @@ function buildExodusStage3World() {
     });
   }
   colliders.push(
-    { minX: -halfW - 12, maxX: -pathHalfLimit + 0.05, minZ: summitZ - 4, maxZ: 26.5 },
-    { minX: pathHalfLimit - 0.05, maxX: halfW + 12, minZ: summitZ - 4, maxZ: 26.5 }
+    { minX: -halfW - 12, maxX: -pathHalfLimit + 0.05, minZ: summitZ - 5, maxZ: 26.5 },
+    { minX: pathHalfLimit - 0.05, maxX: halfW + 12, minZ: summitZ - 5, maxZ: 26.5 }
   );
 
   function createMountainRockBlock(bx, bz, bw, bd, by, bType, stepIdx, nodeIdx, minClimbY = undefined) {
@@ -1375,7 +1384,7 @@ function buildExodusStage3World() {
       const platObj = {
         minX: bx - bw / 2, maxX: bx + bw / 2,
         minZ: bz - bd / 2, maxZ: bz + bd / 2,
-        topY: by, minClimbY, stepIdx, nodeIdx
+        topY: by, baseTopY: by, minClimbY, stepIdx, nodeIdx
       };
       platforms.push(platObj);
 
@@ -1393,13 +1402,17 @@ function buildExodusStage3World() {
     const subMat = isTrap ? yellowRock3 : yellowRock2;
 
     const mainRock = createBox(bw, by, bd, mainMat, bx, by / 2, bz);
-    const frontTrim = createBox(bw * 0.92, Math.max(0.8, by - 0.4), 0.35, subMat, bx, (by - 0.4) / 2, bz + bd / 2 + 0.05);
+    // 앞쪽 장식 턱이 앞줄 돌계단 영역을 침범하지 않도록 안쪽으로 정렬
+    const trimZ = isGold ? (bz + bd / 2 - 0.18) : (bz + bd / 2 - 0.14);
+    const frontTrim = createBox(bw * 0.92, Math.max(0.8, by - 0.4), 0.28, subMat, bx, (by - 0.4) / 2, trimZ);
     worldGroup.add(mainRock, frontTrim);
 
+    // 정상 블록은 core.js의 wallPad(0.26)가 마지막 줄 돌계단을 좁히지 않도록 maxZ를 보정하되, 지지대(supportPad=0.34)는 겹치게 유지
+    const platMaxZ = isGold ? (bz + bd / 2 - 0.25) : (bz + bd / 2);
     platforms.push({
       minX: bx - bw / 2, maxX: bx + bw / 2,
-      minZ: bz - bd / 2, maxZ: bz + bd / 2,
-      topY: by, minClimbY, stepIdx, nodeIdx
+      minZ: bz - bd / 2, maxZ: platMaxZ,
+      topY: by, baseTopY: by, minClimbY, stepIdx, nodeIdx
     });
 
     if (bType === 'snake') {
@@ -1454,10 +1467,10 @@ function buildExodusStage3World() {
 
       worldGroup.add(warnSquareGroup);
 
-      const boltGroup = createZigzagLightningBolt();
-      boltGroup.position.set(bx, by + 11, bz);
-      boltGroup.visible = false;
-      worldGroup.add(boltGroup);
+      const boltMesh = createZigzagLightningBolt();
+      boltMesh.position.set(bx, by + 11, bz);
+      boltMesh.visible = false;
+      worldGroup.add(boltMesh);
 
       const rockFallGroup = new THREE.Group();
       const gravelMat = matVoxel('#a8a29e', '#57534e');
@@ -1481,8 +1494,7 @@ function buildExodusStage3World() {
         warnRing: warnSquareGroup,
         warnFill,
         activeXGroup,
-        boltMesh: boltGroup,
-        boltGroup,
+        boltMesh,
         rockFallGroup
       });
     }
@@ -1549,16 +1561,16 @@ function buildExodusStage3World() {
         lastGlobalObsType = picked;
       });
     } else {
-      // [소년반(senior) 요청사항] 연속 3개 장애물 금지: 하나 건너 하나씩 나오거나 최대 2개까지만 연달아 나오도록 배치
+      // 소년반(senior): 연속 3개 장애물 금지 (하나 건너 하나씩 나오거나 최대 2개까지만 연달아 배치)
       const seniorPatterns = [
-        [1, 3],       // 하나 건너 하나씩 (징검다리)
-        [2, 4],       // 하나 건너 하나씩 (징검다리)
-        [1, 4],       // 양끝 배치
-        [1, 2, 4],    // 2개 연속 + 1칸 건너 1개
-        [1, 3, 4],    // 1개 + 1칸 건너 2개 연속
-        [1, 2],       // 2개 연속
-        [2, 3],       // 2개 연속
-        [3, 4]        // 2개 연속
+        [1, 3],
+        [2, 4],
+        [1, 4],
+        [1, 2, 4],
+        [1, 3, 4],
+        [1, 2],
+        [2, 3],
+        [3, 4]
       ];
       const chosenSlots = seniorPatterns[Math.floor(Math.random() * seniorPatterns.length)];
       chosenSlots.forEach(slotIdx => {
@@ -1582,13 +1594,28 @@ function buildExodusStage3World() {
 
     orderedCols.forEach((cx, k) => {
       const rockY = Number((rowBaseY + (k + 1) * lateralStepRise).toFixed(2));
+      const bType = rowTypes[k];
       const nodeIdx = sinaiStepNodes.length;
-      sinaiStepNodes.push({ x: cx, y: rockY, z: sz, stepIdx, nodeIdx });
+      sinaiStepNodes.push({ x: cx, y: rockY, z: sz, stepIdx, nodeIdx, safe: (bType === 'normal') });
 
       const blockMinClimbY = (r === 0 && k === 0) ? -0.5 : Number((rockY - lateralStepRise - 0.35).toFixed(2));
-      const bType = rowTypes[k];
 
-      createMountainRockBlock(cx, sz, colW, 4.56, rockY, bType, stepIdx, nodeIdx, blockMinClimbY);
+      createMountainRockBlock(cx, sz, colW, stepBd, rockY, bType, stepIdx, nodeIdx, blockMinClimbY);
+
+      // 마지막 줄(정상 바로 앞 줄)의 각 돌계단과 정상 바위 사이 경계 틈새 추락 방지용 안전 지지대 연장
+      if (r === totalRows - 1) {
+        platforms.push({
+          minX: cx - colW / 2 - 0.1,
+          maxX: cx + colW / 2 + 0.1,
+          minZ: lastRowNorthEdgeZ - 0.45,
+          maxZ: lastRowNorthEdgeZ + 0.45,
+          topY: rockY,
+          baseTopY: rockY,
+          minClimbY: blockMinClimbY,
+          stepIdx,
+          nodeIdx
+        });
+      }
 
       if (k === waterPouchCol) {
         spawnSinaiWaterPouchItem(cx, rockY, sz);
@@ -1599,9 +1626,9 @@ function buildExodusStage3World() {
   // 맨 꼭대기 정상 제단 층
   const summitNodeIdx = sinaiStepNodes.length;
   sinaiSafeCheckpoints.push(new THREE.Vector3(0, summitY, summitZ));
-  sinaiStepNodes.push({ x: 0, y: summitY, z: summitZ, stepIdx: totalRows + 1, nodeIdx: summitNodeIdx });
+  sinaiStepNodes.push({ x: 0, y: summitY, z: summitZ, stepIdx: totalRows + 1, nodeIdx: summitNodeIdx, safe: true });
   const summitMinClimbY = Number((totalRows * rowRise - 0.35).toFixed(2));
-  createMountainRockBlock(0, summitZ, pathHalfLimit * 2, 10.5, summitY, 'summit', totalRows + 1, summitNodeIdx, summitMinClimbY);
+  createMountainRockBlock(0, summitZ, pathHalfLimit * 2, summitDepth, summitY, 'summit', totalRows + 1, summitNodeIdx, summitMinClimbY);
 
   // 각 층 바위 바로 위에서 좌우로 움직이는 등반로 구름 (정상 바로 앞 줄은 십계명 시야 확보를 위해 제외)
   const cloudRowStep = isKinder ? 2 : 1;
@@ -1834,7 +1861,7 @@ function updateStage3Sinai(dt, now) {
         const s = Math.max(0.05, 1 - cr.timer * 1.8);
         p.mesh.scale.set(s, s, s);
       });
-      if (inXZ && playerPos.y < cr.baseTopY - 0.25 && playerPos.y > cr.baseTopY - 2.5) {
+      if (inXZ && playerPos.y < cr.baseTopY - 0.25) {
         triggerDamageFlash();
         relocateSinaiPlayerOnHit(cr.stepIdx, cr.nodeIdx, '💥 무너진 바위 틈으로 떨어져');
       }
@@ -1845,7 +1872,7 @@ function updateStage3Sinai(dt, now) {
       }
     } else if (cr.state === 'gone') {
       cr.timer += dt;
-      if (inXZ && playerPos.y < cr.baseTopY - 0.25 && playerPos.y > cr.baseTopY - 2.5) {
+      if (inXZ && playerPos.y < cr.baseTopY - 0.25) {
         triggerDamageFlash();
         relocateSinaiPlayerOnHit(cr.stepIdx, cr.nodeIdx, '💥 사라진 바위 자리로 발을 헛디뎌');
       }
@@ -1901,9 +1928,9 @@ function updateStage3Sinai(dt, now) {
         hz.rockFallGroup.rotation.x += dt * 8;
         hz.rockFallGroup.rotation.z += dt * 5;
       } else {
-        hz.boltGroup.visible = true;
-        hz.boltGroup.position.y = hz.y + 10.5 * (1 - dropProg);
-        hz.boltGroup.rotation.y = Math.sin(now * 0.06) * 0.25;
+        hz.boltMesh.visible = true;
+        hz.boltMesh.position.y = hz.y + 10.5 * (1 - dropProg);
+        hz.boltMesh.rotation.y = Math.sin(now * 0.06) * 0.25;
       }
 
       if (!hz._sfxPlayed) {
@@ -1932,7 +1959,7 @@ function updateStage3Sinai(dt, now) {
         hz.warnFill.material.color.setHex(0xfacc15);
       }
       if (hz.activeXGroup) hz.activeXGroup.visible = false;
-      hz.boltGroup.visible = false;
+      hz.boltMesh.visible = false;
       hz.rockFallGroup.visible = false;
     }
 
@@ -1943,22 +1970,33 @@ function updateStage3Sinai(dt, now) {
     }
   });
 
+  // 등반 구간에서 블록 이음매나 틈새로 빠지지 않도록 보정 (seamPad 적용)
   if (playerPos.z < 26.2) {
+    const seamPad = 0.34;
+    let matchedPlat = null;
     for (const p of platforms) {
-      if (p.topY < 0) continue;
-      if (playerPos.x >= p.minX && playerPos.x <= p.maxX && playerPos.z >= p.minZ && playerPos.z <= p.maxZ) {
-        if (playerPos.y < p.topY - 0.45) {
-          if (p.topY - lastGroundedY <= 1.35) {
-            playerPos.y = p.topY;
-            lastGroundedY = p.topY;
-            playerVelY = 0;
-            isGrounded = true;
-          } else {
-            playSfx('hit');
-            relocateSinaiPlayerOnHit(p.stepIdx || 1, p.nodeIdx || 1, '⛰️ 발을 헛디뎌');
-          }
+      const refTopY = p.topY >= 0 ? p.topY : (p.baseTopY || -999);
+      if (refTopY < 0) continue;
+      if (
+        playerPos.x >= p.minX - seamPad && playerPos.x <= p.maxX + seamPad &&
+        playerPos.z >= p.minZ - seamPad && playerPos.z <= p.maxZ + seamPad
+      ) {
+        if (!matchedPlat || Math.abs(refTopY - lastGroundedY) < Math.abs((matchedPlat.topY >= 0 ? matchedPlat.topY : matchedPlat.baseTopY) - lastGroundedY)) {
+          matchedPlat = p;
         }
-        break;
+      }
+    }
+    if (matchedPlat) {
+      if (matchedPlat.topY >= 0 && playerPos.y < matchedPlat.topY - 0.45) {
+        if (matchedPlat.topY - lastGroundedY <= 1.35) {
+          playerPos.y = matchedPlat.topY;
+          lastGroundedY = matchedPlat.topY;
+          playerVelY = 0;
+          isGrounded = true;
+        } else {
+          playSfx('hit');
+          relocateSinaiPlayerOnHit(matchedPlat.stepIdx || 1, matchedPlat.nodeIdx || 1, '⛰️ 발을 헛디뎌');
+        }
       }
     }
   }
