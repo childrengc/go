@@ -1,5 +1,5 @@
 // =========================================================================
-// [ep2_exodus.js - 파트 1/2] 에피소드 2 : 출애굽과 시내산 언약 (다리 미완성 구간만 투명 표시, 스테이지 1·2 랜덤 스폰)
+// [ep2_exodus.js - 파트 1/2] 에피소드 2 : 출애굽과 시내산 언약 (다리 미완성 구간만 투명 표시, 스테이지 1·2 랜덤 스폰, 스테이지 2 렌더링 최적화)
 // =========================================================================
 
 EPISODE_SCRIPTURE.exodus = {
@@ -35,13 +35,23 @@ function shuffleArray(arr) {
   return copy;
 }
 
+// 정적 메쉬용 재질 캐시 (동일 색상 재질 중복 생성을 방지하여 스테이지 2 소년반 시작 렉 해소)
+const exodusStaticMatCache = {};
+function matVoxelCached(baseHex, noiseHex) {
+  const key = noiseHex ? `${baseHex}_${noiseHex}` : baseHex;
+  if (!exodusStaticMatCache[key]) {
+    exodusStaticMatCache[key] = matVoxel(baseHex, noiseHex);
+  }
+  return exodusStaticMatCache[key];
+}
+
 // -------------------------------------------------------------------------
 // 1. 이집트 피라미드 배경, 점프 가능한 4종 바위, 산호초·해저바위, 백성·병사 모델링
 // -------------------------------------------------------------------------
 function buildEgyptianPyramidBackdrop(southZ, baseY, scale = 1.0) {
-  const sandstone1 = matVoxel('#eab308', '#ca8a04');
-  const sandstone2 = matVoxel('#d97706', '#b45309');
-  const goldCap = matVoxel('#fde047');
+  const sandstone1 = matVoxelCached('#eab308', '#ca8a04');
+  const sandstone2 = matVoxelCached('#d97706', '#b45309');
+  const goldCap = matVoxelCached('#fde047');
 
   const pyramidSpecs = [
     { cx: -38 * scale, cz: southZ + 26 * scale, layers: 10, stepSize: 4.0 * scale },
@@ -69,7 +79,7 @@ function buildEgyptianPyramidBackdrop(southZ, baseY, scale = 1.0) {
     createBox(1.5 * scale, 1.5 * scale, 3.6 * scale, sandstone2, sx - 1.6 * scale, baseY + 0.75 * scale, sz - 5.4 * scale, false),
     createBox(1.5 * scale, 1.5 * scale, 3.6 * scale, sandstone2, sx + 1.6 * scale, baseY + 0.75 * scale, sz - 5.4 * scale, false),
     createBox(3.6 * scale, 3.0 * scale, 3.4 * scale, sandstone2, sx, baseY + 4.0 * scale, sz - 2.6 * scale, false),
-    createBox(4.6 * scale, 2.6 * scale, 2.8 * scale, matVoxel('#1d4ed8', '#facc15'), sx, baseY + 4.1 * scale, sz - 2.8 * scale, false)
+    createBox(4.6 * scale, 2.6 * scale, 2.8 * scale, matVoxelCached('#1d4ed8', '#facc15'), sx, baseY + 4.1 * scale, sz - 2.8 * scale, false)
   );
 }
 
@@ -119,11 +129,12 @@ function createDetailedCoralHurdle(cx, rz, width = 4.4, idx = 0) {
     { main: '#fb923c', sub: '#fdba74', tip: '#fef3c7', reef: '#64748b' }
   ];
   const pal = palettes[idx % palettes.length];
-  const reefMat = matVoxel(pal.reef, '#334155');
-  const mainMat = matVoxel(pal.main);
-  const subMat = matVoxel(pal.sub);
-  const tipMat = matVoxel(pal.tip);
-  const seaWeedMat = matVoxel('#10b981', '#059669');
+  const reefMat = matVoxelCached(pal.reef, '#334155');
+  const mainMat = matVoxelCached(pal.main);
+  const subMat = matVoxelCached(pal.sub);
+  const tipMat = matVoxelCached(pal.tip);
+  const seaWeedMat = matVoxelCached('#10b981', '#059669');
+  const shellMat = matVoxelCached('#fef3c7', '#fde68a');
 
   grp.add(
     createBox(width, 0.55, 1.9, reefMat, 0, 0.28, 0),
@@ -134,17 +145,17 @@ function createDetailedCoralHurdle(cx, rz, width = 4.4, idx = 0) {
   for (let b = 0; b < branchCount; b++) {
     const bx = -width * 0.4 + (b / Math.max(1, branchCount - 1)) * (width * 0.8);
     const bh = 0.65 + ((b + idx) % 2) * 0.32;
-    const pillar = createBox(0.45, bh, 0.45, (b % 2 === 0 ? mainMat : subMat), bx, 0.9 + bh / 2, (b % 2 === 0 ? 0.18 : -0.18));
-    const armL = createBox(0.32, 0.35, 0.32, subMat, bx - 0.28, 0.95 + bh * 0.65, 0);
-    const armR = createBox(0.32, 0.35, 0.32, mainMat, bx + 0.28, 0.95 + bh * 0.75, 0);
-    const glowTip = createBox(0.28, 0.18, 0.28, tipMat, bx, 0.95 + bh + 0.08, (b % 2 === 0 ? 0.18 : -0.18));
+    const pillar = createBox(0.45, bh, 0.45, (b % 2 === 0 ? mainMat : subMat), bx, 0.9 + bh / 2, (b % 2 === 0 ? 0.18 : -0.18), false);
+    const armL = createBox(0.32, 0.35, 0.32, subMat, bx - 0.28, 0.95 + bh * 0.65, 0, false);
+    const armR = createBox(0.32, 0.35, 0.32, mainMat, bx + 0.28, 0.95 + bh * 0.75, 0, false);
+    const glowTip = createBox(0.28, 0.18, 0.28, tipMat, bx, 0.95 + bh + 0.08, (b % 2 === 0 ? 0.18 : -0.18), false);
     grp.add(pillar, armL, armR, glowTip);
   }
 
   grp.add(
-    createBox(0.26, 0.95, 0.26, seaWeedMat, -width * 0.44, 0.65, 0.45),
-    createBox(0.26, 0.85, 0.26, seaWeedMat, width * 0.44, 0.6, -0.45),
-    createBox(0.55, 0.24, 0.52, matVoxel('#fef3c7', '#fde68a'), 0, 0.62, 0.72)
+    createBox(0.26, 0.95, 0.26, seaWeedMat, -width * 0.44, 0.65, 0.45, false),
+    createBox(0.26, 0.85, 0.26, seaWeedMat, width * 0.44, 0.6, -0.45, false),
+    createBox(0.55, 0.24, 0.52, shellMat, 0, 0.62, 0.72, false)
   );
 
   grp.position.set(cx, cBy, rz);
@@ -156,28 +167,28 @@ function createDetailedCoralHurdle(cx, rz, width = 4.4, idx = 0) {
 function createDetailedSeaRockHurdle(cx, rz, width = 6.0, idx = 0) {
   const rBy = getBaseGroundHeight(cx, rz);
   const grp = new THREE.Group();
-  const darkRock = matVoxel('#475569', '#334155');
-  const midRock = matVoxel('#64748b', '#475569');
-  const lightRock = matVoxel('#94a3b8', '#64748b');
-  const mossMat = matVoxel('#15803d', '#166534');
-  const coralSpot = matVoxel('#fb7185');
-  const barnacleMat = matVoxel('#e2e8f0');
+  const darkRock = matVoxelCached('#475569', '#334155');
+  const midRock = matVoxelCached('#64748b', '#475569');
+  const lightRock = matVoxelCached('#94a3b8', '#64748b');
+  const mossMat = matVoxelCached('#15803d', '#166534');
+  const coralSpot = matVoxelCached('#fb7185');
+  const barnacleMat = matVoxelCached('#e2e8f0');
 
   grp.add(
     createBox(width, 0.65, 2.1, darkRock, 0, 0.32, 0),
     createBox(width * 0.88, 0.55, 1.75, midRock, -0.15, 0.88, 0.05),
-    createBox(width * 0.62, 0.38, 1.35, lightRock, 0.2, 1.25, -0.05)
+    createBox(width * 0.62, 0.38, 1.35, lightRock, 0.2, 1.25, -0.05, false)
   );
 
   const segs = Math.max(3, Math.floor(width / 1.7));
   for (let s = 0; s < segs; s++) {
     const sx = -width * 0.38 + (s / Math.max(1, segs - 1)) * (width * 0.76);
     grp.add(
-      createBox(0.95, 0.16, 0.95, mossMat, sx, 1.18 + (s % 2) * 0.22, 0),
-      createBox(0.32, 0.28, 0.32, barnacleMat, sx + 0.35, 0.68, 0.85)
+      createBox(0.95, 0.16, 0.95, mossMat, sx, 1.18 + (s % 2) * 0.22, 0, false),
+      createBox(0.32, 0.28, 0.32, barnacleMat, sx + 0.35, 0.68, 0.85, false)
     );
     if ((s + idx) % 2 === 0) {
-      grp.add(createBox(0.38, 0.48, 0.38, coralSpot, sx - 0.25, 1.42, 0.2));
+      grp.add(createBox(0.38, 0.48, 0.38, coralSpot, sx - 0.25, 1.42, 0.2, false));
     }
   }
 
@@ -191,8 +202,8 @@ function createFollowerPersonMesh(idx) {
   const g = new THREE.Group();
   const robeColors = ['#fef3c7', '#e0f2fe', '#dcfce7', '#fce7f3', '#ffedd5', '#f3e8ff'];
   const shawlColors = ['#92400e', '#0369a1', '#15803d', '#9d174d', '#b45309', '#5b21b6'];
-  const robeMat = matVoxel(robeColors[idx % 6]), shawlMat = matVoxel(shawlColors[idx % 6]);
-  const skinMat = matVoxel('#fed7aa', '#fdba74'), eyeMat = matVoxel('#0f172a');
+  const robeMat = matVoxelCached(robeColors[idx % 6]), shawlMat = matVoxelCached(shawlColors[idx % 6]);
+  const skinMat = matVoxelCached('#fed7aa', '#fdba74'), eyeMat = matVoxelCached('#0f172a');
   const lLeg = new THREE.Group(); lLeg.position.set(-0.18, 0.55, 0); lLeg.add(createBox(0.28, 0.5, 0.28, skinMat, 0, -0.25, 0));
   const rLeg = new THREE.Group(); rLeg.position.set(0.18, 0.55, 0); rLeg.add(createBox(0.28, 0.5, 0.28, skinMat, 0, -0.25, 0));
   const torso = createBox(0.74, 0.95, 0.44, robeMat, 0, 1.02, 0), sash = createBox(0.78, 0.22, 0.48, shawlMat, 0, 0.95, 0);
@@ -203,8 +214,8 @@ function createFollowerPersonMesh(idx) {
 
   const hammerTool = new THREE.Group();
   hammerTool.add(
-    createBox(0.1, 0.65, 0.1, matVoxel('#78350f'), 0, -0.5, 0.25, false),
-    createBox(0.28, 0.24, 0.48, matVoxel('#64748b', '#334155'), 0, -0.78, 0.25, false)
+    createBox(0.1, 0.65, 0.1, matVoxelCached('#78350f'), 0, -0.5, 0.25, false),
+    createBox(0.28, 0.24, 0.48, matVoxelCached('#64748b', '#334155'), 0, -0.78, 0.25, false)
   );
   hammerTool.visible = false;
   rArm.add(hammerTool);
@@ -294,9 +305,9 @@ function updateMosesFollowers(dt, now) {
 
 function createEgyptianSoldierMesh() {
   const g = new THREE.Group();
-  const skin = matVoxel('#d97706', '#b45309'), kilt = matVoxel('#f8fafc', '#e2e8f0');
-  const armor = matVoxel('#ca8a04', '#a16207'), nemes = matVoxel('#1e3a8a', '#facc15');
-  const spearMat = matVoxel('#451a03'), bladeMat = matVoxel('#cbd5e1'), eyeMat = matVoxel('#0f172a');
+  const skin = matVoxelCached('#d97706', '#b45309'), kilt = matVoxelCached('#f8fafc', '#e2e8f0');
+  const armor = matVoxelCached('#ca8a04', '#a16207'), nemes = matVoxelCached('#1e3a8a', '#facc15');
+  const spearMat = matVoxelCached('#451a03'), bladeMat = matVoxelCached('#cbd5e1'), eyeMat = matVoxelCached('#0f172a');
 
   const lLeg = new THREE.Group(); lLeg.position.set(-0.2, 0.65, 0); lLeg.add(createBox(0.32, 0.6, 0.32, skin, 0, -0.3, 0));
   const rLeg = new THREE.Group(); rLeg.position.set(0.2, 0.65, 0); rLeg.add(createBox(0.32, 0.6, 0.32, skin, 0, -0.3, 0));
@@ -368,8 +379,8 @@ function spawnChoppableTree(x, z) {
   const treePivot = new THREE.Group();
 
   const trunkMat = new THREE.MeshLambertMaterial({ map: makeLogBarkTex() });
-  const leafMat1 = matVoxel('#15803d', '#166534');
-  const leafMat2 = matVoxel('#22c55e', '#15803d');
+  const leafMat1 = matVoxelCached('#15803d', '#166534');
+  const leafMat2 = matVoxelCached('#22c55e', '#15803d');
 
   const trunk = createBox(0.92, 3.4, 0.92, trunkMat, 0, 1.7, 0);
   const leaves1 = createBox(3.4, 1.2, 3.4, leafMat1, 0, 3.5, 0);
@@ -452,9 +463,9 @@ function createChasmWithBridgePuzzle(zCenter, trenchDepthW, halfMapW, bridgeConf
   const slopeAngle = Math.atan2(yNorth - ySouth, trenchDepthW);
 
   if (isCliffChasm) {
-    const cliffWallMat = matVoxel('#78350f', '#451a03');
-    const sideCanyonMat = matVoxel('#92400e', '#78350f');
-    const abyssMat = matVoxel('#1c1917', '#0c0a09');
+    const cliffWallMat = matVoxelCached('#78350f', '#451a03');
+    const sideCanyonMat = matVoxelCached('#92400e', '#78350f');
+    const abyssMat = matVoxelCached('#1c1917', '#0c0a09');
     worldGroup.add(
       createBox(halfMapW * 2 - 0.2, 36, 0.8, cliffWallMat, 0, ySouth - 18.08, zSouthEdge + 0.4),
       createBox(halfMapW * 2 - 0.2, 36, 0.8, cliffWallMat, 0, yNorth - 18.08, zNorthEdge - 0.4),
@@ -498,7 +509,7 @@ function createChasmWithBridgePuzzle(zCenter, trenchDepthW, halfMapW, bridgeConf
           builtNorthZ = (this.zSouthEdge + 0.4) - builtLen;
           const curY = THREE.MathUtils.lerp(this.ySouth, this.yNorth, ratio * 0.5);
           const plankMat = new THREE.MeshLambertMaterial({ map: makeLogBarkTex() });
-          const railMat = matVoxel('#5c2d0c', '#451a03');
+          const railMat = matVoxelCached('#5c2d0c', '#451a03');
           const plank = createBox(this.w, 0.48, builtLen, plankMat, this.x, curY - 0.1, curCenterZ);
           const railL = createBox(0.32, 0.65, builtLen, railMat, this.x - this.w / 2 + 0.18, curY + 0.28, curCenterZ);
           const railR = createBox(0.32, 0.65, builtLen, railMat, this.x + this.w / 2 - 0.18, curY + 0.28, curCenterZ);
@@ -543,7 +554,7 @@ function spawnExodusSkyCloudsAndGulls(northZ) {
     cGrp.position.set(cx, cy, cz);
     worldGroup.add(cGrp);
   });
-  const wingMat = matVoxel('#ffffff', '#e2e8f0'), beakMat = matVoxel('#f59e0b');
+  const wingMat = matVoxelCached('#ffffff', '#e2e8f0'), beakMat = matVoxelCached('#f59e0b');
   for (let i = 0; i < 10; i++) {
     const gull = new THREE.Group();
     const lWing = createBox(1.15, 0.1, 0.38, wingMat, -0.62, 0.06, 0, false), rWing = createBox(1.15, 0.1, 0.38, wingMat, 0.62, 0.06, 0, false);
@@ -583,7 +594,9 @@ function buildExodusStage1World() {
   for (let z = southZ + 22; z > northZ; z -= 2.0) {
     const midZ = z - 1.0;
     if (cliffDefinitions.some(c => midZ <= c.z + c.depth / 2 + 0.85 && midZ >= c.z - c.depth / 2 - 0.85)) continue;
-    worldGroup.add(createBox(halfW * 2, 18.0, 1.98, sandMat, 0, getBaseGroundHeight(0, midZ) - 9.0, midZ));
+    const sandBox = createBox(halfW * 2, 18.0, 1.98, sandMat, 0, getBaseGroundHeight(0, midZ) - 9.0, midZ, false);
+    sandBox.receiveShadow = true;
+    worldGroup.add(sandBox);
   }
 
   cliffDefinitions.forEach(c => {
@@ -663,13 +676,15 @@ function buildExodusStage1World() {
   }
 
   let hillStepIdx = 0;
+  const sideHillMat = matVoxelCached('#d97706', '#92400e');
   for (let z = northZ - 8; z <= southZ + 16; z += 10) {
     hillStepIdx++;
     const by = getBaseGroundHeight(0, z);
     const xJitter = (hillStepIdx % 2 === 0) ? 0.25 : 0;
     [-(halfW + 7.5 + xJitter), (halfW + 7.5 + xJitter)].forEach(bx => {
       const h1 = 6 + (Math.abs(Math.round(bx + z)) % 4);
-      const hill = createBox(14.5, h1 + 36, 9.8, matVoxel('#d97706', '#92400e'), bx, by + h1 / 2 - 14, z);
+      const hill = createBox(14.5, h1 + 36, 9.8, sideHillMat, bx, by + h1 / 2 - 14, z, false);
+      hill.receiveShadow = true;
       worldGroup.add(hill);
       const treeClusters = isExtended ? 3 : 1;
       for (let tc = 0; tc < treeClusters; tc++) {
@@ -681,9 +696,9 @@ function buildExodusStage1World() {
   }
 
   const seaWidth = 320, seaDepth = 160, seaCenterZ = northZ - seaDepth / 2, halfSeaW = seaWidth / 2;
-  worldGroup.add(createBox(36, 1.0, seaDepth, matVoxel('#fde047', '#ca8a04'), 0, bottomShoreY - 0.8, seaCenterZ, false));
+  worldGroup.add(createBox(36, 1.0, seaDepth, matVoxelCached('#fde047', '#ca8a04'), 0, bottomShoreY - 0.8, seaCenterZ, false));
 
-  const seaSurfaceMat = matVoxel('#0284c7', '#0369a1'), seaWallMat = new THREE.MeshLambertMaterial({ map: makeArkWallTex('#0284c7', '#38bdf8') }), foamMat = new THREE.MeshBasicMaterial({ color: 0xe0f2fe });
+  const seaSurfaceMat = matVoxelCached('#0284c7', '#0369a1'), seaWallMat = new THREE.MeshLambertMaterial({ map: makeArkWallTex('#0284c7', '#38bdf8') }), foamMat = new THREE.MeshBasicMaterial({ color: 0xe0f2fe });
   const leftSeaGroup = new THREE.Group(), rightSeaGroup = new THREE.Group();
   leftSeaGroup.add(createBox(halfSeaW, 3.2, seaDepth, seaSurfaceMat, -halfSeaW / 2, bottomShoreY - 1.5, seaCenterZ, false));
   rightSeaGroup.add(createBox(halfSeaW, 3.2, seaDepth, seaSurfaceMat, halfSeaW / 2, bottomShoreY - 1.5, seaCenterZ, false));
@@ -700,7 +715,7 @@ function buildExodusStage1World() {
   spawnExodusSkyCloudsAndGulls(northZ);
 
   const goalZ = northZ + 4.5, goalY = getBaseGroundHeight(0, goalZ);
-  const pointPad = createBox(3.6, 0.22, 3.6, matVoxel('#fde047', '#f59e0b'), 0, goalY + 0.11, goalZ, false);
+  const pointPad = createBox(3.6, 0.22, 3.6, matVoxelCached('#fde047', '#f59e0b'), 0, goalY + 0.11, goalZ, false);
   const pointRing = new THREE.Mesh(new THREE.RingGeometry(2.1, 2.7, 28), new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide }));
   pointRing.rotation.x = -Math.PI / 2; pointRing.position.set(0, goalY + 0.16, goalZ);
   worldGroup.add(pointPad, pointRing);
@@ -721,7 +736,7 @@ function buildExodusStage1World() {
 // 3. 스테이지 2: 반별 공간 차별화 + 장애물 위치 매번 랜덤 스폰 + 타임어택 진주 1초 가속
 // -------------------------------------------------------------------------
 function buildStage2DestinationMountainsAndSky(northZ, endHighY) {
-  const mtnMat1 = matVoxel('#15803d', '#166534'), mtnMat2 = matVoxel('#64748b', '#475569'), snowCap = matVoxel('#f8fafc', '#e2e8f0');
+  const mtnMat1 = matVoxelCached('#15803d', '#166534'), mtnMat2 = matVoxelCached('#64748b', '#475569'), snowCap = matVoxelCached('#f8fafc', '#e2e8f0');
   [
     { x: -34, z: northZ - 26, w: 26, h: 24 },
     { x: 0,   z: northZ - 34, w: 34, h: 32 },
@@ -749,7 +764,7 @@ function buildStage2DestinationMountainsAndSky(northZ, endHighY) {
 function spawnSpeedPearl(x, z) {
   const by = getBaseGroundHeight(x, z);
   const grp = new THREE.Group();
-  const shellMat = matVoxel('#fbcfe8', '#f472b6');
+  const shellMat = matVoxelCached('#fbcfe8', '#f472b6');
   const pearlMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
   const glowMat = new THREE.MeshBasicMaterial({ color: 0x67e8f9, transparent: true, opacity: 0.55 });
 
@@ -840,13 +855,15 @@ function buildExodusStage2World() {
   const mudMat = new THREE.MeshLambertMaterial({ map: makeWetMudTex() });
   for (let z = southZ + 26; z >= northZ - 16; z -= 3.0) {
     const midZ = z - 1.5;
-    worldGroup.add(createBox(halfW * 2, 6.0, 3.15, mudMat, 0, getBaseGroundHeight(0, midZ) - 3.0, midZ));
+    const mudBox = createBox(halfW * 2, 6.0, 3.15, mudMat, 0, getBaseGroundHeight(0, midZ) - 3.0, midZ, false);
+    mudBox.receiveShadow = true;
+    worldGroup.add(mudBox);
   }
 
   const waterTex = makeFlowingWaterWallTex();
   const seaWallMat = new THREE.MeshLambertMaterial({ map: waterTex, transparent: true, opacity: 0.85 });
-  const seaTopMat = matVoxel('#0284c7', '#0369a1');
-  const waveCrestMat = matVoxel('#38bdf8', '#7dd3fc');
+  const seaTopMat = matVoxelCached('#0284c7', '#0369a1');
+  const waveCrestMat = matVoxelCached('#38bdf8', '#7dd3fc');
   const wallLen = (southZ - northZ) + 16, wallH = 22.0;
 
   worldGroup.add(
@@ -895,11 +912,13 @@ function buildExodusStage2World() {
   pillarCutscene.rightClosingWall = rightClosingWall;
 
   const fishColors = ['#f97316', '#fde047', '#f43f5e', '#a855f7', '#22d3ee', '#4ade80'];
+  const fishTailMat = matVoxelCached('#ffffff');
+  const fishEyeMat = matVoxelCached('#0f172a');
   for (let f = 0; f < 36; f++) {
     const side = (f % 2 === 0) ? -1 : 1, fishGrp = new THREE.Group();
-    const body = createBox(0.35, 0.55, 1.1, matVoxel(fishColors[f % fishColors.length]), 0, 0, 0, false);
-    const tail = createBox(0.2, 0.45, 0.45, matVoxel('#ffffff'), 0, 0, -0.7, false);
-    const eye = createBox(0.4, 0.12, 0.12, matVoxel('#0f172a'), 0, 0.1, 0.35, false);
+    const body = createBox(0.35, 0.55, 1.1, matVoxelCached(fishColors[f % fishColors.length]), 0, 0, 0, false);
+    const tail = createBox(0.2, 0.45, 0.45, fishTailMat, 0, 0, -0.7, false);
+    const eye = createBox(0.4, 0.12, 0.12, fishEyeMat, 0, 0.1, 0.35, false);
     fishGrp.add(body, tail, eye);
 
     const fx = side * (halfW + 0.55 + (f % 3) * 0.45);
@@ -911,6 +930,7 @@ function buildExodusStage2World() {
     seaWallFishes.push({ group: fishGrp, tail, baseY: fy, dir, speed: 3.5 + (f % 4) * 1.2, phase: f * 0.9, minZ: northZ + 8, maxZ: southZ - 8 });
   }
 
+  const puddleSharedMat = new THREE.MeshBasicMaterial({ color: 0x0284c7 });
   const rowStep = isKinder ? 16 : (isSenior ? 10.5 : 13);
   let rowIdx = 0;
   let lastPattern = -1;
@@ -934,7 +954,7 @@ function buildExodusStage2World() {
       createDetailedCoralHurdle(sideX + xShift * 0.5, rz, coralW, palSeed + 1);
       const pudX = xShift * 0.6;
       const pudBy = getBaseGroundHeight(pudX, rz);
-      worldGroup.add(createBox(puddleW, 0.16, 4.6, new THREE.MeshBasicMaterial({ color: 0x0284c7 }), pudX, pudBy + 0.08, rz, false));
+      worldGroup.add(createBox(puddleW, 0.16, 4.6, puddleSharedMat, pudX, pudBy + 0.08, rz, false));
       stage2Puddles.push({ x: pudX, z: rz, rx: puddleW / 2, rz: 2.3 });
       createDetailedSeaRockHurdle(-xShift * 0.7, rz - 3.6, rockW, palSeed + 2);
     } else if (pattern === 1) {
@@ -947,7 +967,7 @@ function buildExodusStage2World() {
       [-sideX, sideX].forEach((px, pIdx) => {
         const adjX = px + xShift * 0.35;
         const pBy = getBaseGroundHeight(adjX, rz);
-        worldGroup.add(createBox(sidePuddleW, 0.16, 4.5, new THREE.MeshBasicMaterial({ color: 0x0284c7 }), adjX, pBy + 0.08, rz, false));
+        worldGroup.add(createBox(sidePuddleW, 0.16, 4.5, puddleSharedMat, adjX, pBy + 0.08, rz, false));
         stage2Puddles.push({ x: adjX, z: rz, rx: sidePuddleW / 2, rz: 2.25 });
         createDetailedCoralHurdle(adjX, rz - 3.5, sideCoralW, palSeed + pIdx + 1);
       });
@@ -968,7 +988,7 @@ function buildExodusStage2World() {
       [-5.6, 5.6].forEach(px => {
         const adjX = px + xShift * 0.4;
         const pBy = getBaseGroundHeight(adjX, rz - 3.4);
-        worldGroup.add(createBox(pudW, 0.16, 4.2, new THREE.MeshBasicMaterial({ color: 0x0284c7 }), adjX, pBy + 0.08, rz - 3.4, false));
+        worldGroup.add(createBox(pudW, 0.16, 4.2, puddleSharedMat, adjX, pBy + 0.08, rz - 3.4, false));
         stage2Puddles.push({ x: adjX, z: rz - 3.4, rx: pudW / 2, rz: 2.1 });
       });
     } else {
@@ -980,7 +1000,7 @@ function buildExodusStage2World() {
       createDetailedSeaRockHurdle(staggerX, rz - 2.4, staggeredW, palSeed + 1);
       const pudX = xShift * 0.8;
       const pBy = getBaseGroundHeight(pudX, rz + 2.2);
-      worldGroup.add(createBox(pudW, 0.16, 4.2, new THREE.MeshBasicMaterial({ color: 0x0284c7 }), pudX, pBy + 0.08, rz + 2.2, false));
+      worldGroup.add(createBox(pudW, 0.16, 4.2, puddleSharedMat, pudX, pBy + 0.08, rz + 2.2, false));
       stage2Puddles.push({ x: pudX, z: rz + 2.2, rx: pudW / 2, rz: 2.1 });
     }
 
@@ -1022,6 +1042,9 @@ function buildExodusStage2World() {
 
   if (guideArrowGroup) guideArrowGroup.visible = (currentMode !== 'senior');
   snapCameraToPlayer();
+  if (renderer && scene && camera) {
+    renderer.compile(scene, camera);
+  }
   updateStageHUD();
   startStage2Countdown();
 }
