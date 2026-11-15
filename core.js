@@ -1,5 +1,5 @@
 // =========================================================================
-// [core.js - 파트 1/2] 출발! 탐험대! - 공통 3D 엔진, 플러그인 레지스트리, 사운드, 팩토리 (외곽 벽·무지개 Z-fighting 제거)
+// [core.js - 파트 1/2] 출발! 탐험대! - 공통 3D 엔진, 플러그인 레지스트리, 사운드, 팩토리 (TTS 번개 아이콘 제거 및 외곽 벽·무지개 깜빡임 해결)
 // =========================================================================
 
 let audioCtx = null, bgmTimeout = null, bgmEnabled = true, bgmStep = 0;
@@ -283,7 +283,8 @@ function toggleBgm() {
 let melodyTimer = null;
 function speakText(text) {
   if (!text) return;
-  const cleanText = text.replace(/&/g, '과');
+  // 번개 아이콘(⚡)이 '고압주의'로 읽히지 않도록 제거
+  const cleanText = text.replace(/⚡/g, '').replace(/&/g, '과').trim();
   if (melodyTimer) { clearInterval(melodyTimer); melodyTimer = null; }
   let ttsWorked = false;
   if ('speechSynthesis' in window) {
@@ -1120,7 +1121,7 @@ function scatterMeadowGrassTufts(limit) {
 function buildGrassAndTreeBorders(limit, isDesert = false) {
   currentMapBounds = limit - 2.0;
   const step = 10;
-  const spanLen = step - 0.06; // 인접 블록끼리 측면이 겹쳐 깜빡이지 않도록 미세 유격 적용
+  const spanLen = step - 0.06;
 
   let stepIdx = 0;
   for (let i = -limit - 20; i <= limit + 20; i += step) {
@@ -1133,7 +1134,6 @@ function buildGrassAndTreeBorders(limit, isDesert = false) {
     ];
 
     sideSpecs.forEach(({ bx, bz, isXWall }, sIdx) => {
-      // 네 모서리에서 가로 벽과 세로 벽이 이중으로 겹쳐 생성되는 현상 방지
       if (!isXWall && Math.abs(i) > limit) return;
 
       const h1 = 4 + (Math.abs(Math.round(bx + bz)) % 4) + (stepIdx % 2) * 0.08;
@@ -1146,7 +1146,6 @@ function buildGrassAndTreeBorders(limit, isDesert = false) {
       const w2 = isXWall ? (step + 3.6) : spanLen;
       const d2 = isXWall ? spanLen : (step + 3.6);
 
-      // 2단 언덕(hill2)을 바깥쪽으로 분리 배치하고 바닥 높이를 미세 조정하여 1단 언덕(hill1)과의 Z-fighting 제거
       const bx2 = isXWall ? (bx + Math.sign(bx) * 5.5) : bx;
       const bz2 = isXWall ? bz : (bz + Math.sign(bz) * 5.5);
 
@@ -1261,7 +1260,6 @@ function buildEndingWorld() {
   });
 
   if (!isExodus) {
-    // [엔딩 무지개 깜빡임 해결] 무지개 아치 모양은 100% 그대로 유지하되, 색상 단마다 미세한 Z 깊이 차이와 polygonOffset을 부여해 Z-fighting 방지
     const rainbowColors = ['#ef4444', '#f97316', '#fde047', '#22c55e', '#3b82f6', '#4f46e5', '#a855f7'];
     rainbowColors.forEach((hex, idx) => {
       const radius = 26 - idx * 1.15;
@@ -1362,7 +1360,7 @@ function buildEndingWorld() {
   showToast(isExodus ? '🌴 홍해와 시내산을 모두 통과했어요! 기뻐 뛰는 백성들 가운데 제단으로 가보세요!' : '🌈 엔딩 세상에 도착했어요! 제단으로 가거나 [🏆 인증서 보기]를 눌러주세요!');
 }
 // =========================================================================
-// [core.js - 파트 2/2] 게임 흐름, 플러그인 슬롯 연결, 물리 엔진, 구글 시트 연동 모듈
+// [core.js - 파트 2/2] 게임 흐름, 플러그인 슬롯 연결, 물리 엔진, 구글 시트 연동 모듈 (스테이지 2 미션 안내 번개 아이콘 제거)
 // =========================================================================
 
 const GOOGLE_SHEET_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbzDNecO6FM2ZXkdGwhp_XSR3wJ3fX17a029betjsm8sMOWgqeHWsB2rRMtROmB1NUQ-/exec';
@@ -1542,7 +1540,7 @@ function updateStageHUD() {
     countIcon.textContent = '🐾';
     if (currentStage === 1) {
       badge.textContent = '방주 · 스테이지 1'; countText.textContent = `${rescuedPairs}/7쌍`;
-      missionText.textContent = currentMode === 'timeattack' ? '⚡ 동물 7쌍을 찾아 방주 위로 태우세요! (+5초 연장)' : '초원의 동물 7쌍을 모두 찾아 방주 위로 태우세요!';
+      missionText.textContent = currentMode === 'timeattack' ? '동물 7쌍을 찾아 방주 위로 태우세요! (+5초 연장)' : '초원의 동물 7쌍을 모두 찾아 방주 위로 태우세요!';
     } else if (currentStage === 2) {
       badge.textContent = '방주 · 스테이지 2'; countText.textContent = '비둘기 탐색';
       missionText.textContent = '방주 미로를 지나 창문 앞에서 날고 있는 비둘기를 만나세요!';
@@ -1563,9 +1561,10 @@ function updateStageHUD() {
       countIcon.textContent = '❤️';
       const remainLives = Math.max(0, 3 - soldierHitCount);
       badge.textContent = '홍해 · 스피드런 2'; countText.textContent = `기회 ${remainLives}/3`;
+      // 전 레벨 음성 안내 시 '고압주의'로 읽히지 않도록 번개 아이콘(⚡) 삭제
       missionText.textContent = currentMode === 'timeattack'
-        ? '⚡ 병사가 추격해요! 진주를 먹으면 1초 가속! 산호초는 점프하고 물구덩이는 피하세요!'
-        : '⚡ 애굽 병사가 추격해요! 산호초와 바위는 점프하고 물구덩이는 피해 불기둥으로 달리세요!';
+        ? '병사가 추격해요! 진주를 먹으면 1초 가속! 산호초는 점프하고 물구덩이는 피하세요!'
+        : '애굽 병사가 추격해요! 산호초와 바위는 점프하고 물구덩이는 피해 불기둥으로 달리세요!';
     } else if (currentStage === 3) {
       countIcon.textContent = '⛰️';
       badge.textContent = '시내산 · 스테이지 3';
