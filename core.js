@@ -1,5 +1,5 @@
 // =========================================================================
-// [core.js - 파트 1/2] 출발! 탐험대! - 공통 3D 엔진, 플러그인 레지스트리, 사운드, 팩토리
+// [core.js - 파트 1/2] 출발! 탐험대! - 공통 3D 엔진, 플러그인 레지스트리, 사운드, 팩토리 (외곽 벽·무지개 Z-fighting 제거)
 // =========================================================================
 
 let audioCtx = null, bgmTimeout = null, bgmEnabled = true, bgmStep = 0;
@@ -149,7 +149,6 @@ function scheduleNextBgmBeat() {
   const ctx = getAudioCtx();
   const epPlugin = getActiveEpisodePlugin();
 
-  // 플러그인 에피소드 전용 BGM 슬롯 지원
   if (epPlugin) {
     if (typeof epPlugin.scheduleBgmBeat === 'function') {
       const nextMs = epPlugin.scheduleBgmBeat(ctx, bgmStep, currentStage, currentMode, isPlaying, timeRemaining, midiToFreq);
@@ -1121,17 +1120,43 @@ function scatterMeadowGrassTufts(limit) {
 function buildGrassAndTreeBorders(limit, isDesert = false) {
   currentMapBounds = limit - 2.0;
   const step = 10;
+  const spanLen = step - 0.06; // 인접 블록끼리 측면이 겹쳐 깜빡이지 않도록 미세 유격 적용
+
+  let stepIdx = 0;
   for (let i = -limit - 20; i <= limit + 20; i += step) {
-    [[-limit - 8, i], [limit + 8, i], [i, -limit - 8], [i, limit + 8]].forEach(([bx, bz]) => {
-      const h1 = 4 + (Math.abs(bx + bz) % 4), h2 = h1 + 4;
+    stepIdx++;
+    const sideSpecs = [
+      { bx: -limit - 8, bz: i, isXWall: true },
+      { bx:  limit + 8, bz: i, isXWall: true },
+      { bx: i, bz: -limit - 8, isXWall: false },
+      { bx: i, bz:  limit + 8, isXWall: false }
+    ];
+
+    sideSpecs.forEach(({ bx, bz, isXWall }, sIdx) => {
+      // 네 모서리에서 가로 벽과 세로 벽이 이중으로 겹쳐 생성되는 현상 방지
+      if (!isXWall && Math.abs(i) > limit) return;
+
+      const h1 = 4 + (Math.abs(Math.round(bx + bz)) % 4) + (stepIdx % 2) * 0.08;
+      const h2 = h1 + 4.0;
       const c1 = isDesert ? matVoxel('#f59e0b', '#d97706').clone() : matVoxel('#22c55e', '#16a34a').clone();
       const c2 = isDesert ? matVoxel('#b45309', '#92400e').clone() : matVoxel('#15803d', '#166534').clone();
-      const hill1 = createBox(step + 2, h1, step + 2, c1, bx, h1 / 2, bz);
-      const hill2 = createBox(step + 4, h2, step + 4, c2, bx * 1.12, h2 / 2, bz * 1.12);
+
+      const w1 = isXWall ? (step + 1.8) : spanLen;
+      const d1 = isXWall ? spanLen : (step + 1.8);
+      const w2 = isXWall ? (step + 3.6) : spanLen;
+      const d2 = isXWall ? spanLen : (step + 3.6);
+
+      // 2단 언덕(hill2)을 바깥쪽으로 분리 배치하고 바닥 높이를 미세 조정하여 1단 언덕(hill1)과의 Z-fighting 제거
+      const bx2 = isXWall ? (bx + Math.sign(bx) * 5.5) : bx;
+      const bz2 = isXWall ? bz : (bz + Math.sign(bz) * 5.5);
+
+      const hill1 = createBox(w1, h1, d1, c1, bx, h1 / 2 + 0.02, bz);
+      const hill2 = createBox(w2, h2, d2, c2, bx2, h2 / 2 - 0.03, bz2);
       worldGroup.add(hill1, hill2);
       wallMeshes.push(hill1, hill2);
-      if (isDesert) addPalmTree(bx + ((i % 3) - 1), bz, 1.2, true);
-      else addTree(bx + ((i % 3) - 1), bz, 1.25, true);
+
+      if (isDesert) addPalmTree(bx + ((stepIdx + sIdx) % 3 - 1), bz, 1.2, true);
+      else addTree(bx + ((stepIdx + sIdx) % 3 - 1), bz, 1.25, true);
     });
   }
 }
@@ -1196,7 +1221,6 @@ function clearWorld() {
   targetObject = null; endingDovePivot = null;
   doveCutscene.active = false; pillarCutscene.active = false; seaPartingCutscene.active = false; sinaiCutscene.active = false;
 
-  // 플러그인 에피소드 상태 초기화 슬롯 호출
   Object.values(EPISODE_REGISTRY).forEach(plugin => {
     if (plugin && typeof plugin.clearState === 'function') plugin.clearState();
   });
@@ -1213,7 +1237,6 @@ function buildEndingWorld() {
   currentStage = 4; certAutoShown = false; startStageBgm(4);
   const epPlugin = getActiveEpisodePlugin();
 
-  // 플러그인 에피소드 전용 엔딩 월드 슬롯 지원
   if (epPlugin && typeof epPlugin.buildEndingWorld === 'function') {
     epPlugin.buildEndingWorld();
     snapCameraToPlayer();
@@ -1238,11 +1261,21 @@ function buildEndingWorld() {
   });
 
   if (!isExodus) {
+    // [엔딩 무지개 깜빡임 해결] 무지개 아치 모양은 100% 그대로 유지하되, 색상 단마다 미세한 Z 깊이 차이와 polygonOffset을 부여해 Z-fighting 방지
     const rainbowColors = ['#ef4444', '#f97316', '#fde047', '#22c55e', '#3b82f6', '#4f46e5', '#a855f7'];
     rainbowColors.forEach((hex, idx) => {
-      const radius = 26 - idx * 1.15, mat = new THREE.MeshBasicMaterial({ color: hex });
+      const radius = 26 - idx * 1.15;
+      const mat = new THREE.MeshBasicMaterial({
+        color: hex,
+        polygonOffset: true,
+        polygonOffsetFactor: -idx * 2,
+        polygonOffsetUnits: -idx * 2
+      });
+      const boxSize = 1.5 - idx * 0.012;
+      const boxDepth = 1.5 + idx * 0.04;
+      const archZ = -24 + idx * 0.035;
       for (let a = 0; a <= Math.PI; a += 0.08) {
-        worldGroup.add(createBox(1.5, 1.5, 1.5, mat, Math.cos(a) * radius, Math.sin(a) * radius, -24, false));
+        worldGroup.add(createBox(boxSize, boxSize, boxDepth, mat, Math.cos(a) * radius, Math.sin(a) * radius + 0.03, archZ, false));
       }
     });
 
@@ -1297,9 +1330,9 @@ function buildEndingWorld() {
       { x: 20,  z: 32, w1: 20, h1: 10, w2: 14, h2: 19, w3: 8,  h3: 26 }
     ];
     sinaiPeaks.forEach((pk) => {
-      const g1 = createBox(pk.w1, pk.h1, 14, mtnRock2, pk.x, pk.h1 / 2, pk.z);
-      const g2 = createBox(pk.w2, pk.h2, 11, mtnRock1, pk.x, pk.h2 / 2, pk.z + 1.5);
-      const g3 = createBox(pk.w3, pk.h3, 8,  mtnCliff, pk.x, pk.h3 / 2, pk.z + 2.5);
+      const g1 = createBox(pk.w1, pk.h1, 14, mtnRock2.clone(), pk.x, pk.h1 / 2 + 0.02, pk.z);
+      const g2 = createBox(pk.w2, pk.h2, 11, mtnRock1.clone(), pk.x, pk.h2 / 2 + 0.04, pk.z + 1.5);
+      const g3 = createBox(pk.w3, pk.h3, 8,  mtnCliff.clone(), pk.x, pk.h3 / 2 + 0.06, pk.z + 2.5);
       worldGroup.add(g1, g2, g3);
       wallMeshes.push(g1, g2, g3);
     });
