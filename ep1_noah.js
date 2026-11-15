@@ -1,5 +1,5 @@
 // =========================================================================
-// [ep1_noah.js] 에피소드 1 : 노아의 방주 (월드 생성, 비둘기 컷신, 스테이지 진행 로직)
+// [ep1_noah.js] 에피소드 1 : 노아의 방주 (core_2.js의 isSpawnSpotClear 재사용으로 중복 제거 완료)
 // =========================================================================
 
 EPISODE_SCRIPTURE.noah = {
@@ -25,6 +25,265 @@ EPISODE_SCRIPTURE.noah = {
     quiz: { q: '퀴즈! 하나님께서 다시는 물로 심판하지 않겠다고 약속하시며 구름 속에 두신 증거는?', opts: ['일곱 빛깔 무지개', '번개와 구름', '황금 별자리'], ans: 0 }
   }
 };
+
+// 스테이지 3 노아 이동 궤적 기록 배열
+let noahStage3Trail = [];
+
+// -------------------------------------------------------------------------
+// [스테이지 1 보조] core_2.js의 isSpawnSpotClear를 재사용한 동물 반경 검사 & 조향 탐색
+// -------------------------------------------------------------------------
+function isStage1AnimalSpotClear(nx, nz, limit, radius = 1.25) {
+  if (Math.abs(nx) > limit || nz > limit || nz < -10.2) return false;
+  if (nz < -9.8 && Math.abs(nx) < 11.2) return false;
+  return isSpawnSpotClear(nx, nz, radius);
+}
+
+function findBestAnimalSteerAngle(a, preferredAngle, awayFromNoahAngle, isFleeing, stepDist) {
+  const curX = a.group.position.x;
+  const curZ = a.group.position.z;
+  const candidateOffsets = [
+    0,
+    0.42, -0.42,
+    0.85, -0.85,
+    1.28, -1.28,
+    1.72, -1.72,
+    2.18, -2.18,
+    2.65, -2.65,
+    Math.PI
+  ];
+
+  let bestAngle = null;
+  let bestScore = -9999;
+
+  for (const off of candidateOffsets) {
+    const candAngle = preferredAngle + off;
+    const testX = curX + Math.sin(candAngle) * stepDist;
+    const testZ = curZ + Math.cos(candAngle) * stepDist;
+    const lookAheadX = curX + Math.sin(candAngle) * (stepDist * 2.4);
+    const lookAheadZ = curZ + Math.cos(candAngle) * (stepDist * 2.4);
+
+    if (!isStage1AnimalSpotClear(testX, testZ, a.limit, 1.2)) continue;
+
+    let score = Math.cos(off) * 2.5;
+
+    if (isStage1AnimalSpotClear(lookAheadX, lookAheadZ, a.limit, 1.15)) {
+      score += 2.2;
+    }
+
+    const diffFromAway = Math.atan2(Math.sin(candAngle - awayFromNoahAngle), Math.cos(candAngle - awayFromNoahAngle));
+    if (isFleeing) {
+      if (Math.abs(diffFromAway) > 1.83) {
+        score -= 12.0;
+      } else {
+        score += Math.cos(diffFromAway) * 4.5;
+      }
+    } else {
+      const distToNoah = Math.hypot(curX - playerPos.x, curZ - playerPos.z);
+      if (distToNoah < 15.5 && Math.abs(diffFromAway) > 1.75) {
+        score -= 5.0;
+      }
+    }
+
+    for (const other of stageAnimals) {
+      if (other === a || other.rescued) continue;
+      const od = Math.hypot(testX - other.group.position.x, testZ - other.group.position.z);
+      if (od < 4.8) {
+        score -= (4.8 - od) * 2.5;
+      }
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestAngle = candAngle;
+    }
+  }
+
+  return bestAngle;
+}
+
+// -------------------------------------------------------------------------
+// [스테이지 3 보조] 미로 벽 모서리 겹침 방지 & 노아 궤적 추종 헬퍼 (isSpawnSpotClear 재사용)
+// -------------------------------------------------------------------------
+function getStage3CornerRepulsion(x, z, detectPad = 0.72) {
+  let pushX = 0;
+  let pushZ = 0;
+
+  const checkBoxList = (list) => {
+    for (const b of list) {
+      if (b.topY !== undefined && b.topY < -100) continue;
+      if (x > b.minX - detectPad && x < b.maxX + detectPad && z > b.minZ - detectPad && z < b.maxZ + detectPad) {
+        const clampedX = Math.max(b.minX, Math.min(b.maxX, x));
+        const clampedZ = Math.max(b.minZ, Math.min(b.maxZ, z));
+        const dx = x - clampedX;
+        const dz = z - clampedZ;
+        const dist = Math.hypot(dx, dz);
+
+        if (dist > 0.0001 && dist < detectPad) {
+          const strength = (detectPad - dist) / detectPad;
+          pushX += (dx / dist) * strength * 2.2;
+          pushZ += (dz / dist) * strength * 2.2;
+        } else if (dist <= 0.0001) {
+          const dLeft = Math.abs(x - b.minX);
+          const dRight = Math.abs(b.maxX - x);
+          const dTop = Math.abs(z - b.minZ);
+          const dBot = Math.abs(b.maxZ - z);
+          const minSide = Math.min(dLeft, dRight, dTop, dBot);
+          if (minSide === dLeft) pushX -= 2.5;
+          else if (minSide === dRight) pushX += 2.5;
+          else if (minSide === dTop) pushZ -= 2.5;
+          else pushZ += 2.5;
+        }
+      }
+    }
+  };
+
+  checkBoxList(colliders);
+  checkBoxList(platforms);
+  return { pushX, pushZ };
+}
+
+function recordNoahStage3Trail() {
+  const head = noahStage3Trail[0];
+  if (!head || Math.hypot(playerPos.x - head.x, playerPos.z - head.z) >= 0.22) {
+    const rep = getStage3CornerRepulsion(playerPos.x, playerPos.z, 0.58);
+    let tx = playerPos.x + Math.max(-0.35, Math.min(0.35, rep.pushX * 0.18));
+    let tz = playerPos.z + Math.max(-0.35, Math.min(0.35, rep.pushZ * 0.18));
+    if (!isSpawnSpotClear(tx, tz, 0.35)) {
+      tx = playerPos.x;
+      tz = playerPos.z;
+    }
+    noahStage3Trail.unshift({ x: tx, z: tz });
+    if (noahStage3Trail.length > 220) noahStage3Trail.pop();
+  }
+}
+
+function getNoahTrailTargetPos(targetArcDist) {
+  if (noahStage3Trail.length === 0) return { x: playerPos.x, z: playerPos.z };
+  let accum = Math.hypot(playerPos.x - noahStage3Trail[0].x, playerPos.z - noahStage3Trail[0].z);
+  if (accum >= targetArcDist) {
+    const ratio = targetArcDist / Math.max(0.001, accum);
+    return {
+      x: THREE.MathUtils.lerp(playerPos.x, noahStage3Trail[0].x, ratio),
+      z: THREE.MathUtils.lerp(playerPos.z, noahStage3Trail[0].z, ratio)
+    };
+  }
+  for (let i = 0; i < noahStage3Trail.length - 1; i++) {
+    const p0 = noahStage3Trail[i];
+    const p1 = noahStage3Trail[i + 1];
+    const segLen = Math.hypot(p1.x - p0.x, p1.z - p0.z);
+    if (accum + segLen >= targetArcDist && segLen > 0.0001) {
+      const r = (targetArcDist - accum) / segLen;
+      return {
+        x: THREE.MathUtils.lerp(p0.x, p1.x, r),
+        z: THREE.MathUtils.lerp(p0.z, p1.z, r)
+      };
+    }
+    accum += segLen;
+  }
+  const last = noahStage3Trail[noahStage3Trail.length - 1];
+  return { x: last.x, z: last.z };
+}
+
+function moveStage3FollowerSafely(fa, idx, targetX, targetZ, dt, now) {
+  const curX = fa.group.position.x;
+  const curZ = fa.group.position.z;
+  const dx = targetX - curX;
+  const dz = targetZ - curZ;
+  const dist = Math.hypot(dx, dz);
+
+  const leaderPos = (idx === 0) ? playerPos : followingAnimals[idx - 1].group.position;
+  const distToLeader = Math.hypot(leaderPos.x - curX, leaderPos.z - curZ);
+  const minLeaderSpacing = (idx === 0) ? 1.85 : 1.65;
+
+  if (dist < 0.08 || distToLeader < minLeaderSpacing) {
+    fa.group.position.y = 0;
+    return;
+  }
+
+  const rep = getStage3CornerRepulsion(curX, curZ, 0.75);
+  const desiredAng = Math.atan2(dx + rep.pushX * 0.55, dz + rep.pushZ * 0.55);
+
+  const catchupSpeed = Math.min(13.5, Math.max(8.2, currentMoveSpeed * 1.15 + dist * 1.6));
+  const stepDist = Math.min(dist, catchupSpeed * dt);
+
+  const nx = curX + Math.sin(desiredAng) * stepDist;
+  const nz = curZ + Math.cos(desiredAng) * stepDist;
+
+  let moved = false;
+  let finalAng = desiredAng;
+
+  if (isSpawnSpotClear(nx, nz, 0.44)) {
+    fa.group.position.x = nx;
+    fa.group.position.z = nz;
+    moved = true;
+  } else {
+    const steerOffsets = [0.45, -0.45, 0.88, -0.88, 1.32, -1.32, 1.75, -1.75];
+    for (const off of steerOffsets) {
+      const testAng = Math.atan2(dx, dz) + off;
+      const tx = curX + Math.sin(testAng) * stepDist;
+      const tz = curZ + Math.cos(testAng) * stepDist;
+      if (isSpawnSpotClear(tx, tz, 0.40)) {
+        fa.group.position.x = tx;
+        fa.group.position.z = tz;
+        finalAng = testAng;
+        moved = true;
+        break;
+      }
+    }
+
+    if (!moved) {
+      const slideX = curX + Math.sign(dx) * Math.min(Math.abs(dx), stepDist);
+      const slideZ = curZ + Math.sign(dz) * Math.min(Math.abs(dz), stepDist);
+      if (Math.abs(dx) >= Math.abs(dz)) {
+        if (isSpawnSpotClear(slideX, curZ, 0.36)) {
+          fa.group.position.x = slideX;
+          finalAng = Math.atan2(slideX - curX, 0);
+          moved = true;
+        } else if (isSpawnSpotClear(curX, slideZ, 0.36)) {
+          fa.group.position.z = slideZ;
+          finalAng = Math.atan2(0, slideZ - curZ);
+          moved = true;
+        }
+      } else {
+        if (isSpawnSpotClear(curX, slideZ, 0.36)) {
+          fa.group.position.z = slideZ;
+          finalAng = Math.atan2(0, slideZ - curZ);
+          moved = true;
+        } else if (isSpawnSpotClear(slideX, curZ, 0.36)) {
+          fa.group.position.x = slideX;
+          finalAng = Math.atan2(slideX - curX, 0);
+          moved = true;
+        }
+      }
+    }
+  }
+
+  if (!moved) {
+    fa.stuckTimer = (fa.stuckTimer || 0) + dt;
+    if (fa.stuckTimer > 0.25 || dist > 9.5) {
+      fa.group.position.x = THREE.MathUtils.lerp(curX, targetX, 0.35);
+      fa.group.position.z = THREE.MathUtils.lerp(curZ, targetZ, 0.35);
+      fa.stuckTimer = 0;
+      moved = true;
+    }
+  } else {
+    fa.stuckTimer = 0;
+  }
+
+  const postRep = getStage3CornerRepulsion(fa.group.position.x, fa.group.position.z, 0.52);
+  if (Math.hypot(postRep.pushX, postRep.pushZ) > 0.01) {
+    const pushedX = fa.group.position.x + postRep.pushX * dt * 3.5;
+    const pushedZ = fa.group.position.z + postRep.pushZ * dt * 3.5;
+    if (isSpawnSpotClear(pushedX, pushedZ, 0.32)) {
+      fa.group.position.x = pushedX;
+      fa.group.position.z = pushedZ;
+    }
+  }
+
+  fa.heading = lerpAngle(fa.heading, finalAng, dt * 11);
+  fa.group.rotation.y = fa.heading;
+  fa.group.position.y = moved ? Math.abs(Math.sin(now * 0.015 + idx)) * 0.22 : 0;
+}
 
 // -------------------------------------------------------------------------
 // [스테이지 1] 초원 월드 & 동물 7쌍 랜덤 스폰
@@ -100,11 +359,17 @@ function buildNoahStage1World() {
     pairGroup.position.set(ax, 0, az);
     worldGroup.add(pairGroup);
 
-    const initHeading = Math.random() * Math.PI * 2;
+    const initHeading = (i / types.length) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
     const lbl = createWorldLabel(`${ANIMAL_SPECS[type].icon} ${ANIMAL_SPECS[type].name} 한 쌍`);
+    const speedScale = 0.90 + (i % 4) * 0.07;
+    const fleeBias = ((i % 2 === 0 ? 1 : -1) * (0.18 + (i % 3) * 0.11));
+
     stageAnimals.push({
       type, index: i, group: pairGroup, rescued: false, onArkDeck: false, label: lbl,
-      heading: initHeading, targetHeading: initHeading, avoidTimer: 0, fleeState: false, limit: mapLimit - 6
+      heading: initHeading, targetHeading: initHeading,
+      avoidTimer: 0, wanderTimer: 1.2 + (i * 0.4), stuckTimer: 0,
+      fleeState: false, limit: mapLimit - 6,
+      speedScale, fleeBias
     });
   });
 
@@ -120,6 +385,7 @@ function buildNoahStage1World() {
 // -------------------------------------------------------------------------
 function buildNoahArkInteriorMaze(stageNum) {
   clearWorld();
+  noahStage3Trail = [];
   mazeRunCount++;
   scene.background = new THREE.Color(0x18130f);
   scene.fog = new THREE.Fog(0x18130f, 38, 105);
@@ -288,7 +554,7 @@ function buildNoahArkInteriorMaze(stageNum) {
       const lbl = createWorldLabel(`${ANIMAL_SPECS[type].icon} ${ANIMAL_SPECS[type].name} 한 쌍${bonusTxt}`);
       stageAnimals.push({
         type, group: pairGroup, rescued: false, label: lbl,
-        heading: 0, targetHeading: 0, avoidTimer: 0, fleeState: false, limit: halfW - 4
+        heading: 0, targetHeading: 0, avoidTimer: 0, stuckTimer: 0, fleeState: false, limit: halfW - 4
       });
     });
 
@@ -307,6 +573,10 @@ function buildNoahArkInteriorMaze(stageNum) {
 
     const elbl = createWorldLabel('🚪 방주 출구 문 (동물 7쌍과 함께 나가기!)');
     targetObject = { type: 'door', mesh: doorFrame, pos: new THREE.Vector3(0, 1.5, wallDoorZ + 1.2), label: elbl, triggered: false };
+
+    for (let step = 0; step < 30; step++) {
+      noahStage3Trail.push({ x: startPos.x, z: Math.min(halfD - 2.2, startPos.z + step * 0.25) });
+    }
   }
 
   playerPos.set(0, 0, halfD - 5.0);
@@ -379,7 +649,6 @@ function updateNoahCutsceneFrame(dt, now) {
 // [프레임 업데이트] 스테이지 1~3 동물 구출, 비둘기 탐색, 대열 추종 및 출구 이동
 // -------------------------------------------------------------------------
 function updateNoahStageFrame(dt, now) {
-  // 스테이지 1: 초원 동물 7쌍 구출 및 방주 갑판 위 탑승
   if (currentStage === 1) {
     let nearest = null, minDist = 999;
     stageAnimals.forEach((a, idx) => {
@@ -387,40 +656,150 @@ function updateNoahStageFrame(dt, now) {
         a.group.position.y = 6.6 + Math.abs(Math.sin(now * 0.006 + idx)) * 0.15;
         return;
       }
-      const dxFromNoah = a.group.position.x - playerPos.x, dzFromNoah = a.group.position.z - playerPos.z;
+      const curX = a.group.position.x, curZ = a.group.position.z;
+      const dxFromNoah = curX - playerPos.x, dzFromNoah = curZ - playerPos.z;
       const d = Math.hypot(dxFromNoah, dzFromNoah);
 
       if (currentMode === 'senior' || currentMode === 'timeattack') {
         if (a.avoidTimer > 0) a.avoidTimer -= dt;
-        const isFleeing = (d < 10.5);
-        if (isFleeing && a.avoidTimer <= 0) {
-          a.targetHeading = Math.atan2(dxFromNoah, dzFromNoah);
+        if (a.wanderTimer !== undefined) a.wanderTimer -= dt;
+
+        const isFleeing = (d < 11.2);
+        const awayFromNoahAngle = Math.atan2(dxFromNoah, dzFromNoah);
+
+        let sepX = 0, sepZ = 0;
+        stageAnimals.forEach(other => {
+          if (other === a || other.rescued) return;
+          const odx = curX - other.group.position.x;
+          const odz = curZ - other.group.position.z;
+          const od = Math.hypot(odx, odz);
+          if (od < 4.8 && od > 0.001) {
+            const push = (4.8 - od) / 4.8;
+            sepX += (odx / od) * push * 2.4;
+            sepZ += (odz / od) * push * 2.4;
+          } else if (od <= 0.001) {
+            const randAng = idx * 1.7;
+            sepX += Math.sin(randAng) * 2.0;
+            sepZ += Math.cos(randAng) * 2.0;
+          }
+        });
+
+        const edgeMargin = a.limit - 4.5;
+        if (curX > edgeMargin) sepX -= (curX - edgeMargin) * 0.45;
+        if (curX < -edgeMargin) sepX += (-edgeMargin - curX) * 0.45;
+        if (curZ > edgeMargin) sepZ -= (curZ - edgeMargin) * 0.45;
+        if (curZ < -6.5) sepZ += (-6.5 - curZ) * 0.55;
+
+        if (isFleeing) {
           if (!a.fleeState) {
             a.fleeState = true;
             a.label.innerHTML = `${ANIMAL_SPECS[a.type].icon} ${ANIMAL_SPECS[a.type].name} 💨도망중!`;
           }
-        } else if (!isFleeing && a.fleeState) {
-          a.fleeState = false;
-          a.label.innerHTML = `${ANIMAL_SPECS[a.type].icon} ${ANIMAL_SPECS[a.type].name} 한 쌍`;
-        }
-
-        a.heading = lerpAngle(a.heading, a.targetHeading, dt * 6.5);
-        const moveSpd = isFleeing ? 5.3 : 3.2;
-        const nx = a.group.position.x + Math.sin(a.heading) * moveSpd * dt;
-        const nz = a.group.position.z + Math.cos(a.heading) * moveSpd * dt;
-
-        if (!(Math.abs(nx) > a.limit || nz > a.limit || nz < -10.5) && canMoveTo(nx, nz, 0)) {
-          a.group.position.x = nx; a.group.position.z = nz;
+          if (a.avoidTimer <= 0) {
+            const bias = a.fleeBias || 0;
+            const fleeDirX = Math.sin(awayFromNoahAngle + bias) * 2.8 + sepX;
+            const fleeDirZ = Math.cos(awayFromNoahAngle + bias) * 2.8 + sepZ;
+            a.targetHeading = Math.atan2(fleeDirX, fleeDirZ);
+          }
         } else {
-          a.targetHeading = a.heading + 1.9; a.avoidTimer = 0.65;
+          if (a.fleeState) {
+            a.fleeState = false;
+            a.label.innerHTML = `${ANIMAL_SPECS[a.type].icon} ${ANIMAL_SPECS[a.type].name} 한 쌍`;
+            a.targetHeading = awayFromNoahAngle + (a.fleeBias || 0);
+          }
+          if ((a.wanderTimer !== undefined && a.wanderTimer <= 0) || Math.hypot(sepX, sepZ) > 0.6) {
+            a.wanderTimer = 1.6 + (idx % 3) * 0.55;
+            let nextWander = a.heading + ((idx % 2 === 0 ? 1 : -1) * (0.35 + Math.random() * 0.55));
+            if (Math.hypot(sepX, sepZ) > 0.4) {
+              nextWander = lerpAngle(nextWander, Math.atan2(sepX, sepZ), 0.65);
+            }
+            const diffToNoah = Math.atan2(Math.sin(nextWander - awayFromNoahAngle), Math.cos(nextWander - awayFromNoahAngle));
+            if (d < 16.0 && Math.abs(diffToNoah) > 1.65) {
+              nextWander = awayFromNoahAngle + (diffToNoah >= 0 ? 1.15 : -1.15);
+            }
+            a.targetHeading = nextWander;
+          }
         }
+
+        const spdMult = a.speedScale || 1.0;
+        const moveSpd = (isFleeing ? 5.3 : 3.2) * spdMult;
+        const stepDist = moveSpd * dt;
+
+        const probeDist = Math.max(0.95, stepDist * 3.2);
+        const probeX = curX + Math.sin(a.targetHeading) * probeDist;
+        const probeZ = curZ + Math.cos(a.targetHeading) * probeDist;
+
+        if (!isStage1AnimalSpotClear(probeX, probeZ, a.limit, 1.2)) {
+          const safeSteer = findBestAnimalSteerAngle(a, a.targetHeading, awayFromNoahAngle, isFleeing, probeDist);
+          if (safeSteer !== null) {
+            a.targetHeading = safeSteer;
+            a.heading = lerpAngle(a.heading, safeSteer, 0.65);
+            a.avoidTimer = 0.28;
+          }
+        } else {
+          a.heading = lerpAngle(a.heading, a.targetHeading, dt * (isFleeing ? 9.5 : 6.5));
+        }
+
+        const nx = curX + Math.sin(a.heading) * stepDist;
+        const nz = curZ + Math.cos(a.heading) * stepDist;
+
+        let moved = false;
+        if (isStage1AnimalSpotClear(nx, nz, a.limit, 1.15)) {
+          a.group.position.x = nx;
+          a.group.position.z = nz;
+          moved = true;
+        } else {
+          const emergencySteer = findBestAnimalSteerAngle(a, awayFromNoahAngle, awayFromNoahAngle, isFleeing, Math.max(0.8, stepDist * 2.2));
+          if (emergencySteer !== null) {
+            a.heading = emergencySteer;
+            a.targetHeading = emergencySteer;
+            const ex = curX + Math.sin(emergencySteer) * stepDist;
+            const ez = curZ + Math.cos(emergencySteer) * stepDist;
+            if (isStage1AnimalSpotClear(ex, ez, a.limit, 1.05)) {
+              a.group.position.x = ex;
+              a.group.position.z = ez;
+              moved = true;
+            }
+          }
+          if (!moved) {
+            if (isStage1AnimalSpotClear(nx, curZ, a.limit, 1.05)) {
+              a.group.position.x = nx;
+              moved = true;
+            } else if (isStage1AnimalSpotClear(curX, nz, a.limit, 1.05)) {
+              a.group.position.z = nz;
+              moved = true;
+            }
+          }
+        }
+
+        if (!moved) {
+          a.stuckTimer = (a.stuckTimer || 0) + dt;
+          if (a.stuckTimer > 0.15) {
+            for (let distStep = 0.6; distStep <= 2.4; distStep += 0.6) {
+              const escAngle = findBestAnimalSteerAngle(a, awayFromNoahAngle, awayFromNoahAngle, true, distStep);
+              if (escAngle !== null) {
+                a.group.position.x = curX + Math.sin(escAngle) * 0.45;
+                a.group.position.z = curZ + Math.cos(escAngle) * 0.45;
+                a.heading = escAngle;
+                a.targetHeading = escAngle;
+                a.stuckTimer = 0;
+                break;
+              }
+            }
+          }
+        } else {
+          a.stuckTimer = 0;
+        }
+
         a.group.rotation.y = a.heading;
+        a.group.position.y = Math.abs(Math.sin(now * (isFleeing ? 0.016 : 0.01) + idx)) * 0.16;
       }
 
-      if (d < minDist) { minDist = d; nearest = a.group.position; }
-      updateWorldLabelPos(a.label, a.group.position, d < 30);
+      const afterDist = Math.hypot(a.group.position.x - playerPos.x, a.group.position.z - playerPos.z);
+      if (afterDist < minDist) { minDist = afterDist; nearest = a.group.position; }
+      updateWorldLabelPos(a.label, a.group.position, afterDist < 30);
 
-      if (d < 2.35) {
+      if (afterDist < 2.35) {
         a.rescued = true;
         if (a.group.userData && a.group.userData.ring) a.group.userData.ring.visible = false;
         a.group.position.set(-7.2 + rescuedPairs * 2.4, 6.6, -16.2);
@@ -443,7 +822,6 @@ function updateNoahStageFrame(dt, now) {
     }
   }
 
-  // 스테이지 2 & 3: 방주 안 응원 동물 친구들
   if (currentStage === 2 || currentStage === 3) {
     arkFriends.forEach(f => {
       const swayX = f.baseX + Math.sin(now * 0.002 + f.phase) * 1.4;
@@ -462,7 +840,6 @@ function updateNoahStageFrame(dt, now) {
     });
   }
 
-  // 스테이지 2: 공중에서 날고 있는 비둘기
   if (currentStage === 2 && targetObject && !targetObject.triggered) {
     const dove = targetObject.mesh, hoverAngle = now * 0.0032;
     dove.position.x = targetObject.baseX + Math.sin(hoverAngle) * 0.95;
@@ -494,8 +871,9 @@ function updateNoahStageFrame(dt, now) {
     }
   }
 
-  // 스테이지 3: 동물 7쌍 수집 + 대열 추종 + 북쪽 출구 문
   if (currentStage === 3) {
+    recordNoahStage3Trail();
+
     let nearestTarget = null, minDist = 999;
     stageAnimals.forEach(a => {
       if (a.rescued) return;
@@ -522,18 +900,9 @@ function updateNoahStageFrame(dt, now) {
     });
 
     followingAnimals.forEach((fa, idx) => {
-      const leaderPos = (idx === 0) ? playerPos : followingAnimals[idx - 1].group.position;
-      const dx = leaderPos.x - fa.group.position.x, dz = leaderPos.z - fa.group.position.z, dist = Math.hypot(dx, dz);
-      const followSpacing = (idx === 0) ? 2.1 : 1.85;
-      if (dist > followSpacing) {
-        const moveRatio = Math.min(1, (dist - followSpacing) * 5.5 * dt);
-        fa.group.position.x += dx * moveRatio; fa.group.position.z += dz * moveRatio;
-        fa.heading = lerpAngle(fa.heading, Math.atan2(dx, dz), dt * 10);
-        fa.group.rotation.y = fa.heading;
-        fa.group.position.y = Math.abs(Math.sin(now * 0.015 + idx)) * 0.22;
-      } else {
-        fa.group.position.y = 0;
-      }
+      const targetArcDist = 2.1 + idx * 1.85;
+      const trailPt = getNoahTrailTargetPos(targetArcDist);
+      moveStage3FollowerSafely(fa, idx, trailPt.x, trailPt.z, dt, now);
     });
 
     if (targetObject && !targetObject.triggered) {
