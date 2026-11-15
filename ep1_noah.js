@@ -1,5 +1,5 @@
 // =========================================================================
-// [ep1_noah.js] 에피소드 1 : 노아의 방주 (스테이지 3 동물 대열 교차 점프 & 소년반 동물 광역 분산 스폰)
+// [ep1_noah.js] 에피소드 1 : 노아의 방주 (스테이지 1 순간가속 회피·끼임 방지·광역 스폰, 스테이지 3 교차 점프·미로 추종)
 // =========================================================================
 
 EPISODE_SCRIPTURE.noah = {
@@ -405,6 +405,7 @@ function buildNoahStage1World() {
       type, index: i, group: pairGroup, rescued: false, onArkDeck: false, label: lbl,
       heading: initHeading, targetHeading: initHeading,
       avoidTimer: 0, wanderTimer: 1.2 + (i * 0.4), stuckTimer: 0,
+      dashTimer: 0, dashCooldown: 0,
       fleeState: false, limit: mapLimit - 6,
       speedScale, fleeBias
     });
@@ -710,9 +711,18 @@ function updateNoahStageFrame(dt, now) {
       if (currentMode === 'senior' || currentMode === 'timeattack') {
         if (a.avoidTimer > 0) a.avoidTimer -= dt;
         if (a.wanderTimer !== undefined) a.wanderTimer -= dt;
+        if (a.dashTimer > 0) a.dashTimer -= dt;
+        if (a.dashCooldown > 0) a.dashCooldown -= dt;
 
         const isFleeing = (d < 11.2);
         const awayFromNoahAngle = Math.atan2(dxFromNoah, dzFromNoah);
+
+        // [요청사항] 노아가 동물에게 가까이 다가오면 순간가속(dash)으로 약간 멀어지게 처리
+        if (d < 7.5 && a.dashCooldown <= 0) {
+          a.dashTimer = 0.38;
+          a.dashCooldown = 2.6;
+          a.avoidTimer = 0;
+        }
 
         let sepX = 0, sepZ = 0;
         stageAnimals.forEach(other => {
@@ -768,8 +778,10 @@ function updateNoahStageFrame(dt, now) {
           }
         }
 
+        const isDashing = (a.dashTimer > 0);
         const spdMult = a.speedScale || 1.0;
-        const moveSpd = (isFleeing ? 5.3 : 3.2) * spdMult;
+        const baseFleeSpd = isDashing ? 10.2 : 5.3;
+        const moveSpd = (isFleeing ? baseFleeSpd : 3.2) * spdMult;
         const stepDist = moveSpd * dt;
 
         const probeDist = Math.max(0.95, stepDist * 3.2);
@@ -780,11 +792,11 @@ function updateNoahStageFrame(dt, now) {
           const safeSteer = findBestAnimalSteerAngle(a, a.targetHeading, awayFromNoahAngle, isFleeing, probeDist);
           if (safeSteer !== null) {
             a.targetHeading = safeSteer;
-            a.heading = lerpAngle(a.heading, safeSteer, 0.65);
-            a.avoidTimer = 0.28;
+            a.heading = lerpAngle(a.heading, safeSteer, 0.72);
+            a.avoidTimer = 0.25;
           }
         } else {
-          a.heading = lerpAngle(a.heading, a.targetHeading, dt * (isFleeing ? 9.5 : 6.5));
+          a.heading = lerpAngle(a.heading, a.targetHeading, dt * (isDashing ? 14.0 : (isFleeing ? 9.5 : 6.5)));
         }
 
         const nx = curX + Math.sin(a.heading) * stepDist;
@@ -839,7 +851,7 @@ function updateNoahStageFrame(dt, now) {
         }
 
         a.group.rotation.y = a.heading;
-        a.group.position.y = Math.abs(Math.sin(now * (isFleeing ? 0.0085 : 0.006) + idx)) * 0.15;
+        a.group.position.y = Math.abs(Math.sin(now * (isDashing ? 0.014 : (isFleeing ? 0.0085 : 0.006)) + idx)) * (isDashing ? 0.22 : 0.15);
       }
 
       const afterDist = Math.hypot(a.group.position.x - playerPos.x, a.group.position.z - playerPos.z);
