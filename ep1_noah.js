@@ -1,5 +1,5 @@
 // =========================================================================
-// [ep1_noah.js] 에피소드 1 : 노아의 방주 (스테이지 3 동물 대열 떨림 제거 & 소년반 동물 광역 분산 스폰)
+// [ep1_noah.js] 에피소드 1 : 노아의 방주 (스테이지 3 동물 대열 교차 점프 & 소년반 동물 광역 분산 스폰)
 // =========================================================================
 
 EPISODE_SCRIPTURE.noah = {
@@ -43,8 +43,7 @@ function pickWidelySpreadAnimalSpot(bounds, existingSpots, minSpacing, avoidPos,
     const rz = searchB.minZ + Math.random() * (searchB.maxZ - searchB.minZ);
 
     if (avoidPos && Math.hypot(rx - avoidPos.x, rz - avoidPos.z) < avoidRadius) continue;
-    // 방주 본체 주변 제외 (스테이지 1)
-    if ( currentStage === 1 && rz < -9.5 && Math.abs(rx) < 11.5) continue;
+    if (currentStage === 1 && rz < -9.5 && Math.abs(rx) < 11.5) continue;
     if (!isSpawnSpotClear(rx, rz, 1.75)) continue;
 
     let nearestDist = 9999;
@@ -58,7 +57,6 @@ function pickWidelySpreadAnimalSpot(bounds, existingSpots, minSpacing, avoidPos,
       bestSpot = [rx, rz];
     }
 
-    // 충분한 이격 거리를 확보했으면 채택
     if (nearestDist >= minSpacing && attempt >= 18) {
       return bestSpot;
     }
@@ -158,7 +156,7 @@ function findBestAnimalSteerAngle(a, preferredAngle, awayFromNoahAngle, isFleein
 }
 
 // -------------------------------------------------------------------------
-// [스테이지 3 보조] 미로 벽 모서리 겹침 방지 & 떨림 없는 부드러운 대열 추종 헬퍼
+// [스테이지 3 보조] 미로 벽 모서리 겹침 방지 & 한 줄씩 번갈아 뛰는 대열 추종 헬퍼
 // -------------------------------------------------------------------------
 function getStage3CornerRepulsion(x, z, detectPad = 0.65) {
   let pushX = 0;
@@ -230,20 +228,30 @@ function getNoahTrailTargetPos(targetArcDist) {
   return { x: last.x, z: last.z };
 }
 
-function moveStage3FollowerSafely(fa, idx, targetX, targetZ, dt) {
+function applyAlternatingRowBounce(fa, idx, now) {
+  // 짝수 줄(0, 2, 4, 6)과 홀수 줄(1, 3, 5)이 엔딩처럼 한 줄씩 번갈아가며 통통 뛰도록 위상차 부여
+  const rowPhase = (idx % 2) * (Math.PI * 0.5);
+  fa.group.position.y = Math.abs(Math.sin(now * 0.0065 + rowPhase)) * 0.42;
+  if (fa.group.userData && fa.group.userData.a1 && fa.group.userData.a2) {
+    fa.group.userData.a1.position.y = Math.abs(Math.sin(now * 0.009 + rowPhase)) * 0.16;
+    fa.group.userData.a2.position.y = Math.abs(Math.cos(now * 0.009 + rowPhase)) * 0.16;
+  }
+}
+
+function moveStage3FollowerSafely(fa, idx, targetX, targetZ, dt, now) {
+  // 가만히 서 있을 때나 이동 중일 때 모두 한 줄씩 번갈아가며 점프 유지
+  applyAlternatingRowBounce(fa, idx, now);
+
   const curX = fa.group.position.x;
   const curZ = fa.group.position.z;
   const dx = targetX - curX;
   const dz = targetZ - curZ;
   const dist = Math.hypot(dx, dz);
 
-  // 목표 지점에 거의 도착했으면 떨림 없이 부드럽게 착지
   if (dist <= 0.14) {
-    fa.group.position.y = THREE.MathUtils.lerp(fa.group.position.y, 0, Math.min(1, dt * 12));
     return;
   }
 
-  // 기존처럼 거리에 비례하는 부드러운 감속 이동량 계산 (경계면 떨림 방지)
   const moveRatio = Math.min(1, dist * 5.2 * dt);
   const stepDist = dist * moveRatio;
 
@@ -261,7 +269,6 @@ function moveStage3FollowerSafely(fa, idx, targetX, targetZ, dt) {
     fa.group.position.z = nz;
     movedDist = stepDist;
   } else {
-    // 모서리에 막혔을 때 좌우 우회 각도 탐색
     const steerOffsets = [0.42, -0.42, 0.85, -0.85, 1.28, -1.28];
     for (const off of steerOffsets) {
       const testAng = finalAng + off;
@@ -276,7 +283,6 @@ function moveStage3FollowerSafely(fa, idx, targetX, targetZ, dt) {
       }
     }
 
-    // X축 또는 Z축 벽면 슬라이딩
     if (movedDist === 0) {
       const slideX = curX + dx * moveRatio;
       const slideZ = curZ + dz * moveRatio;
@@ -290,13 +296,11 @@ function moveStage3FollowerSafely(fa, idx, targetX, targetZ, dt) {
     }
   }
 
-  // 만약 벽 너머에 끼어 오래 멈춰 있거나 너무 멀어진 경우 트레일 위치로 부드럽게 합류
   if (movedDist < 0.005) {
     fa.stuckTimer = (fa.stuckTimer || 0) + dt;
     if (fa.stuckTimer > 0.30 || dist > 9.0) {
       fa.group.position.x = THREE.MathUtils.lerp(curX, targetX, 0.25);
       fa.group.position.z = THREE.MathUtils.lerp(curZ, targetZ, 0.25);
-      movedDist = stepDist;
       fa.stuckTimer = 0;
     }
   } else {
@@ -305,15 +309,6 @@ function moveStage3FollowerSafely(fa, idx, targetX, targetZ, dt) {
 
   fa.heading = lerpAngle(fa.heading, finalAng, dt * 9.5);
   fa.group.rotation.y = fa.heading;
-
-  // 실제 이동 속도에 맞춰 자연스럽고 차분한 템포로 통통 튀도록 처리 (빠른 진동·떨림 방지)
-  if (movedDist > 0.01) {
-    fa.hopPhase = (fa.hopPhase || idx * 0.9) + dt * 7.2;
-    const targetHopY = Math.abs(Math.sin(fa.hopPhase)) * 0.18;
-    fa.group.position.y = THREE.MathUtils.lerp(fa.group.position.y, targetHopY, Math.min(1, dt * 14));
-  } else {
-    fa.group.position.y = THREE.MathUtils.lerp(fa.group.position.y, 0, Math.min(1, dt * 10));
-  }
 }
 
 // -------------------------------------------------------------------------
@@ -409,7 +404,7 @@ function buildNoahStage1World() {
     stageAnimals.push({
       type, index: i, group: pairGroup, rescued: false, onArkDeck: false, label: lbl,
       heading: initHeading, targetHeading: initHeading,
-      avoidTimer: 0, wanderTimer: 1.2 + (i * 0.4), stuckTimer: 0, hopPhase: i * 0.9,
+      avoidTimer: 0, wanderTimer: 1.2 + (i * 0.4), stuckTimer: 0,
       fleeState: false, limit: mapLimit - 6,
       speedScale, fleeBias
     });
@@ -588,7 +583,6 @@ function buildNoahArkInteriorMaze(stageNum) {
 
     pairTypes.forEach((type, i) => {
       const minSpacing = isHard ? 18.0 : 10.5;
-      // 응원 동물(allSpawnedInside)은 좁은 간격만 피하고, 구출 대상 7쌍(pairSpots)끼리는 최대한 멀리 퍼뜨림
       const [px, pz] = pickWidelySpreadAnimalSpot(
         interiorBounds,
         pairSpots,
@@ -607,7 +601,7 @@ function buildNoahArkInteriorMaze(stageNum) {
       const lbl = createWorldLabel(`${ANIMAL_SPECS[type].icon} ${ANIMAL_SPECS[type].name} 한 쌍${bonusTxt}`);
       stageAnimals.push({
         type, group: pairGroup, rescued: false, label: lbl,
-        heading: 0, targetHeading: 0, avoidTimer: 0, stuckTimer: 0, hopPhase: i * 0.9, fleeState: false, limit: halfW - 4
+        heading: 0, targetHeading: 0, avoidTimer: 0, stuckTimer: 0, fleeState: false, limit: halfW - 4
       });
     });
 
@@ -955,7 +949,7 @@ function updateNoahStageFrame(dt, now) {
     followingAnimals.forEach((fa, idx) => {
       const targetArcDist = 2.1 + idx * 1.85;
       const trailPt = getNoahTrailTargetPos(targetArcDist);
-      moveStage3FollowerSafely(fa, idx, trailPt.x, trailPt.z, dt);
+      moveStage3FollowerSafely(fa, idx, trailPt.x, trailPt.z, dt, now);
     });
 
     if (targetObject && !targetObject.triggered) {
