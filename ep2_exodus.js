@@ -1,5 +1,5 @@
 // =========================================================================
-// [ep2_exodus.js - 파트 1/2] 에피소드 2 : 출애굽과 시내산 언약 (스테이지 1 백성 다리 공중부양 방지, 스테이지 2 번개 아이콘 제거 및 최적화)
+// [ep2_exodus.js - 파트 1/2] 에피소드 2 : 출애굽과 시내산 언약 (스테이지 1 백성 다리 이동 및 절벽 경계 보정, 스테이지 2 번개 아이콘 제거 및 최적화)
 // =========================================================================
 
 EPISODE_SCRIPTURE.exodus = {
@@ -285,7 +285,7 @@ function updateMosesFollowers(dt, now) {
     const backX = -Math.sin(anchor.facing) * (0.85 + f.row * 0.65), backZ = -Math.cos(anchor.facing) * (0.85 + f.row * 0.65);
     let targetX = anchor.x + perpX + backX, targetZ = anchor.z + perpZ + backZ;
 
-    // [스테이지 1 요청사항] 백성들이 협곡 다리를 건널 때 허공으로 벗어나거나 대각선으로 절벽 위를 날아가지 않도록 경로 및 위치 고정
+    // [스테이지 1 요청사항] 백성들이 협곡 다리를 건널 때 허공에 뜨거나 절벽 밖으로 끌려가지 않도록 정밀 보정
     if (currentStage === 1 && buildZones.length > 0) {
       const curX = f.mesh.position.x;
       const curZ = f.mesh.position.z;
@@ -297,32 +297,49 @@ function updateMosesFollowers(dt, now) {
         const walkMaxX = bz.x + bz.w / 2 - 0.68;
         const ratio = Math.min(1, Math.max(0, (bz.placedBlocks || 0) / bz.reqBlocks));
         const builtNorthZ = ratio > 0
-          ? (bz.zSouthEdge + 0.4) - (bz.trenchDepthW + 0.8) * ratio
+          ? (bz.zSouthEdge + 0.55) - (bz.trenchDepthW + 1.1) * ratio
           : gapSouthZ;
 
-        // 1) 목표 지점이 협곡 Z 범위 안에 있으면 다리 폭 내부로 X를 제한하고 미완성 허공 진입 차단
-        if (targetZ < gapSouthZ && targetZ > gapNorthZ) {
+        const inBridgeCorridorX = (curX >= walkMinX - 0.22 && curX <= walkMaxX + 0.22);
+        const mosesEnteredOrCrossedNorth = (playerPos.z < gapSouthZ - 0.25) &&
+          (playerPos.z <= gapNorthZ + 0.25 || Math.abs(playerPos.x - bz.x) <= bz.w / 2 + 1.2);
+        const mosesEnteredOrCrossedSouth = (playerPos.z > gapNorthZ + 0.25) &&
+          (playerPos.z >= gapSouthZ - 0.25 || Math.abs(playerPos.x - bz.x) <= bz.w / 2 + 1.2);
+
+        // 1) 백성이 현재 다리 위(협곡 Z 구간 내부)에 있는 경우
+        if (curZ < gapSouthZ - 0.05 && curZ > gapNorthZ + 0.05 && inBridgeCorridorX) {
           targetX = THREE.MathUtils.clamp(targetX, walkMinX, walkMaxX);
-          if (ratio <= 0) {
-            targetZ = (curZ >= bz.zCenter) ? gapSouthZ + 0.15 : gapNorthZ - 0.15;
-          } else if (ratio < 1 && targetZ < builtNorthZ + 0.35) {
-            targetZ = (curZ < bz.zNorthEdge) ? gapNorthZ - 0.15 : Math.min(gapSouthZ, builtNorthZ + 0.35);
+          if (ratio < 1 && targetZ < builtNorthZ + 0.35) {
+            targetZ = Math.min(gapSouthZ, builtNorthZ + 0.35);
           }
         }
-
-        // 2) 절벽 위에서 다리로 진입할 때 X좌표가 다리 입구 밖이면 먼저 다리 입구 앞으로 이동한 뒤 건너가도록 유도
-        const isOutsideCorridorX = (curX < walkMinX - 0.15 || curX > walkMaxX + 0.15);
-        if (curZ >= gapSouthZ - 0.1 && targetZ < gapSouthZ && isOutsideCorridorX) {
-          targetX = THREE.MathUtils.clamp(bz.x + f.col * 0.75, walkMinX, walkMaxX);
-          targetZ = gapSouthZ + 0.15;
-        } else if (curZ <= gapNorthZ + 0.1 && targetZ > gapNorthZ && isOutsideCorridorX) {
-          targetX = THREE.MathUtils.clamp(bz.x + f.col * 0.75, walkMinX, walkMaxX);
-          targetZ = gapNorthZ - 0.15;
+        // 2) 백성이 남쪽 절벽 위에 있고 목표 Z가 협곡/북쪽으로 넘어가는 경우
+        else if (curZ >= bz.zCenter && targetZ < gapSouthZ) {
+          if (ratio <= 0 || !mosesEnteredOrCrossedNorth) {
+            // 모세가 아직 남쪽 절벽에 있으면 다리 쪽으로 끌려가지 않고 절벽 끝선만 유지
+            targetZ = gapSouthZ + 0.15;
+          } else if (!inBridgeCorridorX) {
+            // 모세가 다리를 건너갔는데 백성이 다리 X폭 바깥에 있으면 먼저 남쪽 다리 입구 앞으로 이동
+            targetX = THREE.MathUtils.clamp(bz.x + f.col * 0.75, walkMinX, walkMaxX);
+            targetZ = gapSouthZ + 0.15;
+          } else {
+            // 다리 입구 안에 정렬되었으면 다리 위로 진입
+            targetX = THREE.MathUtils.clamp(targetX, walkMinX, walkMaxX);
+            if (ratio < 1 && targetZ < builtNorthZ + 0.35) {
+              targetZ = Math.min(gapSouthZ, builtNorthZ + 0.35);
+            }
+          }
         }
-
-        // 3) 현재 다리 위에 있는 동안에는 다리를 완전히 빠져나갈 때까지 다리 난간 안쪽 폭 유지
-        if (curZ < gapSouthZ - 0.05 && curZ > gapNorthZ + 0.05) {
-          targetX = THREE.MathUtils.clamp(targetX, walkMinX, walkMaxX);
+        // 3) 백성이 북쪽 절벽 위에 있고 목표 Z가 협곡/남쪽으로 넘어가는 경우
+        else if (curZ < bz.zCenter && targetZ > gapNorthZ) {
+          if (ratio < 1 || !mosesEnteredOrCrossedSouth) {
+            targetZ = gapNorthZ - 0.15;
+          } else if (!inBridgeCorridorX) {
+            targetX = THREE.MathUtils.clamp(bz.x + f.col * 0.75, walkMinX, walkMaxX);
+            targetZ = gapNorthZ - 0.15;
+          } else {
+            targetX = THREE.MathUtils.clamp(targetX, walkMinX, walkMaxX);
+          }
         }
       }
     }
@@ -341,7 +358,7 @@ function updateMosesFollowers(dt, now) {
       f.mesh.userData.lArm.rotation.x = 0; f.mesh.userData.rArm.rotation.x = 0;
     }
 
-    // 이동 후에도 협곡 허공 영역에 위치하지 않도록 최종 안전 보정
+    // 이동 후 협곡 허공 진입 방지 및 다리 경사면 밀착 보정
     let onBridgeSurface = false;
     if (currentStage === 1 && buildZones.length > 0) {
       for (const bz of buildZones) {
@@ -351,11 +368,13 @@ function updateMosesFollowers(dt, now) {
         const walkMaxX = bz.x + bz.w / 2 - 0.68;
         const ratio = Math.min(1, Math.max(0, (bz.placedBlocks || 0) / bz.reqBlocks));
         const builtNorthZ = ratio > 0
-          ? (bz.zSouthEdge + 0.4) - (bz.trenchDepthW + 0.8) * ratio
+          ? (bz.zSouthEdge + 0.55) - (bz.trenchDepthW + 1.1) * ratio
           : gapSouthZ;
 
         if (f.mesh.position.z < gapSouthZ && f.mesh.position.z > gapNorthZ) {
-          if (ratio <= 0) {
+          const isInsideBridgeX = (f.mesh.position.x >= bz.x - bz.w / 2 - 0.15 && f.mesh.position.x <= bz.x + bz.w / 2 + 0.15);
+          if (ratio <= 0 || !isInsideBridgeX) {
+            // 다리 바깥 절벽에서는 다리로 순간이동시키지 않고 절벽 끝에 위치 고정
             f.mesh.position.z = (f.mesh.position.z >= bz.zCenter) ? gapSouthZ : gapNorthZ;
           } else {
             f.mesh.position.x = THREE.MathUtils.clamp(f.mesh.position.x, walkMinX, walkMaxX);
