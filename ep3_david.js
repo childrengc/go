@@ -5312,7 +5312,7 @@ window.triggerPuzzleBuildOrSwitch = function () {
 };
 
 REGISTER_EPISODE('david', {
-  locked: false,
+  locked: true,
   avatarIcon: '🪉',
   scripture: DAVID_SCRIPTURE,
   certMeta: {
