@@ -3441,11 +3441,10 @@ function updateDavidStage2CutsceneFrame(dt, now) {
   return true;
 }
 // =========================================================================
-// [ep3_david.js - 파트 4/5] 에피소드 3 : 스테이지 3 (다윗성 대규모 건물 미로·상가·골목 행인·2층 건물 월드)
-// - 도시 전용 석조 타일 바닥 텍스처(makeDavidCityStoneTex) 적용
-// - 엉성한 담벽 제거 -> 건물들이 빽빽하게 이어져 골목길과 막다른 길을 만드는 도시 미로 설계
-// - 상가 건물 내부 상인 배치(6곳) 및 미로 골목을 걸어 다니는 마을 행인(12명) 추가
-// - 2층 계단-건물 빈틈 밀착 시공 및 건물 내부 끼임·갇힘 원천 방지
+// [ep3_david.js - 파트 4/5] 에피소드 3 : 스테이지 3 (다윗성 성벽 외곽·성문 결합·성벽 밖 곧은 길·확장형 건물 미로)
+// - 외곽 숲/나무를 모두 성벽과 망루로 교체 (wallMeshes 등록으로 가장자리 접근 시 반투명 시야 확보)
+// - 남쪽 성문을 성벽에 일체형으로 부착하고 성벽 너머로 뻗은 곧은 길(직선 가도) 구현
+// - 건물 미로와 2층 건물, 상가, 자재 은신처를 성벽 코앞(±62m)까지 대폭 확장
 // =========================================================================
 
 let davidCityNpcs = [];
@@ -3485,7 +3484,6 @@ function makeDavidCityStoneTex() {
   c.height = 128;
   const ctx = c.getContext('2d');
 
-  // 예루살렘 성읍 특유의 따뜻한 석회암·사암 바닥 베이스
   ctx.fillStyle = '#d6c3a5';
   ctx.fillRect(0, 0, 128, 128);
 
@@ -3500,7 +3498,6 @@ function makeDavidCityStoneTex() {
       ctx.fillStyle = stonePalette[(row * 3 + col + 10) % stonePalette.length];
       ctx.fillRect(x + 1, y + 1, tileW - 2, tileH - 2);
 
-      // 돌 질감 하이라이트 및 줄눈 음영
       ctx.fillStyle = 'rgba(255,255,255,0.18)';
       ctx.fillRect(x + 2, y + 2, tileW - 4, 2);
       ctx.fillStyle = 'rgba(87,65,42,0.22)';
@@ -3518,7 +3515,6 @@ function makeDavidCityStoneTex() {
   return tex;
 }
 
-// 건물을 등록할 때 2D 충돌체(colliders), 상단 지붕 플랫폼(platforms), 끼임 탈출용 박스(davidCityBuildingBoxes)에 동시 등록
 function registerCitySolidBox(cx, cz, w, d, topY, pad = 0.30) {
   const minX = cx - w / 2 - pad;
   const maxX = cx + w / 2 + pad;
@@ -3529,10 +3525,8 @@ function registerCitySolidBox(cx, cz, w, d, topY, pad = 0.30) {
   davidCityBuildingBoxes.push({ minX, maxX, minZ, maxZ, topY });
 }
 
-// 만약 점프나 이동 중 건물 경계 안쪽(1층 바닥 근처)으로 캐릭터가 밀려 들어갔다면 즉시 가장 가까운 길가로 밀어냄
 function resolvePlayerOutOfCityBuildings() {
   for (const b of davidCityBuildingBoxes) {
-    // 캐릭터가 해당 건물 지붕 위(topY - 0.55 이상)에 정당하게 올라가 있는 경우는 제외
     if (playerPos.y >= b.topY - 0.55) continue;
 
     if (
@@ -3554,7 +3548,115 @@ function resolvePlayerOutOfCityBuildings() {
 }
 
 // -------------------------------------------------------------------------
-// 2. 디테일한 인물(상인·건축가·경비병·왕궁 전령) & 신하 2명 & 하늘 원통 빛기둥 모델링
+// 2. [스테이지 3 & 엔딩 공통] 맵 가장자리 성벽(반투명 시야 보장) 및 성벽 밖 곧은 길 생성
+// -------------------------------------------------------------------------
+function buildDavidCastleWallPerimeter(limit, withSouthGate = true) {
+  const wallBaseMat = matVoxel('#d6c3a5', '#b89f7a');
+  const wallTrimMat = matVoxel('#b45309', '#78350f');
+  const towerBaseMat = matVoxel('#cbb492', '#9c825e');
+  const wallH = 8.2;
+  const wallThick = 3.4;
+  const segLen = 12.0;
+
+  // 성벽 블록을 생성할 때 개별 복제 재질(.clone())과 wallMeshes 등록을 적용해 가장자리에서 캐릭터가 가려지지 않게 함
+  const addTransparentWallSegment = (w, h, d, x, y, z, isTrim = false) => {
+    const mat = (isTrim ? wallTrimMat : wallBaseMat).clone();
+    const box = createBox(w, h, d, mat, x, y, z);
+    worldGroup.add(box);
+    wallMeshes.push(box);
+    return box;
+  };
+
+  // 1) 북쪽 성벽 (z = -limit) & 남쪽 성벽 (z = +limit, 성문 구간 x = -11 ~ +11 개방 가능)
+  for (let x = -limit; x <= limit; x += segLen) {
+    // 북쪽 성벽
+    addTransparentWallSegment(segLen + 0.15, wallH, wallThick, x, wallH / 2, -limit, false);
+    addTransparentWallSegment(segLen + 0.35, 0.55, wallThick + 0.4, x, wallH + 0.25, -limit, true);
+    // 성가퀴(흉벽)
+    [-3.6, 0, 3.6].forEach(ox => {
+      addTransparentWallSegment(2.0, 1.2, wallThick + 0.2, x + ox, wallH + 1.1, -limit, false);
+    });
+
+    // 남쪽 성벽 (withSouthGate일 때 중앙 성문 구간은 비워둠)
+    if (withSouthGate && Math.abs(x) < 12.5) continue;
+    addTransparentWallSegment(segLen + 0.15, wallH, wallThick, x, wallH / 2, limit, false);
+    addTransparentWallSegment(segLen + 0.35, 0.55, wallThick + 0.4, x, wallH + 0.25, limit, true);
+    [-3.6, 0, 3.6].forEach(ox => {
+      addTransparentWallSegment(2.0, 1.2, wallThick + 0.2, x + ox, wallH + 1.1, limit, false);
+    });
+  }
+
+  // 2) 서쪽 성벽 (x = -limit) & 동쪽 성벽 (x = +limit)
+  for (let z = -limit; z <= limit; z += segLen) {
+    // 서쪽 성벽
+    addTransparentWallSegment(wallThick, wallH, segLen + 0.15, -limit, wallH / 2, z, false);
+    addTransparentWallSegment(wallThick + 0.4, 0.55, segLen + 0.35, -limit, wallH + 0.25, z, true);
+    [-3.6, 0, 3.6].forEach(oz => {
+      addTransparentWallSegment(wallThick + 0.2, 1.2, 2.0, -limit, wallH + 1.1, z + oz, false);
+    });
+
+    // 동쪽 성벽
+    addTransparentWallSegment(wallThick, wallH, segLen + 0.15, limit, wallH / 2, z, false);
+    addTransparentWallSegment(wallThick + 0.4, 0.55, segLen + 0.35, limit, wallH + 0.25, z, true);
+    [-3.6, 0, 3.6].forEach(oz => {
+      addTransparentWallSegment(wallThick + 0.2, 1.2, 2.0, limit, wallH + 1.1, z + oz, false);
+    });
+  }
+
+  // 3) 4대 모서리 성벽 망루 (Corner Watchtowers) + 중간 성벽 보루
+  const towerCoords = [
+    [-limit, -limit], [limit, -limit], [-limit, limit], [limit, limit],
+    [-limit, 0], [limit, 0], [0, -limit]
+  ];
+  towerCoords.forEach(([tx, tz]) => {
+    const tBody = createBox(6.8, wallH + 3.2, 6.8, towerBaseMat.clone(), tx, (wallH + 3.2) / 2, tz);
+    const tRoof = createBox(7.4, 0.7, 7.4, wallTrimMat.clone(), tx, wallH + 3.55, tz);
+    worldGroup.add(tBody, tRoof);
+    wallMeshes.push(tBody, tRoof);
+  });
+
+  // 4) 성벽 안쪽 횃불 배치
+  for (let i = -limit + 16; i <= limit - 16; i += 24) {
+    addWallTorch(i, 3.5, -limit + 2.0);
+    if (!withSouthGate || Math.abs(i) > 14) addWallTorch(i, 3.5, limit - 2.0);
+    addWallTorch(-limit + 2.0, 3.5, i);
+    addWallTorch( limit - 2.0, 3.5, i);
+  }
+
+  // 5) [스테이지 3 요청사항 2] 성문 너머 성벽 바깥쪽(남쪽 z > limit)으로 곧게 뻗은 길(직선 가도)과 외부 들판 구현
+  if (withSouthGate) {
+    const outGrassMat = new THREE.MeshLambertMaterial({ map: makeGrassFieldTex() });
+    const highwayMat = matDavidCached('#e5c494', '#c29b61');
+    const curbMat = matDavidCached('#94a3b8', '#64748b');
+
+    // 성벽 밖 남쪽 대지
+    const outerGround = createBox(limit * 3.0, 1.2, 130, outGrassMat, 0, -0.58, limit + 64, false);
+    outerGround.receiveShadow = true;
+    worldGroup.add(outerGround);
+
+    // 성문에서 성벽 밖 지평선까지 일직선으로 곧게 뻗은 왕의 대로 (길이 125m)
+    const roadLen = 125;
+    const roadCenterZ = limit + roadLen / 2 - 2;
+    worldGroup.add(
+      createBox(8.6, 0.14, roadLen, highwayMat, 0, 0.06, roadCenterZ, false),
+      createBox(0.65, 0.28, roadLen, curbMat, -4.6, 0.14, roadCenterZ, false),
+      createBox(0.65, 0.28, roadLen, curbMat,  4.6, 0.14, roadCenterZ, false)
+    );
+
+    // 성벽 밖 곧은 길 양옆의 가로수(종려나무·작은 나무)와 이정표 기둥
+    for (let rz = limit + 12; rz <= limit + 108; rz += 16) {
+      addPalmTree(-9.5, rz, 1.15, false);
+      addPalmTree( 9.5, rz, 1.15, false);
+      worldGroup.add(
+        createBox(0.45, 1.6, 0.45, curbMat, -5.2, 0.8, rz, false),
+        createBox(0.45, 1.6, 0.45, curbMat,  5.2, 0.8, rz, false)
+      );
+    }
+  }
+}
+
+// -------------------------------------------------------------------------
+// 3. 디테일한 인물(상인·건축가·경비병·왕궁 전령) & 신하 2명 & 하늘 원통 빛기둥 모델링
 // -------------------------------------------------------------------------
 function createNpcSkyBeacon(colorHex) {
   const beaconGrp = new THREE.Group();
@@ -3761,7 +3863,7 @@ function createDavidRetainerMesh(retainerIdx) {
 }
 
 // -------------------------------------------------------------------------
-// 3. 다윗성 랜드마크, 빈틈없는 2층 건물, 사람이 있는 상가 건물, 연속형 미로 건물 빌더
+// 4. 다윗성 랜드마크, 빈틈없는 2층 건물, 상가 건물, 성벽까지 확장된 건물 미로 빌더
 // -------------------------------------------------------------------------
 function buildDavidCityPalace(cx, cz) {
   const stoneMat = matVoxel('#fde68a', '#eab308');
@@ -3811,7 +3913,6 @@ function buildDavidCityTabernacle(cx, cz) {
   registerCitySolidBox(cx, cz - 0.3, 12.6, 9.0, 7.2, 0.35);
 }
 
-// [스테이지 3 요청사항 1] 계단과 건물 사이 빈틈을 완전히 없애고 건물에 빠져 갇히지 않는 2층 건물
 function buildClimbableTwoStoryHouse(cx, cz, stairSide = 'east', colorVariant = 0) {
   const wallMat = matVoxel(colorVariant % 2 === 0 ? '#fde68a' : '#fed7aa', '#d97706').clone();
   const trimMat = matVoxel('#92400e', '#5c2d0c').clone();
@@ -3820,14 +3921,12 @@ function buildClimbableTwoStoryHouse(cx, cz, stairSide = 'east', colorVariant = 
 
   const w = 9.0, h1 = 3.6, d = 7.4;
 
-  // 1층 본채 (상단 전체가 걸어 다닐 수 있는 2층 테라스 슬래브)
   const body1F = createBox(w, h1, d, wallMat, cx, h1 / 2, cz);
   const slab2F = createBox(w + 0.4, 0.30, d + 0.4, trimMat, cx, h1 - 0.12, cz);
   const door1F = createBox(1.6, 2.4, 0.25, trimMat, cx, 1.2, cz + d / 2 + 0.08);
   worldGroup.add(body1F, slab2F, door1F);
   wallMeshes.push(body1F, slab2F);
 
-  // 1층 본채를 platforms + davidCityBuildingBoxes에 등록하여 옆으로 뚫고 들어가지 못하면서 계단으로는 올라갈 수 있게 함
   platforms.push({
     minX: cx - w / 2 - 0.25,
     maxX: cx + w / 2 + 0.25,
@@ -3843,7 +3942,6 @@ function buildClimbableTwoStoryHouse(cx, cz, stairSide = 'east', colorVariant = 
     topY: h1
   });
 
-  // 2층 다락방 (반대편 가장자리)
   const roomW = 3.6, roomH = 2.6, roomD = 4.0;
   const roomX = cx + (stairSide === 'east' ? -2.2 : 2.2);
   const roomZ = cz - 1.2;
@@ -3853,7 +3951,6 @@ function buildClimbableTwoStoryHouse(cx, cz, stairSide = 'east', colorVariant = 
   wallMeshes.push(body2F, roof2F);
   registerCitySolidBox(roomX, roomZ, roomW, roomD, h1 + roomH, 0.20);
 
-  // 계단과 건물 외벽이 0.3m 겹치도록 밀착 배치하여 틈새로 빠지는 현상을 100% 차단!
   const dir = (stairSide === 'east') ? 1 : -1;
   const stairW = 2.6;
   const stairX = cx + dir * (w / 2 + stairW / 2 - 0.30);
@@ -3863,7 +3960,6 @@ function buildClimbableTwoStoryHouse(cx, cz, stairSide = 'east', colorVariant = 
   for (let s = 1; s <= 6; s++) {
     const stepTopY = s * 0.6;
     const sz = startZ - (s - 1) * stepDepth;
-    // 마지막 6번째 계단은 건물 2층 슬래브까지 길게 연장하여 빈틈 완벽 제거
     const boxD = (s === 6) ? (stepDepth + 0.65) : (stepDepth + 0.18);
     const boxZ = (s === 6) ? (sz - 0.20) : sz;
     const stepBox = createBox(stairW, stepTopY, boxD, stairMat.clone(), stairX, stepTopY / 2, boxZ);
@@ -3882,16 +3978,13 @@ function buildClimbableTwoStoryHouse(cx, cz, stairSide = 'east', colorVariant = 
   }
 }
 
-// [스테이지 3 요청사항 4] 내부에 상점 주인이 서서 물건을 파는 오픈형 상가 건물 생성 함수
 function buildOpenShopBuildingWithKeeper(cx, cz, w, d, facing = 'south', shopType = 'fruit', idx = 0) {
-  const grp = new THREE.Group();
   const wallMat = matVoxel(idx % 2 === 0 ? '#fde68a' : '#fed7aa', '#d97706');
   const woodMat = matVoxel('#78350f', '#451a03');
   const awningCol1 = (shopType === 'fruit') ? '#16a34a' : (shopType === 'pottery' ? '#ea580c' : (shopType === 'cloth' ? '#9333ea' : '#0284c7'));
   const awningMat = matVoxel(awningCol1, '#0f172a').clone();
   const h = 4.5;
 
-  // 뒷벽, 양옆 벽, 천장 지붕을 세워 안쪽 공간이 들여다보이는 상가 구조
   const isNS = (facing === 'south' || facing === 'north');
   const fSign = (facing === 'south' || facing === 'east') ? 1 : -1;
 
@@ -3916,13 +4009,11 @@ function buildOpenShopBuildingWithKeeper(cx, cz, w, d, facing = 'south', shopTyp
     worldGroup.add(backWall, sideL, sideR, counter);
     wallMeshes.push(backWall, sideL, sideR);
 
-    // 진열대 위 상품 소품 (과일·도자기·옷감·빵)
     const itemCols = ['#ef4444', '#facc15', '#22c55e', '#a855f7'];
     [-1.8, 0, 1.8].forEach((ox, i) => {
       worldGroup.add(createBox(0.75, 0.48, 0.65, matDavidCached(itemCols[(idx + i) % itemCols.length]), cx + ox, 1.38, cz + fSign * (d / 2 - 1.3)));
     });
 
-    // 상가 건물 안에 서 있는 상점 주인 배치!
     const keeper = createDetailedCityNpcMesh(idx % 2 === 0 ? 'merchant' : 'architect');
     keeper.position.set(cx, 0, cz - fSign * 0.4);
     keeper.rotation.y = (fSign === 1) ? 0 : Math.PI;
@@ -3951,7 +4042,6 @@ function buildOpenShopBuildingWithKeeper(cx, cz, w, d, facing = 'south', shopTyp
   registerCitySolidBox(cx, cz, w, d, h + 0.4, 0.30);
 }
 
-// [스테이지 3 요청사항 4·6] 건물들이 서로 이어져 미로 골목길과 막다른 길을 형성하는 일반 시가지 건물 블록 생성 함수
 function buildSolidCityBuildingBlock(cx, cz, w, h, d, variant = 0) {
   const palettes = [
     ['#fde68a', '#d97706'],
@@ -3970,7 +4060,6 @@ function buildSolidCityBuildingBlock(cx, cz, w, h, d, variant = 0) {
   worldGroup.add(body, roof);
   wallMeshes.push(body, roof);
 
-  // 긴 건물은 여러 채의 가옥이 맞벽으로 이어진 형태처럼 문과 창문을 일정 간격으로 배치
   if (w >= d) {
     const count = Math.max(1, Math.floor(w / 7.5));
     for (let i = 0; i < count; i++) {
@@ -3996,73 +4085,85 @@ function buildSolidCityBuildingBlock(cx, cz, w, h, d, variant = 0) {
   registerCitySolidBox(cx, cz, w, d, h + 0.4, 0.30);
 }
 
-// [스테이지 3 요청사항 3·4·5·6] 맵 전체를 빽빽한 건물 미로와 상가 건물, 골목 행인으로 구성
+// [스테이지 3 요청사항 4] 성벽 코앞(±62m)까지 확장된 대규모 건물 미로 및 상가·행인 배치
 function buildDenseMazeCityAndStreets() {
   davidCityShopkeepers = [];
   davidCityPedestrians = [];
 
-  // 1) 위로 올라갈 수 있는 2층 건물 6채 (계단 빈틈 완벽 밀착)
+  // 1) 위로 올라갈 수 있는 2층 건물 8채 (내부 시가지 + 성벽 근처 외곽 거점까지 확장)
   const twoStorySpecs = [
     { x: -42, z: -26, side: 'east', var: 0 },
     { x: -42, z:  22, side: 'east', var: 1 },
     { x:  42, z: -26, side: 'west', var: 0 },
     { x:  42, z:  22, side: 'west', var: 1 },
     { x: -20, z: -34, side: 'east', var: 1 },
-    { x:  20, z:  30, side: 'west', var: 0 }
+    { x:  20, z:  30, side: 'west', var: 0 },
+    { x: -54, z: -48, side: 'east', var: 0 }, // 북서 성벽 근처 2층 건물
+    { x:  54, z:  48, side: 'west', var: 1 }  // 남동 성벽 근처 2층 건물
   ];
   twoStorySpecs.forEach(sp => {
     buildClimbableTwoStoryHouse(sp.x, sp.z, sp.side, sp.var);
   });
 
-  // 2) 안에 상인이 서서 가게를 보는 오픈형 상가 건물 6곳 배치
+  // 2) 안에 상인이 서서 가게를 보는 오픈형 상가 건물 8곳 배치
   const shopSpecs = [
     { x: -17, z:  18, w: 8.5, d: 6.5, facing: 'north', type: 'fruit' },
     { x:  17, z:  18, w: 8.5, d: 6.5, facing: 'north', type: 'pottery' },
     { x: -18, z:  -2, w: 8.5, d: 6.5, facing: 'south', type: 'cloth' },
     { x:  18, z:  -2, w: 8.5, d: 6.5, facing: 'south', type: 'bakery' },
     { x: -32, z:  -2, w: 8.0, d: 6.5, facing: 'south', type: 'fruit' },
-    { x:  32, z:  -2, w: 8.0, d: 6.5, facing: 'south', type: 'pottery' }
+    { x:  32, z:  -2, w: 8.0, d: 6.5, facing: 'south', type: 'pottery' },
+    { x: -46, z:  36, w: 8.5, d: 6.5, facing: 'north', type: 'cloth' },
+    { x:  46, z: -38, w: 8.5, d: 6.5, facing: 'south', type: 'bakery' }
   ];
   shopSpecs.forEach((sh, idx) => {
     buildOpenShopBuildingWithKeeper(sh.x, sh.z, sh.w, sh.d, sh.facing, sh.type, idx);
   });
 
-  // 3) 엉성한 담벽 대신 건물들이 서로 길게 이어져 미로 골목길과 막다른 길(Cul-de-sac)을 만드는 34개 시가지 건물 블록
+  // 3) 성벽 바로 안쪽(±61m)까지 뻗어 골목길과 교차로, 막다른 골목을 형성하는 42개 시가지 건물 블록
   const cityMazeBlocks = [
-    // [북서 구역 건물 미로] (골목과 막다른 중정 형성)
-    { x: -55, z: -38, w: 9.0, h: 4.8, d: 28.0, v: 0 },
-    { x: -36, z: -52, w: 28.0, h: 4.6, d: 8.0, v: 1 },
-    { x: -28, z: -38, w: 7.5, h: 4.5, d: 18.0, v: 2 }, // 막다른 골목 분리 건물
-    { x: -30, z: -15, w: 15.0, h: 4.7, d: 7.5, v: 3 },
-    { x: -54, z: -12, w: 9.5, h: 4.6, d: 16.0, v: 0 },
-    { x: -16, z: -20, w: 7.5, h: 4.8, d: 14.0, v: 1 },
+    // [북서 성벽 인접 미로 구역]
+    { x: -60, z: -26, w: 7.5, h: 4.9, d: 28.0, v: 0 },
+    { x: -36, z: -60, w: 30.0, h: 4.8, d: 7.5, v: 1 },
+    { x: -36, z: -48, w: 20.0, h: 4.6, d: 7.5, v: 2 },
+    { x: -28, z: -36, w: 7.5, h: 4.5, d: 16.0, v: 3 },
+    { x: -30, z: -15, w: 15.0, h: 4.7, d: 7.5, v: 0 },
+    { x: -58, z:  -4, w: 8.5, h: 4.7, d: 14.0, v: 1 },
+    { x: -16, z: -20, w: 7.5, h: 4.8, d: 14.0, v: 2 },
+    { x: -16, z: -56, w: 12.0, h: 4.7, d: 7.5, v: 0 },
 
-    // [북동 구역 건물 미로]
-    { x:  55, z: -38, w: 9.0, h: 4.8, d: 28.0, v: 1 },
-    { x:  36, z: -52, w: 28.0, h: 4.6, d: 8.0, v: 0 },
-    { x:  28, z: -38, w: 7.5, h: 4.5, d: 18.0, v: 3 },
-    { x:  30, z: -15, w: 15.0, h: 4.7, d: 7.5, v: 2 },
-    { x:  54, z: -12, w: 9.5, h: 4.6, d: 16.0, v: 1 },
-    { x:  16, z: -20, w: 7.5, h: 4.8, d: 14.0, v: 0 },
+    // [북동 성벽 인접 미로 구역]
+    { x:  60, z: -26, w: 7.5, h: 4.9, d: 28.0, v: 1 },
+    { x:  36, z: -60, w: 30.0, h: 4.8, d: 7.5, v: 0 },
+    { x:  34, z: -48, w: 18.0, h: 4.6, d: 7.5, v: 3 },
+    { x:  28, z: -36, w: 7.5, h: 4.5, d: 16.0, v: 2 },
+    { x:  30, z: -15, w: 15.0, h: 4.7, d: 7.5, v: 1 },
+    { x:  58, z:  -4, w: 8.5, h: 4.7, d: 14.0, v: 0 },
+    { x:  16, z: -20, w: 7.5, h: 4.8, d: 14.0, v: 3 },
     { x:  20, z: -34, w: 8.5, h: 4.6, d: 7.5, v: 2 },
+    { x:  16, z: -56, w: 12.0, h: 4.7, d: 7.5, v: 1 },
 
-    // [서쪽 & 남서 구역 건물 미로] (상인 주변 및 철광석 은신 골목 형성)
-    { x: -55, z:  12, w: 9.0, h: 4.8, d: 24.0, v: 2 },
+    // [서쪽 & 남서 성벽 인접 미로 구역]
+    { x: -60, z:  16, w: 7.5, h: 4.8, d: 22.0, v: 2 },
     { x: -42, z:   8, w: 8.5, h: 4.5, d: 12.0, v: 0 },
-    { x: -55, z:  38, w: 9.0, h: 4.7, d: 22.0, v: 1 },
-    { x: -38, z:  52, w: 24.0, h: 4.6, d: 8.0, v: 3 },
-    { x: -29, z:  36, w: 8.0, h: 4.6, d: 22.0, v: 0 }, // 남서 미로 골목 분리 건물
-    { x: -17, z:  31, w: 9.0, h: 4.5, d: 12.0, v: 2 },
-    { x: -18, z:  46, w: 10.0, h: 4.8, d: 7.5, v: 1 },
+    { x: -60, z:  46, w: 7.5, h: 4.8, d: 24.0, v: 1 },
+    { x: -40, z:  60, w: 28.0, h: 4.8, d: 7.5, v: 3 },
+    { x: -34, z:  48, w: 18.0, h: 4.6, d: 7.5, v: 0 },
+    { x: -29, z:  32, w: 8.0, h: 4.6, d: 18.0, v: 2 },
+    { x: -17, z:  31, w: 9.0, h: 4.5, d: 12.0, v: 1 },
+    { x: -18, z:  46, w: 10.0, h: 4.8, d: 7.5, v: 3 },
+    { x: -18, z:  59, w: 11.0, h: 4.8, d: 7.5, v: 0 },
 
-    // [동쪽 & 남동 구역 건물 미로] (건축가 주변 및 석재 은신 골목 형성)
-    { x:  55, z:  12, w: 9.0, h: 4.8, d: 24.0, v: 3 },
+    // [동쪽 & 남동 성벽 인접 미로 구역]
+    { x:  60, z:  16, w: 7.5, h: 4.8, d: 22.0, v: 3 },
     { x:  42, z:   8, w: 8.5, h: 4.5, d: 12.0, v: 1 },
-    { x:  55, z:  38, w: 9.0, h: 4.7, d: 22.0, v: 0 },
-    { x:  38, z:  52, w: 24.0, h: 4.6, d: 8.0, v: 2 },
-    { x:  31, z:  34, w: 8.0, h: 4.6, d: 20.0, v: 1 }, // 남동 미로 골목 분리 건물
-    { x:  30, z:  20, w: 10.0, h: 4.5, d: 7.0, v: 3 },
-    { x:  18, z:  46, w: 10.0, h: 4.8, d: 7.5, v: 0 }
+    { x:  60, z:  46, w: 7.5, h: 4.8, d: 24.0, v: 0 },
+    { x:  40, z:  60, w: 28.0, h: 4.8, d: 7.5, v: 2 },
+    { x:  34, z:  48, w: 18.0, h: 4.6, d: 7.5, v: 1 },
+    { x:  31, z:  32, w: 8.0, h: 4.6, d: 18.0, v: 3 },
+    { x:  30, z:  20, w: 10.0, h: 4.5, d: 7.0, v: 0 },
+    { x:  18, z:  46, w: 10.0, h: 4.8, d: 7.5, v: 2 },
+    { x:  18, z:  59, w: 11.0, h: 4.8, d: 7.5, v: 1 }
   ];
 
   cityMazeBlocks.forEach(b => {
@@ -4081,20 +4182,22 @@ function buildDenseMazeCityAndStreets() {
   );
   registerCitySolidBox(0, 8, 3.4, 3.4, 3.5, 0.25);
 
-  // 4) [스테이지 3 요청사항 5] 미로 골목 중간중간을 걸어 다니는 마을 주민(행인) 12명 배치
+  // 4) 미로 골목과 성벽 안쪽 길을 걸어 다니는 마을 행인 14명 배치
   const pedestrianRoutes = [
-    { x1: -10, z1:  8,  x2:  10, z2:   8, spd: 2.3 }, // 중앙 가로 대로 행인 1
-    { x1:  12, z1:  6,  x2: -12, z2:   6, spd: 2.1 }, // 중앙 가로 대로 행인 2
-    { x1:  -3, z1: 14,  x2:  -3, z2:  36, spd: 2.4 }, // 남북 대로 서편 행인
-    { x1:   3, z1: 36,  x2:   3, z2:  14, spd: 2.2 }, // 남북 대로 동편 행인
-    { x1: -34, z1: -6,  x2: -34, z2: -22, spd: 2.0 }, // 북서 미로 골목 행인
-    { x1:  34, z1: -6,  x2:  34, z2: -22, spd: 2.1 }, // 북동 미로 골목 행인
-    { x1: -46, z1: -20, x2: -46, z2:  -2, spd: 2.2 }, // 서쪽 외곽 골목 행인
-    { x1:  46, z1: -20, x2:  46, z2:  -2, spd: 2.2 }, // 동쪽 외곽 골목 행인
-    { x1: -23, z1: 16,  x2: -23, z2:  38, spd: 2.3 }, // 남서 상가 골목 행인
-    { x1:  24, z1: 12,  x2:  46, z2:  12, spd: 2.1 }, // 동쪽 건축가 골목 행인
-    { x1: -42, z1: 43,  x2: -24, z2:  43, spd: 2.0 }, // 남서 성문 옆 골목 행인
-    { x1:  24, z1: 43,  x2:  42, z2:  43, spd: 2.0 }  // 남동 성문 옆 골목 행인
+    { x1: -10, z1:   8, x2:  10, z2:   8, spd: 2.3 },
+    { x1:  12, z1:   6, x2: -12, z2:   6, spd: 2.1 },
+    { x1:  -3, z1:  14, x2:  -3, z2:  56, spd: 2.4 },
+    { x1:   3, z1:  56, x2:   3, z2:  14, spd: 2.2 },
+    { x1: -34, z1:  -6, x2: -34, z2: -22, spd: 2.0 },
+    { x1:  34, z1:  -6, x2:  34, z2: -22, spd: 2.1 },
+    { x1: -50, z1: -36, x2: -50, z2:  -6, spd: 2.2 },
+    { x1:  50, z1: -36, x2:  50, z2:  -6, spd: 2.2 },
+    { x1: -23, z1:  16, x2: -23, z2:  40, spd: 2.3 },
+    { x1:  24, z1:  12, x2:  50, z2:  12, spd: 2.1 },
+    { x1: -50, z1:  54, x2: -26, z2:  54, spd: 2.0 },
+    { x1:  26, z1:  54, x2:  50, z2:  54, spd: 2.0 },
+    { x1: -50, z1: -54, x2: -24, z2: -54, spd: 2.1 },
+    { x1:  24, z1: -54, x2:  50, z2: -54, spd: 2.1 }
   ];
 
   pedestrianRoutes.forEach((rt, idx) => {
@@ -4116,7 +4219,8 @@ function buildDenseMazeCityAndStreets() {
   });
 }
 
-function buildQuestBuildableStructures() {
+// [스테이지 3 요청사항 2] 남쪽 성문을 남쪽 성벽(z = mapLimit = 68)에 빈틈없이 일체형으로 부착
+function buildQuestBuildableStructures(mapLimit = 68) {
   // 1) 상인의 상가 건설 부지 (서쪽 x = -28, z = 8)
   const marketRoot = new THREE.Group();
   marketRoot.position.set(-28, 0, 8);
@@ -4165,35 +4269,39 @@ function buildQuestBuildableStructures() {
   worldGroup.add(houseRoot);
   davidCityBuildings.houseGroup = houseRoot;
 
-  // 3) 경비병의 남쪽 성문 (남쪽 x = 0, z = 46)
+  // 3) 경비병의 남쪽 대성문 -> 남쪽 성벽 라인(z = mapLimit)에 정확히 결합!
+  const gateZ = mapLimit;
   const gateRoot = new THREE.Group();
-  gateRoot.position.set(0, 0, 46);
-  const towerMat = matVoxel('#d97706', '#92400e').clone();
+  gateRoot.position.set(0, 0, gateZ);
+  const towerMat = matVoxel('#d97706', '#92400e');
   const ironMat = matDavidCached('#475569', '#1e293b');
   const goldStud = matDavidCached('#facc15');
-  const tL = createBox(6.5, 9.5, 6.5, towerMat, -7.5, 4.75, 0);
-  const tR = createBox(6.5, 9.5, 6.5, towerMat.clone(),  7.5, 4.75, 0);
-  const tTop = createBox(21.5, 2.2, 5.5, towerMat.clone(), 0, 9.8, 0);
+
+  const tL = createBox(7.2, 10.5, 6.8, towerMat.clone(), -7.6, 5.25, 0);
+  const tR = createBox(7.2, 10.5, 6.8, towerMat.clone(),  7.6, 5.25, 0);
+  const tTop = createBox(22.4, 2.4, 5.8, towerMat.clone(), 0, 10.2, 0);
   gateRoot.add(tL, tR, tTop);
   wallMeshes.push(tL, tR, tTop);
-  registerCitySolidBox(-7.5, 46, 6.5, 6.5, 9.5, 0.30);
-  registerCitySolidBox( 7.5, 46, 6.5, 6.5, 9.5, 0.30);
+  registerCitySolidBox(-7.6, gateZ, 7.2, 6.8, 10.5, 0.25);
+  registerCitySolidBox( 7.6, gateZ, 7.2, 6.8, 6.8, 10.5, 0.25);
 
+  // 고장난 성문 (비뚤어져 열려 있어 성문 밖 곧은 길이 훤히 보임)
   const brokenGate = new THREE.Group();
-  const bDoorL = createBox(3.6, 6.2, 0.5, matDavidCached('#78350f'), -2.2, 2.8, 0);
+  const bDoorL = createBox(3.6, 6.5, 0.5, matDavidCached('#78350f'), -2.4, 3.0, 0);
   bDoorL.rotation.z = -0.28;
-  const bDoorR = createBox(3.6, 5.8, 0.5, matDavidCached('#78350f'),  2.4, 2.4, 0.8);
+  const bDoorR = createBox(3.6, 6.0, 0.5, matDavidCached('#78350f'),  2.5, 2.6, 0.8);
   bDoorR.rotation.x = 0.35;
   brokenGate.add(bDoorL, bDoorR);
 
+  // 수리 완료된 철제 성문 (중앙 틈과 성문 위로 성벽 밖 곧은 길이 보임)
   const repairedGate = new THREE.Group();
   repairedGate.add(
-    createBox(3.8, 7.2, 0.65, ironMat, -3.6, 3.6, 1.8),
-    createBox(3.8, 7.2, 0.65, ironMat,  3.6, 3.6, 1.8),
-    createBox(3.2, 0.4, 0.72, goldStud, -3.6, 5.2, 1.8),
-    createBox(3.2, 0.4, 0.72, goldStud,  3.6, 5.2, 1.8),
-    createBox(3.2, 0.4, 0.72, goldStud, -3.6, 2.2, 1.8),
-    createBox(3.2, 0.4, 0.72, goldStud,  3.6, 2.2, 1.8)
+    createBox(3.8, 7.4, 0.65, ironMat, -2.1, 3.7, 0),
+    createBox(3.8, 7.4, 0.65, ironMat,  2.1, 3.7, 0),
+    createBox(3.2, 0.4, 0.72, goldStud, -2.1, 5.4, 0),
+    createBox(3.2, 0.4, 0.72, goldStud,  2.1, 5.4, 0),
+    createBox(3.2, 0.4, 0.72, goldStud, -2.1, 2.2, 0),
+    createBox(3.2, 0.4, 0.72, goldStud,  2.1, 2.2, 0)
   );
   repairedGate.visible = false;
 
@@ -4204,7 +4312,7 @@ function buildQuestBuildableStructures() {
 }
 
 // -------------------------------------------------------------------------
-// 4. 막다른 골목과 2층 옥상에 숨겨진 건축 자재 스폰 및 신하 운반 표시
+// 5. 성벽 인접 막다른 골목과 2층 옥상에 숨겨진 건축 자재 스폰 및 월드 생성
 // -------------------------------------------------------------------------
 function spawnDavidCityResourceNode(kind, x, z, baseY = 0) {
   const grp = new THREE.Group();
@@ -4296,11 +4404,19 @@ function buildDavidStage3World() {
   hideAllDavidCustomUI();
 
   scene.background = new THREE.Color(0x38bdf8);
-  scene.fog = new THREE.Fog(0xbae6fd, 85, 245);
+  scene.fog = new THREE.Fog(0xbae6fd, 95, 270);
 
   const mapLimit = 68;
   const isKinder = (currentMode === 'kinder');
   const isHard = (currentMode === 'senior' || currentMode === 'timeattack');
+
+  // 사각형 성벽 내부 전체를 걸어 다닐 수 있도록 직사각형 이동 경계 설정
+  currentMapRectBounds = {
+    minX: -mapLimit + 2.4,
+    maxX:  mapLimit - 2.4,
+    minZ: -mapLimit + 2.4,
+    maxZ:  mapLimit - 2.4
+  };
 
   davidCityNpcs = [];
   davidCityResources = [];
@@ -4319,46 +4435,47 @@ function buildDavidStage3World() {
     timeRemaining = 32.0;
   }
 
-  // [스테이지 3 요청사항 3] 도시 전체 바닥을 풀밭이 아닌 예루살렘 석조 타일 바닥 텍스처로 생성!
+  // 도시 전체 석조 바닥 및 중앙 십자 대로 (남쪽 성문 z = 68까지 일직선으로 연결)
   const cityStoneMat = new THREE.MeshLambertMaterial({ map: makeDavidCityStoneTex() });
   const royalRoadMat = matDavidCached('#e5c494', '#c29b61');
   const plazaMat = matDavidCached('#cbd5e1', '#94a3b8');
 
-  const baseGround = createBox(mapLimit * 2.5, 1, mapLimit * 2.5, cityStoneMat, 0, -0.5, 0, false);
+  const baseGround = createBox(mapLimit * 2.2, 1, mapLimit * 2.2, cityStoneMat, 0, -0.5, 0, false);
   baseGround.receiveShadow = true;
   worldGroup.add(baseGround);
 
-  // 중앙 십자 왕의 대로 및 중앙 분수 광장 포인트 타일
   worldGroup.add(
-    createBox(7.8, 0.06, 112, royalRoadMat, 0, 0.03, 0, false),
-    createBox(106, 0.06, 7.2, royalRoadMat, 0, 0.03, 8, false),
+    createBox(8.2, 0.06, mapLimit * 2, royalRoadMat, 0, 0.03, 0, false),
+    createBox(mapLimit * 2, 0.06, 7.4, royalRoadMat, 0, 0.03, 8, false),
     createBox(22, 0.08, 18, plazaMat, 0, 0.04, 8, false)
   );
 
-  // 도시 외곽 성벽 테두리
-  buildGrassAndTreeBorders(mapLimit, false);
+  // [스테이지 3 요청사항 1·2·3·4] 외곽 숲 대신 사방 성벽 + 성문 밖 곧은 길 + 성벽 코앞까지 확장된 건물 미로 생성
+  buildDavidCastleWallPerimeter(mapLimit, true);
   buildDavidCityPalace(0, -14);
   buildDavidCityTabernacle(0, -50);
   buildDenseMazeCityAndStreets();
-  buildQuestBuildableStructures();
+  buildQuestBuildableStructures(mapLimit);
 
-  // 건물 미로의 막다른 골목(Cul-de-sac)과 2층 건물 옥상(baseY = 3.6)에 숨겨진 건축 자재 배치
+  // 성벽 근처 골목과 2층 옥상(baseY = 3.6)에 숨겨진 건축 자재 배치
   // 1) 나무 자재 (🪵)
   [
     [-40.5, -24.5, 3.6], // 북서 2층 집 옥상
     [ 40.5, -24.5, 3.6], // 북동 2층 집 옥상
-    [-35.0, -42.0, 0.0], // 북서 건물 미로 막다른 골목 안쪽
-    [ 35.0, -42.0, 0.0], // 북동 건물 미로 막다른 골목 안쪽
-    [-46.0, -24.0, 0.0], // 북서 서편 골목
-    [ 46.0, -24.0, 0.0]  // 북동 동편 골목
+    [-52.5, -46.5, 3.6], // 북서 성벽 근처 2층 집 옥상
+    [-44.0, -54.0, 0.0], // 북서 성벽 바로 앞 막다른 골목
+    [ 44.0, -54.0, 0.0], // 북동 성벽 바로 앞 막다른 골목
+    [-52.0, -24.0, 0.0], // 서쪽 성벽 안쪽 미로 골목
+    [ 52.0, -24.0, 0.0]  // 동쪽 성벽 안쪽 미로 골목
   ].forEach(([wx, wz, wy]) => spawnDavidCityResourceNode('wood', wx, wz, wy));
 
   // 2) 돌 자재 (🪨)
   [
     [ 40.5,  23.5, 3.6], // 남동 2층 집 옥상
     [ 18.5,  31.5, 3.6], // 남동 광장 2층 집 옥상
-    [ 40.0,  38.0, 0.0], // 남동 건물 미로 막다른 골목 안쪽
-    [ 46.0,   8.0, 0.0], // 동쪽 외곽 미로 골목
+    [ 52.5,  49.5, 3.6], // 남동 성벽 근처 2층 집 옥상
+    [ 46.0,  54.0, 0.0], // 남동 성벽 바로 앞 막다른 골목
+    [ 52.0,  14.0, 0.0], // 동쪽 성벽 안쪽 미로 골목
     [ 24.0,  26.0, 0.0]  // 남동 골목 교차점
   ].forEach(([sx, sz, sy]) => spawnDavidCityResourceNode('stone', sx, sz, sy));
 
@@ -4366,12 +4483,11 @@ function buildDavidStage3World() {
   [
     [-40.5,  23.5, 3.6], // 남서 2층 집 옥상
     [-18.5, -32.5, 3.6], // 성막 서쪽 2층 집 옥상
-    [-40.0,  38.0, 0.0], // 남서 건물 미로 막다른 골목 안쪽
-    [-46.0,   8.0, 0.0], // 서쪽 외곽 미로 골목
+    [-46.0,  54.0, 0.0], // 남서 성벽 바로 앞 막다른 골목
+    [-52.0,  14.0, 0.0], // 서쪽 성벽 안쪽 미로 골목
     [-24.0,  26.0, 0.0]  // 남서 골목 교차점
   ].forEach(([ix, iz, iy]) => spawnDavidCityResourceNode('iron', ix, iz, iy));
 
-  // 퀘스트 인물 4명 배치 (autoPromptedInZone 플래그로 말풍선 이중 팝업 방지)
   const reqWood1 = isKinder ? 1 : 2;
   const reqStone2 = isKinder ? 1 : (isHard ? 2 : 1);
   const reqWood2 = isKinder ? 1 : (isHard ? 2 : 1);
@@ -4395,17 +4511,17 @@ function buildDavidStage3World() {
       pitch: 0.92,
       beaconColor: 0x38bdf8,
       req: { wood: reqWood2, stone: reqStone2, iron: 0 },
-      questLine: `"왕이시여, 집을 지어야 하는데 돌과 나무가 필요합니다! 건물 골목 사이에 숨겨진 돌 ${reqStone2}개와 나무 ${reqWood2}개를 찾아주시옵소서!"`,
+      questLine: `"왕이시여, 집을 지어야 하는데 돌과 나무가 필요합니다! 성벽 근처 골목과 옥상에 숨겨진 돌 ${reqStone2}개와 나무 ${reqWood2}개를 찾아주시옵소서!"`,
       thanksLine: `"찬양받으소서 다윗 왕이시여! 튼튼한 돌과 나무 덕분에 백성들의 집이 완성되었습니다!"`
     },
     {
       id: 'guard',
       roleTitle: '🛡️ 경비병',
-      x: -4.5, z: 41.0,
+      x: -4.5, z: mapLimit - 6.5, // 남쪽 성벽에 붙은 성문 바로 앞(z = 61.5)에 배치
       pitch: 0.78,
       beaconColor: 0xf97316,
       req: { wood: 0, stone: 0, iron: reqIron3 },
-      questLine: `"왕이시여, 성문이 고장나 성문을 고쳐야 합니다. 철이 필요합니다! 막다른 골목과 2층 옥상에서 철 ${reqIron3}개를 갖다주시옵소서!"`,
+      questLine: `"왕이시여, 성벽 대성문이 고장나 성문을 고쳐야 합니다. 철이 필요합니다! 성벽 골목과 2층 옥상에서 철 ${reqIron3}개를 갖다주시옵소서!"`,
       thanksLine: `"충성! 왕께서 가져다주신 철로 다윗성의 남쪽 대성문을 완벽히 고쳤습니다!"`
     },
     {
@@ -4503,7 +4619,7 @@ function buildDavidStage3World() {
   if (guideArrowGroup) guideArrowGroup.visible = (currentMode !== 'senior');
   snapCameraToPlayer();
   updateStageHUD();
-  showToast('👑 신하 2명과 함께 다윗성의 건물 미로와 상가 골목, 2층 옥상을 탐험하며 백성들을 도와주세요!');
+  showToast('👑 성벽으로 둘러싸인 다윗성의 건물 미로와 2층 옥상을 탐험하며 백성들을 도와주세요!');
 }
 // =========================================================================
 // [ep3_david.js - 파트 5/5] 에피소드 3 : 스테이지 3 진행 로직, 빈 왕좌 메시아 성경절 엔딩 및 플러그인 통합 등록
