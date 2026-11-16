@@ -1265,9 +1265,9 @@ function buildDavidStage1World() {
   showToast('🐑 언덕 위 초원에서 바위 뒤에 숨어 있는 양 5마리를 찾아 목초지로 데려오세요!');
 }
 // =========================================================================
-// [ep3_david.js - 파트 2/4] 에피소드 3 : 스테이지 1 진행 로직
-// - 먹이를 먹은 양 머리 위 3D 복셀 하트(❤️) 떠오름 연출 & 먹이 미션 안내문 교체
-// - 바위·나무 끼임 및 흔들림을 원천 차단하는 연속 접선 슬라이딩 & 체인 추종 물리 엔진
+// [ep3_david.js - 파트 2/5] 에피소드 3 : 스테이지 1 진행 로직
+// - 디펜스 시작 시 '양 배부름 상태' 게이지 즉시 숨김 처리
+// - 먹이를 먹은 양 머리 위 3D 복셀 하트(❤️) 연출 & 바위·나무 연속 접선 슬라이딩 추종 물리
 // - 사각형 반투명 울타리(흙담 7 -> 나무담 7 -> 돌담 7) 점프 넘기 및 맹수 교차 디펜스
 // =========================================================================
 
@@ -1363,7 +1363,6 @@ function syncDavidWallTierCounts() {
   }
 }
 
-// 언덕 위(Y = DAVID_HILL_TOP_Y) 사각형 울타리 7구간 렌더링 및 점프 플랫폼 높이 동기화
 function rebuildDavidDefenseWallMesh() {
   if (!davidWallGroup) return;
   while (davidWallGroup.children.length > 0) davidWallGroup.remove(davidWallGroup.children[0]);
@@ -1423,7 +1422,7 @@ function rebuildDavidDefenseWallMesh() {
   }
 }
 
-// [스테이지 1 요청사항 2] 양 머리 위로 떠오르는 귀여운 3D 복셀 하트(❤️) 메쉬 생성
+// 양 머리 위로 떠오르는 3D 복셀 하트(❤️) 메쉬 생성
 function createFloatingHeartMesh(isPink = false) {
   const g = new THREE.Group();
   const hMat = new THREE.MeshBasicMaterial({ color: isPink ? 0xfb7185 : 0xf43f5e });
@@ -1439,7 +1438,6 @@ function createFloatingHeartMesh(isPink = false) {
   return g;
 }
 
-// 먹이를 줄 때 양 머리 위로 3D 하트가 떠오르고 양들이 기뻐하며 먹는 연출
 function triggerSheepHappyEatingEffect() {
   davidSheepEatingAnimTimer = 2.5;
   playSheepBaaSound(1.08, 0.09);
@@ -1453,7 +1451,6 @@ function triggerSheepHappyEatingEffect() {
   ];
 
   allActiveSheep.forEach((pos, idx) => {
-    // 1) 양 머리 위로 떠오르는 3D 하트 생성
     const heartMesh = createFloatingHeartMesh(idx % 2 === 1);
     heartMesh.position.set(pos.x, DAVID_HILL_TOP_Y + 1.45 + (idx % 3) * 0.12, pos.z);
     worldGroup.add(heartMesh);
@@ -1467,7 +1464,6 @@ function triggerSheepHappyEatingEffect() {
       maxLife: 1.65
     });
 
-    // 2) 입 주변 초록 풀잎 조각 파티클
     const leafMat = new THREE.MeshBasicMaterial({ color: idx % 2 === 0 ? 0x4ade80 : 0x22c55e });
     const leafMesh = createBox(0.18, 0.18, 0.18, leafMat, pos.x, DAVID_HILL_TOP_Y + 0.85, pos.z + 0.32, false);
     worldGroup.add(leafMesh);
@@ -1483,7 +1479,6 @@ function triggerSheepHappyEatingEffect() {
   });
 }
 
-// 담장이 없는 쪽으로 맹수가 침입했을 때 양 1마리가 사라지는 효과
 function loseOneSheepByPredator(predatorTitle) {
   let targetMesh = null;
   const availableRescued = davidSheepList.filter(s => s.state === 'penned' && !s.lost);
@@ -1560,7 +1555,7 @@ function getFenceSectionIndexAtPos(x, z) {
 }
 
 // -------------------------------------------------------------------------
-// [스테이지 1 요청사항 3] 바위·나무에 절대 끼이거나 흔들리지 않는 연속 접선 슬라이딩 추종 물리
+// 바위·나무에 끼이거나 흔들리지 않는 연속 접선 슬라이딩 추종 물리
 // -------------------------------------------------------------------------
 function getDavidStage1ObstacleBoxes() {
   const list = [];
@@ -1575,7 +1570,6 @@ function getDavidStage1ObstacleBoxes() {
   return list;
 }
 
-// 양의 원형 반경(r = 0.45)이 바위나 나무 박스와 겹치면 즉시 바깥으로 밀어내고 접선 방향 벡터를 반환
 function resolveSheepObstaclePushOut(x, z, radius = 0.46) {
   let nx = x;
   let nz = z;
@@ -1591,9 +1585,9 @@ function resolveSheepObstaclePushOut(x, z, radius = 0.46) {
       }
       const clampedX = Math.max(b.minX, Math.min(b.maxX, nx));
       const clampedZ = Math.max(b.minZ, Math.min(b.maxZ, nz));
-      let dx = nx - clampedX;
-      let dz = nz - clampedZ;
-      let dist = Math.hypot(dx, dz);
+      const dx = nx - clampedX;
+      const dz = nz - clampedZ;
+      const dist = Math.hypot(dx, dz);
 
       if (dist < radius) {
         touched = true;
@@ -1606,7 +1600,6 @@ function resolveSheepObstaclePushOut(x, z, radius = 0.46) {
           avgNormalX += ux;
           avgNormalZ += uz;
         } else {
-          // 박스 내부 중심에 걸쳤을 경우 가장 가까운 모서리 바깥으로 즉시 탈출
           const cx = (b.minX + b.maxX) * 0.5;
           const cz = (b.minZ + b.maxZ) * 0.5;
           const outAng = Math.atan2(nx - cx, nz - cz);
@@ -1622,7 +1615,6 @@ function resolveSheepObstaclePushOut(x, z, radius = 0.46) {
 }
 
 function moveDavidFollowingSheepSafely(sh, fIdx, dt, now) {
-  // 선두 양(fIdx === 0)은 과거 발자국이 아니라 다윗의 현재 위치를 직접 따라가고, 뒤따르는 양은 바로 앞 양을 따라감!
   const leaderPos = (fIdx === 0) ? playerPos : davidFollowingSheep[fIdx - 1].group.position;
   const keepDist = (fIdx === 0) ? 1.55 : 1.35;
 
@@ -1640,13 +1632,12 @@ function moveDavidFollowingSheepSafely(sh, fIdx, dt, now) {
 
   const moveSpd = Math.min(11.5, Math.max(7.2, (dist - keepDist) * 5.2));
   const stepDist = Math.min(dist - keepDist + 0.05, moveSpd * dt);
-  let dirX = dx / dist;
-  let dirZ = dz / dist;
+  const dirX = dx / dist;
+  const dirZ = dz / dist;
 
   const orbit = sh.orbitSign || 1;
   const boxes = getDavidStage1ObstacleBoxes();
 
-  // 전방 1.4m 내에 바위나 나무가 있으면 미리 일정한 접선 방향(orbit)으로 부드럽게 회전력을 더해 우회
   let avoidX = 0;
   let avoidZ = 0;
   const probeX = curX + dirX * 1.1;
@@ -1664,7 +1655,6 @@ function moveDavidFollowingSheepSafely(sh, fIdx, dt, now) {
       const len = Math.hypot(fromObsX, fromObsZ) || 1;
       const nx = fromObsX / len;
       const nz = fromObsZ / len;
-      // 바위 바깥 법선(nx, nz)과 접선(-nz * orbit, nx * orbit)을 합성하여 바위 둘레를 미끄러지듯 회전
       avoidX += nx * 0.7 + (-nz * orbit) * 1.35;
       avoidZ += nz * 0.7 + ( nx * orbit) * 1.35;
     }
@@ -1679,7 +1669,6 @@ function moveDavidFollowingSheepSafely(sh, fIdx, dt, now) {
   let nextX = curX + moveX * stepDist;
   let nextZ = curZ + moveZ * stepDist;
 
-  // 이동 후 바위/나무와 겹쳤다면 즉시 경계 밖으로 밀어내고 접선 슬라이딩 보정
   const resolved = resolveSheepObstaclePushOut(nextX, nextZ, 0.46);
   nextX = resolved.x;
   nextZ = resolved.z;
@@ -1696,7 +1685,6 @@ function moveDavidFollowingSheepSafely(sh, fIdx, dt, now) {
   sh.group.position.x = nextX;
   sh.group.position.z = nextZ;
 
-  // 실제 이동한 변위가 충분할 때만 회전각을 부드럽게 보간하여 제자리 떨림 원천 차단
   const actualDx = nextX - curX;
   const actualDz = nextZ - curZ;
   if (Math.hypot(actualDx, actualDz) > 0.015) {
@@ -1756,6 +1744,7 @@ function spawnDavidWallUpgradeMaterials() {
   }
 }
 
+// [스테이지 1 요청사항 1] 디펜스가 시작되면(defend_sheep) '양 배부름 상태' 게이지 행(#david-hunger-row)을 숨김!
 function updateDavidStage1UI() {
   ensureDavidCustomUI();
   const st1Panel = document.getElementById('david-st1-panel');
@@ -1777,12 +1766,11 @@ function updateDavidStage1UI() {
   }
 
   st1Panel.classList.remove('hidden');
-  if (hungerRow) hungerRow.classList.remove('hidden');
-  hungerText.textContent = `${Math.round(davidHungerGauge)}%`;
-  hungerBar.style.width = `${Math.min(100, Math.round(davidHungerGauge))}%`;
 
   if (davidStage1Phase === 'defend_sheep') {
-    defRow.classList.remove('hidden');
+    // 디펜스 단계에서는 배부름 상태를 숨기고 디펜스 타이머·상태만 표시
+    if (hungerRow) hungerRow.classList.add('hidden');
+    defRow.classList.remove('hidden', 'border-t', 'pt-1');
     defRow.classList.add('flex');
     defTimer.textContent = `${Math.max(0, davidDefenseTimer).toFixed(1)}초`;
     if (lossBadge) {
@@ -1792,12 +1780,15 @@ function updateDavidStage1UI() {
         : 'text-[11px] font-bold text-amber-200 text-center';
     }
   } else {
+    // 먹이 주기 단계에서는 배부름 상태 게이지만 표시
+    if (hungerRow) hungerRow.classList.remove('hidden');
+    hungerText.textContent = `${Math.round(davidHungerGauge)}%`;
+    hungerBar.style.width = `${Math.min(100, Math.round(davidHungerGauge))}%`;
     defRow.classList.add('hidden');
     defRow.classList.remove('flex');
   }
 }
 
-// [스테이지 1 요청사항 4] 먹이 미션 안내문을 '주변에서 먹이를 찾아 양을 배부르게 해주세요!'로 교체
 function startDavidStage1FeedPhase() {
   davidStage1Phase = 'feed_sheep';
   davidHungerGauge = 0;
@@ -1919,7 +1910,6 @@ function isNearDavidRectangularFence(x, z, pad = 2.6) {
 function performDavidStage1Action() {
   if (davidActionCooldown > 0) return;
 
-  // 1) 디펜스 중 접근한 맹수를 다윗이 지팡이로 직접 쫓아내기
   if (davidStage1Phase === 'defend_sheep') {
     let hitCnt = 0;
     davidPredators.forEach((pr, idx) => {
@@ -1947,7 +1937,6 @@ function performDavidStage1Action() {
     }
   }
 
-  // 2) 디펜스 중 자재를 들고 사각형 반투명 울타리에 다가가 담 쌓기 (흙담 7 -> 나무담 7 -> 돌담 7)
   if (davidStage1Phase === 'defend_sheep' && davidHeldWallMat > 0 && davidWallTier < davidMaxWallTier) {
     if (isNearDavidRectangularFence(playerPos.x, playerPos.z, 3.0)) {
       const targetTier = davidWallTier + 1;
@@ -2005,7 +1994,6 @@ function performDavidStage1Action() {
     }
   }
 
-  // 3) 먹이 주기 단계에서 사각형 목초지 양들에게 먹이 급여 (양 머리 위 하트 떠오름 & 배부름 상승)
   if (davidStage1Phase === 'feed_sheep' && davidHeldFeed > 0) {
     if (isNearDavidRectangularFence(playerPos.x, playerPos.z, 2.2)) {
       const perFeed = (currentMode === 'kinder') ? 34 : 20;
@@ -2050,7 +2038,6 @@ function updateDavidStage1Frame(dt, now) {
   if (davidSheepEatingAnimTimer > 0) davidSheepEatingAnimTimer -= dt;
   updateDavidStage1UI();
 
-  // 목초지나 양 근처에 있을 때 평화로운 양 울음소리("매에~") 주기적 재생
   davidAmbientBaaTimer -= dt;
   if (davidAmbientBaaTimer <= 0 && davidStage1Phase !== 'go_home') {
     davidAmbientBaaTimer = 5.5 + Math.random() * 4.0;
@@ -2080,7 +2067,6 @@ function updateDavidStage1Frame(dt, now) {
     }
   });
 
-  // 먹이 줄 때 양 머리 위로 떠오르는 3D 하트 & 풀잎 파티클 애니메이션
   for (let i = davidSheepEatParticles.length - 1; i >= 0; i--) {
     const pt = davidSheepEatParticles[i];
     pt.timer += dt;
@@ -2135,7 +2121,7 @@ function updateDavidStage1Frame(dt, now) {
     if (davidStaffWaveTimer <= 0) davidStaffWaveMesh.visible = false;
   }
 
-  // 1) 바위 뒤에 숨어 있는 양 5마리 탐색 및 발견 시 체인 추종 시작
+  // 1) 바위 뒤에 숨어 있는 양 5마리 탐색 및 체인 추종
   let nearestTarget = null, minTargetDist = 999;
   davidSheepList.forEach((sh, idx) => {
     if (sh.lost) return;
@@ -2176,14 +2162,12 @@ function updateDavidStage1Frame(dt, now) {
     }
   });
 
-  // 따라오는 양들이 바위·나무에 절대 끼이거나 떨리지 않고 부드럽게 미끄러져 이동
   for (let fIdx = 0; fIdx < davidFollowingSheep.length; fIdx++) {
     const sh = davidFollowingSheep[fIdx];
     moveDavidFollowingSheepSafely(sh, fIdx, dt, now);
     updateWorldLabelPos(sh.label, sh.group.position, true);
   }
 
-  // 다윗이 목초지에 도착하면 따라오던 양들을 목초지 안으로 합류
   if (davidFollowingSheep.length > 0 && isNearDavidRectangularFence(playerPos.x, playerPos.z, 0.8)) {
     while (davidFollowingSheep.length > 0) {
       const sh = davidFollowingSheep.shift();
@@ -2209,7 +2193,7 @@ function updateDavidStage1Frame(dt, now) {
     }
   }
 
-  // 2) 먹이 주기 단계 업데이트 (양 배부름 상태)
+  // 2) 먹이 주기 단계 업데이트
   if (davidStage1Phase === 'feed_sheep') {
     davidFeedItems.forEach(fi => {
       if (fi.collected) return;
@@ -2237,7 +2221,7 @@ function updateDavidStage1Frame(dt, now) {
     });
   }
 
-  // 3) 맹수 교차 디펜스 & 사각형 반투명 울타리(흙 7개 -> 나무 7개 -> 돌 7개) 시공 업데이트
+  // 3) 맹수 교차 디펜스 & 사각형 반투명 울타리 시공 업데이트
   let nearestThreat = null, minThreatDist = 999;
   if (davidStage1Phase === 'defend_sheep') {
     davidDefenseTimer -= dt;
@@ -2390,7 +2374,6 @@ function updateDavidStage1Frame(dt, now) {
       }
     });
 
-    // 디펜스 제한시간 승리 -> 언덕 아래 다윗의 집으로 내려가는 오솔길 개방!
     if (davidDefenseTimer <= 0 && isPlaying) {
       davidStage1Phase = 'go_home';
       davidHeldWallMat = 0;
@@ -2453,7 +2436,7 @@ function updateDavidStage1Frame(dt, now) {
     updateWorldLabelPos(davidCampLabel, davidCampCenter, dCamp < 30);
   }
 
-  // 5) 언덕 아래 집 사무엘 선지자 조우 및 내리막 오솔길 가이드 화살표
+  // 5) 언덕 아래 집 사무엘 선지자 조우 및 가이드 화살표
   if (targetObject && !targetObject.triggered) {
     const td = Math.hypot(playerPos.x - targetObject.pos.x, playerPos.z - targetObject.pos.z);
     updateWorldLabelPos(targetObject.label, targetObject.pos, davidStage1Phase === 'go_home' && td < 55);
