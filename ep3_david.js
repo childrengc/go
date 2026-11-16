@@ -4622,14 +4622,14 @@ function buildDavidStage3World() {
   showToast('👑 성벽으로 둘러싸인 다윗성의 건물 미로와 2층 옥상을 탐험하며 백성들을 도와주세요!');
 }
 // =========================================================================
-// [ep3_david.js - 파트 5/5] 에피소드 3 : 스테이지 3 진행 로직, 빈 왕좌 메시아 성경절 엔딩 및 플러그인 통합 등록
-// - NPC 말풍선 이중 팝업 방지(autoPromptedInZone), "해결해주겠네" 응답 버튼, 하늘 원통 빛기둥 제어
-// - 건물 끼임 즉시 탈출(resolvePlayerOutOfCityBuildings), 상가 상인 및 골목 행인 12명 보행 애니메이션
-// - 신하 2명 추종 및 자재 챙기기 모션, 빈 왕좌 등극 -> 메시아 성경절 모달 -> 인증서 오픈
+// [ep3_david.js - 파트 5/5] 에피소드 3 : 스테이지 3 진행 로직, 성벽 엔딩 및 플러그인 통합 등록
+// - NPC 말풍선 2번 뜨는 오류 수정 (autoPromptedInZone 영역 잠금 및 타이핑 타이머 단일화)
+// - 건물 내부 갇힘 실시간 탈출(resolvePlayerOutOfCityBuildings), 상가 주인·골목 행인·신하 2명 AI
+// - 엔딩: 사방 성벽 외곽 + 빈 왕좌 화살표 안내 -> 왕좌 착석 -> 메시아 성경절 모달 -> 인증서 오픈
 // =========================================================================
 
 // -------------------------------------------------------------------------
-// 1. 동물의 숲 말풍선 대화창(중복 팝업 방지 & "해결해주겠네") 및 퀘스트 완료 처리
+// 1. 동물의 숲 말풍선 대화창(중복 오픈 방지 & "해결해주겠네") 및 퀘스트 완료 처리
 // -------------------------------------------------------------------------
 function openDavidNpcDialog(npc) {
   ensureDavidCustomUI();
@@ -4639,7 +4639,7 @@ function openDavidNpcDialog(npc) {
   const btnEl = document.getElementById('david-npc-action-btn');
   if (!dlg || !npc) return;
 
-  // 이미 대화창이 열려 있으면 중복 실행 차단
+  // 이미 대화창이 열려 있으면 중복 호출 무시
   if (!dlg.classList.contains('hidden')) return;
 
   davidDialogTargetNpc = npc;
@@ -4652,12 +4652,12 @@ function openDavidNpcDialog(npc) {
 
   if (npc.id === 'herald') {
     const allThreeDone = davidCityNpcs.filter(n => n.id !== 'herald').every(n => n.completed);
+    npc.started = true;
     if (allThreeDone) {
       fullLine = npc.thanksLine;
       btnEl.textContent = '✨ 선지자님께 가겠네!';
       canCompleteNow = true;
     } else {
-      npc.started = true;
       fullLine = npc.questLine;
       btnEl.textContent = '해결해주겠네';
     }
@@ -4671,6 +4671,7 @@ function openDavidNpcDialog(npc) {
       davidInventory.stone >= npc.req.stone &&
       davidInventory.iron >= npc.req.iron;
 
+    npc._hadEnoughWhenOpened = hasEnough;
     if (hasEnough) {
       fullLine = npc.thanksLine;
       btnEl.textContent = '🔨 자재 건네주고 완성하기!';
@@ -4703,14 +4704,14 @@ window.confirmDavidNpcDialog = function () {
   if (dlg) dlg.classList.add('hidden');
   if (animaleseTimer) { clearInterval(animaleseTimer); animaleseTimer = null; }
 
-  davidNpcAutoDialogCooldown = 1.2;
+  davidNpcAutoDialogCooldown = 1.5;
 
   const npc = davidDialogTargetNpc;
   davidDialogTargetNpc = null;
   if (!npc) return;
   if (npc._typingTimer) { clearInterval(npc._typingTimer); npc._typingTimer = null; }
 
-  // 대화를 마친 뒤에는 해당 NPC 영역을 떠났다 다시 오기 전까지 자동 팝업되지 않도록 고정
+  // 대화창을 닫은 직후 같은 자리에서 다시 열리지 않도록 잠금 유지
   npc.autoPromptedInZone = true;
 
   if (npc._pendingComplete) {
@@ -4756,7 +4757,7 @@ window.confirmDavidNpcDialog = function () {
     } else if (npc.id === 'guard' && davidCityBuildings.gateGroup) {
       davidCityBuildings.gateGroup.userData.brokenGate.visible = false;
       davidCityBuildings.gateGroup.userData.repairedGate.visible = true;
-      showToast('🛡️ 고장났던 다윗성 남쪽 성문이 철로 단단히 수리되었습니다!');
+      showToast('🛡️ 고장났던 다윗성 남쪽 대성문이 철로 단단히 수리되었습니다!');
     }
 
     const doneCount = davidCityNpcs.filter(n => n.id !== 'herald' && n.completed).length;
@@ -4781,7 +4782,7 @@ function updateDavidStage3HUD(badge, countIcon, countText, missionText) {
   countText.textContent = davidProphetUnlocked ? '선지자 방문' : `민원 ${doneCount}/3 완료`;
   missionText.textContent = davidProphetUnlocked
     ? '북쪽 언약의 성막 앞으로 가서 선지자를 통해 하나님의 영원한 언약을 들으세요!'
-    : '하늘까지 솟은 빛기둥을 보고 상인·건축가·경비병을 만나 미로 골목과 2층 옥상의 자재를 찾아주세요!';
+    : '하늘까지 솟은 빛기둥을 보고 상인·건축가·경비병을 만나 건물 미로와 2층 옥상의 자재를 찾아주세요!';
 }
 
 function triggerDavidStage3Action(targetObj) {
@@ -4795,26 +4796,43 @@ function triggerDavidStage3Action(targetObj) {
 }
 
 // -------------------------------------------------------------------------
-// 2. 상가 건물 내부 상인 & 미로 골목 행인 12명 애니메이션 + 신하 2명 자재 수집
+// 2. 상가 건물 내부 주인(8명), 골목길 행인(14명), 신하(2명) 및 자재 수집 업데이트
 // -------------------------------------------------------------------------
 function updateCityShopkeepersAndPedestrians(dt, now) {
-  // 1) 상가 건물 안쪽에서 손님을 맞이하는 상점 주인들 모션
-  davidCityShopkeepers.forEach(sk => {
+  // 1) 상가 건물 안에 있는 상점 주인들의 손님맞이 모션
+  davidCityShopkeepers.forEach((sk) => {
     const u = sk.mesh.userData;
     if (u && u.lArm && u.rArm) {
       const w = Math.sin(now * 0.005 + sk.phase) * 0.32;
-      u.lArm.rotation.x = -0.45 + w;
-      u.rArm.rotation.x = -0.45 - w;
+      u.lArm.rotation.x = -0.5 + w;
+      u.rArm.rotation.x = -0.5 - w;
     }
   });
 
-  // 2) 골목 중간중간을 걸어 다니는 마을 주민(행인) 12명 왕복 보행 모션
+  // 2) 미로 골목 사이사이를 걸어 다니는 마을 행인 이동 및 인사 모션
   davidCityPedestrians.forEach((ped, idx) => {
+    const u = ped.mesh.userData;
+    const dToKing = Math.hypot(playerPos.x - ped.mesh.position.x, playerPos.z - ped.mesh.position.z);
+
+    // 다윗왕이 바로 옆(2.3m 이내)을 지나가면 걸음을 멈추고 왕을 향해 인사
+    if (dToKing < 2.3 && Math.abs(playerPos.y) < 1.0) {
+      const toKingAng = Math.atan2(playerPos.x - ped.mesh.position.x, playerPos.z - ped.mesh.position.z);
+      ped.heading = lerpAngle(ped.heading, toKingAng, dt * 10);
+      ped.mesh.rotation.y = ped.heading;
+      if (u) {
+        if (u.lLeg) u.lLeg.rotation.x = 0;
+        if (u.rLeg) u.rLeg.rotation.x = 0;
+        if (u.lArm) u.lArm.rotation.x = -0.85;
+        if (u.rArm) u.rArm.rotation.x = -0.85;
+      }
+      return;
+    }
+
     const dx = ped.targetX - ped.mesh.position.x;
     const dz = ped.targetZ - ped.mesh.position.z;
     const dist = Math.hypot(dx, dz);
 
-    if (dist < 0.35) {
+    if (dist < 0.45) {
       ped.forward = !ped.forward;
       ped.targetX = ped.forward ? ped.x2 : ped.x1;
       ped.targetZ = ped.forward ? ped.z2 : ped.z1;
@@ -4822,28 +4840,21 @@ function updateCityShopkeepersAndPedestrians(dt, now) {
       const step = Math.min(dist, ped.speed * dt);
       ped.mesh.position.x += (dx / dist) * step;
       ped.mesh.position.z += (dz / dist) * step;
-      ped.heading = lerpAngle(ped.heading, Math.atan2(dx, dz), dt * 8.0);
+      ped.heading = lerpAngle(ped.heading, Math.atan2(dx, dz), dt * 8);
       ped.mesh.rotation.y = ped.heading;
-    }
 
-    const u = ped.mesh.userData;
-    const swing = Math.sin(now * 0.012 + ped.phase) * 0.55;
-    if (u) {
-      if (u.lLeg && u.rLeg) {
-        u.lLeg.rotation.x = swing;
-        u.rLeg.rotation.x = -swing;
-      }
-      if (u.lArm && u.rArm) {
-        u.lArm.rotation.x = -swing * 0.65;
-        u.rArm.rotation.x = swing * 0.65;
+      const swing = Math.sin(now * 0.014 + ped.phase + idx) * 0.55;
+      if (u) {
+        if (u.lLeg) u.lLeg.rotation.x = swing;
+        if (u.rLeg) u.rLeg.rotation.x = -swing;
+        if (u.lArm) u.lArm.rotation.x = -swing * 0.65;
+        if (u.rArm) u.rArm.rotation.x = swing * 0.65;
       }
     }
-    ped.mesh.position.y = Math.abs(Math.sin(now * 0.012 + ped.phase)) * 0.08;
   });
 }
 
 function updateDavidRetainersAndResources(dt, now) {
-  // 1) 미로 골목 및 2층 옥상의 자재 확인 & 다윗이 가까워지면 신하가 달려가서 챙김
   davidCityResources.forEach((res, idx) => {
     if (res.collected) {
       res.respawnTimer -= dt;
@@ -4895,6 +4906,20 @@ function updateDavidRetainersAndResources(dt, now) {
 
         davidInventory[res.kind] = (davidInventory[res.kind] || 0) + 1;
         updateDavidStage3InventoryHUD();
+
+        // 자재를 새로 획득했을 때 조건을 충족한 NPC의 자동 대화 잠금을 해제하여 돌아갔을 때 바로 완료 대화가 뜨게 함
+        davidCityNpcs.forEach(npc => {
+          if (npc.req && !npc.completed) {
+            const nowEnough =
+              davidInventory.wood >= npc.req.wood &&
+              davidInventory.stone >= npc.req.stone &&
+              davidInventory.iron >= npc.req.iron;
+            if (nowEnough && !npc._hadEnoughWhenOpened) {
+              npc.autoPromptedInZone = false;
+            }
+          }
+        });
+
         playSfx('rescue');
         if (currentMode === 'timeattack') timeRemaining += 3.0;
         const retName = ret ? ret.name : '신하';
@@ -4903,7 +4928,6 @@ function updateDavidRetainersAndResources(dt, now) {
     }
   });
 
-  // 2) 신하 2명의 이동 및 팔·다리 모션 업데이트
   davidRetainers.forEach((ret, rIdx) => {
     const u = ret.mesh.userData;
     let targetX, targetY, targetZ;
@@ -4984,18 +5008,13 @@ function updateDavidRetainersAndResources(dt, now) {
 function updateDavidStage3Frame(dt, now) {
   if (davidNpcAutoDialogCooldown > 0) davidNpcAutoDialogCooldown -= dt;
 
-  // 1) 캐릭터가 건물 내부로 들어가지 않도록 실시간 밀어내기 보호
-  if (typeof resolvePlayerOutOfCityBuildings === 'function') {
-    resolvePlayerOutOfCityBuildings();
-  }
+  // 건물 내부 끼임·갇힘 실시간 방어
+  resolvePlayerOutOfCityBuildings();
 
-  // 2) 상가 내부 상인 & 골목 행인 애니메이션 업데이트
+  // 신하 2명, 상가 주인 8명, 미로 골목 행인 14명 업데이트
+  updateDavidRetainersAndResources(dt, now);
   updateCityShopkeepersAndPedestrians(dt, now);
 
-  // 3) 신하 2명 추종 및 자재 챙기기 모션 업데이트
-  updateDavidRetainersAndResources(dt, now);
-
-  // 4) NPC 4명의 하늘 원통 빛기둥 맥동 및 NPC 앞 접근 시 1회 자동 대화 오픈
   const dlgEl = document.getElementById('david-npc-dialog');
   const isDialogHidden = (!dlgEl || dlgEl.classList.contains('hidden'));
 
@@ -5017,8 +5036,8 @@ function updateDavidStage3Frame(dt, now) {
     const d = Math.hypot(playerPos.x - npc.pos.x, playerPos.z - npc.pos.z);
     updateWorldLabelPos(npc.label, npc.pos, d < 32);
 
-    // 캐릭터가 NPC 반경 4.5m 밖으로 벗어나면 다음에 다가왔을 때 다시 자동 대화가 열릴 수 있도록 플래그 초기화
-    if (d > 4.5) {
+    // 다윗이 NPC 앞을 벗어나면(d > 4.8m) 다음 방문 시 자동 대화가 가능하도록 플래그 초기화
+    if (d > 4.8) {
       npc.autoPromptedInZone = false;
     }
 
@@ -5027,9 +5046,9 @@ function updateDavidStage3Frame(dt, now) {
       davidActiveNearNpc = npc;
     }
 
-    // NPC 앞에 섰을 때 해당 진입에서 딱 한 번만(!npc.autoPromptedInZone) 자동으로 대화창 오픈!
+    // NPC 앞에 서면 1회만 자동으로 대화 시작 (말풍선 2번 연속 뜨는 현상 완벽 방지)
     if (
-      d < 3.1 &&
+      d < 3.0 &&
       !npc.autoPromptedInZone &&
       isDialogHidden &&
       davidNpcAutoDialogCooldown <= 0 &&
@@ -5051,16 +5070,15 @@ function updateDavidStage3Frame(dt, now) {
     }
   });
 
-  // 자동 대화가 열려 있지 않을 때만 수동 대화 버튼을 보조로 표시
   const pBtn = document.getElementById('puzzle-build-btn');
-  if (davidActiveNearNpc && isDialogHidden && davidActiveNearNpc.autoPromptedInZone) {
+  if (davidActiveNearNpc && isDialogHidden) {
     pBtn.classList.remove('hidden');
-    pBtn.textContent = `💬 ${davidActiveNearNpc.roleTitle}와 다시 대화하기`;
+    pBtn.textContent = `💬 ${davidActiveNearNpc.roleTitle}와 대화하기!`;
   } else {
     pBtn.classList.add('hidden');
   }
 
-  // 5) 북쪽 성막 나단 선지자 도착 및 가이드 화살표 계산
+  // 북쪽 성막 나단 선지자 도착 및 가이드 화살표
   if (targetObject && !targetObject.triggered) {
     if (targetObject.beacon && targetObject.beacon.visible) {
       const bPulse = 1.0 + Math.sin(now * 0.005) * 0.16;
@@ -5151,7 +5169,7 @@ function updateDavidStage3CutsceneFrame(dt, now) {
 }
 
 // -------------------------------------------------------------------------
-// 3. [엔딩 월드] 빈 왕좌 + 화살표 표시 안내 -> 다윗이 왕좌에 오르면 메시아 성경절 모달 -> 인증서 오픈
+// 3. [엔딩 월드] 사방 성벽 외곽 + 빈 왕좌 화살표 안내 -> 왕좌 등극 -> 메시아 성경절 모달 -> 인증서 오픈
 // -------------------------------------------------------------------------
 function createEmptyThroneWithGuideArrow(cx, cz) {
   const root = new THREE.Group();
@@ -5159,6 +5177,7 @@ function createEmptyThroneWithGuideArrow(cx, cz) {
   const redVelvet = matDavidCached('#991b1b', '#7f1d1d');
   const stoneStep = matDavidCached('#fde68a', '#d97706');
 
+  // 다윗이 걸어서 올라갈 수 있는 3단 왕좌 단상 (각 단 높이 0.5m)
   root.add(
     createBox(7.6, 0.5, 6.8, stoneStep, 0, 0.25, 0.6),
     createBox(6.0, 1.0, 5.2, stoneStep, 0, 0.50, 0.0),
@@ -5171,7 +5190,7 @@ function createEmptyThroneWithGuideArrow(cx, cz) {
     { minX: cx - 2.2, maxX: cx + 2.2, minZ: cz - 2.4, maxZ: cz + 1.4, topY: 1.55 }
   );
 
-  // 빈 황금 왕좌
+  // 빈 황금 왕좌 (좌석, 등받이, 팔걸이)
   root.add(
     createBox(2.4, 0.35, 1.9, redVelvet, 0, 1.65, -0.5),
     createBox(2.6, 3.4,  0.4, goldMat,   0, 3.20, -1.35),
@@ -5181,7 +5200,7 @@ function createEmptyThroneWithGuideArrow(cx, cz) {
   );
   colliders.push({ minX: cx - 1.5, maxX: cx + 1.5, minZ: cz - 1.8, maxZ: cz - 1.1 });
 
-  // 왕좌 위 입체 황금 화살표(⬇️)
+  // 빈 왕좌 위에서 반짝이며 위아래로 움직이는 3D 입체 황금 화살표(⬇️)
   const arrowGrp = new THREE.Group();
   const arrowMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
   const arrowBorder = new THREE.MeshBasicMaterial({ color: 0xf59e0b });
@@ -5220,7 +5239,7 @@ function ensureDavidMessiahModal() {
           다윗의 왕위와 영원한 메시아 언약
         </div>
         <h2 class="font-jua text-2xl text-amber-300 leading-snug">
-          다윗의 후손으로 오실 구원자 메시아!
+          메시아가 다윗의 후손으로 오십니다!
         </h2>
         <p class="text-xs sm:text-sm text-slate-200 leading-relaxed">
           양을 지키던 목동 다윗은 이스라엘의 왕이 되었고, 하나님께서는 다윗의 후손을 통해 온 세상을 구원할 영원한 왕 <b class="text-amber-300">메시아(예수 그리스도)</b>를 보내주신다고 약속하셨어요!
@@ -5236,7 +5255,7 @@ function ensureDavidMessiahModal() {
           </p>
         </div>
         <button type="button" onclick="proceedFromMessiahModalToCert()" class="mc-btn w-full py-3.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-jua text-lg shadow-xl">
-          🏆 완주 달란트 인증서 받기! ▶
+          🏆 완주 달란트 인증서 보기! ▶
         </button>
       </div>
     `;
@@ -5268,37 +5287,52 @@ function buildDavidEndingWorld() {
   const messiahModal = document.getElementById('david-messiah-modal');
   if (messiahModal) { messiahModal.classList.add('hidden'); messiahModal.classList.remove('flex'); }
 
+  // 엔딩 직후 인증서 바로가기 버튼은 왕좌에 앉아 메시아 성경절을 본 뒤에 누를 수 있도록 잠시 숨김
+  const certBtn = document.getElementById('ending-cert-btn');
+  if (certBtn) certBtn.classList.add('hidden');
+
   scene.background = new THREE.Color(0x38bdf8);
-  scene.fog = new THREE.Fog(0x38bdf8, 55, 165);
+  scene.fog = new THREE.Fog(0xbae6fd, 65, 195);
+
+  const endLimit = 34;
+  currentMapRectBounds = {
+    minX: -endLimit + 2.4,
+    maxX:  endLimit - 2.4,
+    minZ: -endLimit + 2.4,
+    maxZ:  endLimit - 2.4
+  };
 
   davidThroneEnding.seated = false;
   davidThroneEnding.seatTimer = 0;
   davidThroneEnding.modalShown = false;
 
-  const floorMat = new THREE.MeshLambertMaterial({ map: makeDavidCityStoneTex() });
+  const cityStoneMat = new THREE.MeshLambertMaterial({ map: makeDavidCityStoneTex() });
   const marbleMat = matDavidCached('#f8fafc', '#e2e8f0');
   const carpetMat = matDavidCached('#b91c1c', '#7f1d1d');
   const goldMat = matDavidCached('#facc15', '#ca8a04');
 
   worldGroup.add(
-    createBox(120, 1, 120, floorMat, 0, -0.5, 0, false),
-    createBox(26, 0.12, 32, marbleMat, 0, 0.06, -4, false),
-    createBox(4.6, 0.16, 26, carpetMat, 0, 0.08, -2, false)
+    createBox(endLimit * 2.4, 1, endLimit * 2.4, cityStoneMat, 0, -0.5, 0, false),
+    createBox(26, 0.12, 34, marbleMat, 0, 0.06, -4, false),
+    createBox(4.8, 0.16, 28, carpetMat, 0, 0.08, -2, false)
   );
-  buildGrassAndTreeBorders(34, false);
+
+  // [엔딩 요청사항 1] 엔딩 맵 가장자리를 숲 대신 반투명 시야 처리가 된 다윗성 성벽으로 교체!
+  buildDavidCastleWallPerimeter(endLimit, false);
 
   [-10.5, 10.5].forEach(px => {
     for (let pz = -14; pz <= 8; pz += 5.5) {
-      worldGroup.add(
-        createBox(1.2, 6.5, 1.2, marbleMat, px, 3.25, pz),
-        createBox(1.5, 0.45, 1.5, goldMat, px, 6.6, pz)
-      );
+      const col = createBox(1.2, 6.5, 1.2, marbleMat.clone(), px, 3.25, pz);
+      const cap = createBox(1.5, 0.45, 1.5, goldMat, px, 6.6, pz);
+      worldGroup.add(col, cap);
+      wallMeshes.push(col);
     }
   });
   [[-18, 12], [18, 12], [-22, -4], [22, -4], [-18, -18], [18, -18]].forEach(([tx, tz]) => {
     addPalmTree(tx, tz, 1.25, true);
   });
 
+  // 중앙 단상에 빈 황금 왕좌와 화살표 표시 배치 (z = -8)
   const throneGrp = createEmptyThroneWithGuideArrow(0, -8);
   throneGrp.position.set(0, 0, -8);
   worldGroup.add(throneGrp);
@@ -5308,6 +5342,7 @@ function buildDavidEndingWorld() {
   addWallTorch(-4.2, 2.2, -5.2);
   addWallTorch( 4.2, 2.2, -5.2);
 
+  // 왕좌 주변에서 환호하며 뛰는 백성들 22명
   if (typeof createFollowerPersonMesh === 'function') {
     for (let i = 0; i < 22; i++) {
       const ang = (i / 22) * Math.PI * 2;
@@ -5337,6 +5372,7 @@ function buildDavidEndingWorld() {
   rebuildPlayerAppearance();
 }
 
+// [엔딩 요청사항 2] 의자(왕좌)에 올라간 후 메시아 성경절이 먼저 나오고 그 다음 인증서가 나오도록 처리
 function seatDavidOnThroneAndShowMessiahVerse() {
   if (davidThroneEnding.seated) return;
   davidThroneEnding.seated = true;
@@ -5349,6 +5385,7 @@ function seatDavidOnThroneAndShowMessiahVerse() {
   }
   document.getElementById('context-action-btn').classList.add('hidden');
 
+  // 다윗을 왕좌 의자 위에 앉히고 정면(백성들 쪽)을 바라보게 설정
   playerPos.set(0, 1.65, -8.45);
   playerFacing = 0;
   if (playerGroup) {
@@ -5362,7 +5399,7 @@ function seatDavidOnThroneAndShowMessiahVerse() {
   }
 
   playSfx('clear');
-  showToast('👑 다윗왕이 보좌에 올랐습니다! 온 백성이 기뻐 환호합니다!');
+  showToast('👑 다윗왕이 보좌에 올랐습니다! 다윗의 후손으로 오실 메시아 언약 말씀이 펼쳐집니다!');
 }
 
 function updateDavidEndingThroneFrame(dt, now) {
@@ -5382,13 +5419,15 @@ function updateDavidEndingThroneFrame(dt, now) {
       } else {
         ctxBtn.classList.add('hidden');
       }
-      if (td < 1.75) {
+      // 다윗이 왕좌 계단을 걸어 올라 의자 위(td < 1.85 & 높이 0.9m 이상)에 도달하면 자동으로 착석!
+      if (td < 1.85 && playerPos.y >= 0.9) {
         seatDavidOnThroneAndShowMessiahVerse();
       }
     }
     return;
   }
 
+  // 왕좌에 앉은 다윗 클로즈업 후 메시아 성경절 모달 오픈 -> 모달 버튼 클릭 시 인증서 오픈
   davidThroneEnding.seatTimer += dt;
   playerPos.set(0, 1.65, -8.45);
   playerFacing = 0;
@@ -5405,30 +5444,35 @@ function updateDavidEndingThroneFrame(dt, now) {
   camera.position.lerp(new THREE.Vector3(0, 4.8, -1.2), 0.08);
   camera.lookAt(0, 2.5, -8.5);
 
-  if (davidThroneEnding.seatTimer >= 1.25 && !davidThroneEnding.modalShown) {
+  if (davidThroneEnding.seatTimer >= 1.15 && !davidThroneEnding.modalShown) {
     davidThroneEnding.modalShown = true;
+    const certBtn = document.getElementById('ending-cert-btn');
+    if (certBtn) certBtn.classList.remove('hidden');
     openDavidMessiahModal();
   }
 }
 
 // -------------------------------------------------------------------------
-// 4. 에피소드 3 통합 플러그인 등록 & 액션 버튼 연동
+// 4. 에피소드 3 통합 플러그인 등록 & 액션 버튼 단일 훅 연동
 // -------------------------------------------------------------------------
-const _prevTriggerPuzzleBtn = window.triggerPuzzleBuildOrSwitch;
-window.triggerPuzzleBuildOrSwitch = function () {
-  if (currentEpisode === 'david') {
-    if (currentStage === 1) {
-      performDavidStage1Action();
-    } else if (currentStage === 3 && davidActiveNearNpc) {
-      openDavidNpcDialog(davidActiveNearNpc);
+if (!window._davidPuzzleHookRegistered) {
+  window._davidPuzzleHookRegistered = true;
+  const _origTriggerPuzzleBtn = window.triggerPuzzleBuildOrSwitch;
+  window.triggerPuzzleBuildOrSwitch = function () {
+    if (currentEpisode === 'david') {
+      if (currentStage === 1) {
+        performDavidStage1Action();
+      } else if (currentStage === 3 && davidActiveNearNpc) {
+        openDavidNpcDialog(davidActiveNearNpc);
+      }
+      return;
     }
-    return;
-  }
-  if (typeof _prevTriggerPuzzleBtn === 'function') _prevTriggerPuzzleBtn();
-};
+    if (typeof _origTriggerPuzzleBtn === 'function') _origTriggerPuzzleBtn();
+  };
+}
 
 REGISTER_EPISODE('david', {
-  locked: true,
+  locked: false, // 에피소드 선택 맵에서 에피소드 3 선택을 잠그려면 true 로 변경하세요
   avatarIcon: '🪉',
   scripture: DAVID_SCRIPTURE,
   certMeta: {
@@ -5499,7 +5543,7 @@ REGISTER_EPISODE('david', {
   buildEndingWorld: function () {
     buildDavidEndingWorld();
   },
-  endingToast: '👑 환호하는 백성들 사이를 걸어 화살표가 가리키는 빈 왕좌 위로 올라가 보세요!',
+  endingToast: '👑 성벽 안 백성들의 환호를 받으며 화살표가 가리키는 빈 왕좌 위로 올라가 보세요!',
   updateHUD: function (st, badge, countIcon, countText, missionText) {
     if (st === 1) {
       updateDavidCarriedItemsVisual();
