@@ -3441,10 +3441,10 @@ function updateDavidStage2CutsceneFrame(dt, now) {
   return true;
 }
 // =========================================================================
-// [ep3_david.js - 파트 4/5] 에피소드 3 : 스테이지 3 (다윗성 성벽 외곽·성문 결합·성벽 밖 곧은 길·확장형 건물 미로)
-// - 외곽 숲/나무를 모두 성벽과 망루로 교체 (wallMeshes 등록으로 가장자리 접근 시 반투명 시야 확보)
-// - 남쪽 성문을 성벽에 일체형으로 부착하고 성벽 너머로 뻗은 곧은 길(직선 가도) 구현
-// - 건물 미로와 2층 건물, 상가, 자재 은신처를 성벽 코앞(±62m)까지 대폭 확장
+// [ep3_david.js - 파트 4/5] 에피소드 3 : 스테이지 3 (다윗성 성벽·확장 건물 미로·난이도별 랜덤 자원·소형 퀘스트 UI)
+// - 진행 중인 퀘스트 소형 UI 배지(ensureDavidStage3QuestMiniUI) 및 단일 퀘스트 잠금 상태(davidActiveQuestNpc)
+// - 퀘스트 수락 시 자원 0 초기화 및 난이도별(유치: 쉬움 / 유년: 중간 / 소년: 어려움) 랜덤 위치 스폰
+// - 외곽 성벽(반투명 시야 보장), 남쪽 성문과 성벽 밖 곧은 길, 2층 건물 8채 및 상가·행인 배치
 // =========================================================================
 
 let davidCityNpcs = [];
@@ -3454,6 +3454,7 @@ let davidCityShopkeepers = [];
 let davidCityPedestrians = [];
 let davidCityBuildingBoxes = [];
 let davidInventory = { wood: 0, stone: 0, iron: 0 };
+let davidActiveQuestNpc = null; // 현재 진행 중인 단일 퀘스트 NPC (진행 중엔 다른 NPC 퀘스트 불가)
 let davidActiveNearNpc = null;
 let davidDialogTargetNpc = null;
 let davidNpcAutoDialogCooldown = 0;
@@ -3474,7 +3475,89 @@ let davidThroneEnding = {
 };
 
 // -------------------------------------------------------------------------
-// 1. 다윗성 전용 석조 타일 바닥 텍스처 & 건물 충돌·끼임 방지 등록 함수
+// 1. 스테이지 3 전용 소형 퀘스트 UI 창 생성 및 실시간 갱신
+// -------------------------------------------------------------------------
+function ensureDavidStage3QuestMiniUI() {
+  const uiRoot = ensureDavidCustomUI();
+  let tracker = document.getElementById('david-st3-quest-tracker');
+  if (!tracker) {
+    tracker = document.createElement('div');
+    tracker.id = 'david-st3-quest-tracker';
+    tracker.className =
+      'hidden mt-16 mc-panel px-4 py-2 rounded-2xl bg-slate-900/90 border-2 border-amber-400 text-white shadow-xl flex flex-col gap-1 min-w-[240px] max-w-[310px]';
+    tracker.innerHTML = `
+      <div class="flex items-center justify-between gap-2 border-b border-slate-700 pb-1">
+        <span class="text-[11px] font-jua text-amber-300">📜 진행 중인 퀘스트</span>
+        <span id="david-st3-quest-npc" class="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/50 text-[11px] font-jua text-amber-200">없음</span>
+      </div>
+      <div id="david-st3-quest-detail" class="text-xs font-bold text-sky-200 text-center py-0.5">
+        빛기둥 아래 백성을 만나 요청을 들어보세요!
+      </div>
+    `;
+    uiRoot.insertBefore(tracker, uiRoot.firstChild);
+  }
+  return tracker;
+}
+
+function updateDavidStage3QuestMiniUI() {
+  const tracker = ensureDavidStage3QuestMiniUI();
+  if (currentEpisode !== 'david' || currentStage !== 3 || davidStage3Cutscene.active) {
+    tracker.classList.add('hidden');
+    return;
+  }
+
+  // 현재 수락하여 진행 중인 퀘스트가 있을 때만 화면에 작게 표시
+  if (!davidActiveQuestNpc) {
+    if (davidProphetUnlocked) {
+      tracker.classList.remove('hidden');
+      document.getElementById('david-st3-quest-npc').textContent = '✨ 나단 선지자';
+      document.getElementById('david-st3-quest-detail').innerHTML =
+        '<span class="text-emerald-300">북쪽 성막 앞 나단 선지자에게 가세요!</span>';
+    } else {
+      tracker.classList.add('hidden');
+    }
+    return;
+  }
+
+  tracker.classList.remove('hidden');
+  const npcBadge = document.getElementById('david-st3-quest-npc');
+  const detailEl = document.getElementById('david-st3-quest-detail');
+  npcBadge.textContent = davidActiveQuestNpc.roleTitle;
+
+  const req = davidActiveQuestNpc.req;
+  if (!req) {
+    detailEl.textContent = '요청을 수행하세요!';
+    return;
+  }
+
+  const parts = [];
+  if (req.wood > 0) {
+    const done = davidInventory.wood >= req.wood;
+    parts.push(`<span class="${done ? 'text-emerald-300' : 'text-amber-200'}">🪵나무 ${Math.min(davidInventory.wood, req.wood)}/${req.wood}</span>`);
+  }
+  if (req.stone > 0) {
+    const done = davidInventory.stone >= req.stone;
+    parts.push(`<span class="${done ? 'text-emerald-300' : 'text-sky-200'}">🪨돌 ${Math.min(davidInventory.stone, req.stone)}/${req.stone}</span>`);
+  }
+  if (req.iron > 0) {
+    const done = davidInventory.iron >= req.iron;
+    parts.push(`<span class="${done ? 'text-emerald-300' : 'text-orange-200'}">⚙️철 ${Math.min(davidInventory.iron, req.iron)}/${req.iron}</span>`);
+  }
+
+  const allCollected =
+    davidInventory.wood >= req.wood &&
+    davidInventory.stone >= req.stone &&
+    davidInventory.iron >= req.iron;
+
+  if (allCollected) {
+    detailEl.innerHTML = `${parts.join(' · ')} <div class="text-[11px] text-emerald-300 mt-0.5 animate-pulse">✅ 수집 완료! ${davidActiveQuestNpc.roleTitle}에게 돌아가세요!</div>`;
+  } else {
+    detailEl.innerHTML = `${parts.join(' · ')} <div class="text-[10px] text-slate-300 mt-0.5">(완료 전까지 다른 퀘스트 진행 불가)</div>`;
+  }
+}
+
+// -------------------------------------------------------------------------
+// 2. 다윗성 전용 석조 타일 바닥 텍스처 & 건물 충돌·끼임 방지 등록 함수
 // -------------------------------------------------------------------------
 let _davidCityStoneTex = null;
 function makeDavidCityStoneTex() {
@@ -3548,7 +3631,7 @@ function resolvePlayerOutOfCityBuildings() {
 }
 
 // -------------------------------------------------------------------------
-// 2. [스테이지 3 & 엔딩 공통] 맵 가장자리 성벽(반투명 시야 보장) 및 성벽 밖 곧은 길 생성
+// 3. 맵 가장자리 성벽(반투명 시야 보장) 및 성벽 밖 곧은 길 생성
 // -------------------------------------------------------------------------
 function buildDavidCastleWallPerimeter(limit, withSouthGate = true) {
   const wallBaseMat = matVoxel('#d6c3a5', '#b89f7a');
@@ -3558,7 +3641,6 @@ function buildDavidCastleWallPerimeter(limit, withSouthGate = true) {
   const wallThick = 3.4;
   const segLen = 12.0;
 
-  // 성벽 블록을 생성할 때 개별 복제 재질(.clone())과 wallMeshes 등록을 적용해 가장자리에서 캐릭터가 가려지지 않게 함
   const addTransparentWallSegment = (w, h, d, x, y, z, isTrim = false) => {
     const mat = (isTrim ? wallTrimMat : wallBaseMat).clone();
     const box = createBox(w, h, d, mat, x, y, z);
@@ -3567,17 +3649,13 @@ function buildDavidCastleWallPerimeter(limit, withSouthGate = true) {
     return box;
   };
 
-  // 1) 북쪽 성벽 (z = -limit) & 남쪽 성벽 (z = +limit, 성문 구간 x = -11 ~ +11 개방 가능)
   for (let x = -limit; x <= limit; x += segLen) {
-    // 북쪽 성벽
     addTransparentWallSegment(segLen + 0.15, wallH, wallThick, x, wallH / 2, -limit, false);
     addTransparentWallSegment(segLen + 0.35, 0.55, wallThick + 0.4, x, wallH + 0.25, -limit, true);
-    // 성가퀴(흉벽)
     [-3.6, 0, 3.6].forEach(ox => {
       addTransparentWallSegment(2.0, 1.2, wallThick + 0.2, x + ox, wallH + 1.1, -limit, false);
     });
 
-    // 남쪽 성벽 (withSouthGate일 때 중앙 성문 구간은 비워둠)
     if (withSouthGate && Math.abs(x) < 12.5) continue;
     addTransparentWallSegment(segLen + 0.15, wallH, wallThick, x, wallH / 2, limit, false);
     addTransparentWallSegment(segLen + 0.35, 0.55, wallThick + 0.4, x, wallH + 0.25, limit, true);
@@ -3586,16 +3664,13 @@ function buildDavidCastleWallPerimeter(limit, withSouthGate = true) {
     });
   }
 
-  // 2) 서쪽 성벽 (x = -limit) & 동쪽 성벽 (x = +limit)
   for (let z = -limit; z <= limit; z += segLen) {
-    // 서쪽 성벽
     addTransparentWallSegment(wallThick, wallH, segLen + 0.15, -limit, wallH / 2, z, false);
     addTransparentWallSegment(wallThick + 0.4, 0.55, segLen + 0.35, -limit, wallH + 0.25, z, true);
     [-3.6, 0, 3.6].forEach(oz => {
       addTransparentWallSegment(wallThick + 0.2, 1.2, 2.0, -limit, wallH + 1.1, z + oz, false);
     });
 
-    // 동쪽 성벽
     addTransparentWallSegment(wallThick, wallH, segLen + 0.15, limit, wallH / 2, z, false);
     addTransparentWallSegment(wallThick + 0.4, 0.55, segLen + 0.35, limit, wallH + 0.25, z, true);
     [-3.6, 0, 3.6].forEach(oz => {
@@ -3603,7 +3678,6 @@ function buildDavidCastleWallPerimeter(limit, withSouthGate = true) {
     });
   }
 
-  // 3) 4대 모서리 성벽 망루 (Corner Watchtowers) + 중간 성벽 보루
   const towerCoords = [
     [-limit, -limit], [limit, -limit], [-limit, limit], [limit, limit],
     [-limit, 0], [limit, 0], [0, -limit]
@@ -3615,7 +3689,6 @@ function buildDavidCastleWallPerimeter(limit, withSouthGate = true) {
     wallMeshes.push(tBody, tRoof);
   });
 
-  // 4) 성벽 안쪽 횃불 배치
   for (let i = -limit + 16; i <= limit - 16; i += 24) {
     addWallTorch(i, 3.5, -limit + 2.0);
     if (!withSouthGate || Math.abs(i) > 14) addWallTorch(i, 3.5, limit - 2.0);
@@ -3623,18 +3696,15 @@ function buildDavidCastleWallPerimeter(limit, withSouthGate = true) {
     addWallTorch( limit - 2.0, 3.5, i);
   }
 
-  // 5) [스테이지 3 요청사항 2] 성문 너머 성벽 바깥쪽(남쪽 z > limit)으로 곧게 뻗은 길(직선 가도)과 외부 들판 구현
   if (withSouthGate) {
     const outGrassMat = new THREE.MeshLambertMaterial({ map: makeGrassFieldTex() });
     const highwayMat = matDavidCached('#e5c494', '#c29b61');
     const curbMat = matDavidCached('#94a3b8', '#64748b');
 
-    // 성벽 밖 남쪽 대지
     const outerGround = createBox(limit * 3.0, 1.2, 130, outGrassMat, 0, -0.58, limit + 64, false);
     outerGround.receiveShadow = true;
     worldGroup.add(outerGround);
 
-    // 성문에서 성벽 밖 지평선까지 일직선으로 곧게 뻗은 왕의 대로 (길이 125m)
     const roadLen = 125;
     const roadCenterZ = limit + roadLen / 2 - 2;
     worldGroup.add(
@@ -3643,7 +3713,825 @@ function buildDavidCastleWallPerimeter(limit, withSouthGate = true) {
       createBox(0.65, 0.28, roadLen, curbMat,  4.6, 0.14, roadCenterZ, false)
     );
 
-    // 성벽 밖 곧은 길 양옆의 가로수(종려나무·작은 나무)와 이정표 기둥
+    for (let rz = limit + 12; rz <= limit + 108; rz += 16) {
+      addPalmTree(-9.5, rz, 1.15, false);
+      addPalmTree( 9.5, rz, 1.15, false);
+      worldGroup.add(
+        createBox(0.45, 1.6, 0.45, curbMat, -5.2, 0.8, rz, false),
+        createBox(0.45, 1.6, 0.45, curbMat,  5.2, 0.8, rz, false)
+      );
+    }
+  }
+}
+
+// -------------------------------------------------------------------------
+// 4. 디테일한 인물(상인·건축가·경비병·왕궁 전령) & 신하 2명 & 하늘 원통 빛기둥 모델링
+// -------------------------------------------------------------------------
+function createNpcSkyBeacon(colorHex) {
+  const beaconGrp = new THREE.Group();
+  const cylGeo = new THREE.CylinderGeometry(0.95, 0.95, 62, 20, 1, true);
+  const cylMat = new THREE.MeshBasicMaterial({
+    color: colorHex,
+    transparent: true,
+    opacity: 0.26,
+    side: THREE.DoubleSide,
+    depthWrite: false
+  });
+  const outerCyl = new THREE.Mesh(cylGeo, cylMat);
+  outerCyl.position.y = 31.0;
+
+  const coreGeo = new THREE.CylinderGeometry(0.35, 0.35, 62, 12, 1, true);
+  const coreMat = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.38,
+    side: THREE.DoubleSide,
+    depthWrite: false
+  });
+  const innerCyl = new THREE.Mesh(coreGeo, coreMat);
+  innerCyl.position.y = 31.0;
+
+  beaconGrp.add(outerCyl, innerCyl);
+  beaconGrp.userData = { outerCyl, innerCyl };
+  return beaconGrp;
+}
+
+function createDetailedCityNpcMesh(roleId) {
+  const g = new THREE.Group();
+  const skin = matDavidCached('#fed7aa', '#fdba74');
+  const darkSkin = matDavidCached('#f59e0b', '#d97706');
+  const eyeWhite = matDavidCached('#ffffff');
+  const pupilMat = matDavidCached('#0f172a');
+  const sandalMat = matDavidCached('#451a03');
+  const goldMat = matDavidCached('#facc15', '#ca8a04');
+
+  let robePrimary, robeSecondary, sashMat, hairColor;
+  if (roleId === 'merchant') {
+    robePrimary = matDavidCached('#7e22ce', '#581c87');
+    robeSecondary = matDavidCached('#f59e0b', '#d97706');
+    sashMat = matDavidCached('#ef4444', '#b91c1c');
+    hairColor = matDavidCached('#334155');
+  } else if (roleId === 'architect') {
+    robePrimary = matDavidCached('#0369a1', '#075985');
+    robeSecondary = matDavidCached('#b45309', '#78350f');
+    sashMat = matDavidCached('#fde047', '#ca8a04');
+    hairColor = matDavidCached('#78350f');
+  } else if (roleId === 'guard') {
+    robePrimary = matDavidCached('#991b1b', '#7f1d1d');
+    robeSecondary = matDavidCached('#d97706', '#92400e');
+    sashMat = matDavidCached('#475569', '#1e293b');
+    hairColor = matDavidCached('#1e293b');
+  } else {
+    robePrimary = matDavidCached('#1d4ed8', '#1e3a8a');
+    robeSecondary = matDavidCached('#f8fafc', '#e2e8f0');
+    sashMat = goldMat;
+    hairColor = matDavidCached('#451a03');
+  }
+
+  const lLeg = new THREE.Group(); lLeg.position.set(-0.22, 0.7, 0);
+  lLeg.add(
+    createBox(0.32, 0.52, 0.32, skin, 0, -0.26, 0),
+    createBox(0.36, 0.16, 0.42, sandalMat, 0, -0.60, 0.03)
+  );
+  const rLeg = new THREE.Group(); rLeg.position.set(0.22, 0.7, 0);
+  rLeg.add(
+    createBox(0.32, 0.52, 0.32, skin, 0, -0.26, 0),
+    createBox(0.36, 0.16, 0.42, sandalMat, 0, -0.60, 0.03)
+  );
+
+  const torso = createBox(0.88, 1.08, 0.48, robePrimary, 0, 1.22, 0);
+  const robeCoatL = createBox(0.28, 1.06, 0.54, robeSecondary, -0.29, 1.22, 0);
+  const robeCoatR = createBox(0.28, 1.06, 0.54, robeSecondary,  0.29, 1.22, 0);
+  const collar = createBox(0.62, 0.16, 0.54, goldMat, 0, 1.70, 0.02);
+  const belt = createBox(0.94, 0.18, 0.56, sashMat, 0, 0.96, 0);
+  const buckle = createBox(0.22, 0.20, 0.60, goldMat, 0, 0.96, 0);
+
+  const head = createBox(0.76, 0.76, 0.76, skin, 0, 2.12, 0);
+  const nose = createBox(0.12, 0.16, 0.12, darkSkin, 0, 2.08, 0.40);
+  const lEyeW = createBox(0.18, 0.12, 0.05, eyeWhite, -0.18, 2.16, 0.38);
+  const rEyeW = createBox(0.18, 0.12, 0.05, eyeWhite,  0.18, 2.16, 0.38);
+  const lPupil = createBox(0.10, 0.10, 0.06, pupilMat, -0.16, 2.16, 0.39);
+  const rPupil = createBox(0.10, 0.10, 0.06, pupilMat,  0.16, 2.16, 0.39);
+  const lBrow = createBox(0.20, 0.06, 0.06, hairColor, -0.18, 2.26, 0.39);
+  const rBrow = createBox(0.20, 0.06, 0.06, hairColor,  0.18, 2.26, 0.39);
+  const beard = createBox(0.78, 0.28, 0.26, hairColor, 0, 1.84, 0.30);
+  const mustache = createBox(0.46, 0.08, 0.12, hairColor, 0, 1.96, 0.39);
+
+  g.add(
+    lLeg, rLeg, torso, robeCoatL, robeCoatR, collar, belt, buckle,
+    head, nose, lEyeW, rEyeW, lPupil, rPupil, lBrow, rBrow, beard, mustache
+  );
+
+  if (roleId === 'merchant') {
+    g.add(
+      createBox(0.92, 0.34, 0.92, matDavidCached('#fde047', '#eab308'), 0, 2.52, 0),
+      createBox(0.78, 0.22, 0.78, matDavidCached('#9333ea'), 0, 2.74, 0),
+      createBox(0.18, 0.22, 0.14, matDavidCached('#ef4444'), 0, 2.58, 0.45),
+      createBox(0.42, 0.38, 0.26, matDavidCached('#d97706'), -0.44, 0.88, 0.18)
+    );
+  } else if (roleId === 'architect') {
+    g.add(
+      createBox(0.86, 0.26, 0.86, matDavidCached('#f8fafc', '#cbd5e1'), 0, 2.50, 0),
+      createBox(0.90, 0.10, 0.90, matDavidCached('#0284c7'), 0, 2.40, 0),
+      createBox(0.56, 0.58, 0.08, robeSecondary, 0, 0.95, 0.28)
+    );
+  } else if (roleId === 'guard') {
+    g.add(
+      createBox(0.88, 0.32, 0.88, goldMat, 0, 2.50, 0),
+      createBox(0.14, 0.36, 0.86, goldMat, -0.40, 2.22, 0),
+      createBox(0.14, 0.36, 0.86, goldMat,  0.40, 2.22, 0),
+      createBox(0.18, 0.42, 0.58, matDavidCached('#ef4444', '#b91c1c'), 0, 2.82, 0),
+      createBox(0.96, 1.15, 0.12, matDavidCached('#7f1d1d'), 0, 1.18, -0.28)
+    );
+  } else {
+    g.add(
+      createBox(0.86, 0.24, 0.86, matDavidCached('#1e3a8a'), 0, 2.50, 0),
+      createBox(0.90, 0.14, 0.90, goldMat, 0, 2.42, 0),
+      createBox(0.16, 0.36, 0.16, matDavidCached('#38bdf8'), 0, 2.72, 0.36)
+    );
+  }
+
+  const lArm = new THREE.Group(); lArm.position.set(-0.60, 1.56, 0);
+  lArm.add(createBox(0.30, 0.66, 0.30, robePrimary, 0, -0.28, 0), createBox(0.24, 0.20, 0.24, skin, 0, -0.68, 0));
+
+  const rArm = new THREE.Group(); rArm.position.set(0.60, 1.56, 0);
+  rArm.add(createBox(0.30, 0.66, 0.30, robePrimary, 0, -0.28, 0), createBox(0.24, 0.20, 0.24, skin, 0, -0.68, 0));
+
+  if (roleId === 'merchant') {
+    rArm.add(
+      createBox(0.08, 0.42, 0.08, goldMat, 0, -0.68, 0.30, false),
+      createBox(0.46, 0.06, 0.06, goldMat, 0, -0.48, 0.30, false),
+      createBox(0.16, 0.06, 0.16, goldMat, -0.20, -0.65, 0.30, false),
+      createBox(0.16, 0.06, 0.16, goldMat,  0.20, -0.65, 0.30, false)
+    );
+  } else if (roleId === 'architect') {
+    lArm.add(createBox(0.42, 0.16, 0.16, matDavidCached('#fef9c3', '#fde047'), 0, -0.68, 0.26, false));
+    rArm.add(
+      createBox(0.08, 0.48, 0.08, goldMat, 0, -0.65, 0.28, false),
+      createBox(0.32, 0.08, 0.08, goldMat, -0.12, -0.85, 0.28, false)
+    );
+  } else if (roleId === 'guard') {
+    lArm.add(
+      createBox(0.62, 0.88, 0.12, goldMat, -0.14, -0.35, 0.26),
+      createBox(0.46, 0.70, 0.14, matDavidCached('#991b1b'), -0.14, -0.35, 0.28)
+    );
+    rArm.add(
+      createBox(0.10, 2.35, 0.10, sandalMat, 0.05, 0.15, 0.28),
+      createBox(0.22, 0.48, 0.10, matDavidCached('#cbd5e1', '#64748b'), 0.05, 1.42, 0.28)
+    );
+  } else {
+    rArm.add(
+      createBox(0.10, 0.10, 0.55, goldMat, 0, -0.68, 0.36, false),
+      createBox(0.24, 0.24, 0.14, goldMat, 0, -0.68, 0.65, false)
+    );
+  }
+
+  g.add(lArm, rArm);
+  g.userData = { lLeg, rLeg, lArm, rArm };
+  return g;
+}
+
+function createDavidRetainerMesh(retainerIdx) {
+  const g = new THREE.Group();
+  const isFirst = (retainerIdx === 0);
+  const tunicMat = isFirst ? matDavidCached('#f8fafc', '#e2e8f0') : matDavidCached('#eff6ff', '#dbeafe');
+  const cloakMat = isFirst ? matDavidCached('#0284c7', '#0369a1') : matDavidCached('#059669', '#047857');
+  const goldMat = matDavidCached('#facc15', '#ca8a04');
+  const skin = matDavidCached('#fed7aa', '#fdba74');
+  const hairMat = matDavidCached('#451a03');
+  const eyeMat = matDavidCached('#0f172a');
+
+  const lLeg = new THREE.Group(); lLeg.position.set(-0.20, 0.68, 0);
+  lLeg.add(createBox(0.30, 0.52, 0.30, skin, 0, -0.26, 0), createBox(0.34, 0.15, 0.38, hairMat, 0, -0.58, 0.02));
+  const rLeg = new THREE.Group(); rLeg.position.set(0.20, 0.68, 0);
+  rLeg.add(createBox(0.30, 0.52, 0.30, skin, 0, -0.26, 0), createBox(0.34, 0.15, 0.38, hairMat, 0, -0.58, 0.02));
+
+  const torso = createBox(0.82, 1.00, 0.46, tunicMat, 0, 1.16, 0);
+  const sash = createBox(0.32, 1.02, 0.50, cloakMat, isFirst ? -0.22 : 0.22, 1.16, 0);
+  const belt = createBox(0.86, 0.14, 0.50, goldMat, 0, 0.92, 0);
+
+  const head = createBox(0.70, 0.70, 0.70, skin, 0, 2.02, 0);
+  const hair = createBox(0.76, 0.26, 0.76, hairMat, 0, 2.34, 0);
+  const headband = createBox(0.78, 0.10, 0.78, goldMat, 0, 2.24, 0);
+  const lEye = createBox(0.10, 0.10, 0.05, eyeMat, -0.15, 2.06, 0.36);
+  const rEye = createBox(0.10, 0.10, 0.05, eyeMat,  0.15, 2.06, 0.36);
+
+  const lArm = new THREE.Group(); lArm.position.set(-0.54, 1.50, 0);
+  lArm.add(createBox(0.26, 0.62, 0.26, tunicMat, 0, -0.26, 0), createBox(0.22, 0.18, 0.22, skin, 0, -0.62, 0));
+
+  const rArm = new THREE.Group(); rArm.position.set(0.54, 1.50, 0);
+  rArm.add(createBox(0.26, 0.62, 0.26, tunicMat, 0, -0.26, 0), createBox(0.22, 0.18, 0.22, skin, 0, -0.62, 0));
+
+  const packGroup = new THREE.Group();
+  packGroup.position.set(0, 1.18, -0.42);
+  g.add(packGroup);
+
+  g.add(lLeg, rLeg, torso, sash, belt, head, hair, headband, lEye, rEye, lArm, rArm);
+  g.userData = { lLeg, rLeg, lArm, rArm, packGroup };
+  return g;
+}
+
+// -------------------------------------------------------------------------
+// 5. 다윗성 랜드마크, 빈틈없는 2층 건물, 상가 건물, 성벽까지 확장된 건물 미로 빌더
+// -------------------------------------------------------------------------
+function buildDavidCityPalace(cx, cz) {
+  const stoneMat = matVoxel('#fde68a', '#eab308');
+  const cedarMat = matVoxel('#78350f', '#451a03');
+  const goldMat = matDavidCached('#facc15', '#ca8a04');
+  const colMat = matVoxel('#f8fafc', '#cbd5e1');
+
+  const base = createBox(20, 1.2, 14, stoneMat.clone(), cx, 0.6, cz);
+  const mainHall = createBox(18, 6.5, 11, stoneMat.clone(), cx, 4.4, cz);
+  const cedarRoof = createBox(19.2, 0.9, 12.2, cedarMat.clone(), cx, 8.0, cz);
+  const upperTower = createBox(10, 4.2, 7, stoneMat.clone(), cx, 10.5, cz - 1.0);
+  const crownRoof = createBox(11.0, 0.7, 8.0, goldMat, cx, 12.9, cz - 1.0);
+  worldGroup.add(base, mainHall, cedarRoof, upperTower, crownRoof);
+  wallMeshes.push(mainHall, cedarRoof, upperTower);
+
+  [-6.5, -2.5, 2.5, 6.5].forEach(ox => {
+    const col = createBox(1.1, 6.2, 1.1, colMat.clone(), cx + ox, 4.2, cz + 6.0);
+    worldGroup.add(col);
+    wallMeshes.push(col);
+  });
+  addWallTorch(cx - 4.5, 3.2, cz + 6.8);
+  addWallTorch(cx + 4.5, 3.2, cz + 6.8);
+
+  registerCitySolidBox(cx, cz, 20.0, 14.0, 12.5, 0.35);
+}
+
+function buildDavidCityTabernacle(cx, cz) {
+  const tentWhite = matVoxel('#f8fafc', '#e2e8f0').clone();
+  const tentBlue = matVoxel('#1d4ed8', '#1e3a8a').clone();
+  const tentPurple = matVoxel('#7e22ce', '#581c87').clone();
+  const goldMat = matDavidCached('#facc15', '#ca8a04');
+
+  const platform = createBox(16, 0.8, 12, matDavidCached('#cbd5e1', '#94a3b8'), cx, 0.4, cz);
+  const tentBody = createBox(12, 5.2, 8.5, tentWhite, cx, 3.4, cz);
+  const roofBlue = createBox(12.8, 0.8, 9.2, tentBlue, cx, 6.3, cz);
+  const roofTop = createBox(10.5, 0.7, 7.5, tentPurple, cx, 7.0, cz);
+  worldGroup.add(platform, tentBody, roofBlue, roofTop);
+  wallMeshes.push(tentBody, roofBlue, roofTop);
+
+  const arkBox = createBox(2.2, 1.3, 1.3, goldMat, cx, 1.45, cz + 3.2);
+  const cherubL = createBox(0.5, 0.7, 0.5, goldMat, cx - 0.65, 2.4, cz + 3.2);
+  const cherubR = createBox(0.5, 0.7, 0.5, goldMat, cx + 0.65, 2.4, cz + 3.2);
+  worldGroup.add(arkBox, cherubL, cherubR);
+  addWallTorch(cx - 4.8, 2.5, cz + 5.2);
+  addWallTorch(cx + 4.8, 2.5, cz + 5.2);
+
+  registerCitySolidBox(cx, cz - 0.3, 12.6, 9.0, 7.2, 0.35);
+}
+
+function buildClimbableTwoStoryHouse(cx, cz, stairSide = 'east', colorVariant = 0) {
+  const wallMat = matVoxel(colorVariant % 2 === 0 ? '#fde68a' : '#fed7aa', '#d97706').clone();
+  const trimMat = matVoxel('#92400e', '#5c2d0c').clone();
+  const stairMat = matVoxel('#cbd5e1', '#64748b').clone();
+  const awningMat = matVoxel(colorVariant % 2 === 0 ? '#0284c7' : '#16a34a', '#0f172a').clone();
+
+  const w = 9.0, h1 = 3.6, d = 7.4;
+
+  const body1F = createBox(w, h1, d, wallMat, cx, h1 / 2, cz);
+  const slab2F = createBox(w + 0.4, 0.30, d + 0.4, trimMat, cx, h1 - 0.12, cz);
+  const door1F = createBox(1.6, 2.4, 0.25, trimMat, cx, 1.2, cz + d / 2 + 0.08);
+  worldGroup.add(body1F, slab2F, door1F);
+  wallMeshes.push(body1F, slab2F);
+
+  platforms.push({
+    minX: cx - w / 2 - 0.25,
+    maxX: cx + w / 2 + 0.25,
+    minZ: cz - d / 2 - 0.25,
+    maxZ: cz + d / 2 + 0.25,
+    topY: h1
+  });
+  davidCityBuildingBoxes.push({
+    minX: cx - w / 2 - 0.25,
+    maxX: cx + w / 2 + 0.25,
+    minZ: cz - d / 2 - 0.25,
+    maxZ: cz + d / 2 + 0.25,
+    topY: h1
+  });
+
+  const roomW = 3.6, roomH = 2.6, roomD = 4.0;
+  const roomX = cx + (stairSide === 'east' ? -2.2 : 2.2);
+  const roomZ = cz - 1.2;
+  const body2F = createBox(roomW, roomH, roomD, wallMat.clone(), roomX, h1 + roomH / 2, roomZ);
+  const roof2F = createBox(roomW + 0.4, 0.36, roomD + 0.4, awningMat, roomX, h1 + roomH + 0.18, roomZ);
+  worldGroup.add(body2F, roof2F);
+  wallMeshes.push(body2F, roof2F);
+  registerCitySolidBox(roomX, roomZ, roomW, roomD, h1 + roomH, 0.20);
+
+  const dir = (stairSide === 'east') ? 1 : -1;
+  const stairW = 2.6;
+  const stairX = cx + dir * (w / 2 + stairW / 2 - 0.30);
+  const stepDepth = 1.24;
+  const startZ = cz + d / 2 - 0.4;
+
+  for (let s = 1; s <= 6; s++) {
+    const stepTopY = s * 0.6;
+    const sz = startZ - (s - 1) * stepDepth;
+    const boxD = (s === 6) ? (stepDepth + 0.65) : (stepDepth + 0.18);
+    const boxZ = (s === 6) ? (sz - 0.20) : sz;
+    const stepBox = createBox(stairW, stepTopY, boxD, stairMat.clone(), stairX, stepTopY / 2, boxZ);
+    worldGroup.add(stepBox);
+    wallMeshes.push(stepBox);
+
+    const pMinX = Math.min(stairX - stairW / 2 - 0.15, cx + dir * (w / 2 - 0.3));
+    const pMaxX = Math.max(stairX + stairW / 2 + 0.15, cx + dir * (w / 2 - 0.3));
+    platforms.push({
+      minX: pMinX,
+      maxX: pMaxX,
+      minZ: boxZ - boxD * 0.55,
+      maxZ: boxZ + boxD * 0.55,
+      topY: stepTopY
+    });
+  }
+}
+
+function buildOpenShopBuildingWithKeeper(cx, cz, w, d, facing = 'south', shopType = 'fruit', idx = 0) {
+  const wallMat = matVoxel(idx % 2 === 0 ? '#fde68a' : '#fed7aa', '#d97706');
+  const woodMat = matVoxel('#78350f', '#451a03');
+  const awningCol1 = (shopType === 'fruit') ? '#16a34a' : (shopType === 'pottery' ? '#ea580c' : (shopType === 'cloth' ? '#9333ea' : '#0284c7'));
+  const awningMat = matVoxel(awningCol1, '#0f172a').clone();
+  const h = 4.5;
+
+  const isNS = (facing === 'south' || facing === 'north');
+  const fSign = (facing === 'south' || facing === 'east') ? 1 : -1;
+
+  const roofBox = createBox(w + 0.4, 0.55, d + 0.4, woodMat.clone(), cx, h + 0.25, cz);
+  const signAwning = createBox(
+    isNS ? w + 0.6 : 1.8,
+    0.45,
+    isNS ? 1.8 : d + 0.6,
+    awningMat,
+    cx + (isNS ? 0 : fSign * (w / 2 + 0.6)),
+    h - 0.35,
+    cz + (isNS ? fSign * (d / 2 + 0.6) : 0)
+  );
+  worldGroup.add(roofBox, signAwning);
+  wallMeshes.push(roofBox, signAwning);
+
+  if (isNS) {
+    const backWall = createBox(w, h, 0.8, wallMat.clone(), cx, h / 2, cz - fSign * (d / 2 - 0.4));
+    const sideL = createBox(0.8, h, d, wallMat.clone(), cx - w / 2 + 0.4, h / 2, cz);
+    const sideR = createBox(0.8, h, d, wallMat.clone(), cx + w / 2 - 0.4, h / 2, cz);
+    const counter = createBox(w - 2.0, 1.15, 1.1, woodMat.clone(), cx, 0.58, cz + fSign * (d / 2 - 1.3));
+    worldGroup.add(backWall, sideL, sideR, counter);
+    wallMeshes.push(backWall, sideL, sideR);
+
+    const itemCols = ['#ef4444', '#facc15', '#22c55e', '#a855f7'];
+    [-1.8, 0, 1.8].forEach((ox, i) => {
+      worldGroup.add(createBox(0.75, 0.48, 0.65, matDavidCached(itemCols[(idx + i) % itemCols.length]), cx + ox, 1.38, cz + fSign * (d / 2 - 1.3)));
+    });
+
+    const keeper = createDetailedCityNpcMesh(idx % 2 === 0 ? 'merchant' : 'architect');
+    keeper.position.set(cx, 0, cz - fSign * 0.4);
+    keeper.rotation.y = (fSign === 1) ? 0 : Math.PI;
+    worldGroup.add(keeper);
+    davidCityShopkeepers.push({ mesh: keeper, phase: idx * 1.1 });
+  } else {
+    const backWall = createBox(0.8, h, d, wallMat.clone(), cx - fSign * (w / 2 - 0.4), h / 2, cz);
+    const sideN = createBox(w, h, 0.8, wallMat.clone(), cx, h / 2, cz - d / 2 + 0.4);
+    const sideS = createBox(w, h, 0.8, wallMat.clone(), cx, h / 2, cz + d / 2 - 0.4);
+    const counter = createBox(1.1, 1.15, d - 2.0, woodMat.clone(), cx + fSign * (w / 2 - 1.3), 0.58, cz);
+    worldGroup.add(backWall, sideN, sideS, counter);
+    wallMeshes.push(backWall, sideN, sideS);
+
+    const itemCols = ['#f97316', '#38bdf8', '#fde047', '#ec4899'];
+    [-1.8, 0, 1.8].forEach((oz, i) => {
+      worldGroup.add(createBox(0.65, 0.48, 0.75, matDavidCached(itemCols[(idx + i) % itemCols.length]), cx + fSign * (w / 2 - 1.3), 1.38, cz + oz));
+    });
+
+    const keeper = createDetailedCityNpcMesh(idx % 2 === 0 ? 'merchant' : 'architect');
+    keeper.position.set(cx - fSign * 0.4, 0, cz);
+    keeper.rotation.y = (fSign === 1) ? (Math.PI / 2) : (-Math.PI / 2);
+    worldGroup.add(keeper);
+    davidCityShopkeepers.push({ mesh: keeper, phase: idx * 1.1 });
+  }
+
+  registerCitySolidBox(cx, cz, w, d, h + 0.4, 0.30);
+}
+
+function buildSolidCityBuildingBlock(cx, cz, w, h, d, variant = 0) {
+  const palettes = [
+    ['#fde68a', '#d97706'],
+    ['#fed7aa', '#ea580c'],
+    ['#fef08a', '#ca8a04'],
+    ['#e7e5e4', '#a8a29e']
+  ];
+  const [c1, c2] = palettes[variant % palettes.length];
+  const wallMat = matVoxel(c1, c2).clone();
+  const roofMat = matVoxel('#92400e', '#5c2d0c').clone();
+  const winMat = matDavidCached('#1e293b');
+  const doorMat = matDavidCached('#451a03');
+
+  const body = createBox(w, h, d, wallMat, cx, h / 2, cz);
+  const roof = createBox(w + 0.4, 0.45, d + 0.4, roofMat, cx, h + 0.22, cz);
+  worldGroup.add(body, roof);
+  wallMeshes.push(body, roof);
+
+  if (w >= d) {
+    const count = Math.max(1, Math.floor(w / 7.5));
+    for (let i = 0; i < count; i++) {
+      const ox = -w / 2 + (i + 0.5) * (w / count);
+      worldGroup.add(
+        createBox(1.4, 2.3, 0.18, doorMat, cx + ox, 1.15, cz + d / 2 + 0.06),
+        createBox(1.1, 1.1, 0.18, winMat, cx + ox + 1.8, 2.6, cz + d / 2 + 0.06),
+        createBox(1.1, 1.1, 0.18, winMat, cx + ox - 1.8, 2.6, cz - d / 2 - 0.06)
+      );
+    }
+  } else {
+    const count = Math.max(1, Math.floor(d / 7.5));
+    for (let i = 0; i < count; i++) {
+      const oz = -d / 2 + (i + 0.5) * (d / count);
+      worldGroup.add(
+        createBox(0.18, 2.3, 1.4, doorMat, cx + w / 2 + 0.06, 1.15, cz + oz),
+        createBox(0.18, 1.1, 1.1, winMat, cx + w / 2 + 0.06, 2.6, cz + oz + 1.8),
+        createBox(0.18, 1.1, 1.1, winMat, cx - w / 2 - 0.06, 2.6, cz + oz - 1.8)
+      );
+    }
+  }
+
+  registerCitySolidBox(cx, cz, w, d, h + 0.4, 0.30);
+}
+
+function buildDenseMazeCityAndStreets() {
+  davidCityShopkeepers = [];
+  davidCityPedestrians = [];
+
+  const twoStorySpecs = [
+    { x: -42, z: -26, side: 'east', var: 0 },
+    { x: -42, z:  22, side: 'east', var: 1 },
+    { x:  42, z: -26, side: 'west', var: 0 },
+    { x:  42, z:  22, side: 'west', var: 1 },
+    { x: -20, z: -34, side: 'east', var: 1 },
+    { x:  20, z:  30, side: 'west', var: 0 },
+    { x: -54, z: -48, side: 'east', var: 0 },
+    { x:  54, z:  48, side: 'west', var: 1 }
+  ];
+  twoStorySpecs.forEach(sp => {
+    buildClimbableTwoStoryHouse(sp.x, sp.z, sp.side, sp.var);
+  });
+
+  const shopSpecs = [
+    { x: -17, z:  18, w: 8.5, d: 6.5, facing: 'north', type: 'fruit' },
+    { x:  17, z:  18, w: 8.5, d: 6.5, facing: 'north', type: 'pottery' },
+    { x: -18, z:  -2, w: 8.5, d: 6.5, facing: 'south', type: 'cloth' },
+    { x:  18, z:  -2, w: 8.5, d: 6.5, facing: 'south', type: 'bakery' },
+    { x: -32, z:  -2, w: 8.0, d: 6.5, facing: 'south', type: 'fruit' },
+    { x:  32, z:  -2, w: 8.0, d: 6.5, facing: 'south', type: 'pottery' },
+    { x: -46, z:  36, w: 8.5, d: 6.5, facing: 'north', type: 'cloth' },
+    { x:  46, z: -38, w: 8.5, d: 6.5, facing: 'south', type: 'bakery' }
+  ];
+  shopSpecs.forEach((sh, idx) => {
+    buildOpenShopBuildingWithKeeper(sh.x, sh.z, sh.w, sh.d, sh.facing, sh.type, idx);
+  });
+
+  const cityMazeBlocks = [
+    { x: -60, z: -26, w: 7.5, h: 4.9, d: 28.0, v: 0 },
+    { x: -36, z: -60, w: 30.0, h: 4.8, d: 7.5, v: 1 },
+    { x: -36, z: -48, w: 20.0, h: 4.6, d: 7.5, v: 2 },
+    { x: -28, z: -36, w: 7.5, h: 4.5, d: 16.0, v: 3 },
+    { x: -30, z: -15, w: 15.0, h: 4.7, d: 7.5, v: 0 },
+    { x: -58, z:  -4, w: 8.5, h: 4.7, d: 14.0, v: 1 },
+    { x: -16, z: -20, w: 7.5, h: 4.8, d: 14.0, v: 2 },
+    { x: -16, z: -56, w: 12.0, h: 4.7, d: 7.5, v: 0 },
+
+    { x:  60, z: -26, w: 7.5, h: 4.9, d: 28.0, v: 1 },
+    { x:  36, z: -60, w: 30.0, h: 4.8, d: 7.5, v: 0 },
+    { x:  34, z: -48, w: 18.0, h: 4.6, d: 7.5, v: 3 },
+    { x:  28, z: -36, w: 7.5, h: 4.5, d: 16.0, v: 2 },
+    { x:  30, z: -15, w: 15.0, h: 4.7, d: 7.5, v: 1 },
+    { x:  58, z:  -4, w: 8.5, h: 4.7, d: 14.0, v: 0 },
+    { x:  16, z: -20, w: 7.5, h: 4.8, d: 14.0, v: 3 },
+    { x:  20, z: -34, w: 8.5, h: 4.6, d: 7.5, v: 2 },
+    { x:  16, z: -56, w: 12.0, h: 4.7, d: 7.5, v: 1 },
+
+    { x: -60, z:  16, w: 7.5, h: 4.8, d: 22.0, v: 2 },
+    { x: -42, z:   8, w: 8.5, h: 4.5, d: 12.0, v: 0 },
+    { x: -60, z:  46, w: 7.5, h: 4.8, d: 24.0, v: 1 },
+    { x: -40, z:  60, w: 28.0, h: 4.8, d: 7.5, v: 3 },
+    { x: -34, z:  48, w: 18.0, h: 4.6, d: 7.5, v: 0 },
+    { x: -29, z:  32, w: 8.0, h: 4.6, d: 18.0, v: 2 },
+    { x: -17, z:  31, w: 9.0, h: 4.5, d: 12.0, v: 1 },
+    { x: -18, z:  46, w: 10.0, h: 4.8, d: 7.5, v: 3 },
+    { x: -18, z:  59, w: 11.0, h: 4.8, d: 7.5, v: 0 },
+
+    { x:  60, z:  16, w: 7.5, h: 4.8, d: 22.0, v: 3 },
+    { x:  42, z:   8, w: 8.5, h: 4.5, d: 12.0, v: 1 },
+    { x:  60, z:  46, w: 7.5, h: 4.8, d: 24.0, v: 0 },
+    { x:  40, z:  60, w: 28.0, h: 4.8, d: 7.5, v: 2 },
+    { x:  34, z:  48, w: 18.0, h: 4.6, d: 7.5, v: 1 },
+    { x:  31, z:  32, w: 8.0, h: 4.6, d: 18.0, v: 3 },
+    { x:  30, z:  20, w: 10.0, h: 4.5, d: 7.0, v: 0 },
+    { x:  18, z:  46, w: 10.0, h: 4.8, d: 7.5, v: 2 },
+    { x:  18, z:  59, w: 11.0, h: 4.8, d: 7.5, v: 1 }
+  ];
+
+  cityMazeBlocks.forEach(b => {
+    buildSolidCityBuildingBlock(b.x, b.z, b.w, b.h, b.d, b.v);
+  });
+
+  const wellMat = matDavidCached('#94a3b8', '#64748b');
+  const woodMat = matDavidCached('#451a03');
+  worldGroup.add(
+    createBox(3.4, 1.1, 3.4, wellMat, 0, 0.55, 8),
+    createBox(2.4, 0.2, 2.4, new THREE.MeshBasicMaterial({ color: 0x0284c7 }), 0, 0.95, 8, false),
+    createBox(0.28, 2.6, 0.28, woodMat, -1.3, 2.1, 8),
+    createBox(0.28, 2.6, 0.28, woodMat,  1.3, 2.1, 8),
+    createBox(3.4, 0.35, 1.4, woodMat, 0, 3.4, 8)
+  );
+  registerCitySolidBox(0, 8, 3.4, 3.4, 3.5, 0.25);
+
+  const pedestrianRoutes = [
+    { x1: -10, z1:   8, x2:  10, z2:   8,요청하신 **[에피소드 3 : 스테이지 3]**의 3가지 규칙(진행 중 퀘스트 소형 UI 표시 및 타 NPC 퀘스트 잠금, 퀘스트 수락 즉시 보유 자원 0 초기화, 난이도별 맞춤형 랜덤 자원 스폰)은 **파트 4/5**와 **파트 5/5**에 반영됩니다. *(파트 1/5 ~ 파트 3/5은 수정 없이 그대로 유지하시면 됩니다.)*
+
+### 주요 반영 내역
+1. **소형 퀘스트 알림창 UI 및 단일 퀘스트 진행 잠금 (`ensureDavidStage3QuestTrackerUI` / `davidCurrentActiveQuestNpc`)**:
+   * NPC에게 퀘스트를 받으면 화면 상단에 **현재 진행 중인 퀘스트와 실시간 자원 수집 현황(예: `📜 [🏪 상인] 🪵 나무 0/2개`)을 보여주는 소형 알림창**이 뜹니다.
+   * 한 NPC의 퀘스트를 진행하는 동안에는 다른 NPC의 퀘스트를 중복해서 받을 수 없도록 잠기며, 다른 NPC에게 다가가면 현재 맡은 퀘스트를 먼저 해결해 달라고 안내합니다.
+2. **퀘스트 수락 순간 보유 자원 초기화 (`resetDavidStage3InventoryAndRespawnResources`)**:
+   * 퀘스트를 받기 전이나 이전 과정에서 자원을 미리 많이 모아 두었더라도, **새 NPC의 퀘스트를 받는 순간 보유 자원(`나무·돌·철`)과 신하들의 등짐이 모두 `0`으로 초기화**되어 그 순간부터 새로 수집을 시작합니다.
+3. **난이도별(유치·유년·소년) 랜덤 자원 스폰 (`spawnRandomizedStage3Resources`)**:
+   * **유치반(`kinder`)**: 중앙 광장과 대로변, 퀘스트 NPC 주변의 넓고 눈에 잘 띄는 1층 길가에 랜덤 스폰됩니다.
+   * **유년반(`junior`)**: 중간 미로 골목길과 상가 골목, 일부 2층 건물 옥상에 골고루 섞여 랜덤 스폰됩니다.
+   * **소년반·타임어택(`senior` / `timeattack`)**: 성벽 끝 외곽 골목, 건물 미로의 깊은 막다른 길, 2층 건물 옥상 테라스 등 찾기 어려운 은신처 후보지들 중에서 매번 랜덤으로 스폰됩니다.
+
+먼저 **파트 4/5 (`ep3_david.js` - 4/5)** 코드를 출력합니다.
+
+---
+
+### 파트 4 (`ep3_david.js` - 4/5 : 소형 퀘스트 UI, 난이도별 랜덤 자원 스폰, 자원 초기화 및 성벽 미로 도시 월드)
+
+```javascript
+// =========================================================================
+// [ep3_david.js - 파트 4/5] 에피소드 3 : 스테이지 3 월드, 소형 퀘스트 UI 및 난이도별 랜덤 자원 스폰
+// - 소형 진행 퀘스트 표시창(ensureDavidStage3QuestTrackerUI) 및 단일 퀘스트 잠금 상태(davidCurrentActiveQuestNpc)
+// - 퀘스트 수락 즉시 보유 자원 0 초기화(resetDavidStage3InventoryAndRespawnResources)
+// - 난이도별(유치: 쉬움 / 유년: 중간 / 소년·타임어택: 어려움) 랜덤 자원 스폰 시스템
+// =========================================================================
+
+let davidCityNpcs = [];
+let davidCityResources = [];
+let davidRetainers = [];
+let davidCityShopkeepers = [];
+let davidCityPedestrians = [];
+let davidCityBuildingBoxes = [];
+let davidInventory = { wood: 0, stone: 0, iron: 0 };
+let davidCurrentActiveQuestNpc = null; // 현재 진행 중인 단일 퀘스트 NPC
+let davidActiveNearNpc = null;
+let davidDialogTargetNpc = null;
+let davidNpcAutoDialogCooldown = 0;
+let davidProphetUnlocked = false;
+let davidCityBuildings = {
+  marketGroup: null,
+  houseGroup: null,
+  gateGroup: null
+};
+
+// 엔딩 빈 왕좌 착석 & 메시아 성경절 연출 상태
+let davidThroneEnding = {
+  throneGroup: null,
+  arrowGroup: null,
+  seated: false,
+  seatTimer: 0,
+  modalShown: false
+};
+
+// -------------------------------------------------------------------------
+// 1. 진행 중인 퀘스트 소형 UI 표시기 & 도시 석조 바닥 텍스처·충돌 유틸리티
+// -------------------------------------------------------------------------
+function ensureDavidStage3QuestTrackerUI() {
+  const uiRoot = ensureDavidCustomUI();
+  let tracker = document.getElementById('david-st3-quest-tracker');
+  if (!tracker) {
+    tracker = document.createElement('div');
+    tracker.id = 'david-st3-quest-tracker';
+    tracker.className =
+      'hidden mt-16 mc-panel px-4 py-2 rounded-2xl bg-slate-900/90 border-2 border-amber-400 text-white shadow-xl flex flex-col gap-1 min-w-[250px] max-w-[330px]';
+    tracker.innerHTML = `
+      <div class="flex items-center justify-between gap-3 border-b border-slate-700 pb-1">
+        <span id="david-st3-quest-title" class="text-xs font-jua text-amber-300">📜 진행 중인 퀘스트</span>
+        <span class="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/50 text-[10px] font-bold text-amber-200">진행 중</span>
+      </div>
+      <div id="david-st3-quest-reqs" class="text-xs font-bold text-emerald-300 text-center py-0.5"></div>
+      <div id="david-st3-quest-hint" class="text-[10px] text-slate-300 text-center">완료 전까지 다른 퀘스트는 진행할 수 없어요</div>
+    `;
+    uiRoot.appendChild(tracker);
+  }
+  return tracker;
+}
+
+function updateDavidStage3QuestTrackerUI() {
+  const tracker = ensureDavidStage3QuestTrackerUI();
+  if (currentEpisode !== 'david' || currentStage !== 3 || !davidCurrentActiveQuestNpc || davidCurrentActiveQuestNpc.completed) {
+    tracker.classList.add('hidden');
+    return;
+  }
+
+  const npc = davidCurrentActiveQuestNpc;
+  tracker.classList.remove('hidden');
+
+  const titleEl = document.getElementById('david-st3-quest-title');
+  const reqsEl = document.getElementById('david-st3-quest-reqs');
+  const hintEl = document.getElementById('david-st3-quest-hint');
+
+  if (titleEl) titleEl.textContent = `📜 ${npc.roleTitle}의 요청`;
+
+  if (npc.req && reqsEl) {
+    const parts = [];
+    if (npc.req.wood > 0) {
+      const wDone = davidInventory.wood >= npc.req.wood;
+      parts.push(`<span class="${wDone ? 'text-emerald-300' : 'text-amber-200'}">🪵 나무 ${Math.min(davidInventory.wood, npc.req.wood)}/${npc.req.wood}</span>`);
+    }
+    if (npc.req.stone > 0) {
+      const sDone = davidInventory.stone >= npc.req.stone;
+      parts.push(`<span class="${sDone ? 'text-emerald-300' : 'text-sky-200'}">🪨 돌 ${Math.min(davidInventory.stone, npc.req.stone)}/${npc.req.stone}</span>`);
+    }
+    if (npc.req.iron > 0) {
+      const iDone = davidInventory.iron >= npc.req.iron;
+      parts.push(`<span class="${iDone ? 'text-emerald-300' : 'text-orange-200'}">⚙️ 철 ${Math.min(davidInventory.iron, npc.req.iron)}/${npc.req.iron}</span>`);
+    }
+    reqsEl.innerHTML = parts.join(' &nbsp;·&nbsp; ');
+
+    const allMet =
+      davidInventory.wood >= npc.req.wood &&
+      davidInventory.stone >= npc.req.stone &&
+      davidInventory.iron >= npc.req.iron;
+
+    if (hintEl) {
+      hintEl.textContent = allMet
+        ? `✅ 자재를 모두 모았어요! ${npc.roleTitle}에게 돌아가세요!`
+        : `자재를 모두 모아 ${npc.roleTitle}에게 전달하세요 (타 퀘스트 잠금)`;
+      hintEl.className = allMet
+        ? 'text-[11px] font-bold text-yellow-300 text-center animate-pulse'
+        : 'text-[10px] text-slate-300 text-center';
+    }
+  }
+}
+
+let _davidCityStoneTex = null;
+function makeDavidCityStoneTex() {
+  if (_davidCityStoneTex) return _davidCityStoneTex;
+  const c = document.createElement('canvas');
+  c.width = 128;
+  c.height = 128;
+  const ctx = c.getContext('2d');
+
+  ctx.fillStyle = '#d6c3a5';
+  ctx.fillRect(0, 0, 128, 128);
+
+  const stonePalette = ['#e5d5bc', '#cbb492', '#decbb0', '#c2a882', '#dfd0b8'];
+  const tileW = 32, tileH = 16;
+
+  for (let row = 0; row < 8; row++) {
+    const offsetX = (row % 2) * 16;
+    for (let col = -1; col < 5; col++) {
+      const x = col * tileW + offsetX;
+      const y = row * tileH;
+      ctx.fillStyle = stonePalette[(row * 3 + col + 10) % stonePalette.length];
+      ctx.fillRect(x + 1, y + 1, tileW - 2, tileH - 2);
+
+      ctx.fillStyle = 'rgba(255,255,255,0.18)';
+      ctx.fillRect(x + 2, y + 2, tileW - 4, 2);
+      ctx.fillStyle = 'rgba(87,65,42,0.22)';
+      ctx.fillRect(x + 1, y + tileH - 3, tileW - 2, 2);
+    }
+  }
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(36, 36);
+  _davidCityStoneTex = tex;
+  return tex;
+}
+
+function registerCitySolidBox(cx, cz, w, d, topY, pad = 0.30) {
+  const minX = cx - w / 2 - pad;
+  const maxX = cx + w / 2 + pad;
+  const minZ = cz - d / 2 - pad;
+  const maxZ = cz + d / 2 + pad;
+  colliders.push({ minX, maxX, minZ, maxZ });
+  platforms.push({ minX, maxX, minZ, maxZ, topY });
+  davidCityBuildingBoxes.push({ minX, maxX, minZ, maxZ, topY });
+}
+
+function isCityFloorSpotClear(x, z, pad = 1.35) {
+  for (const b of davidCityBuildingBoxes) {
+    if (x + pad > b.minX && x - pad < b.maxX && z + pad > b.minZ && z - pad < b.maxZ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function resolvePlayerOutOfCityBuildings() {
+  for (const b of davidCityBuildingBoxes) {
+    if (playerPos.y >= b.topY - 0.55) continue;
+
+    if (
+      playerPos.x > b.minX && playerPos.x < b.maxX &&
+      playerPos.z > b.minZ && playerPos.z < b.maxZ
+    ) {
+      const dLeft = playerPos.x - b.minX;
+      const dRight = b.maxX - playerPos.x;
+      const dNorth = playerPos.z - b.minZ;
+      const dSouth = b.maxZ - playerPos.z;
+      const minSide = Math.min(dLeft, dRight, dNorth, dSouth);
+
+      if (minSide === dLeft) playerPos.x = b.minX - 0.15;
+      else if (minSide === dRight) playerPos.x = b.maxX + 0.15;
+      else if (minSide === dNorth) playerPos.z = b.minZ - 0.15;
+      else playerPos.z = b.maxZ + 0.15;
+    }
+  }
+}
+
+// -------------------------------------------------------------------------
+// 2. 맵 가장자리 성벽(반투명 시야 보장) 및 성벽 밖 곧은 길 생성
+// -------------------------------------------------------------------------
+function buildDavidCastleWallPerimeter(limit, withSouthGate = true) {
+  const wallBaseMat = matVoxel('#d6c3a5', '#b89f7a');
+  const wallTrimMat = matVoxel('#b45309', '#78350f');
+  const towerBaseMat = matVoxel('#cbb492', '#9c825e');
+  const wallH = 8.2;
+  const wallThick = 3.4;
+  const segLen = 12.0;
+
+  const addTransparentWallSegment = (w, h, d, x, y, z, isTrim = false) => {
+    const mat = (isTrim ? wallTrimMat : wallBaseMat).clone();
+    const box = createBox(w, h, d, mat, x, y, z);
+    worldGroup.add(box);
+    wallMeshes.push(box);
+    return box;
+  };
+
+  for (let x = -limit; x <= limit; x += segLen) {
+    addTransparentWallSegment(segLen + 0.15, wallH, wallThick, x, wallH / 2, -limit, false);
+    addTransparentWallSegment(segLen + 0.35, 0.55, wallThick + 0.4, x, wallH + 0.25, -limit, true);
+    [-3.6, 0, 3.6].forEach(ox => {
+      addTransparentWallSegment(2.0, 1.2, wallThick + 0.2, x + ox, wallH + 1.1, -limit, false);
+    });
+
+    if (withSouthGate && Math.abs(x) < 12.5) continue;
+    addTransparentWallSegment(segLen + 0.15, wallH, wallThick, x, wallH / 2, limit, false);
+    addTransparentWallSegment(segLen + 0.35, 0.55, wallThick + 0.4, x, wallH + 0.25, limit, true);
+    [-3.6, 0, 3.6].forEach(ox => {
+      addTransparentWallSegment(2.0, 1.2, wallThick + 0.2, x + ox, wallH + 1.1, limit, false);
+    });
+  }
+
+  for (let z = -limit; z <= limit; z += segLen) {
+    addTransparentWallSegment(wallThick, wallH, segLen + 0.15, -limit, wallH / 2, z, false);
+    addTransparentWallSegment(wallThick + 0.4, 0.55, segLen + 0.35, -limit, wallH + 0.25, z, true);
+    [-3.6, 0, 3.6].forEach(oz => {
+      addTransparentWallSegment(wallThick + 0.2, 1.2, 2.0, -limit, wallH + 1.1, z + oz, false);
+    });
+
+    addTransparentWallSegment(wallThick, wallH, segLen + 0.15, limit, wallH / 2, z, false);
+    addTransparentWallSegment(wallThick + 0.4, 0.55, segLen + 0.35, limit, wallH + 0.25, z, true);
+    [-3.6, 0, 3.6].forEach(oz => {
+      addTransparentWallSegment(wallThick + 0.2, 1.2, 2.0, limit, wallH + 1.1, z + oz, false);
+    });
+  }
+
+  const towerCoords = [
+    [-limit, -limit], [limit, -limit], [-limit, limit], [limit, limit],
+    [-limit, 0], [limit, 0], [0, -limit]
+  ];
+  towerCoords.forEach(([tx, tz]) => {
+    const tBody = createBox(6.8, wallH + 3.2, 6.8, towerBaseMat.clone(), tx, (wallH + 3.2) / 2, tz);
+    const tRoof = createBox(7.4, 0.7, 7.4, wallTrimMat.clone(), tx, wallH + 3.55, tz);
+    worldGroup.add(tBody, tRoof);
+    wallMeshes.push(tBody, tRoof);
+  });
+
+  for (let i = -limit + 16; i <= limit - 16; i += 24) {
+    addWallTorch(i, 3.5, -limit + 2.0);
+    if (!withSouthGate || Math.abs(i) > 14) addWallTorch(i, 3.5, limit - 2.0);
+    addWallTorch(-limit + 2.0, 3.5, i);
+    addWallTorch( limit - 2.0, 3.5, i);
+  }
+
+  if (withSouthGate) {
+    const outGrassMat = new THREE.MeshLambertMaterial({ map: makeGrassFieldTex() });
+    const highwayMat = matDavidCached('#e5c494', '#c29b61');
+    const curbMat = matDavidCached('#94a3b8', '#64748b');
+
+    const outerGround = createBox(limit * 3.0, 1.2, 130, outGrassMat, 0, -0.58, limit + 64, false);
+    outerGround.receiveShadow = true;
+    worldGroup.add(outerGround);
+
+    const roadLen = 125;
+    const roadCenterZ = limit + roadLen / 2 - 2;
+    worldGroup.add(
+      createBox(8.6, 0.14, roadLen, highwayMat, 0, 0.06, roadCenterZ, false),
+      createBox(0.65, 0.28, roadLen, curbMat, -4.6, 0.14, roadCenterZ, false),
+      createBox(0.65, 0.28, roadLen, curbMat,  4.6, 0.14, roadCenterZ, false)
+    );
+
     for (let rz = limit + 12; rz <= limit + 108; rz += 16) {
       addPalmTree(-9.5, rz, 1.15, false);
       addPalmTree( 9.5, rz, 1.15, false);
@@ -4085,12 +4973,10 @@ function buildSolidCityBuildingBlock(cx, cz, w, h, d, variant = 0) {
   registerCitySolidBox(cx, cz, w, d, h + 0.4, 0.30);
 }
 
-// [스테이지 3 요청사항 4] 성벽 코앞(±62m)까지 확장된 대규모 건물 미로 및 상가·행인 배치
 function buildDenseMazeCityAndStreets() {
   davidCityShopkeepers = [];
   davidCityPedestrians = [];
 
-  // 1) 위로 올라갈 수 있는 2층 건물 8채 (내부 시가지 + 성벽 근처 외곽 거점까지 확장)
   const twoStorySpecs = [
     { x: -42, z: -26, side: 'east', var: 0 },
     { x: -42, z:  22, side: 'east', var: 1 },
@@ -4098,14 +4984,13 @@ function buildDenseMazeCityAndStreets() {
     { x:  42, z:  22, side: 'west', var: 1 },
     { x: -20, z: -34, side: 'east', var: 1 },
     { x:  20, z:  30, side: 'west', var: 0 },
-    { x: -54, z: -48, side: 'east', var: 0 }, // 북서 성벽 근처 2층 건물
-    { x:  54, z:  48, side: 'west', var: 1 }  // 남동 성벽 근처 2층 건물
+    { x: -54, z: -48, side: 'east', var: 0 },
+    { x:  54, z:  48, side: 'west', var: 1 }
   ];
   twoStorySpecs.forEach(sp => {
     buildClimbableTwoStoryHouse(sp.x, sp.z, sp.side, sp.var);
   });
 
-  // 2) 안에 상인이 서서 가게를 보는 오픈형 상가 건물 8곳 배치
   const shopSpecs = [
     { x: -17, z:  18, w: 8.5, d: 6.5, facing: 'north', type: 'fruit' },
     { x:  17, z:  18, w: 8.5, d: 6.5, facing: 'north', type: 'pottery' },
@@ -4120,9 +5005,7 @@ function buildDenseMazeCityAndStreets() {
     buildOpenShopBuildingWithKeeper(sh.x, sh.z, sh.w, sh.d, sh.facing, sh.type, idx);
   });
 
-  // 3) 성벽 바로 안쪽(±61m)까지 뻗어 골목길과 교차로, 막다른 골목을 형성하는 42개 시가지 건물 블록
   const cityMazeBlocks = [
-    // [북서 성벽 인접 미로 구역]
     { x: -60, z: -26, w: 7.5, h: 4.9, d: 28.0, v: 0 },
     { x: -36, z: -60, w: 30.0, h: 4.8, d: 7.5, v: 1 },
     { x: -36, z: -48, w: 20.0, h: 4.6, d: 7.5, v: 2 },
@@ -4132,7 +5015,6 @@ function buildDenseMazeCityAndStreets() {
     { x: -16, z: -20, w: 7.5, h: 4.8, d: 14.0, v: 2 },
     { x: -16, z: -56, w: 12.0, h: 4.7, d: 7.5, v: 0 },
 
-    // [북동 성벽 인접 미로 구역]
     { x:  60, z: -26, w: 7.5, h: 4.9, d: 28.0, v: 1 },
     { x:  36, z: -60, w: 30.0, h: 4.8, d: 7.5, v: 0 },
     { x:  34, z: -48, w: 18.0, h: 4.6, d: 7.5, v: 3 },
@@ -4143,7 +5025,6 @@ function buildDenseMazeCityAndStreets() {
     { x:  20, z: -34, w: 8.5, h: 4.6, d: 7.5, v: 2 },
     { x:  16, z: -56, w: 12.0, h: 4.7, d: 7.5, v: 1 },
 
-    // [서쪽 & 남서 성벽 인접 미로 구역]
     { x: -60, z:  16, w: 7.5, h: 4.8, d: 22.0, v: 2 },
     { x: -42, z:   8, w: 8.5, h: 4.5, d: 12.0, v: 0 },
     { x: -60, z:  46, w: 7.5, h: 4.8, d: 24.0, v: 1 },
@@ -4154,7 +5035,6 @@ function buildDenseMazeCityAndStreets() {
     { x: -18, z:  46, w: 10.0, h: 4.8, d: 7.5, v: 3 },
     { x: -18, z:  59, w: 11.0, h: 4.8, d: 7.5, v: 0 },
 
-    // [동쪽 & 남동 성벽 인접 미로 구역]
     { x:  60, z:  16, w: 7.5, h: 4.8, d: 22.0, v: 3 },
     { x:  42, z:   8, w: 8.5, h: 4.5, d: 12.0, v: 1 },
     { x:  60, z:  46, w: 7.5, h: 4.8, d: 24.0, v: 0 },
@@ -4170,7 +5050,6 @@ function buildDenseMazeCityAndStreets() {
     buildSolidCityBuildingBlock(b.x, b.z, b.w, b.h, b.d, b.v);
   });
 
-  // 중앙 광장 분수 우물
   const wellMat = matDavidCached('#94a3b8', '#64748b');
   const woodMat = matDavidCached('#451a03');
   worldGroup.add(
@@ -4182,7 +5061,6 @@ function buildDenseMazeCityAndStreets() {
   );
   registerCitySolidBox(0, 8, 3.4, 3.4, 3.5, 0.25);
 
-  // 4) 미로 골목과 성벽 안쪽 길을 걸어 다니는 마을 행인 14명 배치
   const pedestrianRoutes = [
     { x1: -10, z1:   8, x2:  10, z2:   8, spd: 2.3 },
     { x1:  12, z1:   6, x2: -12, z2:   6, spd: 2.1 },
@@ -4219,9 +5097,7 @@ function buildDenseMazeCityAndStreets() {
   });
 }
 
-// [스테이지 3 요청사항 2] 남쪽 성문을 남쪽 성벽(z = mapLimit = 68)에 빈틈없이 일체형으로 부착
 function buildQuestBuildableStructures(mapLimit = 68) {
-  // 1) 상인의 상가 건설 부지 (서쪽 x = -28, z = 8)
   const marketRoot = new THREE.Group();
   marketRoot.position.set(-28, 0, 8);
   const basePad = createBox(8.5, 0.2, 6.0, matDavidCached('#d9a05b', '#92400e'), 0, 0.1, 0, false);
@@ -4248,7 +5124,6 @@ function buildQuestBuildableStructures(mapLimit = 68) {
   worldGroup.add(marketRoot);
   davidCityBuildings.marketGroup = marketRoot;
 
-  // 2) 건축가의 새 집 건설 부지 (동쪽 x = 28, z = 8)
   const houseRoot = new THREE.Group();
   houseRoot.position.set(28, 0, 8);
   const hPad = createBox(9.0, 0.25, 7.0, matDavidCached('#94a3b8', '#64748b'), 0, 0.12, 0, false);
@@ -4269,7 +5144,6 @@ function buildQuestBuildableStructures(mapLimit = 68) {
   worldGroup.add(houseRoot);
   davidCityBuildings.houseGroup = houseRoot;
 
-  // 3) 경비병의 남쪽 대성문 -> 남쪽 성벽 라인(z = mapLimit)에 정확히 결합!
   const gateZ = mapLimit;
   const gateRoot = new THREE.Group();
   gateRoot.position.set(0, 0, gateZ);
@@ -4283,9 +5157,8 @@ function buildQuestBuildableStructures(mapLimit = 68) {
   gateRoot.add(tL, tR, tTop);
   wallMeshes.push(tL, tR, tTop);
   registerCitySolidBox(-7.6, gateZ, 7.2, 6.8, 10.5, 0.25);
-  registerCitySolidBox( 7.6, gateZ, 7.2, 6.8, 6.8, 10.5, 0.25);
+  registerCitySolidBox( 7.6, gateZ, 7.2, 6.8, 10.5, 0.25);
 
-  // 고장난 성문 (비뚤어져 열려 있어 성문 밖 곧은 길이 훤히 보임)
   const brokenGate = new THREE.Group();
   const bDoorL = createBox(3.6, 6.5, 0.5, matDavidCached('#78350f'), -2.4, 3.0, 0);
   bDoorL.rotation.z = -0.28;
@@ -4293,7 +5166,6 @@ function buildQuestBuildableStructures(mapLimit = 68) {
   bDoorR.rotation.x = 0.35;
   brokenGate.add(bDoorL, bDoorR);
 
-  // 수리 완료된 철제 성문 (중앙 틈과 성문 위로 성벽 밖 곧은 길이 보임)
   const repairedGate = new THREE.Group();
   repairedGate.add(
     createBox(3.8, 7.4, 0.65, ironMat, -2.1, 3.7, 0),
@@ -4312,7 +5184,7 @@ function buildQuestBuildableStructures(mapLimit = 68) {
 }
 
 // -------------------------------------------------------------------------
-// 5. 성벽 인접 막다른 골목과 2층 옥상에 숨겨진 건축 자재 스폰 및 월드 생성
+// 5. [요청사항 2·3] 난이도별 맞춤형 랜덤 자원 스폰 & 퀘스트 수락 시 보유 자원 0 초기화
 // -------------------------------------------------------------------------
 function spawnDavidCityResourceNode(kind, x, z, baseY = 0) {
   const grp = new THREE.Group();
@@ -4370,6 +5242,103 @@ function spawnDavidCityResourceNode(kind, x, z, baseY = 0) {
   });
 }
 
+// 난이도별(유치: 쉬움 / 유년: 중간 / 소년·타임어택: 어려움) 후보지 풀에서 매번 랜덤 위치를 뽑아 자원 스폰
+function spawnRandomizedStage3Resources() {
+  davidCityResources.forEach(res => {
+    if (res.group) worldGroup.remove(res.group);
+    if (res.label) res.label.remove();
+  });
+  davidCityResources = [];
+
+  davidRetainers.forEach(ret => {
+    ret.fetchingRes = null;
+    ret.pickupAnimTimer = 0;
+  });
+
+  // 1) 유치반(kinder) 후보지: 광장과 중앙 십자 대로변, 퀘스트 NPC 근처의 찾기 쉬운 1층 열린 길가
+  const easyPools = {
+    wood: [
+      [-14, 8, 0], [-19, 4, 0], [-12, 14, 0], [-25, 16, 0], [-8, -2, 0], [-15, -8, 0], [8, 14, 0], [-6, 20, 0]
+    ],
+    stone: [
+      [14, 8, 0], [19, 4, 0], [12, 14, 0], [25, 16, 0], [8, -2, 0], [15, -8, 0], [6, 20, 0], [18, 24, 0]
+    ],
+    iron: [
+      [-6, 30, 0], [6, 30, 0], [-4, 46, 0], [4, 46, 0], [0, 24, 0], [-8, 38, 0], [8, 38, 0], [0, 52, 0]
+    ]
+  };
+
+  // 2) 유년반(junior) 후보지: 중간 미로 골목길 + 가까운 2층 건물 옥상 일부 포함 (중간 난이도)
+  const mediumPools = {
+    wood: [
+      [-34, -8, 0], [34, -8, 0], [-24, -22, 0], [24, -22, 0],
+      [-40.5, -24.5, 3.6], [40.5, -24.5, 3.6], [-34, 14, 0], [-24, -38, 0], [24, -38, 0]
+    ],
+    stone: [
+      [34, 12, 0], [24, 24, 0], [38, 28, 0], [40.5, 23.5, 3.6],
+      [18.5, 31.5, 3.6], [48, 8, 0], [24, 40, 0], [36, -18, 0]
+    ],
+    iron: [
+      [-34, 18, 0], [-24, 26, 0], [-24, 42, 0], [-40.5, 23.5, 3.6],
+      [-18.5, -32.5, 3.6], [-48, 8, 0], [-36, 38, 0], [10, 52, 0]
+    ]
+  };
+
+  // 3) 소년반·타임어택(senior / timeattack) 후보지: 성벽 외곽 골목 끝, 깊은 미로 막다른 골목, 2층 건물 옥상 (어려운 난이도)
+  const hardPools = {
+    wood: [
+      [-52.5, -46.5, 3.6], [-40.5, -24.5, 3.6], [40.5, -24.5, 3.6],
+      [-46, -54, 0], [46, -54, 0], [-52, -32, 0], [52, -32, 0], [-35, -42, 0], [35, -42, 0]
+    ],
+    stone: [
+      [52.5, 49.5, 3.6], [40.5, 23.5, 3.6], [18.5, 31.5, 3.6],
+      [48, 54, 0], [52, 26, 0], [52, -16, 0], [38, 42, 0], [48, -42, 0]
+    ],
+    iron: [
+      [-40.5, 23.5, 3.6], [-18.5, -32.5, 3.6],
+      [-48, 54, 0], [-52, 28, 0], [-52, -16, 0], [-38, 42, 0], [-48, -42, 0], [46, 54, 0]
+    ]
+  };
+
+  const isKinder = (currentMode === 'kinder');
+  const isHard = (currentMode === 'senior' || currentMode === 'timeattack');
+  const selectedPools = isKinder ? easyPools : (isHard ? hardPools : mediumPools);
+  const spawnCountPerKind = isKinder ? 6 : 5;
+
+  ['wood', 'stone', 'iron'].forEach(kind => {
+    const shuffled = [...selectedPools[kind]].sort(() => Math.random() - 0.5);
+    const chosen = shuffled.slice(0, spawnCountPerKind);
+
+    chosen.forEach(([bx, bz, by]) => {
+      let fx = bx;
+      let fz = bz;
+      // 1층 길가 자원은 건물과 겹치지 않는 범위 내에서 매번 미세 랜덤 오프셋(±1.6m)을 더해 위치 변화를 줌
+      if (by === 0) {
+        for (let attempt = 0; attempt < 5; attempt++) {
+          const candX = bx + (Math.random() - 0.5) * 3.2;
+          const candZ = bz + (Math.random() - 0.5) * 3.2;
+          if (isCityFloorSpotClear(candX, candZ, 1.25)) {
+            fx = candX;
+            fz = candZ;
+            break;
+          }
+        }
+      }
+      spawnDavidCityResourceNode(kind, fx, fz, by);
+    });
+  });
+}
+
+// [요청사항 2] NPC에게 새 퀘스트를 받는 순간 보유 자원을 0으로 초기화하고 자원을 랜덤 위치에 새로 배치
+function resetDavidStage3InventoryAndRespawnResources() {
+  davidInventory.wood = 0;
+  davidInventory.stone = 0;
+  davidInventory.iron = 0;
+  spawnRandomizedStage3Resources();
+  updateDavidStage3InventoryHUD();
+  updateDavidStage3QuestTrackerUI();
+}
+
 function updateDavidStage3InventoryHUD() {
   if (carriedBlockGroup) {
     while (carriedBlockGroup.children.length > 0) carriedBlockGroup.remove(carriedBlockGroup.children[0]);
@@ -4396,11 +5365,13 @@ function updateDavidStage3InventoryHUD() {
     document.getElementById('hud-block-text').textContent =
       `🪵${davidInventory.wood} · 🪨${davidInventory.stone} · ⚙️${davidInventory.iron}`;
   }
+  updateDavidStage3QuestTrackerUI();
 }
 
 function buildDavidStage3World() {
   clearWorld();
   ensureDavidCustomUI();
+  ensureDavidStage3QuestTrackerUI();
   hideAllDavidCustomUI();
 
   scene.background = new THREE.Color(0x38bdf8);
@@ -4410,7 +5381,6 @@ function buildDavidStage3World() {
   const isKinder = (currentMode === 'kinder');
   const isHard = (currentMode === 'senior' || currentMode === 'timeattack');
 
-  // 사각형 성벽 내부 전체를 걸어 다닐 수 있도록 직사각형 이동 경계 설정
   currentMapRectBounds = {
     minX: -mapLimit + 2.4,
     maxX:  mapLimit - 2.4,
@@ -4425,6 +5395,7 @@ function buildDavidStage3World() {
   davidCityPedestrians = [];
   davidCityBuildingBoxes = [];
   davidInventory = { wood: 0, stone: 0, iron: 0 };
+  davidCurrentActiveQuestNpc = null;
   davidActiveNearNpc = null;
   davidDialogTargetNpc = null;
   davidNpcAutoDialogCooldown = 0;
@@ -4435,7 +5406,6 @@ function buildDavidStage3World() {
     timeRemaining = 32.0;
   }
 
-  // 도시 전체 석조 바닥 및 중앙 십자 대로 (남쪽 성문 z = 68까지 일직선으로 연결)
   const cityStoneMat = new THREE.MeshLambertMaterial({ map: makeDavidCityStoneTex() });
   const royalRoadMat = matDavidCached('#e5c494', '#c29b61');
   const plazaMat = matDavidCached('#cbd5e1', '#94a3b8');
@@ -4450,43 +5420,14 @@ function buildDavidStage3World() {
     createBox(22, 0.08, 18, plazaMat, 0, 0.04, 8, false)
   );
 
-  // [스테이지 3 요청사항 1·2·3·4] 외곽 숲 대신 사방 성벽 + 성문 밖 곧은 길 + 성벽 코앞까지 확장된 건물 미로 생성
   buildDavidCastleWallPerimeter(mapLimit, true);
   buildDavidCityPalace(0, -14);
   buildDavidCityTabernacle(0, -50);
   buildDenseMazeCityAndStreets();
   buildQuestBuildableStructures(mapLimit);
 
-  // 성벽 근처 골목과 2층 옥상(baseY = 3.6)에 숨겨진 건축 자재 배치
-  // 1) 나무 자재 (🪵)
-  [
-    [-40.5, -24.5, 3.6], // 북서 2층 집 옥상
-    [ 40.5, -24.5, 3.6], // 북동 2층 집 옥상
-    [-52.5, -46.5, 3.6], // 북서 성벽 근처 2층 집 옥상
-    [-44.0, -54.0, 0.0], // 북서 성벽 바로 앞 막다른 골목
-    [ 44.0, -54.0, 0.0], // 북동 성벽 바로 앞 막다른 골목
-    [-52.0, -24.0, 0.0], // 서쪽 성벽 안쪽 미로 골목
-    [ 52.0, -24.0, 0.0]  // 동쪽 성벽 안쪽 미로 골목
-  ].forEach(([wx, wz, wy]) => spawnDavidCityResourceNode('wood', wx, wz, wy));
-
-  // 2) 돌 자재 (🪨)
-  [
-    [ 40.5,  23.5, 3.6], // 남동 2층 집 옥상
-    [ 18.5,  31.5, 3.6], // 남동 광장 2층 집 옥상
-    [ 52.5,  49.5, 3.6], // 남동 성벽 근처 2층 집 옥상
-    [ 46.0,  54.0, 0.0], // 남동 성벽 바로 앞 막다른 골목
-    [ 52.0,  14.0, 0.0], // 동쪽 성벽 안쪽 미로 골목
-    [ 24.0,  26.0, 0.0]  // 남동 골목 교차점
-  ].forEach(([sx, sz, sy]) => spawnDavidCityResourceNode('stone', sx, sz, sy));
-
-  // 3) 철 자재 (⚙️)
-  [
-    [-40.5,  23.5, 3.6], // 남서 2층 집 옥상
-    [-18.5, -32.5, 3.6], // 성막 서쪽 2층 집 옥상
-    [-46.0,  54.0, 0.0], // 남서 성벽 바로 앞 막다른 골목
-    [-52.0,  14.0, 0.0], // 서쪽 성벽 안쪽 미로 골목
-    [-24.0,  26.0, 0.0]  // 남서 골목 교차점
-  ].forEach(([ix, iz, iy]) => spawnDavidCityResourceNode('iron', ix, iz, iy));
+  // 난이도에 맞춰 랜덤 위치에 건축 자재 초기 스폰
+  spawnRandomizedStage3Resources();
 
   const reqWood1 = isKinder ? 1 : 2;
   const reqStone2 = isKinder ? 1 : (isHard ? 2 : 1);
@@ -4501,7 +5442,7 @@ function buildDavidStage3World() {
       pitch: 1.15,
       beaconColor: 0xfacc15,
       req: { wood: reqWood1, stone: 0, iron: 0 },
-      questLine: `"왕이시여, 상가를 지어야 하는데 나무가 필요합니다! 미로 골목과 2층 옥상에 있는 나무 ${reqWood1}개를 구해주시옵소서!"`,
+      questLine: `"왕이시여, 상가를 지어야 하는데 나무가 필요합니다! 지금부터 성 안의 나무 ${reqWood1}개를 새로 구해주시옵소서!"`,
       thanksLine: `"오오! 다윗 왕이시여 감사합니다! 왕께서 주신 나무로 멋진 상가를 세웠습니다!"`
     },
     {
@@ -4511,17 +5452,17 @@ function buildDavidStage3World() {
       pitch: 0.92,
       beaconColor: 0x38bdf8,
       req: { wood: reqWood2, stone: reqStone2, iron: 0 },
-      questLine: `"왕이시여, 집을 지어야 하는데 돌과 나무가 필요합니다! 성벽 근처 골목과 옥상에 숨겨진 돌 ${reqStone2}개와 나무 ${reqWood2}개를 찾아주시옵소서!"`,
+      questLine: `"왕이시여, 집을 지어야 하는데 돌과 나무가 필요합니다! 지금부터 돌 ${reqStone2}개와 나무 ${reqWood2}개를 새로 찾아주시옵소서!"`,
       thanksLine: `"찬양받으소서 다윗 왕이시여! 튼튼한 돌과 나무 덕분에 백성들의 집이 완성되었습니다!"`
     },
     {
       id: 'guard',
       roleTitle: '🛡️ 경비병',
-      x: -4.5, z: mapLimit - 6.5, // 남쪽 성벽에 붙은 성문 바로 앞(z = 61.5)에 배치
+      x: -4.5, z: mapLimit - 6.5,
       pitch: 0.78,
       beaconColor: 0xf97316,
       req: { wood: 0, stone: 0, iron: reqIron3 },
-      questLine: `"왕이시여, 성벽 대성문이 고장나 성문을 고쳐야 합니다. 철이 필요합니다! 성벽 골목과 2층 옥상에서 철 ${reqIron3}개를 갖다주시옵소서!"`,
+      questLine: `"왕이시여, 성벽 대성문이 고장나 성문을 고쳐야 합니다! 지금부터 철 ${reqIron3}개를 새로 찾아 갖다주시옵소서!"`,
       thanksLine: `"충성! 왕께서 가져다주신 철로 다윗성의 남쪽 대성문을 완벽히 고쳤습니다!"`
     },
     {
@@ -4531,7 +5472,7 @@ function buildDavidStage3World() {
       pitch: 1.25,
       beaconColor: 0xa855f7,
       req: null,
-      questLine: `"왕이시여! 성 안의 상인, 건축가, 경비병의 어려움을 먼저 모두 해결해 주시옵소서!"`,
+      questLine: `"왕이시여! 성 안의 상인, 건축가, 경비병의 요청을 한 분씩 차례대로 해결해 주시옵소서!"`,
       thanksLine: `"왕이시여! 온 백성이 왕의 지혜를 칭송하고 있습니다! 이제 북쪽 끝 언약의 성막 앞에 계신 선지자님께 가보시옵소서!"`
     }
   ];
@@ -4566,7 +5507,6 @@ function buildDavidStage3World() {
     });
   });
 
-  // 북쪽 언약의 성막 앞 나단 선지자
   const prophetGrp = new THREE.Group();
   const prophetMesh = createSamuelMesh();
   const prophetBeacon = createNpcSkyBeacon(0x22d3ee);
@@ -4594,7 +5534,6 @@ function buildDavidStage3World() {
     triggered: false
   };
 
-  // 다윗왕 뒤를 따라다니는 신하 2명
   const retainerNames = ['왕실 보좌관', '왕실 서기관'];
   [-1.4, 1.4].forEach((ox, rIdx) => {
     const rMesh = createDavidRetainerMesh(rIdx);
@@ -4619,27 +5558,44 @@ function buildDavidStage3World() {
   if (guideArrowGroup) guideArrowGroup.visible = (currentMode !== 'senior');
   snapCameraToPlayer();
   updateStageHUD();
-  showToast('👑 성벽으로 둘러싸인 다윗성의 건물 미로와 2층 옥상을 탐험하며 백성들을 도와주세요!');
+  updateDavidStage3QuestTrackerUI();
+  showToast('👑 빛기둥 아래 백성에게 다가가 퀘스트를 받으세요! (퀘스트를 받는 순간부터 자원 수집이 시작됩니다)');
 }
 // =========================================================================
 // [ep3_david.js - 파트 5/5] 에피소드 3 : 스테이지 3 진행 로직, 성벽 엔딩 및 플러그인 통합 등록
-// - NPC 말풍선 2번 뜨는 오류 수정 (autoPromptedInZone 영역 잠금 및 타이핑 타이머 단일화)
-// - 건물 내부 갇힘 실시간 탈출(resolvePlayerOutOfCityBuildings), 상가 주인·골목 행인·신하 2명 AI
+// - 퀘스트 수락 시 소형 UI 표시, 진행 중 다른 NPC 퀘스트 잠금(davidCurrentActiveQuestNpc)
+// - 퀘스트 수락 순간 보유 자원 0 초기화 및 난이도별 랜덤 위치 재스폰
 // - 엔딩: 사방 성벽 외곽 + 빈 왕좌 화살표 안내 -> 왕좌 착석 -> 메시아 성경절 모달 -> 인증서 오픈
 // =========================================================================
 
 // -------------------------------------------------------------------------
-// 1. 동물의 숲 말풍선 대화창(중복 오픈 방지 & "해결해주겠네") 및 퀘스트 완료 처리
+// 1. NPC 말풍선 대화창 (단일 퀘스트 잠금, 수락 시 자원 0 초기화, 완료 처리)
 // -------------------------------------------------------------------------
+function syncCityNpcBeaconsForActiveQuest() {
+  davidCityNpcs.forEach(n => {
+    if (!n.beacon) return;
+    if (n.completed) {
+      n.beacon.visible = false;
+    } else if (davidCurrentActiveQuestNpc) {
+      // 진행 중인 퀘스트가 있으면 해당 NPC의 빛기둥만 표시하여 헷갈리지 않게 안내
+      n.beacon.visible = (n === davidCurrentActiveQuestNpc);
+    } else {
+      const allThreeDone = davidCityNpcs.filter(x => x.id !== 'herald').every(x => x.completed);
+      n.beacon.visible = (n.id === 'herald') ? allThreeDone : true;
+    }
+  });
+}
+
 function openDavidNpcDialog(npc) {
   ensureDavidCustomUI();
+  ensureDavidStage3QuestTrackerUI();
   const dlg = document.getElementById('david-npc-dialog');
   const nameEl = document.getElementById('david-npc-name');
   const textEl = document.getElementById('david-npc-text');
   const btnEl = document.getElementById('david-npc-action-btn');
   if (!dlg || !npc) return;
 
-  // 이미 대화창이 열려 있으면 중복 호출 무시
+  // 이미 대화창이 열려 있으면 중복 실행 방지
   if (!dlg.classList.contains('hidden')) return;
 
   davidDialogTargetNpc = npc;
@@ -4649,8 +5605,17 @@ function openDavidNpcDialog(npc) {
 
   let fullLine = '';
   let canCompleteNow = false;
+  let canAcceptNewQuest = false;
 
-  if (npc.id === 'herald') {
+  // [요청사항 1] 다른 NPC의 퀘스트를 진행 중일 때는 새 퀘스트를 받을 수 없도록 잠금!
+  if (
+    davidCurrentActiveQuestNpc &&
+    davidCurrentActiveQuestNpc !== npc &&
+    !davidCurrentActiveQuestNpc.completed
+  ) {
+    fullLine = `"왕이시여! 지금은 먼저 약속하신 [${davidCurrentActiveQuestNpc.roleTitle}]의 요청을 진행 중이십니다. 그 일을 먼저 마친 뒤에 찾아주시옵소서!"`;
+    btnEl.textContent = '먼저 해결하고 오겠네';
+  } else if (npc.id === 'herald') {
     const allThreeDone = davidCityNpcs.filter(n => n.id !== 'herald').every(n => n.completed);
     npc.started = true;
     if (allThreeDone) {
@@ -4664,8 +5629,8 @@ function openDavidNpcDialog(npc) {
   } else if (npc.completed) {
     fullLine = npc.thanksLine;
     btnEl.textContent = '평안하길 바라네!';
-  } else {
-    npc.started = true;
+  } else if (davidCurrentActiveQuestNpc === npc) {
+    // 현재 진행 중인 퀘스트 NPC에게 다시 온 경우
     const hasEnough =
       davidInventory.wood >= npc.req.wood &&
       davidInventory.stone >= npc.req.stone &&
@@ -4678,10 +5643,17 @@ function openDavidNpcDialog(npc) {
       canCompleteNow = true;
     } else {
       fullLine = npc.questLine;
-      btnEl.textContent = '해결해주겠네';
+      btnEl.textContent = '계속 찾아보겠네';
     }
+  } else {
+    // 아직 진행 중인 퀘스트가 없는 상태에서 새 퀘스트를 받는 경우
+    canAcceptNewQuest = true;
+    npc._hadEnoughWhenOpened = false;
+    fullLine = npc.questLine;
+    btnEl.textContent = '해결해주겠네';
   }
 
+  npc._pendingAcceptNewQuest = canAcceptNewQuest;
   npc._pendingComplete = canCompleteNow;
   textEl.textContent = '';
 
@@ -4711,14 +5683,30 @@ window.confirmDavidNpcDialog = function () {
   if (!npc) return;
   if (npc._typingTimer) { clearInterval(npc._typingTimer); npc._typingTimer = null; }
 
-  // 대화창을 닫은 직후 같은 자리에서 다시 열리지 않도록 잠금 유지
   npc.autoPromptedInZone = true;
 
+  // [요청사항 1·2·3] 새 퀘스트를 수락하는 순간: 보유 자원을 모두 0으로 초기화하고 난이도별 랜덤 위치에 자원 재배치!
+  if (npc._pendingAcceptNewQuest) {
+    npc._pendingAcceptNewQuest = false;
+    npc.started = true;
+    davidCurrentActiveQuestNpc = npc;
+
+    resetDavidStage3InventoryAndRespawnResources();
+    syncCityNpcBeaconsForActiveQuest();
+    updateStageHUD();
+
+    playSfx('switch');
+    showToast(`📜 [${npc.roleTitle}] 퀘스트 시작! 보유 자원이 0으로 초기화되었으니 지금부터 새로 수집하세요!`);
+    return;
+  }
+
+  // 퀘스트 완료 처리
   if (npc._pendingComplete) {
     npc._pendingComplete = false;
     if (npc.id === 'herald') {
       npc.completed = true;
-      if (npc.beacon) npc.beacon.visible = false;
+      davidCurrentActiveQuestNpc = null;
+      syncCityNpcBeaconsForActiveQuest();
       npc.ring.material.color.setHex(0x22c55e);
       npc.label.innerHTML = `✅ ${npc.roleTitle} (북쪽 성막의 선지자님께 가세요!)`;
       davidProphetUnlocked = true;
@@ -4727,19 +5715,24 @@ window.confirmDavidNpcDialog = function () {
       if (targetObject && targetObject.label) {
         targetObject.label.innerHTML = '✨ 나단 선지자 (다가가서 하나님의 영원한 언약 듣기!)';
       }
+      updateDavidStage3QuestTrackerUI();
       playSfx('clear');
       updateStageHUD();
       showToast('✨ 북쪽 언약의 성막 위로 푸른 빛기둥이 솟아올랐어요! 나단 선지자님께 나아가세요!');
       return;
     }
 
-    davidInventory.wood = Math.max(0, davidInventory.wood - npc.req.wood);
-    davidInventory.stone = Math.max(0, davidInventory.stone - npc.req.stone);
-    davidInventory.iron = Math.max(0, davidInventory.iron - npc.req.iron);
-    updateDavidStage3InventoryHUD();
+    // 완료 시에도 남는 자원이 다음 퀘스트로 넘어가지 않도록 깔끔하게 차감·정리
+    davidInventory.wood = 0;
+    davidInventory.stone = 0;
+    davidInventory.iron = 0;
 
     npc.completed = true;
-    if (npc.beacon) npc.beacon.visible = false;
+    davidCurrentActiveQuestNpc = null;
+    syncCityNpcBeaconsForActiveQuest();
+    updateDavidStage3InventoryHUD();
+    updateDavidStage3QuestTrackerUI();
+
     npc.ring.material.color.setHex(0x22c55e);
     npc.label.innerHTML = `✅ ${npc.roleTitle} (해결 완료!)`;
     playSfx('hammer');
@@ -4749,11 +5742,11 @@ window.confirmDavidNpcDialog = function () {
     if (npc.id === 'merchant' && davidCityBuildings.marketGroup) {
       davidCityBuildings.marketGroup.userData.unfinishedFrame.visible = false;
       davidCityBuildings.marketGroup.userData.completedMarket.visible = true;
-      showToast('🏪 상인의 상가가 멋지게 지어졌습니다!');
+      showToast('🏪 상인의 상가가 멋지게 지어졌습니다! 이제 다음 빛기둥의 백성을 만나보세요!');
     } else if (npc.id === 'architect' && davidCityBuildings.houseGroup) {
       davidCityBuildings.houseGroup.userData.unfinishedFrame.visible = false;
       davidCityBuildings.houseGroup.userData.completedHouse.visible = true;
-      showToast('🏠 건축가의 새 집이 튼튼하게 완성되었습니다!');
+      showToast('🏠 건축가의 새 집이 튼튼하게 완성되었습니다! 이제 다음 빛기둥의 백성을 만나보세요!');
     } else if (npc.id === 'guard' && davidCityBuildings.gateGroup) {
       davidCityBuildings.gateGroup.userData.brokenGate.visible = false;
       davidCityBuildings.gateGroup.userData.repairedGate.visible = true;
@@ -4768,6 +5761,7 @@ window.confirmDavidNpcDialog = function () {
         herald.ring.material.color.setHex(0x38bdf8);
         herald.label.innerHTML = '📯 왕궁 전령 (선지자님 위치를 알려드려요!)';
       }
+      syncCityNpcBeaconsForActiveQuest();
       showToast('🎉 백성들의 3가지 요청을 모두 해결했어요! 보랏빛 원통 기둥이 있는 중앙 궁전 앞 [왕궁 전령]에게 가보세요!');
     }
     updateStageHUD();
@@ -4780,15 +5774,22 @@ function updateDavidStage3HUD(badge, countIcon, countText, missionText) {
   badge.textContent = '다윗성 · 스테이지 3';
   countIcon.textContent = '👑';
   countText.textContent = davidProphetUnlocked ? '선지자 방문' : `민원 ${doneCount}/3 완료`;
-  missionText.textContent = davidProphetUnlocked
-    ? '북쪽 언약의 성막 앞으로 가서 선지자를 통해 하나님의 영원한 언약을 들으세요!'
-    : '하늘까지 솟은 빛기둥을 보고 상인·건축가·경비병을 만나 건물 미로와 2층 옥상의 자재를 찾아주세요!';
+
+  if (davidProphetUnlocked) {
+    missionText.textContent = '북쪽 언약의 성막 앞으로 가서 선지자를 통해 하나님의 영원한 언약을 들으세요!';
+  } else if (davidCurrentActiveQuestNpc) {
+    missionText.textContent = `현재 진행 중: [${davidCurrentActiveQuestNpc.roleTitle}]의 요청 자재를 새로 모아 전달하세요!`;
+  } else if (doneCount >= 3) {
+    missionText.textContent = '3가지 민원을 모두 해결했어요! 중앙 왕궁 앞 [왕궁 전령]에게 가세요!';
+  } else {
+    missionText.textContent = '하늘까지 솟은 빛기둥의 백성에게 다가가 한 분씩 차례대로 퀘스트를 받아 해결하세요!';
+  }
 }
 
 function triggerDavidStage3Action(targetObj) {
   if (!davidProphetUnlocked) {
     playSfx('wrong');
-    showToast('👑 먼저 상인·건축가·경비병의 요청을 해결하고 왕궁 전령에게 안내를 받으세요!');
+    showToast('👑 먼저 상인·건축가·경비병의 요청을 모두 해결하고 왕궁 전령에게 안내를 받으세요!');
     return;
   }
   targetObj.triggered = true;
@@ -4799,7 +5800,6 @@ function triggerDavidStage3Action(targetObj) {
 // 2. 상가 건물 내부 주인(8명), 골목길 행인(14명), 신하(2명) 및 자재 수집 업데이트
 // -------------------------------------------------------------------------
 function updateCityShopkeepersAndPedestrians(dt, now) {
-  // 1) 상가 건물 안에 있는 상점 주인들의 손님맞이 모션
   davidCityShopkeepers.forEach((sk) => {
     const u = sk.mesh.userData;
     if (u && u.lArm && u.rArm) {
@@ -4809,12 +5809,10 @@ function updateCityShopkeepersAndPedestrians(dt, now) {
     }
   });
 
-  // 2) 미로 골목 사이사이를 걸어 다니는 마을 행인 이동 및 인사 모션
   davidCityPedestrians.forEach((ped, idx) => {
     const u = ped.mesh.userData;
     const dToKing = Math.hypot(playerPos.x - ped.mesh.position.x, playerPos.z - ped.mesh.position.z);
 
-    // 다윗왕이 바로 옆(2.3m 이내)을 지나가면 걸음을 멈추고 왕을 향해 인사
     if (dToKing < 2.3 && Math.abs(playerPos.y) < 1.0) {
       const toKingAng = Math.atan2(playerPos.x - ped.mesh.position.x, playerPos.z - ped.mesh.position.z);
       ped.heading = lerpAngle(ped.heading, toKingAng, dt * 10);
@@ -4895,7 +5893,7 @@ function updateDavidRetainersAndResources(dt, now) {
       if (res.pickupTimer >= 0.45) {
         res.beingPickedUp = false;
         res.collected = true;
-        res.respawnTimer = 9.0;
+        res.respawnTimer = 8.5;
         res.group.visible = false;
         res.label.style.opacity = '0';
 
@@ -4907,23 +5905,26 @@ function updateDavidRetainersAndResources(dt, now) {
         davidInventory[res.kind] = (davidInventory[res.kind] || 0) + 1;
         updateDavidStage3InventoryHUD();
 
-        // 자재를 새로 획득했을 때 조건을 충족한 NPC의 자동 대화 잠금을 해제하여 돌아갔을 때 바로 완료 대화가 뜨게 함
-        davidCityNpcs.forEach(npc => {
-          if (npc.req && !npc.completed) {
-            const nowEnough =
-              davidInventory.wood >= npc.req.wood &&
-              davidInventory.stone >= npc.req.stone &&
-              davidInventory.iron >= npc.req.iron;
-            if (nowEnough && !npc._hadEnoughWhenOpened) {
-              npc.autoPromptedInZone = false;
-            }
+        // 현재 진행 중인 퀘스트의 필요 자재를 모두 모았으면 해당 NPC의 자동 대화 잠금을 해제
+        if (davidCurrentActiveQuestNpc && davidCurrentActiveQuestNpc.req) {
+          const req = davidCurrentActiveQuestNpc.req;
+          const nowEnough =
+            davidInventory.wood >= req.wood &&
+            davidInventory.stone >= req.stone &&
+            davidInventory.iron >= req.iron;
+          if (nowEnough && !davidCurrentActiveQuestNpc._hadEnoughWhenOpened) {
+            davidCurrentActiveQuestNpc.autoPromptedInZone = false;
           }
-        });
+        }
 
         playSfx('rescue');
         if (currentMode === 'timeattack') timeRemaining += 3.0;
         const retName = ret ? ret.name : '신하';
-        showToast(`🙌 ${retName}이(가) ${res.title}을(를) 정성껏 챙겼습니다! (🪵${davidInventory.wood} · 🪨${davidInventory.stone} · ⚙️${davidInventory.iron})`);
+        if (!davidCurrentActiveQuestNpc) {
+          showToast(`🙌 ${retName}이(가) ${res.title}을(를) 챙겼습니다! (※ 퀘스트를 받으면 자원이 0으로 초기화됩니다!)`);
+        } else {
+          showToast(`🙌 ${retName}이(가) ${res.title}을(를) 정성껏 챙겼습니다! (🪵${davidInventory.wood} · 🪨${davidInventory.stone} · ⚙️${davidInventory.iron})`);
+        }
       }
     }
   });
@@ -5008,10 +6009,7 @@ function updateDavidRetainersAndResources(dt, now) {
 function updateDavidStage3Frame(dt, now) {
   if (davidNpcAutoDialogCooldown > 0) davidNpcAutoDialogCooldown -= dt;
 
-  // 건물 내부 끼임·갇힘 실시간 방어
   resolvePlayerOutOfCityBuildings();
-
-  // 신하 2명, 상가 주인 8명, 미로 골목 행인 14명 업데이트
   updateDavidRetainersAndResources(dt, now);
   updateCityShopkeepersAndPedestrians(dt, now);
 
@@ -5036,7 +6034,6 @@ function updateDavidStage3Frame(dt, now) {
     const d = Math.hypot(playerPos.x - npc.pos.x, playerPos.z - npc.pos.z);
     updateWorldLabelPos(npc.label, npc.pos, d < 32);
 
-    // 다윗이 NPC 앞을 벗어나면(d > 4.8m) 다음 방문 시 자동 대화가 가능하도록 플래그 초기화
     if (d > 4.8) {
       npc.autoPromptedInZone = false;
     }
@@ -5046,7 +6043,6 @@ function updateDavidStage3Frame(dt, now) {
       davidActiveNearNpc = npc;
     }
 
-    // NPC 앞에 서면 1회만 자동으로 대화 시작 (말풍선 2번 연속 뜨는 현상 완벽 방지)
     if (
       d < 3.0 &&
       !npc.autoPromptedInZone &&
@@ -5059,9 +6055,14 @@ function updateDavidStage3Frame(dt, now) {
         ? (davidInventory.wood >= npc.req.wood && davidInventory.stone >= npc.req.stone && davidInventory.iron >= npc.req.iron)
         : false;
 
+      // 1) 진행 중인 퀘스트가 없을 때 새 NPC 앞에 서면 자동 오픈
+      // 2) 진행 중인 퀘스트 NPC에게 자재를 다 모아 돌아왔을 때 자동 오픈
+      // 3) 다른 퀘스트 진행 중 다른 NPC에게 갔을 때 안내 대화 1회 오픈
+      // 4) 왕궁 전령에게 3개 완료 후 갔을 때 자동 오픈
       const shouldAutoOpen =
-        (!npc.started && npc.id !== 'herald') ||
-        (!npc.completed && npc.req && hasEnoughForNpc) ||
+        (!davidCurrentActiveQuestNpc && !npc.completed && npc.id !== 'herald') ||
+        (davidCurrentActiveQuestNpc === npc && !npc.completed && hasEnoughForNpc) ||
+        (davidCurrentActiveQuestNpc && davidCurrentActiveQuestNpc !== npc && !npc.completed) ||
         (npc.id === 'herald' && (!npc.started || (allThreeDone && !npc.completed)));
 
       if (shouldAutoOpen) {
@@ -5078,7 +6079,7 @@ function updateDavidStage3Frame(dt, now) {
     pBtn.classList.add('hidden');
   }
 
-  // 북쪽 성막 나단 선지자 도착 및 가이드 화살표
+  // 북쪽 성막 나단 선지자 도착 및 가이드 화살표 계산
   if (targetObject && !targetObject.triggered) {
     if (targetObject.beacon && targetObject.beacon.visible) {
       const bPulse = 1.0 + Math.sin(now * 0.005) * 0.16;
@@ -5100,21 +6101,35 @@ function updateDavidStage3Frame(dt, now) {
     if (guideArrowGroup && guideArrowGroup.visible) {
       let guidePt = targetObject.pos;
       if (!davidProphetUnlocked) {
-        const nextNpc = davidCityNpcs.find(n => n.id !== 'herald' && !n.completed);
-        if (!nextNpc) {
-          const herald = davidCityNpcs.find(n => n.id === 'herald');
-          guidePt = herald ? herald.pos : targetObject.pos;
-        } else if (!nextNpc.started) {
-          guidePt = nextNpc.pos;
-        } else {
+        if (davidCurrentActiveQuestNpc && !davidCurrentActiveQuestNpc.completed) {
+          const req = davidCurrentActiveQuestNpc.req;
           let neededKind = null;
-          if (davidInventory.wood < nextNpc.req.wood) neededKind = 'wood';
-          else if (davidInventory.stone < nextNpc.req.stone) neededKind = 'stone';
-          else if (davidInventory.iron < nextNpc.req.iron) neededKind = 'iron';
+          if (req.wood > davidInventory.wood) neededKind = 'wood';
+          else if (req.stone > davidInventory.stone) neededKind = 'stone';
+          else if (req.iron > davidInventory.iron) neededKind = 'iron';
 
           if (neededKind) {
-            const nearRes = davidCityResources.find(r => !r.collected && r.kind === neededKind);
-            guidePt = nearRes ? nearRes.pos : nextNpc.pos;
+            // 현재 플레이어와 가장 가까운 해당 종류의 자원 위치를 가리킴
+            let bestRes = null;
+            let bestD = 9999;
+            davidCityResources.forEach(r => {
+              if (!r.collected && r.kind === neededKind) {
+                const distToR = Math.hypot(playerPos.x - r.pos.x, playerPos.z - r.pos.z);
+                if (distToR < bestD) {
+                  bestD = distToR;
+                  bestRes = r;
+                }
+              }
+            });
+            guidePt = bestRes ? bestRes.pos : davidCurrentActiveQuestNpc.pos;
+          } else {
+            guidePt = davidCurrentActiveQuestNpc.pos;
+          }
+        } else {
+          const nextNpc = davidCityNpcs.find(n => n.id !== 'herald' && !n.completed);
+          if (!nextNpc) {
+            const herald = davidCityNpcs.find(n => n.id === 'herald');
+            guidePt = herald ? herald.pos : targetObject.pos;
           } else {
             guidePt = nextNpc.pos;
           }
@@ -5129,6 +6144,9 @@ function startDavidStage3CovenantCutscene() {
   isPlaying = false;
   isTimeAttackActive = false;
   hideAllDavidCustomUI();
+  const tracker = document.getElementById('david-st3-quest-tracker');
+  if (tracker) tracker.classList.add('hidden');
+
   document.getElementById('context-action-btn').classList.add('hidden');
   document.getElementById('puzzle-build-btn').classList.add('hidden');
   document.getElementById('hud-mission-box').classList.add('hidden');
@@ -5177,7 +6195,6 @@ function createEmptyThroneWithGuideArrow(cx, cz) {
   const redVelvet = matDavidCached('#991b1b', '#7f1d1d');
   const stoneStep = matDavidCached('#fde68a', '#d97706');
 
-  // 다윗이 걸어서 올라갈 수 있는 3단 왕좌 단상 (각 단 높이 0.5m)
   root.add(
     createBox(7.6, 0.5, 6.8, stoneStep, 0, 0.25, 0.6),
     createBox(6.0, 1.0, 5.2, stoneStep, 0, 0.50, 0.0),
@@ -5190,7 +6207,6 @@ function createEmptyThroneWithGuideArrow(cx, cz) {
     { minX: cx - 2.2, maxX: cx + 2.2, minZ: cz - 2.4, maxZ: cz + 1.4, topY: 1.55 }
   );
 
-  // 빈 황금 왕좌 (좌석, 등받이, 팔걸이)
   root.add(
     createBox(2.4, 0.35, 1.9, redVelvet, 0, 1.65, -0.5),
     createBox(2.6, 3.4,  0.4, goldMat,   0, 3.20, -1.35),
@@ -5200,7 +6216,6 @@ function createEmptyThroneWithGuideArrow(cx, cz) {
   );
   colliders.push({ minX: cx - 1.5, maxX: cx + 1.5, minZ: cz - 1.8, maxZ: cz - 1.1 });
 
-  // 빈 왕좌 위에서 반짝이며 위아래로 움직이는 3D 입체 황금 화살표(⬇️)
   const arrowGrp = new THREE.Group();
   const arrowMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
   const arrowBorder = new THREE.MeshBasicMaterial({ color: 0xf59e0b });
@@ -5284,10 +6299,11 @@ window.proceedFromMessiahModalToCert = function () {
 
 function buildDavidEndingWorld() {
   hideAllDavidCustomUI();
+  const tracker = document.getElementById('david-st3-quest-tracker');
+  if (tracker) tracker.classList.add('hidden');
   const messiahModal = document.getElementById('david-messiah-modal');
   if (messiahModal) { messiahModal.classList.add('hidden'); messiahModal.classList.remove('flex'); }
 
-  // 엔딩 직후 인증서 바로가기 버튼은 왕좌에 앉아 메시아 성경절을 본 뒤에 누를 수 있도록 잠시 숨김
   const certBtn = document.getElementById('ending-cert-btn');
   if (certBtn) certBtn.classList.add('hidden');
 
@@ -5317,7 +6333,7 @@ function buildDavidEndingWorld() {
     createBox(4.8, 0.16, 28, carpetMat, 0, 0.08, -2, false)
   );
 
-  // [엔딩 요청사항 1] 엔딩 맵 가장자리를 숲 대신 반투명 시야 처리가 된 다윗성 성벽으로 교체!
+  // 엔딩 맵 가장자리도 반투명 시야 처리가 적용된 다윗성 성벽으로 둘러쌈
   buildDavidCastleWallPerimeter(endLimit, false);
 
   [-10.5, 10.5].forEach(px => {
@@ -5332,7 +6348,6 @@ function buildDavidEndingWorld() {
     addPalmTree(tx, tz, 1.25, true);
   });
 
-  // 중앙 단상에 빈 황금 왕좌와 화살표 표시 배치 (z = -8)
   const throneGrp = createEmptyThroneWithGuideArrow(0, -8);
   throneGrp.position.set(0, 0, -8);
   worldGroup.add(throneGrp);
@@ -5342,7 +6357,6 @@ function buildDavidEndingWorld() {
   addWallTorch(-4.2, 2.2, -5.2);
   addWallTorch( 4.2, 2.2, -5.2);
 
-  // 왕좌 주변에서 환호하며 뛰는 백성들 22명
   if (typeof createFollowerPersonMesh === 'function') {
     for (let i = 0; i < 22; i++) {
       const ang = (i / 22) * Math.PI * 2;
@@ -5372,7 +6386,6 @@ function buildDavidEndingWorld() {
   rebuildPlayerAppearance();
 }
 
-// [엔딩 요청사항 2] 의자(왕좌)에 올라간 후 메시아 성경절이 먼저 나오고 그 다음 인증서가 나오도록 처리
 function seatDavidOnThroneAndShowMessiahVerse() {
   if (davidThroneEnding.seated) return;
   davidThroneEnding.seated = true;
@@ -5385,7 +6398,6 @@ function seatDavidOnThroneAndShowMessiahVerse() {
   }
   document.getElementById('context-action-btn').classList.add('hidden');
 
-  // 다윗을 왕좌 의자 위에 앉히고 정면(백성들 쪽)을 바라보게 설정
   playerPos.set(0, 1.65, -8.45);
   playerFacing = 0;
   if (playerGroup) {
@@ -5419,7 +6431,6 @@ function updateDavidEndingThroneFrame(dt, now) {
       } else {
         ctxBtn.classList.add('hidden');
       }
-      // 다윗이 왕좌 계단을 걸어 올라 의자 위(td < 1.85 & 높이 0.9m 이상)에 도달하면 자동으로 착석!
       if (td < 1.85 && playerPos.y >= 0.9) {
         seatDavidOnThroneAndShowMessiahVerse();
       }
@@ -5427,7 +6438,6 @@ function updateDavidEndingThroneFrame(dt, now) {
     return;
   }
 
-  // 왕좌에 앉은 다윗 클로즈업 후 메시아 성경절 모달 오픈 -> 모달 버튼 클릭 시 인증서 오픈
   davidThroneEnding.seatTimer += dt;
   playerPos.set(0, 1.65, -8.45);
   playerFacing = 0;
@@ -5494,11 +6504,15 @@ REGISTER_EPISODE('david', {
   },
   onCloseScreen: function () {
     hideAllDavidCustomUI();
+    const tracker = document.getElementById('david-st3-quest-tracker');
+    if (tracker) tracker.classList.add('hidden');
     const messiahModal = document.getElementById('david-messiah-modal');
     if (messiahModal) { messiahModal.classList.add('hidden'); messiahModal.classList.remove('flex'); }
   },
   clearState: function () {
     hideAllDavidCustomUI();
+    const tracker = document.getElementById('david-st3-quest-tracker');
+    if (tracker) tracker.classList.add('hidden');
     const messiahModal = document.getElementById('david-messiah-modal');
     if (messiahModal) { messiahModal.classList.add('hidden'); messiahModal.classList.remove('flex'); }
     davidBaseFlock = [];
@@ -5523,6 +6537,7 @@ REGISTER_EPISODE('david', {
     davidCityShopkeepers = [];
     davidCityPedestrians = [];
     davidCityBuildingBoxes = [];
+    davidCurrentActiveQuestNpc = null;
     davidThroneEnding.seated = false;
     davidThroneEnding.modalShown = false;
     davidAnointCutscene.active = false;
