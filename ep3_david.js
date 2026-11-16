@@ -3441,10 +3441,10 @@ function updateDavidStage2CutsceneFrame(dt, now) {
   return true;
 }
 // =========================================================================
-// [ep3_david.js - 파트 4/5] 에피소드 3 : 스테이지 3 월드, 소형 퀘스트 UI 및 난이도별 랜덤 자원 스폰
-// - 성문 앞 투명벽 버그 수정(성문 밖으로만 못 나가게 차단하고 성문 앞 광장 및 경비병 접근 완전 개방)
-// - 소형 진행 퀘스트 표시창(ensureDavidStage3QuestTrackerUI) 및 단일 퀘스트 잠금 상태(davidCurrentActiveQuestNpc)
-// - 퀘스트 수락 즉시 보유 자원 0 초기화 및 난이도별(유치/유년/소년) 랜덤 자원 스폰 시스템
+// [ep3_david.js - 파트 4/5] 에피소드 3 : 스테이지 3 월드, 좌측 구석 소형 퀘스트 UI 및 전체 카메라 시점 전환
+// - 좌측 상단 구석 초소형 진행 퀘스트 배지(ensureDavidStage3QuestTrackerUI) 적용
+// - 중앙 하단 전체 카메라 시점 전환 버튼(기본 / 넓게 보기 / 정면 낮게 보기) 및 바닥 관통 방지 훅 탑재
+// - 성문 앞 투명벽 버그 수정, 퀘스트 수락 시 자원 0 초기화 및 난이도별(유치/유년/소년) 랜덤 자원 스폰
 // =========================================================================
 
 let davidCityNpcs = [];
@@ -3474,7 +3474,134 @@ let davidThroneEnding = {
 };
 
 // -------------------------------------------------------------------------
-// 1. 진행 중인 퀘스트 소형 UI 표시기 & 도시 석조 바닥 텍스처·충돌 유틸리티
+// 0. [공통 카메라 시점 전환] 중앙 하단 버튼 (기본 / 넓게 보기 / 정면 낮게 보기)
+// -------------------------------------------------------------------------
+window.globalCameraViewMode = window.globalCameraViewMode || 'default'; // 'default' | 'wide' | 'low'
+
+function ensureGlobalCameraViewToggleUI() {
+  let btn = document.getElementById('global-camera-view-btn');
+  if (!btn) {
+    btn = document.createElement('button');
+    btn.id = 'global-camera-view-btn';
+    btn.type = 'button';
+    btn.onclick = function () {
+      window.cycleGlobalCameraViewMode();
+    };
+    btn.className =
+      'fixed bottom-3 left-1/2 -translate-x-1/2 z-20 pointer-events-auto mc-btn px-3.5 py-1.5 rounded-full bg-slate-900/85 hover:bg-slate-800 border-2 border-sky-400/80 text-white font-jua text-xs sm:text-sm shadow-lg flex items-center gap-1.5 backdrop-blur-sm transition-transform active:scale-95';
+    btn.innerHTML = '<span>🎥</span><span id="global-camera-view-label">시점: 기본</span>';
+    document.body.appendChild(btn);
+  }
+  return btn;
+}
+
+window.cycleGlobalCameraViewMode = function () {
+  if (window.globalCameraViewMode === 'default') {
+    window.globalCameraViewMode = 'wide';
+  } else if (window.globalCameraViewMode === 'wide') {
+    window.globalCameraViewMode = 'low';
+  } else {
+    window.globalCameraViewMode = 'default';
+  }
+
+  ensureGlobalCameraViewToggleUI();
+  const lbl = document.getElementById('global-camera-view-label');
+  const btn = document.getElementById('global-camera-view-btn');
+  if (window.globalCameraViewMode === 'default') {
+    if (lbl) lbl.textContent = '시점: 기본';
+    if (btn) btn.innerHTML = '<span>🎥</span><span id="global-camera-view-label">시점: 기본</span>';
+    if (typeof showToast === 'function') showToast('🎥 카메라 시점: [기본 시점]으로 변경되었습니다.');
+  } else if (window.globalCameraViewMode === 'wide') {
+    if (btn) btn.innerHTML = '<span>🔭</span><span id="global-camera-view-label" class="text-sky-300">시점: 넓게 보기</span>';
+    if (typeof showToast === 'function') showToast('🔭 카메라 시점: [넓게 보기]로 변경되었습니다.');
+  } else {
+    if (btn) btn.innerHTML = '<span>👀</span><span id="global-camera-view-label" class="text-amber-300">시점: 정면 낮게 보기</span>';
+    if (typeof showToast === 'function') showToast('👀 카메라 시점: [정면 낮게 보기]로 변경되었습니다.');
+  }
+  if (typeof playSfx === 'function') playSfx('switch');
+};
+
+function attachGlobalCameraViewHook() {
+  ensureGlobalCameraViewToggleUI();
+  if (typeof scene === 'undefined' || !scene || scene._hasGlobalCamViewHook) return;
+  scene._hasGlobalCamViewHook = true;
+
+  const prevBeforeRender = scene.onBeforeRender;
+  scene.onBeforeRender = function (renderer, scn, cam, geometry, material, group) {
+    if (typeof prevBeforeRender === 'function') {
+      prevBeforeRender.call(this, renderer, scn, cam, geometry, material, group);
+    }
+
+    const btn = document.getElementById('global-camera-view-btn');
+    if (btn) {
+      if (typeof isPlaying !== 'undefined' && isPlaying) {
+        btn.classList.remove('hidden');
+      } else {
+        btn.classList.add('hidden');
+      }
+    }
+
+    if (typeof isPlaying === 'undefined' || !isPlaying) return;
+    if (window.globalCameraViewMode === 'default') return;
+    if (typeof davidAimState !== 'undefined' && davidAimState.active) return;
+    if (typeof davidFlyingStone !== 'undefined' && davidFlyingStone.active) return;
+    if (typeof davidThroneEnding !== 'undefined' && davidThroneEnding.seated) return;
+    if (typeof playerPos === 'undefined' || !cam) return;
+
+    const dx = cam.position.x - playerPos.x;
+    const dz = cam.position.z - playerPos.z;
+    const horizDist = Math.hypot(dx, dz);
+    if (horizDist < 0.001) return;
+
+    const dirX = dx / horizDist;
+    const dirZ = dz / horizDist;
+
+    if (window.globalCameraViewMode === 'wide') {
+      // 넓게 보기: 거리와 높이를 넓혀 미로 골목과 전체 지형을 한눈에 조망
+      const targetDist = horizDist * 1.55;
+      const baseDy = Math.max(6.0, cam.position.y - playerPos.y);
+      cam.position.x = playerPos.x + dirX * targetDist;
+      cam.position.z = playerPos.z + dirZ * targetDist;
+      cam.position.y = playerPos.y + baseDy * 1.60;
+      cam.lookAt(playerPos.x, playerPos.y + 1.2, playerPos.z);
+    } else if (window.globalCameraViewMode === 'low') {
+      // 정면 낮게 보기: 캐릭터 등 뒤 낮은 위치에서 정면과 먼 배경·하늘을 시원하게 조망 (지형 바닥 관통 방지 포함)
+      const lowDist = Math.max(6.8, horizDist * 0.68);
+      const camX = playerPos.x + dirX * lowDist;
+      const camZ = playerPos.z + dirZ * lowDist;
+
+      let groundH = playerPos.y;
+      if (
+        typeof currentEpisode !== 'undefined' &&
+        currentEpisode === 'david' &&
+        typeof currentStage !== 'undefined' &&
+        currentStage === 1 &&
+        typeof getDavidStage1GroundHeight === 'function'
+      ) {
+        groundH = Math.max(playerPos.y, getDavidStage1GroundHeight(camX, camZ));
+      }
+
+      cam.position.x = camX;
+      cam.position.z = camZ;
+      cam.position.y = Math.max(playerPos.y + 2.2, groundH + 1.6);
+      cam.lookAt(
+        playerPos.x - dirX * 8.0,
+        playerPos.y + 2.35,
+        playerPos.z - dirZ * 8.0
+      );
+    }
+
+    if (typeof updateWallTransparency === 'function') {
+      updateWallTransparency();
+    }
+  };
+}
+
+// 페이지 로드 및 스테이지 진입 시 시점 전환 버튼 자동 초기화
+setTimeout(attachGlobalCameraViewHook, 300);
+
+// -------------------------------------------------------------------------
+// 1. 진행 중인 퀘스트 초소형 코너 배지 UI (좌측 상단 구석 배치로 맵 시야 확보)
 // -------------------------------------------------------------------------
 function ensureDavidStage3QuestTrackerUI() {
   const uiRoot = ensureDavidCustomUI();
@@ -3483,14 +3610,12 @@ function ensureDavidStage3QuestTrackerUI() {
     tracker = document.createElement('div');
     tracker.id = 'david-st3-quest-tracker';
     tracker.className =
-      'hidden mt-16 mc-panel px-4 py-2 rounded-2xl bg-slate-900/90 border-2 border-amber-400 text-white shadow-xl flex flex-col gap-1 min-w-[250px] max-w-[330px]';
+      'hidden fixed top-20 left-3 z-20 px-2.5 py-1.5 rounded-xl bg-slate-900/75 backdrop-blur-sm border border-amber-400/80 text-white shadow-md flex flex-col gap-0.5 pointer-events-none';
     tracker.innerHTML = `
-      <div class="flex items-center justify-between gap-3 border-b border-slate-700 pb-1">
-        <span id="david-st3-quest-title" class="text-xs font-jua text-amber-300">📜 진행 중인 퀘스트</span>
-        <span class="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/50 text-[10px] font-bold text-amber-200">진행 중</span>
+      <div class="flex items-center gap-1.5">
+        <span id="david-st3-quest-title" class="text-[11px] font-jua text-amber-300 leading-none">📜 퀘스트</span>
       </div>
-      <div id="david-st3-quest-reqs" class="text-xs font-bold text-emerald-300 text-center py-0.5"></div>
-      <div id="david-st3-quest-hint" class="text-[10px] text-slate-300 text-center">완료 전까지 다른 퀘스트는 진행할 수 없어요</div>
+      <div id="david-st3-quest-reqs" class="text-[11px] font-bold text-emerald-300 leading-tight"></div>
     `;
     uiRoot.appendChild(tracker);
   }
@@ -3499,7 +3624,12 @@ function ensureDavidStage3QuestTrackerUI() {
 
 function updateDavidStage3QuestTrackerUI() {
   const tracker = ensureDavidStage3QuestTrackerUI();
-  if (currentEpisode !== 'david' || currentStage !== 3 || !davidCurrentActiveQuestNpc || davidCurrentActiveQuestNpc.completed) {
+  if (
+    currentEpisode !== 'david' ||
+    currentStage !== 3 ||
+    !davidCurrentActiveQuestNpc ||
+    davidCurrentActiveQuestNpc.completed
+  ) {
     tracker.classList.add('hidden');
     return;
   }
@@ -3509,42 +3639,38 @@ function updateDavidStage3QuestTrackerUI() {
 
   const titleEl = document.getElementById('david-st3-quest-title');
   const reqsEl = document.getElementById('david-st3-quest-reqs');
-  const hintEl = document.getElementById('david-st3-quest-hint');
 
-  if (titleEl) titleEl.textContent = `📜 ${npc.roleTitle}의 요청`;
+  if (titleEl) titleEl.textContent = `📜 ${npc.roleTitle}`;
 
   if (npc.req && reqsEl) {
     const parts = [];
     if (npc.req.wood > 0) {
       const wDone = davidInventory.wood >= npc.req.wood;
-      parts.push(`<span class="${wDone ? 'text-emerald-300' : 'text-amber-200'}">🪵 나무 ${Math.min(davidInventory.wood, npc.req.wood)}/${npc.req.wood}</span>`);
+      parts.push(`<span class="${wDone ? 'text-emerald-300' : 'text-amber-200'}">🪵${Math.min(davidInventory.wood, npc.req.wood)}/${npc.req.wood}</span>`);
     }
     if (npc.req.stone > 0) {
       const sDone = davidInventory.stone >= npc.req.stone;
-      parts.push(`<span class="${sDone ? 'text-emerald-300' : 'text-sky-200'}">🪨 돌 ${Math.min(davidInventory.stone, npc.req.stone)}/${npc.req.stone}</span>`);
+      parts.push(`<span class="${sDone ? 'text-emerald-300' : 'text-sky-200'}">🪨${Math.min(davidInventory.stone, npc.req.stone)}/${npc.req.stone}</span>`);
     }
     if (npc.req.iron > 0) {
       const iDone = davidInventory.iron >= npc.req.iron;
-      parts.push(`<span class="${iDone ? 'text-emerald-300' : 'text-orange-200'}">⚙️ 철 ${Math.min(davidInventory.iron, npc.req.iron)}/${npc.req.iron}</span>`);
+      parts.push(`<span class="${iDone ? 'text-emerald-300' : 'text-orange-200'}">⚙️${Math.min(davidInventory.iron, npc.req.iron)}/${npc.req.iron}</span>`);
     }
-    reqsEl.innerHTML = parts.join(' &nbsp;·&nbsp; ');
 
     const allMet =
       davidInventory.wood >= npc.req.wood &&
       davidInventory.stone >= npc.req.stone &&
       davidInventory.iron >= npc.req.iron;
 
-    if (hintEl) {
-      hintEl.textContent = allMet
-        ? `✅ 자재를 모두 모았어요! ${npc.roleTitle}에게 돌아가세요!`
-        : `자재를 모두 모아 ${npc.roleTitle}에게 전달하세요 (타 퀘스트 잠금)`;
-      hintEl.className = allMet
-        ? 'text-[11px] font-bold text-yellow-300 text-center animate-pulse'
-        : 'text-[10px] text-slate-300 text-center';
-    }
+    reqsEl.innerHTML = allMet
+      ? `<span class="text-yellow-300 animate-pulse">✅ 완료! ${npc.roleTitle}에게 이동</span>`
+      : parts.join(' · ');
   }
 }
 
+// -------------------------------------------------------------------------
+// 2. 도시 석조 타일 바닥 텍스처 & 건물 충돌·끼임 방지 유틸리티
+// -------------------------------------------------------------------------
 let _davidCityStoneTex = null;
 function makeDavidCityStoneTex() {
   if (_davidCityStoneTex) return _davidCityStoneTex;
@@ -3626,7 +3752,7 @@ function resolvePlayerOutOfCityBuildings() {
 }
 
 // -------------------------------------------------------------------------
-// 2. 맵 가장자리 성벽(반투명 시야 보장) 및 성벽 밖 곧은 길 생성
+// 3. 맵 가장자리 성벽(반투명 시야 보장) 및 성벽 밖 곧은 길 생성
 // -------------------------------------------------------------------------
 function buildDavidCastleWallPerimeter(limit, withSouthGate = true) {
   const wallBaseMat = matVoxel('#d6c3a5', '#b89f7a');
@@ -3720,7 +3846,7 @@ function buildDavidCastleWallPerimeter(limit, withSouthGate = true) {
 }
 
 // -------------------------------------------------------------------------
-// 3. 디테일한 인물(상인·건축가·경비병·왕궁 전령) & 신하 2명 & 하늘 원통 빛기둥 모델링
+// 4. 디테일한 인물(상인·건축가·경비병·왕궁 전령) & 신하 2명 & 하늘 원통 빛기둥 모델링
 // -------------------------------------------------------------------------
 function createNpcSkyBeacon(colorHex) {
   const beaconGrp = new THREE.Group();
@@ -3927,7 +4053,7 @@ function createDavidRetainerMesh(retainerIdx) {
 }
 
 // -------------------------------------------------------------------------
-// 4. 다윗성 랜드마크, 빈틈없는 2층 건물, 상가 건물, 성벽까지 확장된 건물 미로 빌더
+// 5. 다윗성 랜드마크, 빈틈없는 2층 건물, 상가 건물, 성벽까지 확장된 건물 미로 빌더
 // -------------------------------------------------------------------------
 function buildDavidCityPalace(cx, cz) {
   const stoneMat = matVoxel('#fde68a', '#eab308');
@@ -4320,7 +4446,7 @@ function buildQuestBuildableStructures(mapLimit = 68) {
   worldGroup.add(houseRoot);
   davidCityBuildings.houseGroup = houseRoot;
 
-  // 남쪽 대성문 (성문 앞 광장은 완전히 비워두고, 성문 문짝 위치 z = 66.0만 막아 성문 밖 이탈 방지)
+  // 남쪽 대성문 (성문 앞 광장은 완전히 개방하고, 성문 문짝 위치 z = 66.0만 막아 성문 밖 이탈 방지)
   const gateZ = mapLimit;
   const gateRoot = new THREE.Group();
   gateRoot.position.set(0, 0, gateZ);
@@ -4363,7 +4489,7 @@ function buildQuestBuildableStructures(mapLimit = 68) {
 }
 
 // -------------------------------------------------------------------------
-// 5. 난이도별 맞춤형 랜덤 자원 스폰 & 퀘스트 수락 시 보유 자원 0 초기화
+// 6. 난이도별 맞춤형 랜덤 자원 스폰 & 퀘스트 수락 시 보유 자원 0 초기화
 // -------------------------------------------------------------------------
 function spawnDavidCityResourceNode(kind, x, z, baseY = 0) {
   const grp = new THREE.Group();
@@ -4545,6 +4671,7 @@ function buildDavidStage3World() {
   clearWorld();
   ensureDavidCustomUI();
   ensureDavidStage3QuestTrackerUI();
+  attachGlobalCameraViewHook();
   hideAllDavidCustomUI();
 
   scene.background = new THREE.Color(0x38bdf8);
@@ -4632,8 +4759,8 @@ function buildDavidStage3World() {
     {
       id: 'guard',
       roleTitle: '🛡️ 경비병',
-      x: -2.5, z: mapLimit - 9.5, // 성문 앞 열린 광장(z = 58.5)에 배치하여 사방에서 자유롭게 접근 가능!
-      rotY: Math.PI,              // 성 안쪽에서 다가오는 다윗왕을 바라봄
+      x: -2.5, z: mapLimit - 9.5,
+      rotY: Math.PI,
       pitch: 0.78,
       beaconColor: 0xf97316,
       req: { wood: 0, stone: 0, iron: reqIron3 },
@@ -4736,7 +4863,7 @@ function buildDavidStage3World() {
   snapCameraToPlayer();
   updateStageHUD();
   updateDavidStage3QuestTrackerUI();
-  showToast('👑 빛기둥 아래 백성에게 다가가 퀘스트를 받으세요! (퀘스트를 받는 순간부터 자원 수집이 시작됩니다)');
+  showToast('👑 빛기둥 아래 백성에게 다가가 퀘스트를 받으세요! (하단 버튼으로 카메라 시점도 전환할 수 있어요)');
 }
 // =========================================================================
 // [ep3_david.js - 파트 5/5] 에피소드 3 : 스테이지 3 진행 로직, 성벽 엔딩 및 플러그인 통합 등록
