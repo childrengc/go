@@ -64,7 +64,7 @@
         </div>
       </div>
 
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4" id="launcher-grid"></div>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4" id="launcher-grid"></div>
     </section>
 
     <!-- 섹션 B: 접속자 및 플레이 기록 조회 -->
@@ -108,6 +108,7 @@
           <option value="all">모든 에피소드</option>
           <option value="noah">⛵ 에피소드 1 (노아의 방주)</option>
           <option value="exodus">🌊 에피소드 2 (출애굽·시내산)</option>
+          <option value="david">👑 에피소드 3 (다윗 이야기)</option>
         </select>
         <select id="filter-mode" onchange="renderRecordsTable()" class="px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white">
           <option value="all">모든 반(레벨)</option>
@@ -156,7 +157,8 @@
 
     const EPISODES = [
       { key: 'noah', title: '⛵ 에피소드 1 : 노아의 방주', color: 'border-amber-500/60', btnBg: 'bg-amber-500 hover:bg-amber-400 text-slate-950' },
-      { key: 'exodus', title: '🌊 에피소드 2 : 출애굽과 시내산 언약', color: 'border-cyan-500/60', btnBg: 'bg-cyan-400 hover:bg-cyan-300 text-slate-950' }
+      { key: 'exodus', title: '🌊 에피소드 2 : 출애굽과 시내산 언약', color: 'border-cyan-500/60', btnBg: 'bg-cyan-400 hover:bg-cyan-300 text-slate-950' },
+      { key: 'david', title: '👑 에피소드 3 : 믿음의 왕 다윗', color: 'border-purple-500/60', btnBg: 'bg-purple-400 hover:bg-purple-300 text-slate-950' }
     ];
     const MODES = [
       { key: 'kinder', label: '🐣 유치반' },
@@ -195,11 +197,11 @@
           <div class="space-y-2">
             ${MODES.map(m => `
               <div class="flex flex-wrap items-center justify-between gap-2 bg-slate-800/80 p-2 rounded-lg">
-                <span class="font-jua text-xs text-amber-200 w-24">${m.label}</span>
-                <div class="flex flex-wrap gap-1.5 flex-1 justify-end">
+                <span class="font-jua text-xs text-amber-200 w-20">${m.label}</span>
+                <div class="flex flex-wrap gap-1 flex-1 justify-end">
                   ${[1, 2, 3, 4].map(st => `
                     <button onclick="jumpToStage('${ep.key}', '${m.key}', ${st})"
-                      class="mc-btn px-2.5 py-1 rounded-lg ${st === 4 ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950' : ep.btnBg} font-jua text-xs">
+                      class="mc-btn px-2 py-1 rounded-lg ${st === 4 ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950' : ep.btnBg} font-jua text-xs">
                       ${st === 4 ? '🏆엔딩' : '스테이지 ' + st}
                     </button>
                   `).join('')}
@@ -249,7 +251,7 @@
       const statusQ = document.getElementById('filter-status').value;
 
       const modeMap = { kinder: '🐣유치반', junior: '🌱유년반', senior: '🍎소년반', timeattack: '⚡타임어택' };
-      const epMap = { noah: '⛵노아의방주', exodus: '🌊출애굽·시내산' };
+      const epMap = { noah: '⛵노아의방주', exodus: '🌊출애굽·시내산', david: '👑다윗이야기' };
 
       const filtered = allRecords.filter(r => {
         if (nameQ && !String(r.name).toLowerCase().includes(nameQ)) return false;
