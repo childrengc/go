@@ -6482,7 +6482,7 @@ if (!window._davidPuzzleHookRegistered) {
 }
 
 REGISTER_EPISODE('david', {
-  locked: false, // 에피소드 선택 맵에서 에피소드 3 선택을 잠그려면 true 로 변경하세요
+  locked: true, // 에피소드 선택 맵에서 에피소드 3 선택을 잠그려면 true 로 변경하세요
   avatarIcon: '🪉',
   scripture: DAVID_SCRIPTURE,
   certMeta: {
