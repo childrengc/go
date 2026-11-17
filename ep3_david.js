@@ -1,8 +1,8 @@
 // =========================================================================
-// [ep3_david.js - 파트 1/4] 에피소드 3 : 다윗 이야기
-// - 공통: 6/8박자 스윙 하프 BGM (골리앗 격파 후 퀴즈까지 평온한 음악 유지), 양 울음소리, 애니멀리즈 효과음
-// - UI: 16비트 도트 픽셀아트 스타일 물맷돌 집중 조준 캔버스 렌더러 & 양 배부름 상태(😢~😊)
-// - 스테이지 1 월드: 강 건너 하늘이 보이는 작은 나무 숲 원경, 언덕 위 목장 & 언덕 아래 다윗의 집
+// [ep3_david.js - 파트 1/5] 에피소드 3 : 다윗 이야기 (공통 시점·오프닝·모델링·스테이지 1 월드)
+// - 공통 카메라 시점 전환: 각도 변경 버튼 사이에 배치 & '넓게 보기' 시 오브젝트 소실 버그 완벽 해결
+// - 시네마틱 오프닝 & 엔딩 남자 성우 음성(Web Speech TTS + 중저음 공명) 및 전쟁 함성 효과음 합성기
+// - 다윗 캐릭터 눈 흰자·눈썹·코·입 디테일 추가 & 스테이지 1 좌측 세로형 배부름 게이지 UI
 // =========================================================================
 
 const DAVID_SCRIPTURE = {
@@ -40,7 +40,225 @@ function matDavidCached(baseHex, noiseHex) {
 }
 
 // -------------------------------------------------------------------------
-// 1. [공통 사운드] 6/8박자 스윙·스트럼 하프 BGM, 양 울음소리(매에~), 애니멀리즈 사운드
+// 0. [모든 에피소드 공통] 각도 변경 버튼 사이 카메라 시점 전환 & 넓게 보기 오브젝트 소실 방지
+// -------------------------------------------------------------------------
+window.globalCameraViewMode = window.globalCameraViewMode || 'default'; // 'default' | 'wide' | 'low'
+
+function ensureGlobalCameraViewToggleUI() {
+  let btn = document.getElementById('global-camera-view-btn');
+  if (!btn) {
+    btn = document.createElement('button');
+    btn.id = 'global-camera-view-btn';
+    btn.type = 'button';
+    btn.onclick = function (e) {
+      if (e) e.stopPropagation();
+      window.cycleGlobalCameraViewMode();
+    };
+    btn.className =
+      'pointer-events-auto mc-btn px-3 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border-2 border-sky-400 text-white font-jua text-xs sm:text-sm shadow-lg flex items-center justify-center gap-1 backdrop-blur-sm transition-transform active:scale-95 shrink-0';
+    btn.innerHTML = '<span>🎥</span><span id="global-camera-view-label">기본시점</span>';
+  }
+
+  // 각도 변경 버튼(좌/우 카메라 회전 버튼)을 찾아 그 사이에 배치
+  if (!btn.parentElement || btn.dataset.mountedBetweenAngles !== 'true') {
+    const allBtns = Array.from(document.querySelectorAll('button'));
+    let leftAngleBtn = null;
+    let rightAngleBtn = null;
+
+    for (let i = 0; i < allBtns.length; i++) {
+      const b = allBtns[i];
+      if (b.id === 'global-camera-view-btn') continue;
+      const oc = (b.getAttribute('onclick') || '').toLowerCase();
+      const txt = (b.textContent || '').trim();
+      if (
+        oc.includes('rotatecamera(-1)') ||
+        oc.includes('rotatecamera( -1') ||
+        oc.includes('cameratargetyaw -=') ||
+        oc.includes('angle') && oc.includes('-') ||
+        txt.includes('↺') || txt.includes('◀') && txt.includes('각도')
+      ) {
+        leftAngleBtn = b;
+      } else if (
+        oc.includes('rotatecamera(1)') ||
+        oc.includes('rotatecamera( 1') ||
+        oc.includes('cameratargetyaw +=') ||
+        oc.includes('angle') && oc.includes('+') ||
+        txt.includes('↻') || txt.includes('▶') && txt.includes('각도')
+      ) {
+        rightAngleBtn = b;
+      }
+    }
+
+    if (leftAngleBtn && leftAngleBtn.parentElement) {
+      leftAngleBtn.insertAdjacentElement('afterend', btn);
+      btn.dataset.mountedBetweenAngles = 'true';
+    } else if (rightAngleBtn && rightAngleBtn.parentElement) {
+      rightAngleBtn.parentElement.insertBefore(btn, rightAngleBtn);
+      btn.dataset.mountedBetweenAngles = 'true';
+    } else if (!btn.parentElement) {
+      // 각도 버튼 컨테이너가 아직 생성되기 전이면 하단 중앙 고정 후 다음 프레임에 재탐색
+      btn.className += ' fixed bottom-4 left-1/2 -translate-x-1/2 z-20';
+      document.body.appendChild(btn);
+    }
+  }
+
+  if (btn.dataset.mountedBetweenAngles === 'true') {
+    btn.classList.remove('fixed', 'bottom-4', 'left-1/2', '-translate-x-1/2', 'z-20');
+  }
+  return btn;
+}
+
+window.cycleGlobalCameraViewMode = function () {
+  if (window.globalCameraViewMode === 'default') {
+    window.globalCameraViewMode = 'wide';
+  } else if (window.globalCameraViewMode === 'wide') {
+    window.globalCameraViewMode = 'low';
+  } else {
+    window.globalCameraViewMode = 'default';
+  }
+
+  const btn = ensureGlobalCameraViewToggleUI();
+  if (window.globalCameraViewMode === 'default') {
+    btn.innerHTML = '<span>🎥</span><span id="global-camera-view-label">기본시점</span>';
+    if (typeof showToast === 'function') showToast('🎥 카메라: [기본 시점]');
+  } else if (window.globalCameraViewMode === 'wide') {
+    btn.innerHTML = '<span>🔭</span><span id="global-camera-view-label" class="text-sky-300">넓게보기</span>';
+    if (typeof showToast === 'function') showToast('🔭 카메라: [넓게 보기]');
+  } else {
+    btn.innerHTML = '<span>👀</span><span id="global-camera-view-label" class="text-amber-300">정면낮게</span>';
+    if (typeof showToast === 'function') showToast('👀 카메라: [정면 낮게 보기]');
+  }
+  if (typeof playSfx === 'function') playSfx('switch');
+};
+
+function attachGlobalCameraViewHook() {
+  ensureGlobalCameraViewToggleUI();
+  if (typeof scene === 'undefined' || !scene || scene._hasGlobalCamViewHookV2) return;
+  scene._hasGlobalCamViewHookV2 = true;
+
+  const savedCamPos = new THREE.Vector3();
+  const savedCamQuat = new THREE.Quaternion();
+  let savedFogNear = 60;
+  let savedFogFar = 200;
+  let didModifyCameraThisFrame = false;
+
+  const prevBeforeRender = scene.onBeforeRender;
+  scene.onBeforeRender = function (renderer, scn, cam, geometry, material, group) {
+    if (typeof prevBeforeRender === 'function') {
+      prevBeforeRender.call(this, renderer, scn, cam, geometry, material, group);
+    }
+    didModifyCameraThisFrame = false;
+
+    const btn = ensureGlobalCameraViewToggleUI();
+    if (btn && btn.dataset.mountedBetweenAngles !== 'true') {
+      if (typeof isPlaying !== 'undefined' && isPlaying) btn.classList.remove('hidden');
+      else btn.classList.add('hidden');
+    }
+
+    if (typeof isPlaying === 'undefined' || !isPlaying) return;
+    if (window.globalCameraViewMode === 'default') return;
+    if (typeof davidAimState !== 'undefined' && davidAimState.active) return;
+    if (typeof davidFlyingStone !== 'undefined' && davidFlyingStone.active) return;
+    if (typeof davidThroneEnding !== 'undefined' && davidThroneEnding.seated) return;
+    if (typeof davidOpeningState !== 'undefined' && davidOpeningState.active) return;
+    if (typeof davidStage2Dialogue !== 'undefined' && davidStage2Dialogue.active) return;
+    if (typeof playerPos === 'undefined' || !cam) return;
+
+    // 렌더링 직전 원래 카메라 위치·회전·안개 거리를 저장 (누적 증폭으로 카메라가 날아가는 현상 원천 차단!)
+    savedCamPos.copy(cam.position);
+    savedCamQuat.copy(cam.quaternion);
+    if (scn.fog) {
+      savedFogNear = scn.fog.near;
+      savedFogFar = scn.fog.far;
+    }
+
+    // 멀리 보기 시 오브젝트가 잘리지 않도록 카메라 Far 평면 확장
+    if (cam.far < 1200) {
+      cam.far = 1200;
+      cam.updateProjectionMatrix();
+    }
+
+    const yaw = (typeof cameraYaw !== 'undefined') ? cameraYaw : 0;
+    const dirX = Math.sin(yaw);
+    const dirZ = Math.cos(yaw);
+
+    if (window.globalCameraViewMode === 'wide') {
+      const wideDist = 22.5;
+      const wideHeight = 20.5;
+      cam.position.set(
+        playerPos.x + dirX * wideDist,
+        playerPos.y + wideHeight,
+        playerPos.z + dirZ * wideDist
+      );
+      cam.lookAt(playerPos.x, playerPos.y + 1.2, playerPos.z);
+
+      // 넓게 보기 시 안개(Fog) 때문에 멀리 있는 오브젝트가 사라지지 않도록 안개 가시거리 대폭 확장
+      if (scn.fog) {
+        scn.fog.near = Math.max(savedFogNear, 160);
+        scn.fog.far = Math.max(savedFogFar, 520);
+      }
+      didModifyCameraThisFrame = true;
+    } else if (window.globalCameraViewMode === 'low') {
+      const lowDist = 8.4;
+      const camX = playerPos.x + dirX * lowDist;
+      const camZ = playerPos.z + dirZ * lowDist;
+
+      let groundH = playerPos.y;
+      if (
+        typeof currentEpisode !== 'undefined' &&
+        currentEpisode === 'david' &&
+        typeof currentStage !== 'undefined' &&
+        currentStage === 1 &&
+        typeof getDavidStage1GroundHeight === 'function'
+      ) {
+        groundH = Math.max(playerPos.y, getDavidStage1GroundHeight(camX, camZ));
+      }
+
+      cam.position.set(
+        camX,
+        Math.max(playerPos.y + 2.3, groundH + 1.65),
+        camZ
+      );
+      cam.lookAt(
+        playerPos.x - dirX * 9.0,
+        playerPos.y + 2.3,
+        playerPos.z - dirZ * 9.0
+      );
+      if (scn.fog) {
+        scn.fog.near = Math.max(savedFogNear, 140);
+        scn.fog.far = Math.max(savedFogFar, 460);
+      }
+      didModifyCameraThisFrame = true;
+    }
+
+    if (didModifyCameraThisFrame && typeof updateWallTransparency === 'function') {
+      updateWallTransparency();
+    }
+  };
+
+  const prevAfterRender = scene.onAfterRender;
+  scene.onAfterRender = function (renderer, scn, cam, geometry, material, group) {
+    // 렌더링 직후 원래 카메라 좌표와 안개 설정을 즉시 복원하여 core.js의 lerp와 충돌하지 않게 함!
+    if (didModifyCameraThisFrame && cam) {
+      cam.position.copy(savedCamPos);
+      cam.quaternion.copy(savedCamQuat);
+      if (scn && scn.fog) {
+        scn.fog.near = savedFogNear;
+        scn.fog.far = savedFogFar;
+      }
+      didModifyCameraThisFrame = false;
+    }
+    if (typeof prevAfterRender === 'function') {
+      prevAfterRender.call(this, renderer, scn, cam, geometry, material, group);
+    }
+  };
+}
+
+setTimeout(attachGlobalCameraViewHook, 250);
+setInterval(attachGlobalCameraViewHook, 1500);
+
+// -------------------------------------------------------------------------
+// 1. [공통 사운드 & 성우 내레이션 & 전쟁 효과음]
 // -------------------------------------------------------------------------
 const DAVID_HARP_MELODY   = [0, 4, 7, 12, 11, 9, 7, 4, 5, 9, 12, 16, 14, 12, 9, 7, 4, 7, 11, 14, 12, 9, 7, 4];
 const DAVID_HARP_CHORD1   = [4, 7, 12, 16, 14, 12, 11, 7, 9, 12, 16, 19, 17, 16, 12, 11, 7, 11, 14, 17, 16, 12, 11, 7];
@@ -62,9 +280,131 @@ const DAVID_TENSION_RHYTHM = [
   0.55, 0.55, 1.40, 0.50
 ];
 
-// [스테이지 2 요청사항 3] 골리앗이 무너지면(davidIdolHits >= davidReqIdolHits) 컷신과 퀴즈 풀 때까지 평온한 음악 유지!
+// 남자 성우 음성 낭독기 (Web Speech API 중저음 남성 보이스 + 중후한 성우 공명 사운드 보조)
+function speakMaleVoiceNarration(spokenText) {
+  try {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(spokenText);
+      utter.lang = 'ko-KR';
+      utter.pitch = 0.68; // 중후한 남성 성우 톤
+      utter.rate = 0.88;  // 차분하고 위엄 있는 낭독 속도
+      utter.volume = 1.0;
+
+      const voices = window.speechSynthesis.getVoices() || [];
+      const koVoices = voices.filter(v => v.lang && (v.lang.includes('ko') || v.lang.includes('KR')));
+      const maleVoice = koVoices.find(v => /male|injoon|봉|남|현|준/i.test(v.name)) || koVoices[0];
+      if (maleVoice) utter.voice = maleVoice;
+
+      window.speechSynthesis.speak(utter);
+    }
+  } catch (e) {}
+
+  // 브라우저 TTS 제한 환경에서도 남성 성우 울림이 느껴지도록 부드러운 바리톤 공명음 동시 재생
+  const ctx = getAudioCtx();
+  if (ctx) {
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(130.8, now);
+    osc.frequency.exponentialRampToValueAtTime(146.8, now + 0.6);
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.linearRampToValueAtTime(0.045, now + 0.08);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 1.1);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 1.15);
+  }
+}
+
+// 스테이지 2 오프닝용 전쟁 나팔·칼 부딪히는 소리·병사들의 함성 소리 합성기
+let davidWarSfxTimer = null;
+function playWarBattleCrySfx(mode = 'battle') {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+
+  if (mode === 'battle') {
+    // 1) 전쟁 뿔나팔(쇼파르) 저음 울림
+    [110, 165, 220].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(freq * 0.94, now + i * 0.08);
+      osc.frequency.linearRampToValueAtTime(freq, now + 0.45);
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.linearRampToValueAtTime(0.045, now + 0.25);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 2.4);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 2.45);
+    });
+
+    // 2) 군사들의 함성("와아아!") 포먼트 노이즈 + 칼·창 부딪히는 금속음
+    const bufferSize = ctx.sampleRate * 2.2;
+    const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const output = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
+
+    const whiteNoise = ctx.createBufferSource();
+    whiteNoise.buffer = noiseBuffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(520, now);
+    filter.frequency.linearRampToValueAtTime(680, now + 1.0);
+    filter.Q.setValueAtTime(2.2, now);
+
+    const roarGain = ctx.createGain();
+    roarGain.gain.setValueAtTime(0.001, now);
+    roarGain.gain.linearRampToValueAtTime(0.09, now + 0.3);
+    roarGain.gain.setValueAtTime(0.08, now + 1.4);
+    roarGain.gain.exponentialRampToValueAtTime(0.001, now + 2.15);
+
+    whiteNoise.connect(filter);
+    filter.connect(roarGain);
+    roarGain.connect(ctx.destination);
+    whiteNoise.start(now);
+    whiteNoise.stop(now + 2.2);
+
+    // 칼이 부딪히는 챙챙 금속 효과음 4회
+    [0.25, 0.75, 1.25, 1.75].forEach(tOff => {
+      const clang = ctx.createOscillator();
+      const cGain = ctx.createGain();
+      clang.type = 'square';
+      clang.frequency.setValueAtTime(1480 + (tOff * 300), now + tOff);
+      clang.frequency.exponentialRampToValueAtTime(620, now + tOff + 0.14);
+      cGain.gain.setValueAtTime(0.05, now + tOff);
+      cGain.gain.exponentialRampToValueAtTime(0.001, now + tOff + 0.15);
+      clang.connect(cGain);
+      cGain.connect(ctx.destination);
+      clang.start(now + tOff);
+      clang.stop(now + tOff + 0.16);
+    });
+  } else if (mode === 'giant_steps') {
+    // 거인 골리앗이 걸어 나오는 쿵! 쿵! 대지 진동 발소리
+    [0.1, 0.95, 1.85].forEach(tOff => {
+      const thud = ctx.createOscillator();
+      const tGain = ctx.createGain();
+      thud.type = 'sine';
+      thud.frequency.setValueAtTime(95, now + tOff);
+      thud.frequency.exponentialRampToValueAtTime(28, now + tOff + 0.42);
+      tGain.gain.setValueAtTime(0.14, now + tOff);
+      tGain.gain.exponentialRampToValueAtTime(0.001, now + tOff + 0.45);
+      thud.connect(tGain);
+      tGain.connect(ctx.destination);
+      thud.start(now + tOff);
+      thud.stop(now + tOff + 0.46);
+    });
+  }
+}
+
+// 골리앗이 무너지면 컷신과 퀴즈 풀 때까지 평온한 음악 유지
 function isDavidTensionActive() {
   if (currentEpisode !== 'david') return false;
+  if (typeof davidOpeningState !== 'undefined' && davidOpeningState.active) return false;
   if (currentStage === 1 && davidStage1Phase === 'defend_sheep') return true;
   if (
     currentStage === 2 &&
@@ -106,6 +446,8 @@ function playHarpPluckNote(ctx, freq, startTime, dur, vol, isTension = false) {
 }
 
 function scheduleDavidBgmBeat(ctx, step, st, mode, playing, timeRem, toFreq) {
+  if (typeof davidOpeningState !== 'undefined' && davidOpeningState.active) return 300;
+
   if (isDavidTensionActive()) {
     const idx = step % DAVID_TENSION_MELODY.length;
     const rhythmMult = DAVID_TENSION_RHYTHM[idx] || 1.0;
@@ -219,7 +561,7 @@ function playAnimaleseSpeech(text, voicePitch = 1.0, onCharStep = null) {
   if (animaleseTimer) { clearInterval(animaleseTimer); animaleseTimer = null; }
   const clean = (text || '').replace(/[^\uAC00-\uD7A3a-zA-Z0-9]/g, '');
   let idx = 0;
-  const maxSteps = Math.min(clean.length, 28);
+  const maxSteps = Math.min(clean.length, 36);
 
   animaleseTimer = setInterval(() => {
     if (idx >= maxSteps) {
@@ -260,16 +602,125 @@ function playAnimaleseSpeech(text, voicePitch = 1.0, onCharStep = null) {
 }
 
 // -------------------------------------------------------------------------
-// 2. 에피소드 3 전용 전역 상태 변수, 지형 고도 함수 및 픽셀아트 조준 UI
+// 2. [오프닝 & 엔딩 암전 시네마틱 시퀀서] (스테이지 1 오프닝, 스테이지 2 오프닝, 엔딩 암전 성경절)
+// -------------------------------------------------------------------------
+let davidOpeningState = {
+  active: false,
+  timers: []
+};
+
+function clearDavidOpeningTimers() {
+  davidOpeningState.timers.forEach(t => clearTimeout(t));
+  davidOpeningState.timers = [];
+  if (davidWarSfxTimer) { clearInterval(davidWarSfxTimer); davidWarSfxTimer = null; }
+  try {
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+  } catch (e) {}
+}
+
+function runDavidBlackoutSequence(slides, onComplete) {
+  ensureDavidCustomUI();
+  clearDavidOpeningTimers();
+
+  const overlay = document.getElementById('david-cinematic-overlay');
+  const textWrap = document.getElementById('david-cinematic-text-wrap');
+  const mainText = document.getElementById('david-cinematic-main-text');
+  const subText = document.getElementById('david-cinematic-sub-text');
+  if (!overlay || !textWrap || !mainText || !subText) {
+    if (onComplete) onComplete();
+    return;
+  }
+
+  davidOpeningState.active = true;
+  const prevTimeAttack = isTimeAttackActive;
+  isPlaying = false;
+  isTimeAttackActive = false;
+
+  overlay.classList.remove('hidden');
+  overlay.classList.add('flex');
+  overlay.style.opacity = '1';
+
+  let cursorMs = 0;
+
+  slides.forEach((slide, idx) => {
+    const startTimer = setTimeout(() => {
+      textWrap.style.opacity = '0';
+      setTimeout(() => {
+        mainText.innerHTML = slide.html || '';
+        subText.textContent = slide.sub || '';
+        subText.className = slide.sub ? 'text-amber-300 font-jua text-base sm:text-xl mt-4 tracking-wide' : 'hidden';
+        textWrap.style.opacity = '1';
+
+        if (slide.voiceText) {
+          speakMaleVoiceNarration(slide.voiceText);
+        }
+        if (slide.sfxMode) {
+          playWarBattleCrySfx(slide.sfxMode);
+        }
+      }, 280);
+    }, cursorMs);
+    davidOpeningState.timers.push(startTimer);
+
+    // 각 슬라이드 종료 650ms 전에 텍스트 페이드 아웃
+    const fadeOutTimer = setTimeout(() => {
+      textWrap.style.opacity = '0';
+    }, cursorMs + Math.max(500, slide.durationMs - 650));
+    davidOpeningState.timers.push(fadeOutTimer);
+
+    cursorMs += slide.durationMs;
+  });
+
+  const finishTimer = setTimeout(() => {
+    overlay.style.opacity = '0';
+    const hideTimer = setTimeout(() => {
+      overlay.classList.add('hidden');
+      overlay.classList.remove('flex');
+      davidOpeningState.active = false;
+      clearDavidOpeningTimers();
+      if (onComplete) onComplete(prevTimeAttack);
+    }, 650);
+    davidOpeningState.timers.push(hideTimer);
+  }, cursorMs);
+  davidOpeningState.timers.push(finishTimer);
+}
+
+// [에피소드 3 : 오프닝] 5초 내레이션 -> 페이드아웃 -> 6초 성경절(사도행전 13:22는 읽지 않음) -> 게임 시작
+function startDavidStage1Opening(onDone) {
+  runDavidBlackoutSequence(
+    [
+      {
+        html: '"내가 이새의 아들 다윗을 만나니... "',
+        sub: '',
+        voiceText: '내가 이새의 아들 다윗을 만나니',
+        durationMs: 5000
+      },
+      {
+        html: '"내 마음에 맞는 사람이라 내 뜻을 다 이루리라 "',
+        sub: '- 사도행전 13:22 -',
+        voiceText: '내 마음에 맞는 사람이라 내 뜻을 다 이루리라', // 사도행전 13:22는 읽지 않음
+        durationMs: 6000
+      }
+    ],
+    (wasTimeAttack) => {
+      isPlaying = true;
+      if (currentMode === 'timeattack') isTimeAttackActive = true;
+      startStageBgm(1);
+      if (onDone) onDone();
+    }
+  );
+}
+
+// -------------------------------------------------------------------------
+// 3. 에피소드 3 전용 전역 상태 변수, 지형 고도 함수 및 UI (세로형 배부름 게이지 포함)
 // -------------------------------------------------------------------------
 const DAVID_WALL_REQ_PER_TIER = 7;
 const DAVID_CAMP_HALF_W = 7.4;
 const DAVID_CAMP_HALF_D = 5.6;
-const DAVID_HILL_TOP_Y = 11.0;       // 언덕 위 목장 높이 (11m)
-const DAVID_HILL_SLOPE_SOUTH_Z = -8; // 언덕 내리막 시작 Z
-const DAVID_HILL_SLOPE_NORTH_Z = -34;// 언덕 내리막 끝(평지 마을 시작) Z
+const DAVID_HILL_TOP_Y = 11.0;
+const DAVID_HILL_SLOPE_SOUTH_Z = -8;
+const DAVID_HILL_SLOPE_NORTH_Z = -34;
 
-let davidStage1Phase = 'find_sheep'; // 'find_sheep' | 'feed_sheep' | 'defend_sheep' | 'go_home'
+let davidStage1Phase = 'find_sheep';
 let davidBaseFlock = [];
 let davidSheepList = [];
 let davidFollowingSheep = [];
@@ -288,7 +739,6 @@ let davidMaxCarryFeed = 2;
 let davidCampCenter = new THREE.Vector3(0, DAVID_HILL_TOP_Y, 12);
 let davidCampLabel = null;
 
-// 디펜스 & 사각형 담장 7구간별 단계(0: 미완성, 1: 흙담, 2: 나무담, 3: 돌담)
 let davidDefenseTimer = 0;
 let davidDefenseDuration = 95;
 let davidWallSectionTiers = [0, 0, 0, 0, 0, 0, 0];
@@ -364,28 +814,35 @@ function ensureDavidCustomUI() {
     uiRoot.id = 'david-custom-ui';
     uiRoot.className = 'fixed inset-0 pointer-events-none z-20 flex flex-col items-center';
     uiRoot.innerHTML = `
-      <!-- 스테이지 1: 양 배부름 상태(0% 😢 ~ 100% 😊) & 디펜스 타이머 패널 -->
-      <div id="david-st1-panel" class="hidden mt-16 mc-panel px-4 py-2 rounded-2xl bg-slate-900/85 border-2 border-amber-400 text-white shadow-xl flex flex-col gap-1.5 min-w-[290px]">
-        <div id="david-hunger-row" class="flex flex-col gap-1">
-          <div class="flex justify-between text-xs font-jua text-amber-300">
-            <span>🐑 양 배부름 상태</span>
-            <span id="david-hunger-text">0%</span>
-          </div>
-          <div class="flex items-center gap-1.5">
-            <span class="text-base leading-none select-none" title="0% 배고픔">😢</span>
-            <div class="flex-1 h-3.5 bg-slate-700 rounded-full overflow-hidden border border-slate-500">
-              <div id="david-hunger-bar" class="h-full bg-gradient-to-r from-amber-400 to-emerald-400 transition-all duration-200" style="width:0%"></div>
-            </div>
-            <span class="text-base leading-none select-none" title="100% 배부름">😊</span>
-          </div>
+      <!-- [오프닝 & 엔딩 암전 내레이션 오버레이] -->
+      <div id="david-cinematic-overlay" class="hidden pointer-events-auto fixed inset-0 bg-black z-50 flex-col items-center justify-center p-6 text-center transition-opacity duration-700" style="opacity:0;">
+        <div id="david-cinematic-text-wrap" class="max-w-2xl transition-opacity duration-500 px-4" style="opacity:0;">
+          <p id="david-cinematic-main-text" class="text-white font-jua text-xl sm:text-3xl leading-relaxed drop-shadow-lg break-keep"></p>
+          <p id="david-cinematic-sub-text" class="hidden"></p>
         </div>
-        <div id="david-defense-row" class="hidden flex-col gap-1 pt-1 border-t border-slate-700">
-          <div class="flex justify-between text-xs font-jua text-rose-300">
-            <span id="david-defense-title">🛡️ 맹수 디펜스 남은 시간</span>
-            <span id="david-defense-timer">95.0초</span>
+      </div>
+
+      <!-- [스테이지 1 요청사항 1] 상단 시야를 가리지 않는 좌측 가변 세로형 배부름 게이지 & 초소형 디펜스 배지 -->
+      <div id="david-st1-panel" class="hidden">
+        <!-- 좌측 세로형 배부름 게이지 (먹이 미션 중에만 좌측 구석에 표시) -->
+        <div id="david-hunger-row" class="fixed left-3 top-1/2 -translate-y-1/2 z-20 mc-panel px-2 py-3 rounded-2xl bg-slate-900/85 border-2 border-amber-400 text-white shadow-xl flex flex-col items-center gap-1.5">
+          <span class="text-[10px] font-jua text-amber-300 leading-none">🐑배부름</span>
+          <span class="text-base leading-none select-none" title="100% 배부름">😊</span>
+          <div class="w-4 h-28 bg-slate-800 rounded-full overflow-hidden border border-slate-500 flex flex-col justify-end p-0.5">
+            <div id="david-hunger-bar" class="w-full rounded-full bg-gradient-to-t from-amber-400 to-emerald-400 transition-all duration-200" style="height:0%; width:100%;"></div>
           </div>
-          <div id="david-sheep-loss-badge" class="text-[11px] font-bold text-amber-200 text-center">사라진 양: 0마리 (허용 한도: 2마리)</div>
-          <div id="david-wall-tier-badge" class="text-[11px] font-bold text-sky-300 text-center">사각형 흙담 시공: 0/7개</div>
+          <span class="text-base leading-none select-none" title="0% 배고픔">😢</span>
+          <span id="david-hunger-text" class="text-[11px] font-jua text-emerald-300 leading-none">0%</span>
+        </div>
+
+        <!-- 디펜스 중에만 좌측 상단 구석에 작게 뜨는 한 줄 디펜스 배지 -->
+        <div id="david-defense-row" class="hidden fixed top-20 left-3 z-20 mc-panel px-3 py-1.5 rounded-xl bg-slate-900/85 border border-rose-400 text-white shadow-lg flex-col gap-0.5">
+          <div class="flex items-center gap-2 text-xs font-jua text-rose-300">
+            <span id="david-defense-title">🛡️ 디펜스</span>
+            <span id="david-defense-timer" class="text-white">95.0초</span>
+          </div>
+          <div id="david-sheep-loss-badge" class="text-[10px] font-bold text-amber-200">사라진 양: 0/2</div>
+          <div id="david-wall-tier-badge" class="text-[10px] font-bold text-sky-300">흙담: 0/7</div>
         </div>
       </div>
 
@@ -407,10 +864,10 @@ function ensureDavidCustomUI() {
         </div>
       </div>
 
-      <!-- 스테이지 3: 동물의 숲 스타일 NPC 말풍선 대화창 -->
+      <!-- 스테이지 2 & 3: 동물의 숲 스타일 말풍선 대화창 -->
       <div id="david-npc-dialog" class="hidden pointer-events-auto mt-auto mb-28 mc-panel bg-amber-50/95 border-4 border-amber-700 rounded-3xl p-4 max-w-md w-[92%] text-slate-900 shadow-2xl flex flex-col gap-2">
         <div class="flex items-center justify-between">
-          <span id="david-npc-name" class="px-3 py-0.5 rounded-full bg-amber-700 text-amber-100 font-jua text-sm">NPC 이름</span>
+          <span id="david-npc-name" class="px-3 py-0.5 rounded-full bg-amber-700 text-amber-100 font-jua text-sm">이름</span>
           <span class="text-[11px] font-bold text-amber-800">🔊 또로롱 말풍선 사운드</span>
         </div>
         <p id="david-npc-text" class="font-bold text-sm leading-relaxed min-h-[42px] text-slate-800"></p>
@@ -424,48 +881,41 @@ function ensureDavidCustomUI() {
   return uiRoot;
 }
 
-// [스테이지 2 요청사항 5] 도트 픽셀아트 스타일로 골리앗의 투구, 비늘갑옷, 우상 장식, 조준 십자선을 정교하게 렌더링
 function renderDavidPixelAimScreen(retX, retY, tgtX, tgtY, now) {
   const cvs = document.getElementById('david-aim-canvas');
   if (!cvs) return;
   const ctx = cvs.getContext('2d');
   ctx.imageSmoothingEnabled = false;
 
-  // 256x176 기준 좌표를 128x88 도트 그리드로 변환
-  const gx = Math.round((tgtX + 24) * 0.5); // 우상 중심 X (약 64)
-  const gy = Math.round((tgtY + 24) * 0.5); // 우상 중심 Y (약 29)
-  const rx = Math.round((retX + 20) * 0.5); // 조준점 중심 X
-  const ry = Math.round((retY + 20) * 0.5); // 조준점 중심 Y
+  const gx = Math.round((tgtX + 24) * 0.5);
+  const gy = Math.round((tgtY + 24) * 0.5);
+  const rx = Math.round((retX + 20) * 0.5);
+  const ry = Math.round((retY + 20) * 0.5);
 
   const px = (x, y, w, h, col) => {
     ctx.fillStyle = col;
     ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
   };
 
-  // 1) 픽셀 밤하늘/노을 그라데이션 배경 및 도트 구름·절벽
   px(0, 0, 128, 22, '#0c4a6e');
   px(0, 22, 128, 22, '#0369a1');
   px(0, 44, 128, 22, '#0284c7');
   px(0, 66, 128, 22, '#78350f');
 
-  // 도트 구름
   const clOff = Math.round((now * 0.008) % 140) - 20;
   px(clOff, 10, 18, 4, '#bae6fd');
   px(clOff + 3, 8, 12, 2, '#e0f2fe');
   px(105 - (clOff * 0.5), 16, 16, 3, '#bae6fd');
 
-  // 골짜기 사막 언덕 도트 실루엣
   for (let i = 0; i < 128; i += 8) {
     const ch = 12 + ((i * 7) % 10);
     px(i, 68 - ch, 8, ch, '#92400e');
     px(i, 68 - ch, 8, 2, '#b45309');
   }
 
-  // 2) 골리앗의 거대한 어깨(비늘 갑옷) & 얼굴 & 청동 투구 픽셀아트 (우상 X좌표와 연동)
   const hx = gx;
-  const hy = gy + 26; // 투구 중심 Y (약 55)
+  const hy = gy + 26;
 
-  // 비늘 갑옷 어깨
   px(hx - 34, hy + 14, 68, 20, '#854d0e');
   px(hx - 30, hy + 12, 60, 4, '#ca8a04');
   for (let sx = hx - 30; sx <= hx + 26; sx += 6) {
@@ -474,70 +924,57 @@ function renderDavidPixelAimScreen(retX, retY, tgtX, tgtY, now) {
     }
   }
 
-  // 골리앗 얼굴 & 검은 수염 & 붉은 눈빛
   px(hx - 16, hy - 2, 32, 16, '#b45309');
-  px(hx - 16, hy + 8, 32, 8, '#1e293b'); // 턱수염
-  px(hx - 10, hy + 2, 5, 3, '#ef4444');  // 왼눈
-  px(hx + 5,  hy + 2, 5, 3, '#ef4444');  // 오른눈
-  px(hx - 8,  hy + 2, 2, 2, '#fef08a');  // 눈 하이라이트
+  px(hx - 16, hy + 8, 32, 8, '#1e293b');
+  px(hx - 10, hy + 2, 5, 3, '#ef4444');
+  px(hx + 5,  hy + 2, 5, 3, '#ef4444');
+  px(hx - 8,  hy + 2, 2, 2, '#fef08a');
   px(hx + 7,  hy + 2, 2, 2, '#fef08a');
 
-  // 청동 투구 돔 & 코보호대 & 볼가리개
   px(hx - 20, hy - 12, 40, 12, '#b45309');
   px(hx - 17, hy - 16, 34, 5,  '#d97706');
   px(hx - 12, hy - 19, 24, 3,  '#f59e0b');
-  px(hx - 22, hy - 4,  44, 3,  '#78350f'); // 투구 테두리 챙
-  px(hx - 2,  hy - 4,  4,  9,  '#d97706'); // 코 보호대
-  px(hx - 20, hy - 1,  5,  10, '#92400e'); // 좌측 볼가리개
-  px(hx + 15, hy - 1,  5,  10, '#92400e'); // 우측 볼가리개
-  // 투구 리벳 도트
+  px(hx - 22, hy - 4,  44, 3,  '#78350f');
+  px(hx - 2,  hy - 4,  4,  9,  '#d97706');
+  px(hx - 20, hy - 1,  5,  10, '#92400e');
+  px(hx + 15, hy - 1,  5,  10, '#92400e');
   [-15, -8, 0, 8, 15].forEach(ox => px(hx + ox, hy - 6, 2, 2, '#fde047'));
 
-  // 3) 투구 꼭대기의 우상(Idol) 조각상 픽셀아트 (조준 타깃: gx, gy)
   const pulse = Math.floor(now * 0.01) % 2 === 0;
-  // 황금 받침대
   px(gx - 10, gy + 6, 20, 4, '#ca8a04');
   px(gx - 8,  gy + 4, 16, 2, '#facc15');
-  // 우상 양 날개 (황금 도트)
   px(gx - 15, gy - 6, 6, 8, '#eab308');
   px(gx - 17, gy - 9, 4, 5, '#fde047');
   px(gx + 9,  gy - 6, 6, 8, '#eab308');
   px(gx + 13, gy - 9, 4, 5, '#fde047');
-  // 우상 몸통 (보랏빛 석상)
   px(gx - 8,  gy - 10, 16, 14, '#581c87');
   px(gx - 6,  gy - 8,  12, 10, '#7e22ce');
-  // 우상 양 뿔
   px(gx - 7,  gy - 16, 3, 6, '#facc15');
   px(gx - 8,  gy - 18, 3, 3, '#fef08a');
   px(gx + 4,  gy - 16, 3, 6, '#facc15');
   px(gx + 5,  gy - 18, 3, 3, '#fef08a');
-  // 우상 중앙 붉은 보석 코어 & 눈
   px(gx - 3,  gy - 4, 6, 6, pulse ? '#f43f5e' : '#e11d48');
   px(gx - 1,  gy - 2, 2, 2, '#ffffff');
   px(gx - 4,  gy - 8, 2, 2, '#fde047');
   px(gx + 2,  gy - 8, 2, 2, '#fde047');
 
-  // 우상 타깃 외곽 점선 브래킷
   const brkCol = pulse ? '#fde047' : '#f59e0b';
   px(gx - 18, gy - 19, 5, 2, brkCol); px(gx - 18, gy - 19, 2, 5, brkCol);
   px(gx + 13, gy - 19, 5, 2, brkCol); px(gx + 16, gy - 19, 2, 5, brkCol);
   px(gx - 18, gy + 8,  5, 2, brkCol); px(gx - 18, gy + 5,  2, 5, brkCol);
   px(gx + 13, gy + 8,  5, 2, brkCol); px(gx + 16, gy + 5,  2, 5, brkCol);
 
-  // 4) 다윗의 물맷돌 픽셀 조준 십자선 (Reticle: rx, ry)
   const dist = Math.hypot((retX + 20) - (tgtX + 24), (retY + 20) - (tgtY + 24));
   const hitThreshold = (currentMode === 'kinder') ? 46 : (currentMode === 'junior' ? 38 : 34);
   const isLockedOn = (dist <= hitThreshold);
   const retCol = isLockedOn ? '#4ade80' : '#38bdf8';
   const retSub = isLockedOn ? '#fef08a' : '#e0f2fe';
 
-  // 조준 사각 테두리 코너
   px(rx - 11, ry - 11, 6, 2, retCol); px(rx - 11, ry - 11, 2, 6, retCol);
   px(rx + 5,  ry - 11, 6, 2, retCol); px(rx + 9,  ry - 11, 2, 6, retCol);
   px(rx - 11, ry + 9,  6, 2, retCol); px(rx - 11, ry + 5,  2, 6, retCol);
   px(rx + 5,  ry + 9,  6, 2, retCol); px(rx + 9,  ry + 5,  2, 6, retCol);
 
-  // 십자선 및 중앙 도트
   px(rx - 14, ry - 1, 6, 2, retSub);
   px(rx + 8,  ry - 1, 6, 2, retSub);
   px(rx - 1,  ry - 14, 2, 6, retSub);
@@ -557,9 +994,12 @@ function hideAllDavidCustomUI() {
   const st1 = document.getElementById('david-st1-panel');
   const aim = document.getElementById('david-aim-overlay');
   const dlg = document.getElementById('david-npc-dialog');
+  const ov = document.getElementById('david-cinematic-overlay');
   if (st1) st1.classList.add('hidden');
   if (aim) aim.classList.add('hidden');
   if (dlg) dlg.classList.add('hidden');
+  if (ov) { ov.classList.add('hidden'); ov.classList.remove('flex'); }
+  clearDavidOpeningTimers();
   if (animaleseTimer) { clearInterval(animaleseTimer); animaleseTimer = null; }
 }
 
@@ -577,7 +1017,7 @@ function openDavidSheepLostRetryModal() {
 }
 
 // -------------------------------------------------------------------------
-// 3. 다윗(수금·물매·왕관), 늑대, 사무엘 선지자 3D 모델링
+// 4. [공통 3] 다윗 캐릭터 (눈 흰자, 눈동자, 눈썹, 입체 코, 볼, 입 디테일 추가!) & 늑대·사무엘 모델링
 // -------------------------------------------------------------------------
 function createDavidHeroMesh() {
   const g = new THREE.Group();
@@ -586,9 +1026,13 @@ function createDavidHeroMesh() {
   const vest = isKingStage ? matDavidCached('#facc15', '#ca8a04') : matDavidCached('#b45309', '#78350f');
   const beltMat = matDavidCached('#78350f');
   const skin = matDavidCached('#fed7aa', '#fdba74');
+  const noseMat = matDavidCached('#fdba74', '#f59e0b');
   const hairMat = matDavidCached('#92400e', '#78350f');
   const pouchMat = matDavidCached('#d97706', '#92400e');
-  const eyeMat = matDavidCached('#0f172a');
+  const eyeWhiteMat = matDavidCached('#ffffff');
+  const eyePupilMat = matDavidCached('#0f172a');
+  const mouthMat = matDavidCached('#be123c');
+  const cheekMat = matDavidCached('#fda4af');
   const goldMat = matDavidCached('#facc15', '#ca8a04');
 
   const lLeg = new THREE.Group(); lLeg.position.set(-0.22, 0.7, 0);
@@ -606,11 +1050,25 @@ function createDavidHeroMesh() {
     g.add(createBox(0.98, 1.18, 0.14, matDavidCached('#7f1d1d'), 0, 1.18, -0.30));
   }
 
+  // 얼굴 헤드 + 머리카락 + 흰자(Sclera) + 눈동자(Pupil) + 눈썹 + 코 + 볼 터치 + 미소 입 모양!
   const head = createBox(0.78, 0.78, 0.78, skin, 0, 2.12, 0);
   const hairTop = createBox(0.86, 0.28, 0.86, hairMat, 0, 2.48, 0);
   const hairBack = createBox(0.84, 0.52, 0.24, hairMat, 0, 2.18, -0.34);
-  const lEye = createBox(0.12, 0.12, 0.06, eyeMat, -0.18, 2.18, 0.40);
-  const rEye = createBox(0.12, 0.12, 0.06, eyeMat, 0.18, 2.18, 0.40);
+  const hairSideL = createBox(0.14, 0.38, 0.68, hairMat, -0.38, 2.22, -0.04);
+  const hairSideR = createBox(0.14, 0.38, 0.68, hairMat,  0.38, 2.22, -0.04);
+
+  const lEyeWhite = createBox(0.20, 0.14, 0.05, eyeWhiteMat, -0.18, 2.17, 0.39, false);
+  const rEyeWhite = createBox(0.20, 0.14, 0.05, eyeWhiteMat,  0.18, 2.17, 0.39, false);
+  const lPupil = createBox(0.10, 0.12, 0.06, eyePupilMat, -0.15, 2.17, 0.40, false);
+  const rPupil = createBox(0.10, 0.12, 0.06, eyePupilMat,  0.15, 2.17, 0.40, false);
+  const lBrow = createBox(0.22, 0.05, 0.06, hairMat, -0.18, 2.28, 0.40, false);
+  const rBrow = createBox(0.22, 0.05, 0.06, hairMat,  0.18, 2.28, 0.40, false);
+  const nose = createBox(0.10, 0.12, 0.10, noseMat, 0, 2.08, 0.41, false);
+  const lCheek = createBox(0.12, 0.07, 0.05, cheekMat, -0.26, 2.04, 0.39, false);
+  const rCheek = createBox(0.12, 0.07, 0.05, cheekMat,  0.26, 2.04, 0.39, false);
+  const mouthCenter = createBox(0.18, 0.06, 0.06, mouthMat, 0, 1.94, 0.40, false);
+  const mouthCornerL = createBox(0.06, 0.06, 0.06, mouthMat, -0.10, 1.97, 0.40, false);
+  const mouthCornerR = createBox(0.06, 0.06, 0.06, mouthMat,  0.10, 1.97, 0.40, false);
 
   if (isKingStage) {
     g.add(
@@ -664,7 +1122,10 @@ function createDavidHeroMesh() {
 
   g.add(
     lLeg, rLeg, torso, shepherdVestL, shepherdVestR, belt, slingBag,
-    head, hairTop, hairBack, lEye, rEye, lArm, rArm
+    head, hairTop, hairBack, hairSideL, hairSideR,
+    lEyeWhite, rEyeWhite, lPupil, rPupil, lBrow, rBrow, nose, lCheek, rCheek,
+    mouthCenter, mouthCornerL, mouthCornerR,
+    lArm, rArm
   );
   playerLimbs = { lLeg, rLeg, lArm, rArm, axeTool: harpTool };
   return g;
@@ -707,6 +1168,7 @@ function createSamuelMesh() {
   const goldTrim = matDavidCached('#facc15', '#ca8a04');
   const skinMat = matDavidCached('#fed7aa', '#fdba74');
   const beardMat = matDavidCached('#f1f5f9', '#cbd5e1');
+  const eyeWhite = matDavidCached('#ffffff');
   const eyeMat = matDavidCached('#0f172a');
 
   const torso = createBox(0.88, 1.25, 0.52, robeMat, 0, 0.85, 0);
@@ -715,8 +1177,10 @@ function createSamuelMesh() {
   const head = createBox(0.72, 0.72, 0.72, skinMat, 0, 1.88, 0);
   const beard = createBox(0.76, 0.48, 0.32, beardMat, 0, 1.62, 0.32);
   const hair = createBox(0.80, 0.32, 0.80, beardMat, 0, 2.22, 0);
-  const lEye = createBox(0.10, 0.10, 0.05, eyeMat, -0.15, 1.92, 0.37);
-  const rEye = createBox(0.10, 0.10, 0.05, eyeMat, 0.15, 1.92, 0.37);
+  const lEyeW = createBox(0.16, 0.11, 0.04, eyeWhite, -0.15, 1.92, 0.36);
+  const rEyeW = createBox(0.16, 0.11, 0.04, eyeWhite,  0.15, 1.92, 0.36);
+  const lEye = createBox(0.09, 0.09, 0.05, eyeMat, -0.15, 1.92, 0.37);
+  const rEye = createBox(0.09, 0.09, 0.05, eyeMat,  0.15, 1.92, 0.37);
 
   const lArm = new THREE.Group(); lArm.position.set(-0.56, 1.42, 0);
   lArm.add(createBox(0.28, 0.68, 0.28, robeMat, 0, -0.28, 0));
@@ -732,13 +1196,13 @@ function createSamuelMesh() {
   hornGroup.rotation.x = 0.4;
   rArm.add(hornGroup);
 
-  g.add(torso, ephod, breastplate, head, beard, hair, lEye, rEye, lArm, rArm);
+  g.add(torso, ephod, breastplate, head, beard, hair, lEyeW, rEyeW, lEye, rEye, lArm, rArm);
   g.userData = { lArm, rArm, hornGroup };
   return g;
 }
 
 // -------------------------------------------------------------------------
-// 4. [스테이지 1 월드] 언덕 위 목장 + 내리막 오솔길 + 언덕 아래 집 + 강 건너 작은 나무 원경
+// 5. [스테이지 1 월드] 언덕 위 목장 + 내리막 오솔길 + 언덕 아래 집 + 강 건너 작은 나무 원경
 // -------------------------------------------------------------------------
 function buildGrazedRectangularPasture(cx, cz) {
   const by = getDavidStage1GroundHeight(cx, cz);
@@ -803,7 +1267,6 @@ function buildGrazedRectangularPasture(cx, cz) {
   });
 }
 
-// [스테이지 1 요청사항 1] 강 건너 먼 배경의 거대 산맥을 제거해 하늘이 시원하게 보이도록 하고, 외곽을 작은 나무들로 채움!
 function buildDistantPlainAndRiverVista(houseZ) {
   const plainMat = new THREE.MeshLambertMaterial({ map: makeGrassFieldTex() });
   const fieldMat1 = matDavidCached('#84cc16', '#65a30d');
@@ -828,7 +1291,6 @@ function buildDistantPlainAndRiverVista(houseZ) {
     worldGroup.add(createBox(pw, 0.12, pd, m, px, 0.04, pz, false));
   });
 
-  // 유유히 흐르는 강줄기
   const riverBaseZ = houseZ - 40;
   for (let rx = -130; rx <= 130; rx += 6) {
     const curveZ = riverBaseZ + Math.sin(rx * 0.035) * 7.5;
@@ -845,37 +1307,32 @@ function buildDistantPlainAndRiverVista(houseZ) {
     createBox(0.5, 1.2, 15.5, bridgeMat,  2.9, 1.15, bridgeZ, false)
   );
 
-  // 강변 작은 나무들
   [-84, -68, -52, -38, -22, 18, 34, 50, 66, 82].forEach((tx, idx) => {
     const tz = riverBaseZ + Math.sin(tx * 0.035) * 7.5 + (idx % 2 === 0 ? 10.0 : -10.0);
     addDavidHillTree(tx, tz, 0.72 + (idx % 3) * 0.1, false, false, 0);
   });
 
-  // 강 건너 먼 배경 외곽: 하늘을 가리지 않는 완만한 잔디 둔덕(높이 1.2~2.2m)과 촘촘한 작은 나무 숲(scale 0.55~0.85)
   for (let x = -120; x <= 120; x += 18) {
     const moundZ = houseZ - 92 + (Math.abs(x) % 12);
     worldGroup.add(createBox(22, 1.6, 16, lowMoundMat, x, 0.8, moundZ, false));
   }
 
-  // 강 건너편 평야 외곽을 가득 채우는 작은 나무 군락 (하늘이 탁 트여 보이도록 작은 스케일 적용)
   for (let row = 0; row < 3; row++) {
     const baseZ = houseZ - 64 - row * 16;
     for (let x = -116; x <= 116; x += 9) {
       const jitterX = x + ((row * 3 + x) % 5) - 2;
       const jitterZ = baseZ + ((x * 7) % 6) - 3;
-      const smallScale = 0.55 + ((Math.abs(x + row * 11)) % 4) * 0.08; // 0.55 ~ 0.79 작은 나무
+      const smallScale = 0.55 + ((Math.abs(x + row * 11)) % 4) * 0.08;
       addDavidHillTree(jitterX, jitterZ, smallScale, false, false, 0);
     }
   }
 
-  // 강 건너 좌우 평야 외곽 작은 나무들
   for (let z = houseZ - 56; z <= houseZ - 12; z += 10) {
     [-96, -84, 84, 96].forEach((x, idx) => {
       addDavidHillTree(x + (idx % 2) * 3, z, 0.65 + (idx % 2) * 0.12, false, false, 0);
     });
   }
 
-  // 탁 트인 하늘 위에 떠 있는 구름들
   [
     [-55, 22, houseZ - 75, 1.3],
     [  0, 25, houseZ - 85, 1.5],
@@ -1083,6 +1540,7 @@ function buildHiddenJesseHouseInLowerValley(houseZ) {
 function buildDavidStage1World() {
   clearWorld();
   ensureDavidCustomUI();
+  attachGlobalCameraViewHook();
   hideAllDavidCustomUI();
 
   scene.background = new THREE.Color(0x7dd3fc);
@@ -1163,7 +1621,6 @@ function buildDavidStage1World() {
   davidStaffWaveMesh.visible = false;
   worldGroup.add(davidStaffWaveMesh);
 
-  // 4) 양이 숨어 있을 큰 바위 은신처 5곳 생성 (바위와 나무 사이에 좁은 틈이 생기지 않도록 나무 간격을 넉넉히 띄움)
   const hidingSpotCandidates = isHard
     ? [
         [-32,  2], [32,  2], [-36, 26], [36, 26], [0, 40],
@@ -1181,7 +1638,6 @@ function buildDavidStage1World() {
     addDavidStage1Rock(rx, rz, 4.0, 1.45, 3.4);
     addDavidStage1Rock(rx + 0.3, rz - 0.1, 2.5, 2.55, 2.3);
     const treeSide = (rx >= 0 ? 1 : -1);
-    // 나무를 바위에서 4.6m 이상 넉넉히 띄워 양이 바위와 나무 사이에 절대 끼이지 않도록 배치
     addDavidHillTree(rx + treeSide * 4.8, rz + 1.2, 1.15, true);
 
     const dirAng = Math.atan2(rx - davidCampCenter.x, rz - davidCampCenter.z);
@@ -1255,18 +1711,20 @@ function buildDavidStage1World() {
   lastGroundedY = DAVID_HILL_TOP_Y;
   playerVelY = 0; isGrounded = true; playerFacing = 0;
   cameraYaw = 0; cameraTargetYaw = 0;
-  for (let s = 0; s < 40; s++) davidTrailHistory.push({ x: 0, z: 20.0 + s * 0.2 });
 
   if (guideArrowGroup) guideArrowGroup.visible = (currentMode !== 'senior');
   snapCameraToPlayer();
   if (typeof updateDavidStage1UI === 'function') updateDavidStage1UI();
   updateStageHUD();
-  playSheepBaaSound(1.05, 0.08);
-  showToast('🐑 언덕 위 초원에서 바위 뒤에 숨어 있는 양 5마리를 찾아 목초지로 데려오세요!');
-}
-// =========================================================================
+
+  // 에피소드 3 시작 시 암전 오프닝 내레이션 & 성경절(사도행전 13:22) 송출 후 게임 시작!
+  startDavidStage1Opening(() => {
+    playSheepBaaSound(1.05, 0.08);
+    showToast('🐑 언덕 위 초원에서 바위 뒤에 숨어 있는 양 5마리를 찾아 목초지로 데려오세요!');
+  });
+}// =========================================================================
 // [ep3_david.js - 파트 2/5] 에피소드 3 : 스테이지 1 진행 로직
-// - 디펜스 시작 시 '양 배부름 상태' 게이지 즉시 숨김 처리
+// - 좌측 세로형 가변 배부름 게이지(height: 0% -> 100%) 연동 및 디펜스 시작 시 배부름 게이지 숨김
 // - 먹이를 먹은 양 머리 위 3D 복셀 하트(❤️) 연출 & 바위·나무 연속 접선 슬라이딩 추종 물리
 // - 사각형 반투명 울타리(흙담 7 -> 나무담 7 -> 돌담 7) 점프 넘기 및 맹수 교차 디펜스
 // =========================================================================
@@ -1417,8 +1875,8 @@ function rebuildDavidDefenseWallMesh() {
 
   if (badgeEl) {
     badgeEl.textContent = isAllFinished
-      ? `${nextSpec.fullTitle} 완성! (점프로 담장을 넘나들 수 있어요!)`
-      : `${nextSpec.fullTitle} 시공: ${davidPlacedWallMat}/${DAVID_WALL_REQ_PER_TIER}개 (지어진 담은 점프로 넘기!)`;
+      ? `${nextSpec.fullTitle} 완성!`
+      : `${nextSpec.name}: ${davidPlacedWallMat}/${DAVID_WALL_REQ_PER_TIER}개`;
   }
 }
 
@@ -1744,7 +2202,7 @@ function spawnDavidWallUpgradeMaterials() {
   }
 }
 
-// [스테이지 1 요청사항 1] 디펜스가 시작되면(defend_sheep) '양 배부름 상태' 게이지 행(#david-hunger-row)을 숨김!
+// [스테이지 1 요청사항 1] 좌측 세로형 가변 배부름 게이지(height%) 업데이트 및 디펜스 시 숨김 처리
 function updateDavidStage1UI() {
   ensureDavidCustomUI();
   const st1Panel = document.getElementById('david-st1-panel');
@@ -1768,22 +2226,22 @@ function updateDavidStage1UI() {
   st1Panel.classList.remove('hidden');
 
   if (davidStage1Phase === 'defend_sheep') {
-    // 디펜스 단계에서는 배부름 상태를 숨기고 디펜스 타이머·상태만 표시
     if (hungerRow) hungerRow.classList.add('hidden');
-    defRow.classList.remove('hidden', 'border-t', 'pt-1');
+    defRow.classList.remove('hidden');
     defRow.classList.add('flex');
     defTimer.textContent = `${Math.max(0, davidDefenseTimer).toFixed(1)}초`;
     if (lossBadge) {
-      lossBadge.textContent = `🐑 사라진 양: ${davidLostSheepCount}마리 (허용 한도: ${davidMaxAllowedLost}마리)`;
+      lossBadge.textContent = `🐑 사라진 양: ${davidLostSheepCount}/${davidMaxAllowedLost}마리`;
       lossBadge.className = davidLostSheepCount >= davidMaxAllowedLost
-        ? 'text-[11px] font-bold text-rose-400 text-center'
-        : 'text-[11px] font-bold text-amber-200 text-center';
+        ? 'text-[10px] font-bold text-rose-400'
+        : 'text-[10px] font-bold text-amber-200';
     }
   } else {
-    // 먹이 주기 단계에서는 배부름 상태 게이지만 표시
+    // 먹이 미션 중: 좌측 세로형 가변 배부름 게이지 표시 (height로 가변 조절)
     if (hungerRow) hungerRow.classList.remove('hidden');
-    hungerText.textContent = `${Math.round(davidHungerGauge)}%`;
-    hungerBar.style.width = `${Math.min(100, Math.round(davidHungerGauge))}%`;
+    const pct = Math.min(100, Math.round(davidHungerGauge));
+    hungerText.textContent = `${pct}%`;
+    hungerBar.style.height = `${pct}%`;
     defRow.classList.add('hidden');
     defRow.classList.remove('flex');
   }
@@ -1822,7 +2280,8 @@ function startDavidStage1FeedPhase() {
     });
   }
 
-  davidCampLabel.innerHTML = '🌿 주변에서 먹이를 찾아 양을 배부르게 해주세요! (0% 😢)';
+  // 시야를 가리지 않도록 한 줄로 간결하게 표시
+  davidCampLabel.innerHTML = '🌿 양을 배부르게 해주세요! (0%)';
   updateDavidStage1UI();
   updateStageHUD();
   playSheepBaaSound(1.12, 0.09);
@@ -1835,7 +2294,7 @@ function startDavidStage1DefensePhase() {
   davidWallTier = 0;
   davidPlacedWallMat = 0;
   davidHeldWallMat = 0;
-  davidCampLabel.innerHTML = '🛡️ 사각형 울타리 방어 진영 (자원 7개를 모아 담을 쌓고 맹수를 막으세요!)';
+  davidCampLabel.innerHTML = '🛡️ 사각형 울타리 방어 진영 (자원 7개를 모아 담을 쌓으세요!)';
 
   startStageBgm(1);
 
@@ -2009,10 +2468,10 @@ function performDavidStage1Action() {
         davidFeedItems.forEach(f => { f.group.visible = false; f.label.style.opacity = '0'; });
         startDavidStage1DefensePhase();
       } else {
-        davidCampLabel.innerHTML = `🌿 주변에서 먹이를 찾아 양을 배부르게 해주세요! (${Math.round(davidHungerGauge)}%)`;
+        davidCampLabel.innerHTML = `🌿 양을 배부르게 해주세요! (${Math.round(davidHungerGauge)}%)`;
         updateDavidStage1UI();
         updateStageHUD();
-        showToast(`❤️ 양들이 맛있게 먹고 머리 위로 하트가 떠올라요! (양 배부름 상태 ${Math.round(davidHungerGauge)}%)`);
+        showToast(`❤️ 양들이 맛있게 먹고 머리 위로 하트가 떠올라요! (배부름 ${Math.round(davidHungerGauge)}%)`);
       }
     }
   }
@@ -2034,6 +2493,7 @@ function updateDavidCarriedItemsVisual() {
 }
 
 function updateDavidStage1Frame(dt, now) {
+  if (typeof davidOpeningState !== 'undefined' && davidOpeningState.active) return;
   if (davidActionCooldown > 0) davidActionCooldown -= dt;
   if (davidSheepEatingAnimTimer > 0) davidSheepEatingAnimTimer -= dt;
   updateDavidStage1UI();
@@ -2153,7 +2613,7 @@ function updateDavidStage1Frame(dt, now) {
       if (davidStage1Phase === 'find_sheep' && d < 3.0) {
         sh.state = 'following';
         sh.ring.material.color.setHex(0x38bdf8);
-        sh.label.innerHTML = `🐑 ${sh.name} (목초지로 데려가세요!)`;
+        sh.label.innerHTML = `🐑 ${sh.name} (목초지로!)`;
         davidFollowingSheep.push(sh);
         playSfx('rescue');
         playSheepBaaSound(1.0 + idx * 0.06, 0.10);
@@ -2538,9 +2998,11 @@ function updateDavidAnointCutsceneFrame(dt, now) {
   return true;
 }
 // =========================================================================
-// [ep3_david.js - 파트 3/4] 에피소드 3 : 스테이지 2
+// [ep3_david.js - 파트 3/5] 에피소드 3 : 스테이지 2 (엘라 골짜기와 골리앗)
+// - 암전 전쟁 효과음 오프닝 (5초 -> 3초 -> 7초 페이드 전환)
+// - 전투 시작 전 골리앗 전신 클로즈업 & 다윗 클로즈업 애니멀리즈 대화 연출
+// - 다윗이 골리앗 투구에 물맷돌을 던지는 팔 모션 및 돌 비행 속도 감속(1.45초 아크 궤적)
 // - 골리앗 주변 군인 20명 & 다윗 뒤편 아군 20명, 다윗 뒤쪽 평야·산맥 원경, S자 곡선 하천
-// - 조준 영역 진입 시 픽셀아트 조준창 자동 오픈 & 골리앗 격파 후 평온한 하프 BGM 유지
 // =========================================================================
 
 let davidGoliathObj = null;
@@ -2565,12 +3027,21 @@ let davidFlyingStone = {
   active: false,
   mesh: null,
   timer: 0,
-  duration: 0.55,
+  duration: 1.45,
   startPos: new THREE.Vector3(),
   endPos: new THREE.Vector3(),
   isHit: false
 };
 let davidIdolShards = [];
+
+// 스테이지 2 시작 시 골리앗 vs 다윗 카메라 대면 대화 상태
+let davidStage2Dialogue = {
+  active: false,
+  step: 0,
+  timer: 0,
+  typingTimer: null,
+  autoNextTimer: null
+};
 
 // 엘라 골짜기 S자 곡선 하천의 중심 Z좌표 계산 함수
 function getElahStreamCenterZ(x) {
@@ -2622,7 +3093,6 @@ function createGiantGoliathMesh() {
     createBox(0.16 * s, 0.45 * s, 0.88 * s, bronzeMat,  0.42 * s, -0.32 * s, 0)
   );
 
-  // 투구 위에 세워진 우상(Idol) 모양 장식
   const idolGroup = new THREE.Group();
   idolGroup.position.set(0, 0.52 * s, 0);
   const idolBaseMat = matDavidCached('#7e22ce', '#581c87');
@@ -2670,7 +3140,6 @@ function createGiantGoliathMesh() {
   return g;
 }
 
-// 블레셋 군인(20명) 및 이스라엘 아군 군인(20명) 생성 함수
 function createArmySoldierMesh(isPhilistine, idx = 0) {
   const g = new THREE.Group();
   const skin = matDavidCached('#fed7aa', '#fdba74');
@@ -2714,7 +3183,114 @@ function createArmySoldierMesh(isPhilistine, idx = 0) {
 }
 
 // -------------------------------------------------------------------------
-// 2. 곡선 하천, 시냇가 물맷돌, 양 진영 40명 군대, 다윗 뒤편 평야·산맥 생성
+// 2. [스테이지 2 요청사항 1 & 3] 전쟁 오프닝(5초·3초·7초) 및 골리앗-다윗 카메라 클로즈업 대화
+// -------------------------------------------------------------------------
+function showStage2PreBattleLine(speakerTitle, fullLine, voicePitch, btnLabel) {
+  ensureDavidCustomUI();
+  const dlg = document.getElementById('david-npc-dialog');
+  const nameEl = document.getElementById('david-npc-name');
+  const textEl = document.getElementById('david-npc-text');
+  const btnEl = document.getElementById('david-npc-action-btn');
+  if (!dlg) return;
+
+  dlg.classList.remove('hidden');
+  nameEl.textContent = speakerTitle;
+  btnEl.textContent = btnLabel;
+  textEl.textContent = '';
+
+  if (davidStage2Dialogue.typingTimer) clearInterval(davidStage2Dialogue.typingTimer);
+  let shownLen = 0;
+  davidStage2Dialogue.typingTimer = setInterval(() => {
+    shownLen += 2;
+    textEl.textContent = fullLine.slice(0, shownLen);
+    if (shownLen >= fullLine.length) {
+      clearInterval(davidStage2Dialogue.typingTimer);
+      davidStage2Dialogue.typingTimer = null;
+    }
+  }, 38);
+
+  playAnimaleseSpeech(fullLine, voicePitch);
+}
+
+window.advanceDavidStage2Dialogue = function () {
+  if (!davidStage2Dialogue.active) return;
+  if (davidStage2Dialogue.typingTimer) {
+    clearInterval(davidStage2Dialogue.typingTimer);
+    davidStage2Dialogue.typingTimer = null;
+  }
+  if (davidStage2Dialogue.autoNextTimer) {
+    clearTimeout(davidStage2Dialogue.autoNextTimer);
+    davidStage2Dialogue.autoNextTimer = null;
+  }
+
+  if (davidStage2Dialogue.step === 1) {
+    // 2단계: 카메라가 다윗을 클로즈업하며 다윗의 선포 대사 출력
+    davidStage2Dialogue.step = 2;
+    davidStage2Dialogue.timer = 0;
+    const davidLine =
+      '"너는 나에게 칼과 큰 창과 작은 창을 가지고 나아오지만, 나는 만군의 여호와의 이름으로 너에게 간다. 여호와는 이스라엘 군대의 하나님이시다. 오늘 여호와께서는 너를 나에게 주실 것이다."';
+    showStage2PreBattleLine('🪉 소년 다윗', davidLine, 1.08, '⚔️ 전투 시작하기! ▶');
+  } else {
+    // 대화 종료 -> 본 게임 시작!
+    davidStage2Dialogue.active = false;
+    davidStage2Dialogue.step = 0;
+    const dlg = document.getElementById('david-npc-dialog');
+    if (dlg) dlg.classList.add('hidden');
+    if (animaleseTimer) { clearInterval(animaleseTimer); animaleseTimer = null; }
+
+    isPlaying = true;
+    if (currentMode === 'timeattack') isTimeAttackActive = true;
+    snapCameraToPlayer();
+    startStageBgm(2);
+    showToast('🪨 곡선 시냇가에서 물맷돌을 주운 뒤, 골리앗 앞 노란 조준 영역으로 나아가세요!');
+  }
+};
+
+function startDavidStage2PreBattleDialogue() {
+  isPlaying = false;
+  isTimeAttackActive = false;
+  davidStage2Dialogue.active = true;
+  davidStage2Dialogue.step = 1;
+  davidStage2Dialogue.timer = 0;
+
+  // 1단계: 카메라가 골리앗 전신을 잡으며 골리앗의 대사 출력
+  camera.position.set(0, 7.2, -3.2);
+  camera.lookAt(0, 6.2, -17.5);
+
+  const goliathLine = '"이것이 이스라엘이 보낸 전사란 말이냐? 앳된 애송이 하나뿐이라니"';
+  showStage2PreBattleLine('🗿 거인 전사 골리앗', goliathLine, 0.58, '다음 (다윗의 대답) ▶');
+}
+
+function startDavidStage2OpeningAndDialogue() {
+  runDavidBlackoutSequence(
+    [
+      {
+        html: '"블레셋 군대가 유다 땅을 침공했다.<br/>사울 왕이 이끄는 이스라엘과 적군 블레셋은<br/>엘라 골짜기를 사이에 두고 팽팽히 대치했다"',
+        sub: '',
+        sfxMode: 'battle',
+        durationMs: 5000
+      },
+      {
+        html: '"블레셋 진영에서 키가 약 3미터에 달하는 거인 전사,<br/>골리앗이 걸어 나왔다."',
+        sub: '',
+        sfxMode: 'giant_steps',
+        durationMs: 3000
+      },
+      {
+        html: '"모두가 숨죽이던 그때, 형들의 안부를 물으러 전장에 온<br/>베들레헴의 어린 목동 다윗.<br/>살아 계신 하나님을 모욕하는 골리앗의 목소리를 들은 소년은<br/>홀로 전장으로 발걸음을 옮긴다."',
+        sub: '',
+        sfxMode: 'battle',
+        durationMs: 7000
+      }
+    ],
+    () => {
+      startDavidStage2PreBattleDialogue();
+    }
+  );
+}
+
+// -------------------------------------------------------------------------
+// 3. 곡선 하천, 시냇가 물맷돌, 양 진영 40명 군대, 다윗 뒤편 평야·산맥 생성
 // -------------------------------------------------------------------------
 function spawnBrookSlingStones(count) {
   davidSlingStones.forEach(st => {
@@ -2776,7 +3352,6 @@ function updateDavidCarriedStonesVisual() {
   }
 }
 
-// [스테이지 2 요청사항 6] 다윗 뒤쪽(남쪽) 배경에 펼쳐진 평야와 들판, 나무, 원경 산맥 생성
 function buildStage2SouthPlainAndMountains() {
   const grassMat = new THREE.MeshLambertMaterial({ map: makeGrassFieldTex() });
   const fieldMat1 = matDavidCached('#84cc16', '#65a30d');
@@ -2785,12 +3360,10 @@ function buildStage2SouthPlainAndMountains() {
   const mtnMat2 = matDavidCached('#15803d', '#166534');
   const mtnMat3 = matDavidCached('#475569', '#334155');
 
-  // 다윗 뒤편(z = 34 ~ 145)으로 넓게 펼쳐지는 초원 평야 바닥
   const southPlain = createBox(220, 2.0, 120, grassMat, 0, -1.02, 92, false);
   southPlain.receiveShadow = true;
   worldGroup.add(southPlain);
 
-  // 평야 들판 패치
   [
     [-38, 52, 28, 16, fieldMat1],
     [ 38, 54, 30, 16, fieldMat2],
@@ -2801,7 +3374,6 @@ function buildStage2SouthPlainAndMountains() {
     worldGroup.add(createBox(pw, 0.12, pd, m, px, 0.04, pz, false));
   });
 
-  // 평야 곳곳의 나무와 종려나무 숲
   [
     [-32, 42], [-18, 46], [18, 46], [32, 42],
     [-44, 60], [-24, 62], [24, 62], [44, 60],
@@ -2811,7 +3383,6 @@ function buildStage2SouthPlainAndMountains() {
     else addTree(tx, tz, 1.05 + (idx % 2) * 0.2, false);
   });
 
-  // 남쪽 지평선 원경 다층 산맥과 구름
   [
     [-85, 122, 44, 26],
     [-42, 128, 48, 32],
@@ -2839,6 +3410,7 @@ function buildStage2SouthPlainAndMountains() {
 function buildDavidStage2World() {
   clearWorld();
   ensureDavidCustomUI();
+  attachGlobalCameraViewHook();
   hideAllDavidCustomUI();
 
   scene.background = new THREE.Color(0x38bdf8);
@@ -2861,12 +3433,12 @@ function buildDavidStage2World() {
   davidAimState.active = false;
   davidFlyingStone.active = false;
   davidStage2Cutscene.active = false;
+  davidStage2Dialogue.active = false;
 
   if (currentMode === 'timeattack') {
     timeRemaining = 22.0;
   }
 
-  // 1) 엘라 골짜기 기본 지형 & 다윗 뒤쪽(남쪽) 평야·산맥 배경
   const sandMat = new THREE.MeshLambertMaterial({ map: makeDesertSandTex() });
   const valleyGround = createBox(halfW * 2 + 24, 2, 72, sandMat, 0, -1.0, 8, false);
   valleyGround.receiveShadow = true;
@@ -2874,7 +3446,6 @@ function buildDavidStage2World() {
 
   buildStage2SouthPlainAndMountains();
 
-  // 2) [스테이지 2 요청사항 7] 골리앗과 다윗 사이를 S자 곡선으로 흐르는 시냇가 생성
   const waterTex = makeFlowingWaterWallTex();
   const streamMat = new THREE.MeshLambertMaterial({ map: waterTex, transparent: true, opacity: 0.88 });
   const bankMat = matDavidCached('#94a3b8', '#64748b');
@@ -2893,7 +3464,6 @@ function buildDavidStage2World() {
     }
   }
 
-  // 양옆 엘라 골짜기 절벽 산맥
   const cliffMat1 = matDavidCached('#d97706', '#92400e');
   const cliffMat2 = matDavidCached('#b45309', '#78350f');
   for (let z = -26; z <= 32; z += 9) {
@@ -2903,7 +3473,6 @@ function buildDavidStage2World() {
     });
   }
 
-  // 3) 북쪽 블레셋 언덕 & 거대 골리앗 + [요청사항 1] 골리앗 주변 군인 20명 배치
   const northHillMat = matDavidCached('#78350f', '#451a03');
   worldGroup.add(
     createBox(halfW * 2 + 12, 3.2, 14, northHillMat, 0, 1.6, -21, false),
@@ -2915,42 +3484,42 @@ function buildDavidStage2World() {
   worldGroup.add(goliath);
   davidGoliathObj = goliath;
 
-  // 골리앗 좌우 언덕 위에 블레셋 군인 20명 (좌측 10명, 우측 10명, 2열 진형)
+  // 골리앗 주변 블레셋 군인 20명
   const philistineXList = [-21.5, -18.0, -14.5, -11.0, -7.5, 7.5, 11.0, 14.5, 18.0, 21.5];
   [-16.5, -20.2].forEach((rowZ, rIdx) => {
     philistineXList.forEach((px, cIdx) => {
       const idx = rIdx * 10 + cIdx;
       const pSol = createArmySoldierMesh(true, idx);
       pSol.position.set(px + (rIdx % 2 === 1 ? 0.6 : -0.6), 3.1, rowZ);
-      pSol.rotation.y = 0; // 남쪽(다윗 쪽)을 바라봄
+      pSol.rotation.y = 0;
       worldGroup.add(pSol);
       davidPhilistineSoldiers.push({ mesh: pSol, phase: idx * 0.55 });
     });
   });
 
-  // 4) [요청사항 2] 다윗 뒤쪽 남쪽 진영에 아군 이스라엘 군인 20명 배치 (2열 진형)
+  // 다윗 뒤쪽 이스라엘 아군 군인 20명
   const israelXList = [-20.5, -16.5, -12.5, -8.5, -4.5, 4.5, 8.5, 12.5, 16.5, 20.5];
   [30.5, 34.0].forEach((rowZ, rIdx) => {
     israelXList.forEach((ix, cIdx) => {
       const idx = rIdx * 10 + cIdx;
       const iSol = createArmySoldierMesh(false, idx);
       iSol.position.set(ix + (rIdx % 2 === 1 ? 0.5 : -0.5), 0, rowZ);
-      iSol.rotation.y = Math.PI; // 북쪽(골리앗 쪽)을 바라봄
+      iSol.rotation.y = Math.PI;
       worldGroup.add(iSol);
       davidIsraelSoldiers.push({ mesh: iSol, phase: idx * 0.55 });
     });
   });
 
-  // 발사된 물맷돌 메쉬
+  // 발사된 물맷돌 메쉬 (느린 비행 중 잘 보이도록 크기 살짝 확대)
   const projMesh = new THREE.Mesh(
-    new THREE.SphereGeometry(0.42, 10, 10),
+    new THREE.SphereGeometry(0.48, 12, 12),
     new THREE.MeshBasicMaterial({ color: 0xfef08a })
   );
   projMesh.visible = false;
   worldGroup.add(projMesh);
   davidFlyingStone.mesh = projMesh;
 
-  // 5) 물맷돌 조준·발사 영역 (z = -6.5, 들어가면 자동으로 조준창 오픈)
+  // 물맷돌 조준·발사 영역 (z = -6.5)
   const padMat = matDavidCached('#fde047', '#ca8a04');
   const padRing = new THREE.Mesh(
     new THREE.RingGeometry(2.4, 3.1, 32),
@@ -2970,10 +3539,8 @@ function buildDavidStage2World() {
     triggered: false
   };
 
-  // 6) 곡선 시냇가 물맷돌 5개 스폰
   spawnBrookSlingStones(5);
 
-  // 7) 골리앗이 던지는 낙석/충격파 위험 구역 생성
   const hazardSpots = isKinder
     ? [[-7, 13], [7, 13], [0, -1]]
     : (isJunior
@@ -3023,14 +3590,16 @@ function buildDavidStage2World() {
   if (guideArrowGroup) guideArrowGroup.visible = (currentMode !== 'senior');
   snapCameraToPlayer();
   updateStageHUD();
-  showToast('🪨 곡선 시냇가에서 물맷돌을 주운 뒤, 골리앗 앞 노란 조준 영역에 들어가면 자동으로 조준창이 열립니다!');
+
+  // 스테이지 2 진입 시 전쟁 암전 오프닝(5초·3초·7초) -> 골리앗·다윗 대면 대화 시작!
+  startDavidStage2OpeningAndDialogue();
 }
 
 // -------------------------------------------------------------------------
-// 3. 물맷돌 회전 & 픽셀아트 집중 조준 화면(UI) 제어 및 발사 판정
+// 4. [스테이지 2 요청사항 2] 물맷돌 투척 모션 감속 & 픽셀아트 조준 화면 제어
 // -------------------------------------------------------------------------
 function openDavidAimOverlay() {
-  if (davidAimState.active || davidFlyingStone.active || davidStage2Cutscene.active) return;
+  if (davidAimState.active || davidFlyingStone.active || davidStage2Cutscene.active || davidStage2Dialogue.active) return;
   if (davidHeldStones <= 0) {
     playSfx('wrong');
     showToast('🪨 물맷돌이 없어요! 먼저 시냇가에서 매끄러운 물맷돌을 주워오세요!');
@@ -3053,7 +3622,6 @@ function openDavidAimOverlay() {
 
 window.closeDavidAimOverlay = function () {
   davidAimState.active = false;
-  // 피하기 버튼을 눌렀을 때 조준 발판 밖으로 걸어 나갈 수 있도록 2.2초 동안 자동 재오픈 유예
   davidAimAutoCooldown = 2.2;
   const overlay = document.getElementById('david-aim-overlay');
   if (overlay) overlay.classList.add('hidden');
@@ -3077,11 +3645,12 @@ window.fireDavidSlingAtIdol = function () {
   const isSuccess = (dist <= hitThreshold);
 
   closeDavidAimOverlay();
-  davidAimAutoCooldown = 1.35;
+  davidAimAutoCooldown = 2.1;
 
+  // [스테이지 2 요청사항 2] 다윗이 골리앗 투구에 돌을 던지는 모션 및 돌 비행 속도를 느리고 묵직하게(1.45초) 설정!
   davidFlyingStone.active = true;
   davidFlyingStone.timer = 0;
-  davidFlyingStone.duration = 0.52;
+  davidFlyingStone.duration = 1.45;
   davidFlyingStone.isHit = isSuccess;
   davidFlyingStone.startPos.set(playerPos.x, playerPos.y + 2.2, playerPos.z);
 
@@ -3111,23 +3680,23 @@ function updateDavidStage2HUD(badge, countIcon, countText, missionText) {
 }
 
 // -------------------------------------------------------------------------
-// 4. 스테이지 2 프레임 업데이트 & 골리앗 우상 파괴 승리 컷신
+// 5. 스테이지 2 프레임 업데이트 & 대면 대화 카메라 연출 & 골리앗 격파 컷신
 // -------------------------------------------------------------------------
 function updateDavidStage2Frame(dt, now) {
+  if (typeof davidOpeningState !== 'undefined' && davidOpeningState.active) return;
+  if (davidStage2Dialogue.active) return;
   if (davidAimAutoCooldown > 0) davidAimAutoCooldown -= dt;
 
   flowingWaterTextures.forEach(tex => {
     tex.offset.x = (tex.offset.x + dt * 0.38) % 1;
   });
 
-  // 골리앗 주변 블레셋 군인 20명 창 흔들기 모션
   davidPhilistineSoldiers.forEach(s => {
     if (s.mesh.userData && s.mesh.userData.rArm) {
       s.mesh.userData.rArm.rotation.x = -0.35 + Math.sin(now * 0.007 + s.phase) * 0.30;
     }
   });
 
-  // 다윗 뒤편 아군 이스라엘 군인 20명 응원 모션
   davidIsraelSoldiers.forEach(s => {
     if (s.mesh.userData && s.mesh.userData.lArm && s.mesh.userData.rArm) {
       const w = Math.sin(now * 0.008 + s.phase) * 0.38;
@@ -3143,18 +3712,18 @@ function updateDavidStage2Frame(dt, now) {
     if (u.targetRing) u.targetRing.rotation.z += dt * 2.5;
   }
 
-  // 1) 집중 조준 모달이 열려 있을 때: 도트 픽셀아트 조준 캔버스 실시간 렌더링
+  // 1) 집중 조준 모달이 열려 있을 때: 다윗의 물매 회전 팔 모션을 천천히(0.012) 연출
   if (davidAimState.active) {
     davidAimState.phase += dt;
     if (playerLimbs && playerLimbs.rArm) {
-      playerLimbs.rArm.rotation.x = -2.4 + Math.sin(now * 0.035) * 0.85;
+      playerLimbs.rArm.rotation.x = -2.3 + Math.sin(now * 0.012) * 0.72;
     }
     camera.position.lerp(new THREE.Vector3(playerPos.x * 0.4, 7.2, -3.5), 0.12);
     camera.lookAt(0, 12.2, -17.5);
 
     const isKinder = (currentMode === 'kinder');
     const isHard = (currentMode === 'senior' || currentMode === 'timeattack');
-    const spd = isKinder ? 1.8 : (isHard ? 3.4 : 2.5);
+    const spd = isKinder ? 1.55 : (isHard ? 2.85 : 2.15);
 
     davidAimState.reticleX = 108 + Math.sin(davidAimState.phase * spd) * 82;
     davidAimState.reticleY = isHard
@@ -3162,8 +3731,8 @@ function updateDavidStage2Frame(dt, now) {
       : (36 + Math.cos(davidAimState.phase * spd) * 10);
 
     davidAimState.targetX = isHard
-      ? (104 + Math.cos(davidAimState.phase * 1.9) * 34)
-      : (104 + Math.sin(davidAimState.phase * 1.1) * (isKinder ? 0 : 16));
+      ? (104 + Math.cos(davidAimState.phase * 1.6) * 34)
+      : (104 + Math.sin(davidAimState.phase * 1.0) * (isKinder ? 0 : 16));
     davidAimState.targetY = 34;
 
     if (typeof renderDavidPixelAimScreen === 'function') {
@@ -3178,20 +3747,35 @@ function updateDavidStage2Frame(dt, now) {
     return;
   }
 
-  // 2) 발사된 3D 물맷돌 비행 및 투구 위 우상 타격 처리
+  // 2) [스테이지 2 요청사항 2] 발사된 물맷돌의 느린 비행(1.45초) 및 다윗의 슬로우 투척 팔 모션
   if (davidFlyingStone.active) {
     davidFlyingStone.timer += dt;
     const p = Math.min(1, davidFlyingStone.timer / davidFlyingStone.duration);
+
+    // 초반(0 ~ 0.35)에는 다윗이 팔을 뒤에서 앞으로 천천히 힘껏 휘두르는 투척 모션 연출
+    if (playerLimbs && playerLimbs.rArm) {
+      if (p < 0.35) {
+        const swingP = p / 0.35;
+        playerLimbs.rArm.rotation.x = THREE.MathUtils.lerp(-2.8, -0.35, swingP);
+      } else {
+        playerLimbs.rArm.rotation.x = THREE.MathUtils.lerp(-0.35, 0, (p - 0.35) / 0.65);
+      }
+    }
+
     const curPos = new THREE.Vector3().lerpVectors(davidFlyingStone.startPos, davidFlyingStone.endPos, p);
-    curPos.y += Math.sin(p * Math.PI) * 3.8;
+    curPos.y += Math.sin(p * Math.PI) * 5.2;
     if (davidFlyingStone.mesh) {
       davidFlyingStone.mesh.position.copy(curPos);
     }
-    camera.lookAt(curPos.x, curPos.y, curPos.z);
+
+    // 카메라가 날아가는 물맷돌과 골리앗의 투구를 부드럽게 추적
+    camera.position.lerp(new THREE.Vector3(playerPos.x * 0.3 + 2.5, 7.8, -2.0), 0.08);
+    camera.lookAt(curPos.x * 0.5, Math.max(8.5, curPos.y), curPos.z);
 
     if (p >= 1) {
       davidFlyingStone.active = false;
       if (davidFlyingStone.mesh) davidFlyingStone.mesh.visible = false;
+      if (playerLimbs && playerLimbs.rArm) playerLimbs.rArm.rotation.x = 0;
 
       if (davidFlyingStone.isHit) {
         davidIdolHits++;
@@ -3325,7 +3909,7 @@ function updateDavidStage2Frame(dt, now) {
     }
   });
 
-  // 5) [스테이지 2 요청사항 4] 골리앗 앞 조준 영역에 들어가면 자동으로 조준창 오픈!
+  // 5) 골리앗 앞 조준 영역 진입 시 자동 조준창 오픈
   if (targetObject && !targetObject.triggered) {
     const td = Math.hypot(playerPos.x - targetObject.pos.x, playerPos.z - targetObject.pos.z);
     updateWorldLabelPos(targetObject.label, targetObject.pos, td < 28);
@@ -3338,7 +3922,6 @@ function updateDavidStage2Frame(dt, now) {
       if (davidHeldStones > 0) {
         ctxBtn.classList.remove('hidden');
         ctxBtn.textContent = '🎯 물맷돌 돌려 투구 위 우상 조준하기!';
-        // 조준 영역 안에 들어오면 자동으로 조준창 오픈 (피하기 직후 쿨타임 중에는 수동 버튼도 함께 제공)
         if (davidAimAutoCooldown <= 0) {
           openDavidAimOverlay();
           return;
@@ -3395,13 +3978,34 @@ function startDavidStage2VictoryCutscene() {
   davidStage2Cutscene.active = true;
   davidStage2Cutscene.timer = 0;
   davidStage2Cutscene.phase = 1;
-  // [스테이지 2 요청사항 3] 골리앗이 무너지면 즉시 평온한 하프 BGM으로 전환되어 퀴즈 풀 때까지 유지됨
   startStageBgm(2);
   playSfx('clear');
   showToast('✨ 물맷돌이 골리앗 투구 위의 우상 장식을 산산조각 냈습니다! 골리앗이 무너져 내립니다!');
 }
 
 function updateDavidStage2CutsceneFrame(dt, now) {
+  // 1) 스테이지 2 시작 전 골리앗 전신 클로즈업 & 다윗 클로즈업 대화 카메라 연출
+  if (davidStage2Dialogue.active) {
+    davidStage2Dialogue.timer += dt;
+    if (davidStage2Dialogue.step === 1) {
+      // 카메라가 골리앗 전신(발끝부터 투구 위 우상까지)을 웅장하게 비춤
+      camera.position.lerp(new THREE.Vector3(1.8, 7.2, -2.5), 0.08);
+      camera.lookAt(0, 6.8, -17.5);
+      if (davidGoliathObj && davidGoliathObj.userData.rArm) {
+        davidGoliathObj.userData.rArm.rotation.x = -0.8 + Math.sin(now * 0.008) * 0.45;
+      }
+    } else if (davidStage2Dialogue.step === 2) {
+      // 카메라가 다윗을 정면 비스듬히 클로즈업하며 다윗이 믿음으로 선포하는 모습을 비춤
+      camera.position.lerp(new THREE.Vector3(playerPos.x + 1.8, playerPos.y + 2.4, playerPos.z - 4.2), 0.10);
+      camera.lookAt(playerPos.x, playerPos.y + 1.8, playerPos.z);
+      if (playerLimbs && playerLimbs.rArm) {
+        playerLimbs.rArm.rotation.x = -1.6 + Math.sin(now * 0.01) * 0.35;
+      }
+    }
+    return true;
+  }
+
+  // 2) 골리앗 격파 승리 컷신
   if (!davidStage2Cutscene.active) return false;
   davidStage2Cutscene.timer += dt;
   const t = davidStage2Cutscene.timer;
@@ -3423,7 +4027,6 @@ function updateDavidStage2CutsceneFrame(dt, now) {
     davidGoliathObj.position.y = THREE.MathUtils.lerp(3.1, 1.2, fallProg);
   }
 
-  // 골리앗 주변 블레셋 군인 20명은 당황하며 흔들리고, 다윗 뒤편 이스라엘 군인 20명은 기뻐 뛰며 환호!
   davidPhilistineSoldiers.forEach(s => {
     s.mesh.rotation.y = Math.PI + Math.sin(now * 0.02 + s.phase) * 0.4;
     s.mesh.position.y = 3.1 + Math.abs(Math.sin(now * 0.015 + s.phase)) * 0.25;
@@ -3441,10 +4044,10 @@ function updateDavidStage2CutsceneFrame(dt, now) {
   return true;
 }
 // =========================================================================
-// [ep3_david.js - 파트 4/5] 에피소드 3 : 스테이지 3 월드, 좌측 구석 소형 퀘스트 UI 및 전체 카메라 시점 전환
-// - 좌측 상단 구석 초소형 진행 퀘스트 배지(ensureDavidStage3QuestTrackerUI) 적용
-// - 중앙 하단 전체 카메라 시점 전환 버튼(기본 / 넓게 보기 / 정면 낮게 보기) 및 바닥 관통 방지 훅 탑재
-// - 성문 앞 투명벽 버그 수정, 퀘스트 수락 시 자원 0 초기화 및 난이도별(유치/유년/소년) 랜덤 자원 스폰
+// [ep3_david.js - 파트 4/5] 에피소드 3 : 스테이지 3 월드, 건물 디테일 질감, 퀘스트 건물 충돌 및 랜덤 자원
+// - 건물 벽면 전용 석조·회벽 캔버스 텍스처(makeDavidBuildingWallTex) 및 처마 서까래·창틀 디테일 추가
+// - 퀘스트 완료 후 지어진 건물(상가·새 집) 관통 방지 충돌 등록(lockCompletedQuestBuilding)
+// - 좌측 상단 초소형 퀘스트 배지, 수락 시 자원 0 초기화, 난이도별(유치/유년/소년) 랜덤 자원 스폰
 // =========================================================================
 
 let davidCityNpcs = [];
@@ -3474,134 +4077,7 @@ let davidThroneEnding = {
 };
 
 // -------------------------------------------------------------------------
-// 0. [공통 카메라 시점 전환] 중앙 하단 버튼 (기본 / 넓게 보기 / 정면 낮게 보기)
-// -------------------------------------------------------------------------
-window.globalCameraViewMode = window.globalCameraViewMode || 'default'; // 'default' | 'wide' | 'low'
-
-function ensureGlobalCameraViewToggleUI() {
-  let btn = document.getElementById('global-camera-view-btn');
-  if (!btn) {
-    btn = document.createElement('button');
-    btn.id = 'global-camera-view-btn';
-    btn.type = 'button';
-    btn.onclick = function () {
-      window.cycleGlobalCameraViewMode();
-    };
-    btn.className =
-      'fixed bottom-3 left-1/2 -translate-x-1/2 z-20 pointer-events-auto mc-btn px-3.5 py-1.5 rounded-full bg-slate-900/85 hover:bg-slate-800 border-2 border-sky-400/80 text-white font-jua text-xs sm:text-sm shadow-lg flex items-center gap-1.5 backdrop-blur-sm transition-transform active:scale-95';
-    btn.innerHTML = '<span>🎥</span><span id="global-camera-view-label">시점: 기본</span>';
-    document.body.appendChild(btn);
-  }
-  return btn;
-}
-
-window.cycleGlobalCameraViewMode = function () {
-  if (window.globalCameraViewMode === 'default') {
-    window.globalCameraViewMode = 'wide';
-  } else if (window.globalCameraViewMode === 'wide') {
-    window.globalCameraViewMode = 'low';
-  } else {
-    window.globalCameraViewMode = 'default';
-  }
-
-  ensureGlobalCameraViewToggleUI();
-  const lbl = document.getElementById('global-camera-view-label');
-  const btn = document.getElementById('global-camera-view-btn');
-  if (window.globalCameraViewMode === 'default') {
-    if (lbl) lbl.textContent = '시점: 기본';
-    if (btn) btn.innerHTML = '<span>🎥</span><span id="global-camera-view-label">시점: 기본</span>';
-    if (typeof showToast === 'function') showToast('🎥 카메라 시점: [기본 시점]으로 변경되었습니다.');
-  } else if (window.globalCameraViewMode === 'wide') {
-    if (btn) btn.innerHTML = '<span>🔭</span><span id="global-camera-view-label" class="text-sky-300">시점: 넓게 보기</span>';
-    if (typeof showToast === 'function') showToast('🔭 카메라 시점: [넓게 보기]로 변경되었습니다.');
-  } else {
-    if (btn) btn.innerHTML = '<span>👀</span><span id="global-camera-view-label" class="text-amber-300">시점: 정면 낮게 보기</span>';
-    if (typeof showToast === 'function') showToast('👀 카메라 시점: [정면 낮게 보기]로 변경되었습니다.');
-  }
-  if (typeof playSfx === 'function') playSfx('switch');
-};
-
-function attachGlobalCameraViewHook() {
-  ensureGlobalCameraViewToggleUI();
-  if (typeof scene === 'undefined' || !scene || scene._hasGlobalCamViewHook) return;
-  scene._hasGlobalCamViewHook = true;
-
-  const prevBeforeRender = scene.onBeforeRender;
-  scene.onBeforeRender = function (renderer, scn, cam, geometry, material, group) {
-    if (typeof prevBeforeRender === 'function') {
-      prevBeforeRender.call(this, renderer, scn, cam, geometry, material, group);
-    }
-
-    const btn = document.getElementById('global-camera-view-btn');
-    if (btn) {
-      if (typeof isPlaying !== 'undefined' && isPlaying) {
-        btn.classList.remove('hidden');
-      } else {
-        btn.classList.add('hidden');
-      }
-    }
-
-    if (typeof isPlaying === 'undefined' || !isPlaying) return;
-    if (window.globalCameraViewMode === 'default') return;
-    if (typeof davidAimState !== 'undefined' && davidAimState.active) return;
-    if (typeof davidFlyingStone !== 'undefined' && davidFlyingStone.active) return;
-    if (typeof davidThroneEnding !== 'undefined' && davidThroneEnding.seated) return;
-    if (typeof playerPos === 'undefined' || !cam) return;
-
-    const dx = cam.position.x - playerPos.x;
-    const dz = cam.position.z - playerPos.z;
-    const horizDist = Math.hypot(dx, dz);
-    if (horizDist < 0.001) return;
-
-    const dirX = dx / horizDist;
-    const dirZ = dz / horizDist;
-
-    if (window.globalCameraViewMode === 'wide') {
-      // 넓게 보기: 거리와 높이를 넓혀 미로 골목과 전체 지형을 한눈에 조망
-      const targetDist = horizDist * 1.55;
-      const baseDy = Math.max(6.0, cam.position.y - playerPos.y);
-      cam.position.x = playerPos.x + dirX * targetDist;
-      cam.position.z = playerPos.z + dirZ * targetDist;
-      cam.position.y = playerPos.y + baseDy * 1.60;
-      cam.lookAt(playerPos.x, playerPos.y + 1.2, playerPos.z);
-    } else if (window.globalCameraViewMode === 'low') {
-      // 정면 낮게 보기: 캐릭터 등 뒤 낮은 위치에서 정면과 먼 배경·하늘을 시원하게 조망 (지형 바닥 관통 방지 포함)
-      const lowDist = Math.max(6.8, horizDist * 0.68);
-      const camX = playerPos.x + dirX * lowDist;
-      const camZ = playerPos.z + dirZ * lowDist;
-
-      let groundH = playerPos.y;
-      if (
-        typeof currentEpisode !== 'undefined' &&
-        currentEpisode === 'david' &&
-        typeof currentStage !== 'undefined' &&
-        currentStage === 1 &&
-        typeof getDavidStage1GroundHeight === 'function'
-      ) {
-        groundH = Math.max(playerPos.y, getDavidStage1GroundHeight(camX, camZ));
-      }
-
-      cam.position.x = camX;
-      cam.position.z = camZ;
-      cam.position.y = Math.max(playerPos.y + 2.2, groundH + 1.6);
-      cam.lookAt(
-        playerPos.x - dirX * 8.0,
-        playerPos.y + 2.35,
-        playerPos.z - dirZ * 8.0
-      );
-    }
-
-    if (typeof updateWallTransparency === 'function') {
-      updateWallTransparency();
-    }
-  };
-}
-
-// 페이지 로드 및 스테이지 진입 시 시점 전환 버튼 자동 초기화
-setTimeout(attachGlobalCameraViewHook, 300);
-
-// -------------------------------------------------------------------------
-// 1. 진행 중인 퀘스트 초소형 코너 배지 UI (좌측 상단 구석 배치로 맵 시야 확보)
+// 1. 진행 중인 퀘스트 초소형 코너 배지 UI (좌측 상단 구석 배치)
 // -------------------------------------------------------------------------
 function ensureDavidStage3QuestTrackerUI() {
   const uiRoot = ensureDavidCustomUI();
@@ -3669,7 +4145,7 @@ function updateDavidStage3QuestTrackerUI() {
 }
 
 // -------------------------------------------------------------------------
-// 2. 도시 석조 타일 바닥 텍스처 & 건물 충돌·끼임 방지 유틸리티
+// 2. 도시 바닥 석조 텍스처 & [스테이지 3 요청사항 2] 건물 외벽 디테일 질감 텍스처 생성기
 // -------------------------------------------------------------------------
 let _davidCityStoneTex = null;
 function makeDavidCityStoneTex() {
@@ -3710,6 +4186,74 @@ function makeDavidCityStoneTex() {
   return tex;
 }
 
+const _davidWallTexCache = {};
+function makeDavidBuildingWallTex(variant = 0) {
+  const key = `wall_v_${variant % 4}`;
+  if (_davidWallTexCache[key]) return _davidWallTexCache[key];
+
+  const schemes = [
+    { bg: '#e8d0a7', b1: '#f5e1be', b2: '#dabb8a', b3: '#cfa972', mortar: '#9c784c', frieze: '#b45309' },
+    { bg: '#e6c29f', b1: '#f3d4b6', b2: '#d9ae86', b3: '#c8986c', mortar: '#8c5832', frieze: '#9a3412' },
+    { bg: '#ece0b9', b1: '#f7eed0', b2: '#dfd0a0', b3: '#cfc08e', mortar: '#8f7e4f', frieze: '#a16207' },
+    { bg: '#dcd6ce', b1: '#eae5df', b2: '#cdc5ba', b3: '#beb5a8', mortar: '#78716c', frieze: '#57534e' }
+  ];
+  const sc = schemes[variant % schemes.length];
+
+  const c = document.createElement('canvas');
+  c.width = 128;
+  c.height = 128;
+  const ctx = c.getContext('2d');
+
+  ctx.fillStyle = sc.mortar;
+  ctx.fillRect(0, 0, 128, 128);
+
+  const bricks = [sc.b1, sc.b2, sc.b3, sc.bg];
+  const rowH = 16;
+  const colW = 32;
+
+  for (let r = 0; r < 8; r++) {
+    const offX = (r % 2) * 16;
+    for (let col = -1; col < 5; col++) {
+      const bx = col * colW + offX;
+      const by = r * rowH;
+      ctx.fillStyle = bricks[(r * 5 + col + 8) % bricks.length];
+      ctx.fillRect(bx + 1, by + 1, colW - 2, rowH - 2);
+
+      // 벽돌 상단 빛 반사 및 하단 음영 디테일
+      ctx.fillStyle = 'rgba(255,255,255,0.22)';
+      ctx.fillRect(bx + 2, by + 2, colW - 4, 2);
+      ctx.fillStyle = 'rgba(60,35,15,0.18)';
+      ctx.fillRect(bx + 2, by + rowH - 3, colW - 4, 2);
+
+      // 미세한 고대 석재 풍화 도트 표현
+      ctx.fillStyle = 'rgba(90,60,30,0.14)';
+      ctx.fillRect(bx + 6 + ((r * 7) % 14), by + 6, 3, 3);
+      ctx.fillRect(bx + 18 + ((col * 5) % 8), by + 9, 2, 2);
+    }
+  }
+
+  // 건물 상단과 하단에 고대 중동 건축 양식의 장식 띠(Frieze)와 주춧돌 표현
+  ctx.fillStyle = sc.frieze;
+  ctx.fillRect(0, 0, 128, 6);
+  ctx.fillRect(0, 120, 128, 8);
+  for (let x = 4; x < 128; x += 16) {
+    ctx.fillStyle = '#fef3c7';
+    ctx.fillRect(x, 2, 6, 3);
+  }
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  _davidWallTexCache[key] = tex;
+  return tex;
+}
+
+function makeDetailedBuildingWallMat(variant = 0) {
+  return new THREE.MeshLambertMaterial({ map: makeDavidBuildingWallTex(variant) });
+}
+
 function registerCitySolidBox(cx, cz, w, d, topY, pad = 0.30) {
   const minX = cx - w / 2 - pad;
   const maxX = cx + w / 2 + pad;
@@ -3718,6 +4262,19 @@ function registerCitySolidBox(cx, cz, w, d, topY, pad = 0.30) {
   colliders.push({ minX, maxX, minZ, maxZ });
   platforms.push({ minX, maxX, minZ, maxZ, topY });
   davidCityBuildingBoxes.push({ minX, maxX, minZ, maxZ, topY });
+}
+
+// [스테이지 3 요청사항 1] 퀘스트 완료로 건물이 지어졌을 때 건물을 뚫고 지나가지 못하도록 충돌 박스 등록 및 끼임 밀어내기
+function lockCompletedQuestBuilding(cx, cz, w, d, topY, completedGroup) {
+  registerCitySolidBox(cx, cz, w, d, topY, 0.28);
+  if (completedGroup) {
+    completedGroup.traverse(child => {
+      if (child.isMesh && !wallMeshes.includes(child)) {
+        wallMeshes.push(child);
+      }
+    });
+  }
+  resolvePlayerOutOfCityBuildings();
 }
 
 function isCityFloorSpotClear(x, z, pad = 1.35) {
@@ -3743,27 +4300,25 @@ function resolvePlayerOutOfCityBuildings() {
       const dSouth = b.maxZ - playerPos.z;
       const minSide = Math.min(dLeft, dRight, dNorth, dSouth);
 
-      if (minSide === dLeft) playerPos.x = b.minX - 0.15;
-      else if (minSide === dRight) playerPos.x = b.maxX + 0.15;
-      else if (minSide === dNorth) playerPos.z = b.minZ - 0.15;
-      else playerPos.z = b.maxZ + 0.15;
+      if (minSide === dLeft) playerPos.x = b.minX - 0.18;
+      else if (minSide === dRight) playerPos.x = b.maxX + 0.18;
+      else if (minSide === dNorth) playerPos.z = b.minZ - 0.18;
+      else playerPos.z = b.maxZ + 0.18;
     }
   }
 }
 
 // -------------------------------------------------------------------------
-// 3. 맵 가장자리 성벽(반투명 시야 보장) 및 성벽 밖 곧은 길 생성
+// 3. 맵 가장자리 성벽(석조 텍스처 + 반투명 시야 보장) 및 성벽 밖 곧은 길 생성
 // -------------------------------------------------------------------------
 function buildDavidCastleWallPerimeter(limit, withSouthGate = true) {
-  const wallBaseMat = matVoxel('#d6c3a5', '#b89f7a');
   const wallTrimMat = matVoxel('#b45309', '#78350f');
-  const towerBaseMat = matVoxel('#cbb492', '#9c825e');
   const wallH = 8.2;
   const wallThick = 3.4;
   const segLen = 12.0;
 
-  const addTransparentWallSegment = (w, h, d, x, y, z, isTrim = false) => {
-    const mat = (isTrim ? wallTrimMat : wallBaseMat).clone();
+  const addTransparentWallSegment = (w, h, d, x, y, z, isTrim = false, v = 0) => {
+    const mat = isTrim ? wallTrimMat.clone() : makeDetailedBuildingWallMat(v);
     const box = createBox(w, h, d, mat, x, y, z);
     worldGroup.add(box);
     wallMeshes.push(box);
@@ -3771,31 +4326,31 @@ function buildDavidCastleWallPerimeter(limit, withSouthGate = true) {
   };
 
   for (let x = -limit; x <= limit; x += segLen) {
-    addTransparentWallSegment(segLen + 0.15, wallH, wallThick, x, wallH / 2, -limit, false);
+    addTransparentWallSegment(segLen + 0.15, wallH, wallThick, x, wallH / 2, -limit, false, 0);
     addTransparentWallSegment(segLen + 0.35, 0.55, wallThick + 0.4, x, wallH + 0.25, -limit, true);
     [-3.6, 0, 3.6].forEach(ox => {
-      addTransparentWallSegment(2.0, 1.2, wallThick + 0.2, x + ox, wallH + 1.1, -limit, false);
+      addTransparentWallSegment(2.0, 1.2, wallThick + 0.2, x + ox, wallH + 1.1, -limit, false, 3);
     });
 
     if (withSouthGate && Math.abs(x) < 12.5) continue;
-    addTransparentWallSegment(segLen + 0.15, wallH, wallThick, x, wallH / 2, limit, false);
+    addTransparentWallSegment(segLen + 0.15, wallH, wallThick, x, wallH / 2, limit, false, 0);
     addTransparentWallSegment(segLen + 0.35, 0.55, wallThick + 0.4, x, wallH + 0.25, limit, true);
     [-3.6, 0, 3.6].forEach(ox => {
-      addTransparentWallSegment(2.0, 1.2, wallThick + 0.2, x + ox, wallH + 1.1, limit, false);
+      addTransparentWallSegment(2.0, 1.2, wallThick + 0.2, x + ox, wallH + 1.1, limit, false, 3);
     });
   }
 
   for (let z = -limit; z <= limit; z += segLen) {
-    addTransparentWallSegment(wallThick, wallH, segLen + 0.15, -limit, wallH / 2, z, false);
+    addTransparentWallSegment(wallThick, wallH, segLen + 0.15, -limit, wallH / 2, z, false, 0);
     addTransparentWallSegment(wallThick + 0.4, 0.55, segLen + 0.35, -limit, wallH + 0.25, z, true);
     [-3.6, 0, 3.6].forEach(oz => {
-      addTransparentWallSegment(wallThick + 0.2, 1.2, 2.0, -limit, wallH + 1.1, z + oz, false);
+      addTransparentWallSegment(wallThick + 0.2, 1.2, 2.0, -limit, wallH + 1.1, z + oz, false, 3);
     });
 
-    addTransparentWallSegment(wallThick, wallH, segLen + 0.15, limit, wallH / 2, z, false);
+    addTransparentWallSegment(wallThick, wallH, segLen + 0.15, limit, wallH / 2, z, false, 0);
     addTransparentWallSegment(wallThick + 0.4, 0.55, segLen + 0.35, limit, wallH + 0.25, z, true);
     [-3.6, 0, 3.6].forEach(oz => {
-      addTransparentWallSegment(wallThick + 0.2, 1.2, 2.0, limit, wallH + 1.1, z + oz, false);
+      addTransparentWallSegment(wallThick + 0.2, 1.2, 2.0, limit, wallH + 1.1, z + oz, false, 3);
     });
   }
 
@@ -3804,7 +4359,7 @@ function buildDavidCastleWallPerimeter(limit, withSouthGate = true) {
     [-limit, 0], [limit, 0], [0, -limit]
   ];
   towerCoords.forEach(([tx, tz]) => {
-    const tBody = createBox(6.8, wallH + 3.2, 6.8, towerBaseMat.clone(), tx, (wallH + 3.2) / 2, tz);
+    const tBody = createBox(6.8, wallH + 3.2, 6.8, makeDetailedBuildingWallMat(3), tx, (wallH + 3.2) / 2, tz);
     const tRoof = createBox(7.4, 0.7, 7.4, wallTrimMat.clone(), tx, wallH + 3.55, tz);
     worldGroup.add(tBody, tRoof);
     wallMeshes.push(tBody, tRoof);
@@ -4020,6 +4575,7 @@ function createDavidRetainerMesh(retainerIdx) {
   const goldMat = matDavidCached('#facc15', '#ca8a04');
   const skin = matDavidCached('#fed7aa', '#fdba74');
   const hairMat = matDavidCached('#451a03');
+  const eyeWhite = matDavidCached('#ffffff');
   const eyeMat = matDavidCached('#0f172a');
 
   const lLeg = new THREE.Group(); lLeg.position.set(-0.20, 0.68, 0);
@@ -4034,8 +4590,10 @@ function createDavidRetainerMesh(retainerIdx) {
   const head = createBox(0.70, 0.70, 0.70, skin, 0, 2.02, 0);
   const hair = createBox(0.76, 0.26, 0.76, hairMat, 0, 2.34, 0);
   const headband = createBox(0.78, 0.10, 0.78, goldMat, 0, 2.24, 0);
-  const lEye = createBox(0.10, 0.10, 0.05, eyeMat, -0.15, 2.06, 0.36);
-  const rEye = createBox(0.10, 0.10, 0.05, eyeMat,  0.15, 2.06, 0.36);
+  const lEyeW = createBox(0.16, 0.11, 0.04, eyeWhite, -0.15, 2.06, 0.35);
+  const rEyeW = createBox(0.16, 0.11, 0.04, eyeWhite,  0.15, 2.06, 0.35);
+  const lEye = createBox(0.09, 0.09, 0.05, eyeMat, -0.15, 2.06, 0.36);
+  const rEye = createBox(0.09, 0.09, 0.05, eyeMat,  0.15, 2.06, 0.36);
 
   const lArm = new THREE.Group(); lArm.position.set(-0.54, 1.50, 0);
   lArm.add(createBox(0.26, 0.62, 0.26, tunicMat, 0, -0.26, 0), createBox(0.22, 0.18, 0.22, skin, 0, -0.62, 0));
@@ -4047,24 +4605,23 @@ function createDavidRetainerMesh(retainerIdx) {
   packGroup.position.set(0, 1.18, -0.42);
   g.add(packGroup);
 
-  g.add(lLeg, rLeg, torso, sash, belt, head, hair, headband, lEye, rEye, lArm, rArm);
+  g.add(lLeg, rLeg, torso, sash, belt, head, hair, headband, lEyeW, rEyeW, lEye, rEye, lArm, rArm);
   g.userData = { lLeg, rLeg, lArm, rArm, packGroup };
   return g;
 }
 
 // -------------------------------------------------------------------------
-// 5. 다윗성 랜드마크, 빈틈없는 2층 건물, 상가 건물, 성벽까지 확장된 건물 미로 빌더
+// 5. [스테이지 3 요청사항 2] 벽돌·회벽 질감과 서까래·창틀 디테일이 적용된 다윗성 건축물 빌더
 // -------------------------------------------------------------------------
 function buildDavidCityPalace(cx, cz) {
-  const stoneMat = matVoxel('#fde68a', '#eab308');
   const cedarMat = matVoxel('#78350f', '#451a03');
   const goldMat = matDavidCached('#facc15', '#ca8a04');
   const colMat = matVoxel('#f8fafc', '#cbd5e1');
 
-  const base = createBox(20, 1.2, 14, stoneMat.clone(), cx, 0.6, cz);
-  const mainHall = createBox(18, 6.5, 11, stoneMat.clone(), cx, 4.4, cz);
+  const base = createBox(20, 1.2, 14, makeDetailedBuildingWallMat(3), cx, 0.6, cz);
+  const mainHall = createBox(18, 6.5, 11, makeDetailedBuildingWallMat(0), cx, 4.4, cz);
   const cedarRoof = createBox(19.2, 0.9, 12.2, cedarMat.clone(), cx, 8.0, cz);
-  const upperTower = createBox(10, 4.2, 7, stoneMat.clone(), cx, 10.5, cz - 1.0);
+  const upperTower = createBox(10, 4.2, 7, makeDetailedBuildingWallMat(2), cx, 10.5, cz - 1.0);
   const crownRoof = createBox(11.0, 0.7, 8.0, goldMat, cx, 12.9, cz - 1.0);
   worldGroup.add(base, mainHall, cedarRoof, upperTower, crownRoof);
   wallMeshes.push(mainHall, cedarRoof, upperTower);
@@ -4104,18 +4661,32 @@ function buildDavidCityTabernacle(cx, cz) {
 }
 
 function buildClimbableTwoStoryHouse(cx, cz, stairSide = 'east', colorVariant = 0) {
-  const wallMat = matVoxel(colorVariant % 2 === 0 ? '#fde68a' : '#fed7aa', '#d97706').clone();
+  const wallMat = makeDetailedBuildingWallMat(colorVariant);
   const trimMat = matVoxel('#92400e', '#5c2d0c').clone();
   const stairMat = matVoxel('#cbd5e1', '#64748b').clone();
   const awningMat = matVoxel(colorVariant % 2 === 0 ? '#0284c7' : '#16a34a', '#0f172a').clone();
+  const frameMat = matDavidCached('#78350f', '#451a03');
+  const winMat = matDavidCached('#1e293b');
 
   const w = 9.0, h1 = 3.6, d = 7.4;
 
   const body1F = createBox(w, h1, d, wallMat, cx, h1 / 2, cz);
   const slab2F = createBox(w + 0.4, 0.30, d + 0.4, trimMat, cx, h1 - 0.12, cz);
   const door1F = createBox(1.6, 2.4, 0.25, trimMat, cx, 1.2, cz + d / 2 + 0.08);
-  worldGroup.add(body1F, slab2F, door1F);
+  const lintel1F = createBox(2.1, 0.28, 0.34, frameMat, cx, 2.52, cz + d / 2 + 0.10);
+  worldGroup.add(body1F, slab2F, door1F, lintel1F);
   wallMeshes.push(body1F, slab2F);
+
+  // 1층 전면·후면 창틀 및 처마 서까래(들보) 디테일 추가
+  [-2.6, 2.6].forEach(ox => {
+    worldGroup.add(
+      createBox(1.3, 1.2, 0.22, frameMat, cx + ox, 2.1, cz + d / 2 + 0.06),
+      createBox(0.95, 0.95, 0.26, winMat, cx + ox, 2.1, cz + d / 2 + 0.08)
+    );
+  });
+  for (let bx = -w / 2 + 0.8; bx <= w / 2 - 0.8; bx += 1.8) {
+    worldGroup.add(createBox(0.24, 0.22, d + 0.7, frameMat, cx + bx, h1 - 0.28, cz));
+  }
 
   platforms.push({
     minX: cx - w / 2 - 0.25,
@@ -4135,7 +4706,7 @@ function buildClimbableTwoStoryHouse(cx, cz, stairSide = 'east', colorVariant = 
   const roomW = 3.6, roomH = 2.6, roomD = 4.0;
   const roomX = cx + (stairSide === 'east' ? -2.2 : 2.2);
   const roomZ = cz - 1.2;
-  const body2F = createBox(roomW, roomH, roomD, wallMat.clone(), roomX, h1 + roomH / 2, roomZ);
+  const body2F = createBox(roomW, roomH, roomD, makeDetailedBuildingWallMat(colorVariant + 1), roomX, h1 + roomH / 2, roomZ);
   const roof2F = createBox(roomW + 0.4, 0.36, roomD + 0.4, awningMat, roomX, h1 + roomH + 0.18, roomZ);
   worldGroup.add(body2F, roof2F);
   wallMeshes.push(body2F, roof2F);
@@ -4169,7 +4740,6 @@ function buildClimbableTwoStoryHouse(cx, cz, stairSide = 'east', colorVariant = 
 }
 
 function buildOpenShopBuildingWithKeeper(cx, cz, w, d, facing = 'south', shopType = 'fruit', idx = 0) {
-  const wallMat = matVoxel(idx % 2 === 0 ? '#fde68a' : '#fed7aa', '#d97706');
   const woodMat = matVoxel('#78350f', '#451a03');
   const awningCol1 = (shopType === 'fruit') ? '#16a34a' : (shopType === 'pottery' ? '#ea580c' : (shopType === 'cloth' ? '#9333ea' : '#0284c7'));
   const awningMat = matVoxel(awningCol1, '#0f172a').clone();
@@ -4192,9 +4762,9 @@ function buildOpenShopBuildingWithKeeper(cx, cz, w, d, facing = 'south', shopTyp
   wallMeshes.push(roofBox, signAwning);
 
   if (isNS) {
-    const backWall = createBox(w, h, 0.8, wallMat.clone(), cx, h / 2, cz - fSign * (d / 2 - 0.4));
-    const sideL = createBox(0.8, h, d, wallMat.clone(), cx - w / 2 + 0.4, h / 2, cz);
-    const sideR = createBox(0.8, h, d, wallMat.clone(), cx + w / 2 - 0.4, h / 2, cz);
+    const backWall = createBox(w, h, 0.8, makeDetailedBuildingWallMat(idx), cx, h / 2, cz - fSign * (d / 2 - 0.4));
+    const sideL = createBox(0.8, h, d, makeDetailedBuildingWallMat(idx), cx - w / 2 + 0.4, h / 2, cz);
+    const sideR = createBox(0.8, h, d, makeDetailedBuildingWallMat(idx), cx + w / 2 - 0.4, h / 2, cz);
     const counter = createBox(w - 2.0, 1.15, 1.1, woodMat.clone(), cx, 0.58, cz + fSign * (d / 2 - 1.3));
     worldGroup.add(backWall, sideL, sideR, counter);
     wallMeshes.push(backWall, sideL, sideR);
@@ -4210,9 +4780,9 @@ function buildOpenShopBuildingWithKeeper(cx, cz, w, d, facing = 'south', shopTyp
     worldGroup.add(keeper);
     davidCityShopkeepers.push({ mesh: keeper, phase: idx * 1.1 });
   } else {
-    const backWall = createBox(0.8, h, d, wallMat.clone(), cx - fSign * (w / 2 - 0.4), h / 2, cz);
-    const sideN = createBox(w, h, 0.8, wallMat.clone(), cx, h / 2, cz - d / 2 + 0.4);
-    const sideS = createBox(w, h, 0.8, wallMat.clone(), cx, h / 2, cz + d / 2 - 0.4);
+    const backWall = createBox(0.8, h, d, makeDetailedBuildingWallMat(idx), cx - fSign * (w / 2 - 0.4), h / 2, cz);
+    const sideN = createBox(w, h, 0.8, makeDetailedBuildingWallMat(idx), cx, h / 2, cz - d / 2 + 0.4);
+    const sideS = createBox(w, h, 0.8, makeDetailedBuildingWallMat(idx), cx, h / 2, cz + d / 2 - 0.4);
     const counter = createBox(1.1, 1.15, d - 2.0, woodMat.clone(), cx + fSign * (w / 2 - 1.3), 0.58, cz);
     worldGroup.add(backWall, sideN, sideS, counter);
     wallMeshes.push(backWall, sideN, sideS);
@@ -4232,22 +4802,20 @@ function buildOpenShopBuildingWithKeeper(cx, cz, w, d, facing = 'south', shopTyp
   registerCitySolidBox(cx, cz, w, d, h + 0.4, 0.30);
 }
 
+// [스테이지 3 요청사항 2] 벽면 석조·회벽 텍스처 + 처마 나무 서까래 + 입체 창틀·문틀이 적용된 시가지 건물 블록
 function buildSolidCityBuildingBlock(cx, cz, w, h, d, variant = 0) {
-  const palettes = [
-    ['#fde68a', '#d97706'],
-    ['#fed7aa', '#ea580c'],
-    ['#fef08a', '#ca8a04'],
-    ['#e7e5e4', '#a8a29e']
-  ];
-  const [c1, c2] = palettes[variant % palettes.length];
-  const wallMat = matVoxel(c1, c2).clone();
+  const wallMat = makeDetailedBuildingWallMat(variant);
   const roofMat = matVoxel('#92400e', '#5c2d0c').clone();
+  const beamMat = matDavidCached('#78350f', '#451a03');
+  const winFrameMat = matDavidCached('#b45309', '#78350f');
   const winMat = matDavidCached('#1e293b');
   const doorMat = matDavidCached('#451a03');
+  const stoneQuoinMat = matDavidCached('#d6d3d1', '#a8a29e');
 
   const body = createBox(w, h, d, wallMat, cx, h / 2, cz);
-  const roof = createBox(w + 0.4, 0.45, d + 0.4, roofMat, cx, h + 0.22, cz);
-  worldGroup.add(body, roof);
+  const roof = createBox(w + 0.45, 0.45, d + 0.45, roofMat, cx, h + 0.22, cz);
+  const plinth = createBox(w + 0.22, 0.36, d + 0.22, stoneQuoinMat, cx, 0.18, cz);
+  worldGroup.add(body, roof, plinth);
   wallMeshes.push(body, roof);
 
   if (w >= d) {
@@ -4255,10 +4823,19 @@ function buildSolidCityBuildingBlock(cx, cz, w, h, d, variant = 0) {
     for (let i = 0; i < count; i++) {
       const ox = -w / 2 + (i + 0.5) * (w / count);
       worldGroup.add(
+        // 출입문 + 상인방(Lintel) 돌출 디테일
         createBox(1.4, 2.3, 0.18, doorMat, cx + ox, 1.15, cz + d / 2 + 0.06),
-        createBox(1.1, 1.1, 0.18, winMat, cx + ox + 1.8, 2.6, cz + d / 2 + 0.06),
-        createBox(1.1, 1.1, 0.18, winMat, cx + ox - 1.8, 2.6, cz - d / 2 - 0.06)
+        createBox(1.8, 0.24, 0.28, beamMat, cx + ox, 2.40, cz + d / 2 + 0.08),
+        // 전면·후면 창틀 + 창턱(Sill) 디테일
+        createBox(1.35, 1.35, 0.16, winFrameMat, cx + ox + 1.85, 2.65, cz + d / 2 + 0.05),
+        createBox(1.05, 1.05, 0.20, winMat, cx + ox + 1.85, 2.65, cz + d / 2 + 0.07),
+        createBox(1.35, 1.35, 0.16, winFrameMat, cx + ox - 1.85, 2.65, cz - d / 2 - 0.05),
+        createBox(1.05, 1.05, 0.20, winMat, cx + ox - 1.85, 2.65, cz - d / 2 - 0.07)
       );
+    }
+    // 지붕 아래로 돌출된 나무 서까래(처마 들보)
+    for (let bx = -w / 2 + 1.2; bx <= w / 2 - 1.2; bx += 2.6) {
+      worldGroup.add(createBox(0.22, 0.22, d + 0.72, beamMat, cx + bx, h - 0.22, cz));
     }
   } else {
     const count = Math.max(1, Math.floor(d / 7.5));
@@ -4266,9 +4843,15 @@ function buildSolidCityBuildingBlock(cx, cz, w, h, d, variant = 0) {
       const oz = -d / 2 + (i + 0.5) * (d / count);
       worldGroup.add(
         createBox(0.18, 2.3, 1.4, doorMat, cx + w / 2 + 0.06, 1.15, cz + oz),
-        createBox(0.18, 1.1, 1.1, winMat, cx + w / 2 + 0.06, 2.6, cz + oz + 1.8),
-        createBox(0.18, 1.1, 1.1, winMat, cx - w / 2 - 0.06, 2.6, cz + oz - 1.8)
+        createBox(0.28, 0.24, 1.8, beamMat, cx + w / 2 + 0.08, 2.40, cz + oz),
+        createBox(0.16, 1.35, 1.35, winFrameMat, cx + w / 2 + 0.05, 2.65, cz + oz + 1.85),
+        createBox(0.20, 1.05, 1.05, winMat, cx + w / 2 + 0.07, 2.65, cz + oz + 1.85),
+        createBox(0.16, 1.35, 1.35, winFrameMat, cx - w / 2 - 0.05, 2.65, cz + oz - 1.85),
+        createBox(0.20, 1.05, 1.05, winMat, cx - w / 2 - 0.07, 2.65, cz + oz - 1.85)
       );
+    }
+    for (let bz = -d / 2 + 1.2; bz <= d / 2 - 1.2; bz += 2.6) {
+      worldGroup.add(createBox(w + 0.72, 0.22, 0.22, beamMat, cx, h - 0.22, cz + bz));
     }
   }
 
@@ -4286,8 +4869,8 @@ function buildDenseMazeCityAndStreets() {
     { x:  42, z:  22, side: 'west', var: 1 },
     { x: -20, z: -34, side: 'east', var: 1 },
     { x:  20, z:  30, side: 'west', var: 0 },
-    { x: -54, z: -48, side: 'east', var: 0 },
-    { x:  54, z:  48, side: 'west', var: 1 }
+    { x: -54, z: -48, side: 'east', var: 2 },
+    { x:  54, z:  48, side: 'west', var: 3 }
   ];
   twoStorySpecs.forEach(sp => {
     buildClimbableTwoStoryHouse(sp.x, sp.z, sp.side, sp.var);
@@ -4400,63 +4983,67 @@ function buildDenseMazeCityAndStreets() {
 }
 
 function buildQuestBuildableStructures(mapLimit = 68) {
+  // 1) 상인의 상가 건설 부지 (x = -28, z = 8)
   const marketRoot = new THREE.Group();
   marketRoot.position.set(-28, 0, 8);
   const basePad = createBox(8.5, 0.2, 6.0, matDavidCached('#d9a05b', '#92400e'), 0, 0.1, 0, false);
   const unfinishedFrame = createBox(8.2, 0.25, 5.8, new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.35 }), 0, 0.25, 0, false);
   const completedMarket = new THREE.Group();
   const woodMat = matDavidCached('#78350f', '#451a03');
-  const awning1 = matDavidCached('#ef4444', '#b91c1c');
-  const awning2 = matDavidCached('#fef08a', '#eab308');
+  const awning1 = matVoxel('#ef4444', '#b91c1c').clone();
+  const awning2 = matVoxel('#fef08a', '#eab308').clone();
   completedMarket.add(
-    createBox(0.35, 3.8, 0.35, woodMat, -3.6, 1.9, -2.4),
-    createBox(0.35, 3.8, 0.35, woodMat,  3.6, 1.9, -2.4),
-    createBox(0.35, 3.8, 0.35, woodMat, -3.6, 1.9,  2.4),
-    createBox(0.35, 3.8, 0.35, woodMat,  3.6, 1.9,  2.4),
-    createBox(8.4, 0.5, 3.0, awning1, 0, 4.0, -1.3),
-    createBox(8.4, 0.5, 3.0, awning2, 0, 3.8,  1.3),
-    createBox(6.8, 1.1, 1.6, woodMat, 0, 0.65, 0),
-    createBox(1.2, 0.6, 1.0, matDavidCached('#f97316'), -1.8, 1.4, 0),
-    createBox(1.2, 0.6, 1.0, matDavidCached('#22c55e'),  0.0, 1.4, 0),
-    createBox(1.2, 0.6, 1.0, matDavidCached('#a855f7'),  1.8, 1.4, 0)
+    createBox(8.2, 3.8, 0.7, makeDetailedBuildingWallMat(0), 0, 1.9, -2.5), // 상가 뒷벽 추가
+    createBox(0.45, 3.8, 0.45, woodMat, -3.6, 1.9, -2.4),
+    createBox(0.45, 3.8, 0.45, woodMat,  3.6, 1.9, -2.4),
+    createBox(0.45, 3.8, 0.45, woodMat, -3.6, 1.9,  2.4),
+    createBox(0.45, 3.8, 0.45, woodMat,  3.6, 1.9,  2.4),
+    createBox(8.6, 0.5, 3.1, awning1, 0, 4.0, -1.3),
+    createBox(8.6, 0.5, 3.1, awning2, 0, 3.8,  1.3),
+    createBox(6.8, 1.15, 1.6, woodMat, 0, 0.65, 0.4),
+    createBox(1.2, 0.6, 1.0, matDavidCached('#f97316'), -1.8, 1.45, 0.4),
+    createBox(1.2, 0.6, 1.0, matDavidCached('#22c55e'),  0.0, 1.45, 0.4),
+    createBox(1.2, 0.6, 1.0, matDavidCached('#a855f7'),  1.8, 1.45, 0.4)
   );
   completedMarket.visible = false;
   marketRoot.add(basePad, unfinishedFrame, completedMarket);
-  marketRoot.userData = { unfinishedFrame, completedMarket };
+  marketRoot.userData = { unfinishedFrame, completedMarket, cx: -28, cz: 8, w: 8.5, d: 6.0, topY: 4.3 };
   worldGroup.add(marketRoot);
   davidCityBuildings.marketGroup = marketRoot;
 
+  // 2) 건축가의 새 집 건설 부지 (x = 28, z = 8)
   const houseRoot = new THREE.Group();
   houseRoot.position.set(28, 0, 8);
   const hPad = createBox(9.0, 0.25, 7.0, matDavidCached('#94a3b8', '#64748b'), 0, 0.12, 0, false);
   const hUnfinished = createBox(8.6, 0.3, 6.6, new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.35 }), 0, 0.28, 0, false);
   const completedHouse = new THREE.Group();
-  const stoneWall = matDavidCached('#fde68a', '#d97706');
-  const woodBeam = matDavidCached('#78350f', '#451a03');
+  const stoneWall = makeDetailedBuildingWallMat(1);
+  const woodBeam = matVoxel('#78350f', '#451a03').clone();
   completedHouse.add(
     createBox(8.4, 4.6, 6.4, stoneWall, 0, 2.3, 0),
     createBox(8.8, 0.5, 6.8, woodBeam, 0, 4.8, 0),
-    createBox(4.8, 2.5, 4.4, stoneWall, 1.2, 6.2, -0.5),
+    createBox(4.8, 2.5, 4.4, makeDetailedBuildingWallMat(2), 1.2, 6.2, -0.5),
     createBox(5.2, 0.4, 4.8, woodBeam, 1.2, 7.6, -0.5),
-    createBox(1.6, 2.8, 0.3, woodBeam, -1.2, 1.4, 3.25)
+    createBox(1.6, 2.8, 0.3, woodBeam, -1.2, 1.4, 3.25),
+    createBox(1.3, 1.3, 0.25, matDavidCached('#1e293b'), 2.0, 2.6, 3.25)
   );
   completedHouse.visible = false;
   houseRoot.add(hPad, hUnfinished, completedHouse);
-  houseRoot.userData = { unfinishedFrame: hUnfinished, completedHouse };
+  houseRoot.userData = { unfinishedFrame: hUnfinished, completedHouse, cx: 28, cz: 8, w: 8.8, d: 6.8, topY: 7.8 };
   worldGroup.add(houseRoot);
   davidCityBuildings.houseGroup = houseRoot;
 
-  // 남쪽 대성문 (성문 앞 광장은 완전히 개방하고, 성문 문짝 위치 z = 66.0만 막아 성문 밖 이탈 방지)
+  // 3) 남쪽 대성문
   const gateZ = mapLimit;
   const gateRoot = new THREE.Group();
   gateRoot.position.set(0, 0, gateZ);
-  const towerMat = matVoxel('#d97706', '#92400e');
+  const towerMat = makeDetailedBuildingWallMat(0);
   const ironMat = matDavidCached('#475569', '#1e293b');
   const goldStud = matDavidCached('#facc15');
 
-  const tL = createBox(7.2, 10.5, 5.8, towerMat.clone(), -7.8, 5.25, 0);
-  const tR = createBox(7.2, 10.5, 5.8, towerMat.clone(),  7.8, 5.25, 0);
-  const tTop = createBox(22.8, 2.4, 5.8, towerMat.clone(), 0, 10.2, 0);
+  const tL = createBox(7.2, 10.5, 5.8, towerMat, -7.8, 5.25, 0);
+  const tR = createBox(7.2, 10.5, 5.8, makeDetailedBuildingWallMat(0),  7.8, 5.25, 0);
+  const tTop = createBox(22.8, 2.4, 5.8, makeDetailedBuildingWallMat(1), 0, 10.2, 0);
   gateRoot.add(tL, tR, tTop);
   wallMeshes.push(tL, tR, tTop);
 
@@ -4863,17 +5450,17 @@ function buildDavidStage3World() {
   snapCameraToPlayer();
   updateStageHUD();
   updateDavidStage3QuestTrackerUI();
-  showToast('👑 빛기둥 아래 백성에게 다가가 퀘스트를 받으세요! (하단 버튼으로 카메라 시점도 전환할 수 있어요)');
+  showToast('👑 빛기둥 아래 백성에게 다가가 퀘스트를 받으세요! (각도 버튼 사이에서 시점도 전환할 수 있어요)');
 }
 // =========================================================================
-// [ep3_david.js - 파트 5/5] 에피소드 3 : 스테이지 3 진행 로직, 성벽 엔딩 및 플러그인 통합 등록
-// - 퀘스트 수락 시 소형 UI 표시, 진행 중 다른 NPC 퀘스트 잠금(davidCurrentActiveQuestNpc)
-// - 퀘스트 수락 순간 보유 자원 0 초기화 및 난이도별 랜덤 위치 재스폰
-// - 엔딩: 사방 성벽 외곽 + 빈 왕좌 화살표 안내 -> 왕좌 착석 -> 메시아 성경절 모달 -> 인증서 오픈
+// [ep3_david.js - 파트 5/5] 에피소드 3 : 스테이지 3 진행 로직, 암전 성경절 엔딩 및 플러그인 통합 등록
+// - 스테이지 2 시작 대화 버튼 연동 및 스테이지 3 단일 퀘스트 잠금·수락 시 자원 0 초기화
+// - 스테이지 3 퀘스트 완료 후 지어진 건물(상가·새 집) 관통 방지 충돌 잠금(lockCompletedQuestBuilding)
+// - 엔딩: 빈 왕좌 착석 -> 암전 후 메시아 성경절 화면 표시 및 남자 성우 음성 낭독 -> 인증서 자동 오픈
 // =========================================================================
 
 // -------------------------------------------------------------------------
-// 1. NPC 말풍선 대화창 (단일 퀘스트 잠금, 수락 시 자원 0 초기화, 완료 처리)
+// 1. NPC 말풍선 대화창 (단일 퀘스트 잠금, 수락 시 자원 0 초기화, 완공 건물 충돌 잠금)
 // -------------------------------------------------------------------------
 function syncCityNpcBeaconsForActiveQuest() {
   davidCityNpcs.forEach(n => {
@@ -4881,7 +5468,6 @@ function syncCityNpcBeaconsForActiveQuest() {
     if (n.completed) {
       n.beacon.visible = false;
     } else if (davidCurrentActiveQuestNpc) {
-      // 진행 중인 퀘스트가 있으면 해당 NPC의 빛기둥만 표시하여 헷갈리지 않게 안내
       n.beacon.visible = (n === davidCurrentActiveQuestNpc);
     } else {
       const allThreeDone = davidCityNpcs.filter(x => x.id !== 'herald').every(x => x.completed);
@@ -4899,7 +5485,6 @@ function openDavidNpcDialog(npc) {
   const btnEl = document.getElementById('david-npc-action-btn');
   if (!dlg || !npc) return;
 
-  // 이미 대화창이 열려 있으면 중복 실행 방지
   if (!dlg.classList.contains('hidden')) return;
 
   davidDialogTargetNpc = npc;
@@ -4911,7 +5496,6 @@ function openDavidNpcDialog(npc) {
   let canCompleteNow = false;
   let canAcceptNewQuest = false;
 
-  // [요청사항 1] 다른 NPC의 퀘스트를 진행 중일 때는 새 퀘스트를 받을 수 없도록 잠금!
   if (
     davidCurrentActiveQuestNpc &&
     davidCurrentActiveQuestNpc !== npc &&
@@ -4934,7 +5518,6 @@ function openDavidNpcDialog(npc) {
     fullLine = npc.thanksLine;
     btnEl.textContent = '평안하길 바라네!';
   } else if (davidCurrentActiveQuestNpc === npc) {
-    // 현재 진행 중인 퀘스트 NPC에게 다시 온 경우
     const hasEnough =
       davidInventory.wood >= npc.req.wood &&
       davidInventory.stone >= npc.req.stone &&
@@ -4950,7 +5533,6 @@ function openDavidNpcDialog(npc) {
       btnEl.textContent = '계속 찾아보겠네';
     }
   } else {
-    // 아직 진행 중인 퀘스트가 없는 상태에서 새 퀘스트를 받는 경우
     canAcceptNewQuest = true;
     npc._hadEnoughWhenOpened = false;
     fullLine = npc.questLine;
@@ -4976,6 +5558,17 @@ function openDavidNpcDialog(npc) {
 }
 
 window.confirmDavidNpcDialog = function () {
+  // 스테이지 2 시작 대면 대화 중일 때는 스테이지 2 대화 진행 함수로 연결
+  if (
+    currentEpisode === 'david' &&
+    currentStage === 2 &&
+    typeof davidStage2Dialogue !== 'undefined' &&
+    davidStage2Dialogue.active
+  ) {
+    window.advanceDavidStage2Dialogue();
+    return;
+  }
+
   const dlg = document.getElementById('david-npc-dialog');
   if (dlg) dlg.classList.add('hidden');
   if (animaleseTimer) { clearInterval(animaleseTimer); animaleseTimer = null; }
@@ -4989,7 +5582,7 @@ window.confirmDavidNpcDialog = function () {
 
   npc.autoPromptedInZone = true;
 
-  // [요청사항 1·2·3] 새 퀘스트를 수락하는 순간: 보유 자원을 모두 0으로 초기화하고 난이도별 랜덤 위치에 자원 재배치!
+  // 새 퀘스트를 수락하는 순간 보유 자원을 0으로 초기화하고 난이도별 랜덤 위치에 자원 재배치
   if (npc._pendingAcceptNewQuest) {
     npc._pendingAcceptNewQuest = false;
     npc.started = true;
@@ -5026,7 +5619,6 @@ window.confirmDavidNpcDialog = function () {
       return;
     }
 
-    // 완료 시에도 남는 자원이 다음 퀘스트로 넘어가지 않도록 깔끔하게 차감·정리
     davidInventory.wood = 0;
     davidInventory.stone = 0;
     davidInventory.iron = 0;
@@ -5043,13 +5635,18 @@ window.confirmDavidNpcDialog = function () {
     playSfx('rescue');
     if (currentMode === 'timeattack') timeRemaining += 6.0;
 
+    // [스테이지 3 요청사항 1] 완성된 상가·새 집 건물을 뚫고 지나갈 수 없도록 충돌 박스 즉시 활성화!
     if (npc.id === 'merchant' && davidCityBuildings.marketGroup) {
-      davidCityBuildings.marketGroup.userData.unfinishedFrame.visible = false;
-      davidCityBuildings.marketGroup.userData.completedMarket.visible = true;
+      const u = davidCityBuildings.marketGroup.userData;
+      u.unfinishedFrame.visible = false;
+      u.completedMarket.visible = true;
+      lockCompletedQuestBuilding(u.cx, u.cz, u.w, u.d, u.topY, u.completedMarket);
       showToast('🏪 상인의 상가가 멋지게 지어졌습니다! 이제 다음 빛기둥의 백성을 만나보세요!');
     } else if (npc.id === 'architect' && davidCityBuildings.houseGroup) {
-      davidCityBuildings.houseGroup.userData.unfinishedFrame.visible = false;
-      davidCityBuildings.houseGroup.userData.completedHouse.visible = true;
+      const u = davidCityBuildings.houseGroup.userData;
+      u.unfinishedFrame.visible = false;
+      u.completedHouse.visible = true;
+      lockCompletedQuestBuilding(u.cx, u.cz, u.w, u.d, u.topY, u.completedHouse);
       showToast('🏠 건축가의 새 집이 튼튼하게 완성되었습니다! 이제 다음 빛기둥의 백성을 만나보세요!');
     } else if (npc.id === 'guard' && davidCityBuildings.gateGroup) {
       davidCityBuildings.gateGroup.userData.brokenGate.visible = false;
@@ -5209,7 +5806,6 @@ function updateDavidRetainersAndResources(dt, now) {
         davidInventory[res.kind] = (davidInventory[res.kind] || 0) + 1;
         updateDavidStage3InventoryHUD();
 
-        // 현재 진행 중인 퀘스트의 필요 자재를 모두 모았으면 해당 NPC의 자동 대화 잠금을 해제
         if (davidCurrentActiveQuestNpc && davidCurrentActiveQuestNpc.req) {
           const req = davidCurrentActiveQuestNpc.req;
           const nowEnough =
@@ -5311,6 +5907,7 @@ function updateDavidRetainersAndResources(dt, now) {
 }
 
 function updateDavidStage3Frame(dt, now) {
+  if (typeof davidOpeningState !== 'undefined' && davidOpeningState.active) return;
   if (davidNpcAutoDialogCooldown > 0) davidNpcAutoDialogCooldown -= dt;
 
   resolvePlayerOutOfCityBuildings();
@@ -5359,10 +5956,6 @@ function updateDavidStage3Frame(dt, now) {
         ? (davidInventory.wood >= npc.req.wood && davidInventory.stone >= npc.req.stone && davidInventory.iron >= npc.req.iron)
         : false;
 
-      // 1) 진행 중인 퀘스트가 없을 때 새 NPC 앞에 서면 자동 오픈
-      // 2) 진행 중인 퀘스트 NPC에게 자재를 다 모아 돌아왔을 때 자동 오픈
-      // 3) 다른 퀘스트 진행 중 다른 NPC에게 갔을 때 안내 대화 1회 오픈
-      // 4) 왕궁 전령에게 3개 완료 후 갔을 때 자동 오픈
       const shouldAutoOpen =
         (!davidCurrentActiveQuestNpc && !npc.completed && npc.id !== 'herald') ||
         (davidCurrentActiveQuestNpc === npc && !npc.completed && hasEnoughForNpc) ||
@@ -5383,7 +5976,6 @@ function updateDavidStage3Frame(dt, now) {
     pBtn.classList.add('hidden');
   }
 
-  // 북쪽 성막 나단 선지자 도착 및 가이드 화살표 계산
   if (targetObject && !targetObject.triggered) {
     if (targetObject.beacon && targetObject.beacon.visible) {
       const bPulse = 1.0 + Math.sin(now * 0.005) * 0.16;
@@ -5413,7 +6005,6 @@ function updateDavidStage3Frame(dt, now) {
           else if (req.iron > davidInventory.iron) neededKind = 'iron';
 
           if (neededKind) {
-            // 현재 플레이어와 가장 가까운 해당 종류의 자원 위치를 가리킴
             let bestRes = null;
             let bestD = 9999;
             davidCityResources.forEach(r => {
@@ -5491,13 +6082,13 @@ function updateDavidStage3CutsceneFrame(dt, now) {
 }
 
 // -------------------------------------------------------------------------
-// 3. [엔딩 월드] 사방 성벽 외곽 + 빈 왕좌 화살표 안내 -> 왕좌 등극 -> 메시아 성경절 모달 -> 인증서 오픈
+// 3. [엔딩 월드] 왕좌 착석 -> 암전 후 메시아 성경절 표시 및 남자 성우 음성 낭독 -> 인증서 자동 오픈
 // -------------------------------------------------------------------------
 function createEmptyThroneWithGuideArrow(cx, cz) {
   const root = new THREE.Group();
   const goldMat = matDavidCached('#facc15', '#ca8a04');
   const redVelvet = matDavidCached('#991b1b', '#7f1d1d');
-  const stoneStep = matDavidCached('#fde68a', '#d97706');
+  const stoneStep = makeDetailedBuildingWallMat(0);
 
   root.add(
     createBox(7.6, 0.5, 6.8, stoneStep, 0, 0.25, 0.6),
@@ -5545,68 +6136,39 @@ function createEmptyThroneWithGuideArrow(cx, cz) {
   return root;
 }
 
-function ensureDavidMessiahModal() {
-  let modal = document.getElementById('david-messiah-modal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'david-messiah-modal';
-    modal.className = 'hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm items-center justify-center p-4 pointer-events-auto';
-    modal.innerHTML = `
-      <div class="mc-panel max-w-md w-full rounded-3xl bg-gradient-to-b from-slate-900 via-indigo-950 to-slate-900 border-4 border-amber-400 p-6 text-center text-white shadow-2xl space-y-4">
-        <div class="text-5xl">👑✨</div>
-        <div class="inline-block px-3 py-1 rounded-full bg-amber-400/20 border border-amber-300 text-amber-300 font-jua text-xs">
-          다윗의 왕위와 영원한 메시아 언약
-        </div>
-        <h2 class="font-jua text-2xl text-amber-300 leading-snug">
-          메시아가 다윗의 후손으로 오십니다!
-        </h2>
-        <p class="text-xs sm:text-sm text-slate-200 leading-relaxed">
-          양을 지키던 목동 다윗은 이스라엘의 왕이 되었고, 하나님께서는 다윗의 후손을 통해 온 세상을 구원할 영원한 왕 <b class="text-amber-300">메시아(예수 그리스도)</b>를 보내주신다고 약속하셨어요!
-        </p>
-        <div class="bg-slate-950/80 border-2 border-amber-500/60 rounded-2xl p-4 text-left space-y-2">
-          <p class="text-xs sm:text-sm font-bold text-amber-200 leading-relaxed">
-            "보라 날이 이르리니 내가 다윗에게 한 의로운 가지를 일으킬 것이라 그가 왕이 되어 지혜롭게 다스리며 세상에서 정의와 공의를 행할 것이며"
-            <span class="block text-right text-[11px] text-amber-400 mt-1">- 예레미야 23장 5절 -</span>
-          </p>
-          <p class="text-xs sm:text-sm font-bold text-sky-200 leading-relaxed pt-2 border-t border-slate-800">
-            "아브라함과 다윗의 자손 예수 그리스도의 계보라"
-            <span class="block text-right text-[11px] text-sky-400 mt-1">- 마태복음 1장 1절 -</span>
-          </p>
-        </div>
-        <button type="button" onclick="proceedFromMessiahModalToCert()" class="mc-btn w-full py-3.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-jua text-lg shadow-xl">
-          🏆 완주 달란트 인증서 보기! ▶
-        </button>
-      </div>
-    `;
-    document.body.appendChild(modal);
-  }
-  return modal;
+// [엔딩 요청사항] 다윗이 왕좌에 오르면 암전 후 별도 카드로 나오던 메시아 성경절을 화면에 띄우고 남자 성우 목소리로 읽은 뒤 인증서 오픈!
+function startDavidEndingBlackoutAndCert() {
+  runDavidBlackoutSequence(
+    [
+      {
+        html: '"보라 날이 이르리니 내가 다윗에게 한 의로운 가지를 일으킬 것이라<br/>그가 왕이 되어 지혜롭게 다스리며 세상에서 정의와 공의를 행할 것이며"',
+        sub: '- 예레미야 23장 5절 -',
+        voiceText: '보라 날이 이르리니 내가 다윗에게 한 의로운 가지를 일으킬 것이라 그가 왕이 되어 지혜롭게 다스리며 세상에서 정의와 공의를 행할 것이며',
+        durationMs: 7500
+      },
+      {
+        html: '"아브라함과 다윗의 자손 예수 그리스도의 계보라"',
+        sub: '- 마태복음 1장 1절 (다윗의 후손으로 오신 구원자 메시아) -',
+        voiceText: '아브라함과 다윗의 자손 예수 그리스도의 계보라',
+        durationMs: 5500
+      }
+    ],
+    () => {
+      isPlaying = true;
+      const certBtn = document.getElementById('ending-cert-btn');
+      if (certBtn) certBtn.classList.remove('hidden');
+      if (typeof openCertificateModal === 'function') {
+        openCertificateModal();
+      }
+    }
+  );
 }
-
-function openDavidMessiahModal() {
-  const modal = ensureDavidMessiahModal();
-  modal.classList.remove('hidden');
-  modal.classList.add('flex');
-  playSfx('clear');
-}
-
-window.proceedFromMessiahModalToCert = function () {
-  const modal = document.getElementById('david-messiah-modal');
-  if (modal) {
-    modal.classList.add('hidden');
-    modal.classList.remove('flex');
-  }
-  if (typeof openCertificateModal === 'function') {
-    openCertificateModal();
-  }
-};
 
 function buildDavidEndingWorld() {
   hideAllDavidCustomUI();
+  attachGlobalCameraViewHook();
   const tracker = document.getElementById('david-st3-quest-tracker');
   if (tracker) tracker.classList.add('hidden');
-  const messiahModal = document.getElementById('david-messiah-modal');
-  if (messiahModal) { messiahModal.classList.add('hidden'); messiahModal.classList.remove('flex'); }
 
   const certBtn = document.getElementById('ending-cert-btn');
   if (certBtn) certBtn.classList.add('hidden');
@@ -5637,7 +6199,6 @@ function buildDavidEndingWorld() {
     createBox(4.8, 0.16, 28, carpetMat, 0, 0.08, -2, false)
   );
 
-  // 엔딩 맵 가장자리도 반투명 시야 처리가 적용된 다윗성 성벽으로 둘러쌈
   buildDavidCastleWallPerimeter(endLimit, false);
 
   [-10.5, 10.5].forEach(px => {
@@ -5715,10 +6276,12 @@ function seatDavidOnThroneAndShowMessiahVerse() {
   }
 
   playSfx('clear');
-  showToast('👑 다윗왕이 보좌에 올랐습니다! 다윗의 후손으로 오실 메시아 언약 말씀이 펼쳐집니다!');
+  showToast('👑 다윗왕이 보좌에 올랐습니다!');
 }
 
 function updateDavidEndingThroneFrame(dt, now) {
+  if (typeof davidOpeningState !== 'undefined' && davidOpeningState.active) return;
+
   if (!davidThroneEnding.seated) {
     if (davidThroneEnding.arrowGroup) {
       davidThroneEnding.arrowGroup.position.y = 4.2 + Math.sin(now * 0.006) * 0.42;
@@ -5758,11 +6321,10 @@ function updateDavidEndingThroneFrame(dt, now) {
   camera.position.lerp(new THREE.Vector3(0, 4.8, -1.2), 0.08);
   camera.lookAt(0, 2.5, -8.5);
 
-  if (davidThroneEnding.seatTimer >= 1.15 && !davidThroneEnding.modalShown) {
+  // 왕좌에 앉은 모습을 1.1초간 비춘 뒤 즉시 암전 -> 메시아 성경절 표시 및 남자 성우 낭독 -> 인증서 자동 오픈!
+  if (davidThroneEnding.seatTimer >= 1.10 && !davidThroneEnding.modalShown) {
     davidThroneEnding.modalShown = true;
-    const certBtn = document.getElementById('ending-cert-btn');
-    if (certBtn) certBtn.classList.remove('hidden');
-    openDavidMessiahModal();
+    startDavidEndingBlackoutAndCert();
   }
 }
 
@@ -5786,7 +6348,7 @@ if (!window._davidPuzzleHookRegistered) {
 }
 
 REGISTER_EPISODE('david', {
-  locked: true, // 에피소드 선택 맵에서 에피소드 3 선택을 잠그려면 true 로 변경하세요
+  locked: false, // 에피소드 선택 맵에서 에피소드 3 선택을 잠그려면 true 로 변경하세요
   avatarIcon: '🪉',
   scripture: DAVID_SCRIPTURE,
   certMeta: {
@@ -5810,15 +6372,11 @@ REGISTER_EPISODE('david', {
     hideAllDavidCustomUI();
     const tracker = document.getElementById('david-st3-quest-tracker');
     if (tracker) tracker.classList.add('hidden');
-    const messiahModal = document.getElementById('david-messiah-modal');
-    if (messiahModal) { messiahModal.classList.add('hidden'); messiahModal.classList.remove('flex'); }
   },
   clearState: function () {
     hideAllDavidCustomUI();
     const tracker = document.getElementById('david-st3-quest-tracker');
     if (tracker) tracker.classList.add('hidden');
-    const messiahModal = document.getElementById('david-messiah-modal');
-    if (messiahModal) { messiahModal.classList.add('hidden'); messiahModal.classList.remove('flex'); }
     davidBaseFlock = [];
     davidSheepList = [];
     davidFollowingSheep = [];
@@ -5847,6 +6405,7 @@ REGISTER_EPISODE('david', {
     davidAnointCutscene.active = false;
     davidStage2Cutscene.active = false;
     davidStage3Cutscene.active = false;
+    davidStage2Dialogue.active = false;
     davidAimState.active = false;
     davidFlyingStone.active = false;
   },
