@@ -236,10 +236,9 @@
       </div>
       <h1 class="font-jua text-3xl sm:text-4xl text-amber-900 mb-1">출발! 성경 탐험대!</h1>
       <p class="text-xs sm:text-sm text-slate-600 mb-4">말씀 속 주인공이 되어 믿음의 모험을 떠나요!</p>
-      <!-- 이름 입력창(input) 위 또는 아래에 추가 -->
       <div class="flex items-center justify-center gap-1.5 px-3 py-1.5 my-1 rounded-xl bg-sky-500/20 border border-sky-400/60 text-black-200 text-xs sm:text-sm font-jua shadow-inner animate-pulse">
-      <span>📱🔄</span>
-      <span>가로모드 가능해요! (화면을 가로로 돌리면 더 넓게 보여요)</span>
+        <span>📱🔄</span>
+        <span>가로모드 가능해요! (화면을 가로로 돌리면 더 넓게 보여요)</span>
       </div>
       <div class="bg-amber-100/80 border-2 border-amber-400 rounded-2xl p-3.5 mb-4 text-left">
         <label for="opening-name-input" class="block font-jua text-amber-900 text-sm mb-1.5">🎖️ 탐험 대원 이름을 입력해 주세요</label>
@@ -470,10 +469,13 @@
     </div>
   </div>
 
-  <!-- 게임 스크립트 로드 -->
+  <!-- 게임 스크립트 로드 (core.js -> ep1 -> ep2 -> ep3 순서로 1회씩만 로드) -->
   <script src="core.js"></script>
   <script src="ep1_noah.js"></script>
   <script src="ep2_exodus.js"></script>
+  <script src="ep3_david_base.js"></script>
+  <script src="ep3_david_st1_2.js"></script>
+  <script src="ep3_david_st3_end.js"></script>
 
   <!-- 전체화면 자동 전환 & 화면 전환 보장 & 16비트 도트 월드맵 엔진 -->
   <script>
@@ -998,17 +1000,6 @@
       }
       requestAnimationFrame(renderPixelMapFrame);
     })();
-  </script><!-- 게임 스크립트 로드 (core.js -> ep1 -> ep2 -> ep3 순서로 1회씩만 로드) -->
-  <script src="core.js"></script>
-  <script src="ep1_noah.js"></script>
-  <script src="ep2_exodus.js"></script>
-  <script src="ep3_david_base.js"></script>
-  <script src="ep3_david_st1_2.js"></script>
-  <script src="ep3_david_st3_end.js"></script>
-
-  <!-- 전체화면 자동 전환 & 화면 전환 보장 & 16비트 도트 월드맵 엔진 -->
-  <script>
-    function requestGameFullscreen() {
-    ... (이하 기존 인라인 스크립트 그대로 유지하되, 맨 아래 </body> 직전에 중복 추가했던 <script src="core.js">~<script src="ep3_..."> 4줄은 삭제)
+  </script>
 </body>
 </html>
