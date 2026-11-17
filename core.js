@@ -1361,6 +1361,7 @@ function buildEndingWorld() {
 }
 // =========================================================================
 // [core.js - 파트 2/2] 게임 흐름, 3단계 카메라 시스템(정사각형 미니 독), 물리 엔진, 구글 시트 연동 모듈
+// - retryCurrentStage() 내부 괄호 문법 오류(SyntaxError) 수정 완료
 // =========================================================================
 
 const GOOGLE_SHEET_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbzDNecO6FM2ZXkdGwhp_XSR3wJ3fX17a029betjsm8sMOWgqeHWsB2rRMtROmB1NUQ-/exec';
@@ -1419,7 +1420,6 @@ function ensureGlobalCameraViewToggleUI() {
   const camBar = document.getElementById('cam-bottom-bar');
   if (camBar && camBar.dataset.compactStyled !== 'true') {
     camBar.dataset.compactStyled = 'true';
-    // 조이스틱(좌) 및 점프·액션 버튼(우) 영역을 침범하지 않도록 중앙 하단 폭을 좁게 고정
     camBar.style.left = '50%';
     camBar.style.right = 'auto';
     camBar.style.transform = 'translateX(-50%)';
@@ -1431,7 +1431,6 @@ function ensureGlobalCameraViewToggleUI() {
     camBar.style.alignItems = 'center';
     camBar.style.pointerEvents = 'none';
 
-    // 기존 좌회전·우회전 버튼을 정사각형(44x44px) 아이콘 버튼으로 자동 변환
     const existingBtns = Array.from(camBar.querySelectorAll('button')).filter(
       b => b.id !== 'global-camera-view-btn'
     );
@@ -1528,7 +1527,6 @@ window.cycleGlobalCameraViewMode = function () {
 function applyCoreCameraByMode() {
   if (!playerGroup || !camera) return;
 
-  // 에피소드 3 특수 조준·비행·왕좌 착석 연출 중에는 전용 연출 카메라 유지
   if (typeof davidAimState !== 'undefined' && davidAimState.active) return;
   if (typeof davidFlyingStone !== 'undefined' && davidFlyingStone.active) return;
   if (typeof davidThroneEnding !== 'undefined' && davidThroneEnding.seated) return;
@@ -1537,7 +1535,6 @@ function applyCoreCameraByMode() {
   const cosY = Math.cos(cameraYaw);
 
   if (window.globalCameraViewMode === 'fps') {
-    // (2) 1인칭 시점: 눈높이 고정 (원궤도 즉시 반영으로 회전 시 떨림 없음)
     setPlayerMeshVisibilityForCamera(true);
     const eyeX = playerPos.x - sinY * 0.15;
     const eyeY = playerPos.y + 2.15;
@@ -1549,7 +1546,6 @@ function applyCoreCameraByMode() {
       playerPos.z - cosY * 12.0
     );
   } else if (window.globalCameraViewMode === 'lookup') {
-    // (3) 위를 보는 시점: 캐릭터 등 뒤 낮은 위치에서 위쪽(2층 옥상·시내산·골리앗·하늘) 조망
     setPlayerMeshVisibilityForCamera(false);
     const lowDist = 6.2;
     const camX = playerPos.x + sinY * lowDist;
@@ -1564,7 +1560,6 @@ function applyCoreCameraByMode() {
       playerPos.z - cosY * 8.0
     );
   } else {
-    // (1) 기본 시점: cameraYaw가 이미 부드럽게 보간되므로 원궤도 좌표를 직접 사용하여 회전 흔들림 원천 제거
     setPlayerMeshVisibilityForCamera(false);
     const camDist = (currentStage === 1 || currentStage === 4) ? 11.5 : (currentEpisode === 'exodus' ? 11.2 : 8.4);
     const camH = (currentStage === 1 || currentStage === 4) ? 8.5 : (currentEpisode === 'exodus' ? 8.0 : 7.0);
@@ -1671,7 +1666,7 @@ function retryCurrentStage() {
   } else if (currentEpisode === 'exodus') {
     timeRemaining = (currentStage === 1) ? 10.0 : (currentStage === 2 ? 22.0 : 10.0);
   } else {
-    timeRemaining = (currentStage === 1) ? 7.5 : 10.0);
+    timeRemaining = (currentStage === 1) ? 7.5 : 10.0;
   }
   timeAttackFirstRechargeUsed = false;
 
@@ -2011,7 +2006,6 @@ function showEndingCertificate() {
   em.classList.remove('hidden'); em.classList.add('flex');
 }
 
-// 에피소드 3 등에서 openCertificateModal 이름으로 호출할 때도 동일하게 작동하도록 별칭 연결
 window.openCertificateModal = showEndingCertificate;
 
 function closeEndingToLookAround() {
@@ -2027,7 +2021,6 @@ function setupControls() {
 
   ensureGlobalCameraViewToggleUI();
 
-  // 우측 액션·점프 버튼 영역을 터치할 때 조이스틱이나 화면 드래그와 간섭하지 않도록 멀티터치 보호
   const actionZone = document.getElementById('action-zone');
   if (actionZone) {
     actionZone.addEventListener('pointerdown', e => {
@@ -2318,11 +2311,9 @@ function initEngine(skipInitialPreview = false) {
         }
       }
 
-      // 1인칭 시점일 때는 길 안내 화살표가 카메라 방향을 기준으로 회전하도록 처리
       playerGroup.position.copy(playerPos);
       playerGroup.rotation.y = (window.globalCameraViewMode === 'fps') ? (cameraYaw + Math.PI) : playerFacing;
 
-      // 먼저 스테이지별 플레이어 위치 보정(예: 에피소드3 건물 끼임 방지 등)을 수행한 뒤 카메라와 반투명 벽을 갱신하여 떨림 원천 차단!
       if (epPlugin && typeof epPlugin.updateStageFrame === 'function') {
         epPlugin.updateStageFrame(dt, now, currentStage);
       } else if (currentEpisode === 'noah' && typeof updateNoahStageFrame === 'function') {
