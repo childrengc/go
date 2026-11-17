@@ -998,11 +998,17 @@
       }
       requestAnimationFrame(renderPixelMapFrame);
     })();
-  </script>
-<script src="core.js"></script>
-<!-- 에피소드 1, 2 스크립트 -->
-<script src="ep3_david_base.js"></script>
-<script src="ep3_david_st1_2.js"></script>
-<script src="ep3_david_st3_end.js"></script>
+  </script><!-- 게임 스크립트 로드 (core.js -> ep1 -> ep2 -> ep3 순서로 1회씩만 로드) -->
+  <script src="core.js"></script>
+  <script src="ep1_noah.js"></script>
+  <script src="ep2_exodus.js"></script>
+  <script src="ep3_david_base.js"></script>
+  <script src="ep3_david_st1_2.js"></script>
+  <script src="ep3_david_st3_end.js"></script>
+
+  <!-- 전체화면 자동 전환 & 화면 전환 보장 & 16비트 도트 월드맵 엔진 -->
+  <script>
+    function requestGameFullscreen() {
+    ... (이하 기존 인라인 스크립트 그대로 유지하되, 맨 아래 </body> 직전에 중복 추가했던 <script src="core.js">~<script src="ep3_..."> 4줄은 삭제)
 </body>
 </html>
