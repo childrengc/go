@@ -2278,7 +2278,7 @@ if (!window._davidPuzzleHookRegistered) {
 }
 
 REGISTER_EPISODE('david', {
-  locked: false,
+  locked: true,
   avatarIcon: '🪉',
   scripture: DAVID_SCRIPTURE,
   certMeta: {
