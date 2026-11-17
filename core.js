@@ -1360,7 +1360,7 @@ function buildEndingWorld() {
   showToast(isExodus ? '🌴 홍해와 시내산을 모두 통과했어요! 기뻐 뛰는 백성들 가운데 제단으로 가보세요!' : '🌈 엔딩 세상에 도착했어요! 제단으로 가거나 [🏆 인증서 보기]를 눌러주세요!');
 }
 // =========================================================================
-// [core.js - 파트 2/2] 게임 흐름, 플러그인 슬롯 연결, 물리 엔진, 구글 시트 연동 모듈 (스테이지 2 미션 안내 번개 아이콘 제거)
+// [core.js - 파트 2/2] 게임 흐름, 3단계 카메라 시스템(정사각형 미니 독), 물리 엔진, 구글 시트 연동 모듈
 // =========================================================================
 
 const GOOGLE_SHEET_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbzDNecO6FM2ZXkdGwhp_XSR3wJ3fX17a029betjsm8sMOWgqeHWsB2rRMtROmB1NUQ-/exec';
@@ -1403,13 +1403,193 @@ function createWorldLabel(html) {
   return div;
 }
 
-function rotateCameraDeg(deg) { cameraTargetYaw += (deg * Math.PI) / 180; playSfx('step'); }
+function rotateCameraDeg(deg) {
+  cameraTargetYaw += (deg * Math.PI) / 180;
+  playSfx('step');
+}
+
+// =========================================================================
+// [공통 3단계 카메라 시스템] (1)기본시점 -> (2)1인칭 시점 -> (3)위를 보는 시점
+// - 좌회전/시점전환/우회전 3개 버튼을 정사각형 미니 독으로 만들어 조이스틱·점프 버튼과 겹침 완벽 방지
+// - 회전 시 직선 lerp 간섭 제거로 좌우 드래그 시 떨림(흔들림) 현상 해결
+// =========================================================================
+window.globalCameraViewMode = 'default'; // 'default'(기본시점) | 'fps'(1인칭 시점) | 'lookup'(위를 보는 시점)
+
+function ensureGlobalCameraViewToggleUI() {
+  const camBar = document.getElementById('cam-bottom-bar');
+  if (camBar && camBar.dataset.compactStyled !== 'true') {
+    camBar.dataset.compactStyled = 'true';
+    // 조이스틱(좌) 및 점프·액션 버튼(우) 영역을 침범하지 않도록 중앙 하단 폭을 좁게 고정
+    camBar.style.left = '50%';
+    camBar.style.right = 'auto';
+    camBar.style.transform = 'translateX(-50%)';
+    camBar.style.width = 'auto';
+    camBar.style.maxWidth = '164px';
+    camBar.style.gap = '6px';
+    camBar.style.padding = '0';
+    camBar.style.justifyContent = 'center';
+    camBar.style.alignItems = 'center';
+    camBar.style.pointerEvents = 'none';
+
+    // 기존 좌회전·우회전 버튼을 정사각형(44x44px) 아이콘 버튼으로 자동 변환
+    const existingBtns = Array.from(camBar.querySelectorAll('button')).filter(
+      b => b.id !== 'global-camera-view-btn'
+    );
+    const squareBtnClass =
+      'pointer-events-auto mc-btn w-11 h-11 p-0 rounded-xl bg-slate-900/90 hover:bg-slate-800 border-2 border-slate-400 text-white font-jua shadow-lg flex flex-col items-center justify-center leading-none shrink-0 select-none active:scale-95';
+
+    if (existingBtns[0]) {
+      existingBtns[0].className = squareBtnClass;
+      existingBtns[0].innerHTML =
+        '<span class="text-sm leading-none">↺</span><span class="text-[9px] text-slate-200 mt-0.5 leading-none">좌회전</span>';
+      existingBtns[0].addEventListener('pointerdown', e => e.stopPropagation());
+    }
+    if (existingBtns[1]) {
+      existingBtns[1].className = squareBtnClass;
+      existingBtns[1].innerHTML =
+        '<span class="text-sm leading-none">↻</span><span class="text-[9px] text-slate-200 mt-0.5 leading-none">우회전</span>';
+      existingBtns[1].addEventListener('pointerdown', e => e.stopPropagation());
+    }
+  }
+
+  let btn = document.getElementById('global-camera-view-btn');
+  if (!btn) {
+    btn = document.createElement('button');
+    btn.id = 'global-camera-view-btn';
+    btn.type = 'button';
+    btn.addEventListener('pointerdown', e => e.stopPropagation());
+    btn.onclick = function (e) {
+      if (e) e.stopPropagation();
+      window.cycleGlobalCameraViewMode();
+    };
+    btn.className =
+      'pointer-events-auto mc-btn w-12 h-11 p-0 rounded-xl bg-slate-900/90 hover:bg-slate-800 border-2 border-sky-400 text-white font-jua shadow-lg flex flex-col items-center justify-center leading-none shrink-0 select-none active:scale-95';
+    btn.innerHTML =
+      '<span class="text-sm leading-none">🎥</span><span id="global-camera-view-label" class="text-[9px] text-sky-200 mt-0.5 leading-none">기본</span>';
+  }
+
+  if (camBar && btn.parentElement !== camBar) {
+    const children = Array.from(camBar.children);
+    if (children.length >= 2) {
+      camBar.insertBefore(btn, children[1]);
+    } else {
+      camBar.appendChild(btn);
+    }
+  }
+  return btn;
+}
+
+function setPlayerMeshVisibilityForCamera(isFpsMode) {
+  if (!playerGroup) return;
+  playerGroup.children.forEach(child => {
+    if (child === guideArrowGroup) {
+      child.visible = (currentMode !== 'senior');
+      if (isFpsMode) {
+        child.position.set(0, 1.35, 2.2);
+      } else {
+        child.position.set(0, 3.35, 0);
+      }
+    } else {
+      child.visible = !isFpsMode;
+    }
+  });
+}
+
+window.cycleGlobalCameraViewMode = function () {
+  if (window.globalCameraViewMode === 'default') {
+    window.globalCameraViewMode = 'fps';
+  } else if (window.globalCameraViewMode === 'fps') {
+    window.globalCameraViewMode = 'lookup';
+  } else {
+    window.globalCameraViewMode = 'default';
+  }
+
+  const btn = ensureGlobalCameraViewToggleUI();
+  if (window.globalCameraViewMode === 'default') {
+    btn.innerHTML =
+      '<span class="text-sm leading-none">🎥</span><span id="global-camera-view-label" class="text-[9px] text-sky-200 mt-0.5 leading-none">기본</span>';
+    setPlayerMeshVisibilityForCamera(false);
+    showToast('🎥 카메라: [기본 시점]');
+  } else if (window.globalCameraViewMode === 'fps') {
+    btn.innerHTML =
+      '<span class="text-sm leading-none">👀</span><span id="global-camera-view-label" class="text-[9px] text-emerald-300 mt-0.5 leading-none">1인칭</span>';
+    setPlayerMeshVisibilityForCamera(true);
+    showToast('👀 카메라: [1인칭 시점]');
+  } else {
+    btn.innerHTML =
+      '<span class="text-sm leading-none">🌤️</span><span id="global-camera-view-label" class="text-[9px] text-amber-300 mt-0.5 leading-none">위시점</span>';
+    setPlayerMeshVisibilityForCamera(false);
+    showToast('🌤️ 카메라: [위를 보는 시점]');
+  }
+  playSfx('switch');
+  snapCameraToPlayer();
+};
+
+function applyCoreCameraByMode() {
+  if (!playerGroup || !camera) return;
+
+  // 에피소드 3 특수 조준·비행·왕좌 착석 연출 중에는 전용 연출 카메라 유지
+  if (typeof davidAimState !== 'undefined' && davidAimState.active) return;
+  if (typeof davidFlyingStone !== 'undefined' && davidFlyingStone.active) return;
+  if (typeof davidThroneEnding !== 'undefined' && davidThroneEnding.seated) return;
+
+  const sinY = Math.sin(cameraYaw);
+  const cosY = Math.cos(cameraYaw);
+
+  if (window.globalCameraViewMode === 'fps') {
+    // (2) 1인칭 시점: 눈높이 고정 (원궤도 즉시 반영으로 회전 시 떨림 없음)
+    setPlayerMeshVisibilityForCamera(true);
+    const eyeX = playerPos.x - sinY * 0.15;
+    const eyeY = playerPos.y + 2.15;
+    const eyeZ = playerPos.z - cosY * 0.15;
+    camera.position.set(eyeX, eyeY, eyeZ);
+    camera.lookAt(
+      playerPos.x - sinY * 12.0,
+      playerPos.y + 2.10,
+      playerPos.z - cosY * 12.0
+    );
+  } else if (window.globalCameraViewMode === 'lookup') {
+    // (3) 위를 보는 시점: 캐릭터 등 뒤 낮은 위치에서 위쪽(2층 옥상·시내산·골리앗·하늘) 조망
+    setPlayerMeshVisibilityForCamera(false);
+    const lowDist = 6.2;
+    const camX = playerPos.x + sinY * lowDist;
+    const camZ = playerPos.z + cosY * lowDist;
+    const groundH = Math.max(playerPos.y, getBaseGroundHeight(camX, camZ));
+    const camY = Math.max(playerPos.y + 1.45, groundH + 1.15);
+
+    camera.position.set(camX, camY, camZ);
+    camera.lookAt(
+      playerPos.x - sinY * 8.0,
+      playerPos.y + 5.2,
+      playerPos.z - cosY * 8.0
+    );
+  } else {
+    // (1) 기본 시점: cameraYaw가 이미 부드럽게 보간되므로 원궤도 좌표를 직접 사용하여 회전 흔들림 원천 제거
+    setPlayerMeshVisibilityForCamera(false);
+    const camDist = (currentStage === 1 || currentStage === 4) ? 11.5 : (currentEpisode === 'exodus' ? 11.2 : 8.4);
+    const camH = (currentStage === 1 || currentStage === 4) ? 8.5 : (currentEpisode === 'exodus' ? 8.0 : 7.0);
+    camera.position.set(
+      playerPos.x + sinY * camDist,
+      playerPos.y + camH,
+      playerPos.z + cosY * camDist
+    );
+    camera.lookAt(playerPos.x, playerPos.y + 1.5, playerPos.z);
+  }
+}
+
+function snapCameraToPlayer() {
+  if (!playerGroup || !camera) return;
+  ensureGlobalCameraViewToggleUI();
+  playerGroup.position.copy(playerPos);
+  applyCoreCameraByMode();
+}
 
 function startVoxelGame(mode, targetStage = 1) {
   currentMode = mode; currentStage = targetStage; isPlaying = true;
   lastSpokenStageKey = '';
   delete document.getElementById('cert-code').dataset.generated;
   rebuildPlayerAppearance();
+  ensureGlobalCameraViewToggleUI();
 
   document.getElementById('hud-top').classList.remove('hidden');
   document.getElementById('hud-player-tag').textContent = `${explorerName}`;
@@ -1491,7 +1671,7 @@ function retryCurrentStage() {
   } else if (currentEpisode === 'exodus') {
     timeRemaining = (currentStage === 1) ? 10.0 : (currentStage === 2 ? 22.0 : 10.0);
   } else {
-    timeRemaining = (currentStage === 1) ? 7.5 : 10.0;
+    timeRemaining = (currentStage === 1) ? 7.5 : 10.0);
   }
   timeAttackFirstRechargeUsed = false;
 
@@ -1561,7 +1741,6 @@ function updateStageHUD() {
       countIcon.textContent = '❤️';
       const remainLives = Math.max(0, 3 - soldierHitCount);
       badge.textContent = '홍해 · 스피드런 2'; countText.textContent = `기회 ${remainLives}/3`;
-      // 전 레벨 음성 안내 시 '고압주의'로 읽히지 않도록 번개 아이콘(⚡) 삭제
       missionText.textContent = currentMode === 'timeattack'
         ? '병사가 추격해요! 진주를 먹으면 1초 가속! 산호초는 점프하고 물구덩이는 피하세요!'
         : '애굽 병사가 추격해요! 산호초와 바위는 점프하고 물구덩이는 피해 불기둥으로 달리세요!';
@@ -1587,20 +1766,11 @@ function updateStageHUD() {
   }
 }
 
-function snapCameraToPlayer() {
-  if (!playerGroup || !camera) return;
-  playerGroup.position.copy(playerPos);
-  const dist = (currentStage === 1 || currentStage === 4) ? 11.5 : (currentEpisode === 'exodus' ? 11.2 : 8.4);
-  const height = (currentStage === 1 || currentStage === 4) ? 8.5 : (currentEpisode === 'exodus' ? 8.0 : 7.0);
-  camera.position.set(playerPos.x + Math.sin(cameraYaw) * dist, playerPos.y + height, playerPos.z + Math.cos(cameraYaw) * dist);
-  camera.lookAt(playerPos.x, playerPos.y + 1.5, playerPos.z);
-}
-
 const raycaster = new THREE.Raycaster();
 function updateWallTransparency() {
   fadedMaterials.forEach(m => { m.transparent = false; m.opacity = 1.0; });
   fadedMaterials = [];
-  if (wallMeshes.length === 0) return;
+  if (wallMeshes.length === 0 || window.globalCameraViewMode === 'fps') return;
   const focusPos = doveCutscene.active ? new THREE.Vector3(doveCutscene.doveX, 2.8, doveCutscene.goalZ) : new THREE.Vector3(playerPos.x, playerPos.y + 1.5, playerPos.z);
   const dir = focusPos.clone().sub(camera.position), dist = dir.length();
   raycaster.set(camera.position, dir.normalize());
@@ -1841,6 +2011,9 @@ function showEndingCertificate() {
   em.classList.remove('hidden'); em.classList.add('flex');
 }
 
+// 에피소드 3 등에서 openCertificateModal 이름으로 호출할 때도 동일하게 작동하도록 별칭 연결
+window.openCertificateModal = showEndingCertificate;
+
 function closeEndingToLookAround() {
   const em = document.getElementById('ending-modal');
   em.classList.add('hidden'); em.classList.remove('flex');
@@ -1851,6 +2024,16 @@ let joyX = 0, joyY = 0, keys = {};
 function setupControls() {
   const zone = document.getElementById('joystick-zone'), knob = document.getElementById('joystick-knob');
   let joyPointerId = null, cx = 0, cy = 0, camPointerId = null, lastCamX = 0;
+
+  ensureGlobalCameraViewToggleUI();
+
+  // 우측 액션·점프 버튼 영역을 터치할 때 조이스틱이나 화면 드래그와 간섭하지 않도록 멀티터치 보호
+  const actionZone = document.getElementById('action-zone');
+  if (actionZone) {
+    actionZone.addEventListener('pointerdown', e => {
+      e.stopPropagation();
+    });
+  }
 
   function handleJoyMove(clientX, clientY) {
     let dx = clientX - cx, dy = clientY - cy;
@@ -1870,12 +2053,14 @@ function setupControls() {
 
   document.getElementById('canvas-container').addEventListener('pointerdown', e => {
     if (!isPlaying || doveCutscene.active || pillarCutscene.active || seaPartingCutscene.active || sinaiCutscene.active) return;
+    if (e.pointerId === joyPointerId) return;
     camPointerId = e.pointerId; lastCamX = e.clientX;
   });
 
   window.addEventListener('pointermove', e => {
-    if (e.pointerId === joyPointerId) handleJoyMove(e.clientX, e.clientY);
-    else if (e.pointerId === camPointerId && isPlaying && !doveCutscene.active && !pillarCutscene.active && !seaPartingCutscene.active && !sinaiCutscene.active) {
+    if (e.pointerId === joyPointerId) {
+      handleJoyMove(e.clientX, e.clientY);
+    } else if (e.pointerId === camPointerId && isPlaying && !doveCutscene.active && !pillarCutscene.active && !seaPartingCutscene.active && !sinaiCutscene.active) {
       const dx = e.clientX - lastCamX; lastCamX = e.clientX;
       cameraTargetYaw -= dx * 0.0075;
     }
@@ -1960,7 +2145,7 @@ function updateWorldLabelPos(lbl, worldVec, visible = true) {
 function initEngine(skipInitialPreview = false) {
   const container = document.getElementById('canvas-container');
   scene = new THREE.Scene(); scene.background = new THREE.Color(0x7dd3fc);
-  camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 750);
+  camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 900);
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -2063,7 +2248,7 @@ function initEngine(skipInitialPreview = false) {
     }
 
     if (isPlaying) {
-      cameraYaw = lerpAngle(cameraYaw, cameraTargetYaw, dt * 10);
+      cameraYaw = lerpAngle(cameraYaw, cameraTargetYaw, dt * 12);
       if (keys['Space'] && isGrounded) playerJump();
       playerVelY -= 24 * dt;
       playerPos.y += playerVelY * dt;
@@ -2133,14 +2318,11 @@ function initEngine(skipInitialPreview = false) {
         }
       }
 
-      playerGroup.position.copy(playerPos); playerGroup.rotation.y = playerFacing;
+      // 1인칭 시점일 때는 길 안내 화살표가 카메라 방향을 기준으로 회전하도록 처리
+      playerGroup.position.copy(playerPos);
+      playerGroup.rotation.y = (window.globalCameraViewMode === 'fps') ? (cameraYaw + Math.PI) : playerFacing;
 
-      const camDist = (currentStage === 1 || currentStage === 4) ? 11.5 : (currentEpisode === 'exodus' ? 11.2 : 8.4);
-      const camH = (currentStage === 1 || currentStage === 4) ? 8.5 : (currentEpisode === 'exodus' ? 8.0 : 7.0);
-      camera.position.lerp(new THREE.Vector3(playerPos.x + Math.sin(cameraYaw) * camDist, playerPos.y + camH, playerPos.z + Math.cos(cameraYaw) * camDist), 0.18);
-      camera.lookAt(playerPos.x, playerPos.y + 1.5, playerPos.z);
-      updateWallTransparency();
-
+      // 먼저 스테이지별 플레이어 위치 보정(예: 에피소드3 건물 끼임 방지 등)을 수행한 뒤 카메라와 반투명 벽을 갱신하여 떨림 원천 차단!
       if (epPlugin && typeof epPlugin.updateStageFrame === 'function') {
         epPlugin.updateStageFrame(dt, now, currentStage);
       } else if (currentEpisode === 'noah' && typeof updateNoahStageFrame === 'function') {
@@ -2149,11 +2331,15 @@ function initEngine(skipInitialPreview = false) {
         updateExodusStageFrame(dt, now);
       }
 
-      if (currentStage === 4 && targetObject) {
+      playerGroup.position.copy(playerPos);
+      applyCoreCameraByMode();
+      updateWallTransparency();
+
+      if (currentStage === 4 && targetObject && currentEpisode !== 'david') {
         const td = Math.hypot(playerPos.x - targetObject.pos.x, playerPos.z - targetObject.pos.z);
         updateWorldLabelPos(targetObject.label, targetObject.pos, td < 26);
         if (guideArrowGroup.visible) {
-          guideArrowGroup.rotation.y = Math.atan2(targetObject.pos.x - playerPos.x, targetObject.pos.z - playerPos.z) - playerFacing;
+          guideArrowGroup.rotation.y = Math.atan2(targetObject.pos.x - playerPos.x, targetObject.pos.z - playerPos.z) - playerGroup.rotation.y;
         }
         if (td < 4.2 && !certAutoShown) { certAutoShown = true; showEndingCertificate(); }
       }
