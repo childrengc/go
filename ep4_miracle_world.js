@@ -1737,6 +1737,7 @@ window.returnToMiracleOpenWorld = function () {
   document.getElementById('hud-timer-box').classList.add('hidden');
   buildMiracleOpenWorld(true);
   startStageBgm(currentStage);
+  if (typeof playMiracleOpenWorldOgg === 'function') playMiracleOpenWorldOgg();
 };
 
 function updateMiracleOpenWorldFrame(dt, now) {
