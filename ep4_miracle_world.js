@@ -1725,7 +1725,7 @@ function buildMiracleOpenWorld(restoreSavedPos = false) {
   updateMiracleNotebookHudBadge();
   updateStageHUD();
 
-  showToast(
+ showToast(
     miracleIsPostResurrection
       ? '✨ 부활 이후의 갈릴리와 예루살렘 오픈월드입니다! 엠마오·도마·바닷가 아침식사를 체험하고 감람산으로 오르세요!'
       : '🗺️ 성경 오픈월드에 오신 것을 환영합니다! 빛기둥이 켜진 순서(1→2→3→4)대로 메인 스테이지를 진행해 보세요!'
