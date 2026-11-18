@@ -203,26 +203,51 @@ function getMiracleNotebookTotalCount() {
 //    - 메인 스테이지(1~4) 및 엔딩: 기존 Web Audio API 코드 음원 재생
 // -------------------------------------------------------------------------
 let _miracleOpenWorldOgg = null;
+let _miracleOggUnlockBound = false;
 
 function getMiracleOpenWorldOgg() {
   if (!_miracleOpenWorldOgg) {
-    // 웹 표준 경로 슬래시(/) 적용
-    _miracleOpenWorldOgg = new Audio('assets/music/miracle01.ogg');
+    _miracleOpenWorldOgg = new Audio('./assets/music/miracle01.ogg');
     _miracleOpenWorldOgg.loop = true;
     _miracleOpenWorldOgg.preload = 'auto';
     _miracleOpenWorldOgg.volume = 0.55;
+
+    _miracleOpenWorldOgg.addEventListener('error', (e) => {
+      console.warn('[EP4 BGM] miracle01.ogg 파일을 불러오지 못했습니다. 경로(assets/music/miracle01.ogg)를 확인하세요.', e);
+    });
   }
   return _miracleOpenWorldOgg;
 }
 
+// 사용자의 첫 화면 터치/마우스 클릭/키보드 입력 시 즉시 브라우저 오디오 잠금을 해제하고 재생
+function bindMiracleOggUserGestureUnlock() {
+  if (_miracleOggUnlockBound) return;
+  _miracleOggUnlockBound = true;
+
+  const unlockHandler = () => {
+    if (typeof currentEpisode !== 'undefined' && currentEpisode === 'miracle' && miracleSubMode === 'openworld') {
+      playMiracleOpenWorldOgg();
+    }
+  };
+
+  window.addEventListener('pointerdown', unlockHandler, { passive: true });
+  window.addEventListener('touchstart', unlockHandler, { passive: true });
+  window.addEventListener('keydown', unlockHandler, { passive: true });
+  window.addEventListener('click', unlockHandler, { passive: true });
+}
+
 function playMiracleOpenWorldOgg() {
+  bindMiracleOggUserGestureUnlock();
+
   if (typeof currentEpisode !== 'undefined' && currentEpisode !== 'miracle') return;
   if (miracleSubMode !== 'openworld') return;
 
   const isMuted =
     (typeof isBgmMuted !== 'undefined' && isBgmMuted) ||
     (typeof bgmMuted !== 'undefined' && bgmMuted) ||
-    (typeof isMuted !== 'undefined' && isMuted);
+    (typeof isMuted !== 'undefined' && isMuted) ||
+    (typeof soundEnabled !== 'undefined' && !soundEnabled) ||
+    (typeof bgmEnabled !== 'undefined' && !bgmEnabled);
 
   const audio = getMiracleOpenWorldOgg();
   if (isMuted) {
@@ -233,8 +258,9 @@ function playMiracleOpenWorldOgg() {
   if (audio.paused) {
     const playPromise = audio.play();
     if (playPromise !== undefined) {
-      playPromise.catch(() => {
-        // 모바일 브라우저 자동재생 정책 대기 시 첫 터치에 자동 재생
+      playPromise.catch((err) => {
+        // 자동재생 정책 대기 시 다음 클릭/터치(unlockHandler)에서 즉시 재생됨
+        console.debug('[EP4 BGM] 사용자 터치 대기 중:', err.name);
       });
     }
   }
