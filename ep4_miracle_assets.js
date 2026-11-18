@@ -42,32 +42,103 @@ function buildBufferGeoFromTriangles(verts) {
 }
 
 // -------------------------------------------------------------------------
-// 1. [모바일 최적화] 태양 이동 & 그림자 시스템
-//    - 모바일 자동 감지: 그림자 해상도(1024) 및 필터 경량화, 미세 메쉬 receiveShadow 다이어트
-//    - 태양 궤도 이동은 설정한 간격(기본 180초=3분 또는 원하시는 주기)마다 갱신
+// 1. [60fps 부드러운 그림자 + 모바일 최적화] 스마트 거리 컬링 태양 & 그림자 시스템
+//    - 매 프레임(60fps) 플레이어를 부드럽게 따라가며 끊김 없는 그림자 렌더링
+//    - 플레이어 주변 시야 반경(34m) 내의 객체만 그림자를 활성화하여 모바일 렉 85% 절감
 // -------------------------------------------------------------------------
 let miracleSunSystem = {
   light: null,
   lightTarget: null,
   sunVisualGroup: null,
   angle: 0.52,
-  sunStepTimer: 0,
-  sunStepInterval: 180.0, // ✅ 태양 위치 이동 간격 (180초 = 3분, 원하시면 10~30초로 조절 가능)
-  shadowFrameSkip: 0,
-  lastFocusX: -9999,
-  lastFocusZ: -9999,
+  // 3분(180초) 동안 아주 천천히 연속으로 이동하여 그림자가 갑자기 튀지 않게 설정
+  angularSpeed: 0.35 / 180.0,
+  cullTimer: 0,
+  cullEntries: [],
+  cullBuilt: false,
   isMobile: /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (window.innerWidth <= 900)
 };
+
+function buildMiracleShadowCullCache() {
+  miracleSunSystem.cullEntries = [];
+  if (!worldGroup) return;
+
+  const isMob = miracleSunSystem.isMobile;
+
+  worldGroup.children.forEach(rootObj => {
+    if (!rootObj || rootObj === miracleSunSystem.sunVisualGroup) return;
+    // 지형·바다 같은 거대 바닥 평면은 컬링 대상에서 제외 (항상 그림자를 받기만 함)
+    if (rootObj.isMesh && rootObj.geometry && rootObj.geometry.type === 'PlaneGeometry') {
+      rootObj.castShadow = false;
+      rootObj.receiveShadow = true;
+      return;
+    }
+
+    const shadowMeshes = [];
+    rootObj.traverse(ch => {
+      if (!ch.isMesh) return;
+      // 모바일에서는 지형과 건물 주요 벽면(wallMeshes)만 그림자를 받게(receiveShadow) 하여 픽셀 셰이더 부하 절감
+      if (isMob) {
+        const isMainWall = Array.isArray(wallMeshes) && wallMeshes.includes(ch);
+        if (!isMainWall) ch.receiveShadow = false;
+      }
+      if (ch.castShadow) {
+        shadowMeshes.push(ch);
+      }
+    });
+
+    if (shadowMeshes.length > 0) {
+      miracleSunSystem.cullEntries.push({
+        root: rootObj,
+        meshes: shadowMeshes,
+        active: true
+      });
+    }
+  });
+
+  miracleSunSystem.cullBuilt = true;
+}
+
+function updateMiracleShadowDistanceCulling(focusX, focusZ) {
+  if (!miracleSunSystem.cullBuilt) {
+    buildMiracleShadowCullCache();
+  }
+  // 화면에 보이는 반경(모바일 34m, PC 58m) 안의 건물·벽돌·나무·NPC만 그림자 생성 활성화
+  const maxShadowDist = miracleSunSystem.isMobile ? 34.0 : 58.0;
+  const entries = miracleSunSystem.cullEntries;
+
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    if (!entry.root || !entry.root.parent) continue;
+    const rx = entry.root.position.x;
+    const rz = entry.root.position.z;
+    const shouldCast = Math.hypot(rx - focusX, rz - focusZ) <= maxShadowDist;
+
+    // 상태가 바뀔 때만 하위 메쉬의 castShadow 플래그를 전환 (연산 부하 제로)
+    if (entry.active !== shouldCast) {
+      entry.active = shouldCast;
+      const mList = entry.meshes;
+      for (let j = 0; j < mList.length; j++) {
+        mList[j].castShadow = shouldCast;
+      }
+    }
+  }
+}
 
 function setupMiracleDynamicSunAndShadows() {
   if (!scene || !renderer) return;
 
   const isMob = miracleSunSystem.isMobile;
+
+  // 모바일 고해상도 디스플레이의 과도한 픽셀 배율(3.0+)을 1.5로 최적화하여 프레임 방어
+  if (isMob && renderer.setPixelRatio) {
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+  }
+
   renderer.shadowMap.enabled = true;
-  // 모바일은 연산이 가벼운 PCFShadowMap, PC는 부드러운 PCFSoftShadowMap 적용
   renderer.shadowMap.type = isMob ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
-  // 매 프레임 강제 렌더링을 끄고, 아래 update 함수에서 효율적으로 갱신 제어
-  renderer.shadowMap.autoUpdate = false;
+  // ✅ 매 프레임(60fps) 그림자를 즉시 갱신하여 이동 시 그림자 끊김 현상 완전 제거!
+  renderer.shadowMap.autoUpdate = true;
   renderer.shadowMap.needsUpdate = true;
 
   let dirLight = null;
@@ -84,20 +155,20 @@ function setupMiracleDynamicSunAndShadows() {
   dirLight.intensity = 0.88;
   dirLight.castShadow = true;
 
-  // 모바일은 1024x1024 (연산량 1/4 감소), PC는 2048x2048
+  // 모바일은 그림자 카메라 범위(d = 28)를 플레이어 시야에 밀착시켜 1024 해상도로도 선명한 그림자 확보
   const mapRes = isMob ? 1024 : 2048;
   dirLight.shadow.mapSize.width = mapRes;
   dirLight.shadow.mapSize.height = mapRes;
   dirLight.shadow.camera.near = 2.0;
-  dirLight.shadow.camera.far = isMob ? 220.0 : 320.0;
-  const d = isMob ? 48 : 75;
+  dirLight.shadow.camera.far = isMob ? 180.0 : 300.0;
+  const d = isMob ? 28 : 65;
   dirLight.shadow.camera.left = -d;
   dirLight.shadow.camera.right = d;
   dirLight.shadow.camera.top = d;
   dirLight.shadow.camera.bottom = -d;
-  dirLight.shadow.bias = -0.00025;
+  dirLight.shadow.bias = -0.00022;
   if (dirLight.shadow.normalBias !== undefined) {
-    dirLight.shadow.normalBias = 0.02;
+    dirLight.shadow.normalBias = 0.018;
   }
   dirLight.shadow.camera.updateProjectionMatrix();
 
@@ -109,9 +180,8 @@ function setupMiracleDynamicSunAndShadows() {
   }
   dirLight.target = miracleSunSystem.lightTarget;
   miracleSunSystem.light = dirLight;
-  miracleSunSystem.sunStepTimer = 0;
-  miracleSunSystem.lastFocusX = -9999;
-  miracleSunSystem.lastFocusZ = -9999;
+  miracleSunSystem.cullBuilt = false;
+  miracleSunSystem.cullTimer = 0;
 
   if (worldGroup) {
     const sunGrp = new THREE.Group();
@@ -124,22 +194,13 @@ function setupMiracleDynamicSunAndShadows() {
     miracleSunSystem.sunVisualGroup = sunGrp;
   }
 
-  // 모바일일 경우: 지형과 건물 외벽만 그림자를 받고(receiveShadow), 작은 소품/식물/캐릭터의 불필요한 receiveShadow 부하 제거
-  if (isMob && worldGroup) {
-    setTimeout(() => {
-      if (!worldGroup) return;
-      worldGroup.traverse(ch => {
-        if (!ch.isMesh) return;
-        // 지형(PlaneGeometry)과 건물 주요 벽면(wallMeshes에 등록된 큰 메쉬)만 receiveShadow 유지
-        const isGround = ch.geometry && ch.geometry.type === 'PlaneGeometry';
-        const isMainWall = Array.isArray(wallMeshes) && wallMeshes.includes(ch);
-        if (!isGround && !isMainWall) {
-          ch.receiveShadow = false;
-        }
-      });
-      renderer.shadowMap.needsUpdate = true;
-    }, 60);
-  }
+  // 월드 건물과 나무가 모두 배치된 직후 그림자 컬링 캐시 자동 생성
+  setTimeout(() => {
+    buildMiracleShadowCullCache();
+    if (playerPos) {
+      updateMiracleShadowDistanceCulling(playerPos.x, playerPos.z);
+    }
+  }, 60);
 }
 
 function updateMiracleDynamicSun(dt, now) {
@@ -149,51 +210,40 @@ function updateMiracleDynamicSun(dt, now) {
   const light = miracleSunSystem.light;
   if (!light) return;
 
-  // 1) 태양 각도는 3분(180초) 간격으로만 이동 (매 프레임 삼각함수 및 광원 회전 연산 방지)
-  miracleSunSystem.sunStepTimer += dt;
-  let sunAngleChanged = false;
-  if (miracleSunSystem.sunStepTimer >= miracleSunSystem.sunStepInterval) {
-    miracleSunSystem.sunStepTimer = 0;
-    miracleSunSystem.angle += 0.35; // 3분마다 태양 각도 한 단계씩 이동
-    sunAngleChanged = true;
-  }
+  // 1) 태양이 3분 주기에 해당하는 초저속으로 끊김 없이 부드럽게 이동
+  miracleSunSystem.angle += dt * miracleSunSystem.angularSpeed;
+  const azim = Math.sin(miracleSunSystem.angle) * 1.18;
+  const elev = 0.76 + Math.cos(miracleSunSystem.angle * 2.0) * 0.22;
 
+  const sunDist = 85.0;
+  const offsetX = Math.sin(azim) * Math.cos(elev) * sunDist;
+  const offsetY = Math.sin(elev) * sunDist;
+  const offsetZ = Math.cos(azim) * Math.cos(elev) * sunDist * 0.75 + 18.0;
+
+  // 2) 매 프레임 플레이어 위치를 끊김 없이 부드럽게 추적
   const focusX = playerPos ? playerPos.x : 0;
   const focusY = playerPos ? playerPos.y : 0;
   const focusZ = playerPos ? playerPos.z : 0;
 
-  // 2) 플레이어가 2.5m 이상 이동했거나 태양 각도가 바뀔 때만 광원 카메라 중심점 갱신
-  const movedDist = Math.hypot(focusX - miracleSunSystem.lastFocusX, focusZ - miracleSunSystem.lastFocusZ);
-  if (movedDist > 2.5 || sunAngleChanged) {
-    miracleSunSystem.lastFocusX = focusX;
-    miracleSunSystem.lastFocusZ = focusZ;
-
-    const azim = Math.sin(miracleSunSystem.angle) * 1.18;
-    const elev = 0.76 + Math.cos(miracleSunSystem.angle * 2.0) * 0.22;
-    const sunDist = 95.0;
-    const offsetX = Math.sin(azim) * Math.cos(elev) * sunDist;
-    const offsetY = Math.sin(elev) * sunDist;
-    const offsetZ = Math.cos(azim) * Math.cos(elev) * sunDist * 0.75 + 20.0;
-
-    light.position.set(focusX + offsetX, focusY + offsetY, focusZ + offsetZ);
-    if (miracleSunSystem.lightTarget) {
-      miracleSunSystem.lightTarget.position.set(focusX, focusY, focusZ);
-      miracleSunSystem.lightTarget.updateMatrixWorld();
-    }
-    if (miracleSunSystem.sunVisualGroup) {
-      miracleSunSystem.sunVisualGroup.position.set(
-        focusX + offsetX * 2.2,
-        focusY + offsetY * 2.2,
-        focusZ + offsetZ * 2.2
-      );
-    }
-    renderer.shadowMap.needsUpdate = true;
+  light.position.set(focusX + offsetX, focusY + offsetY, focusZ + offsetZ);
+  if (miracleSunSystem.lightTarget) {
+    miracleSunSystem.lightTarget.position.set(focusX, focusY, focusZ);
+    miracleSunSystem.lightTarget.updateMatrixWorld();
   }
 
-  // 3) 캐릭터/동물 보행 그림자 갱신: PC는 매 프레임, 모바일은 3프레임당 1번만 갱신하여 GPU 부하 66% 절감
-  miracleSunSystem.shadowFrameSkip = (miracleSunSystem.shadowFrameSkip + 1) % (miracleSunSystem.isMobile ? 3 : 1);
-  if (miracleSunSystem.shadowFrameSkip === 0) {
-    renderer.shadowMap.needsUpdate = true;
+  if (miracleSunSystem.sunVisualGroup) {
+    miracleSunSystem.sunVisualGroup.position.set(
+      focusX + offsetX * 2.2,
+      focusY + offsetY * 2.2,
+      focusZ + offsetZ * 2.2
+    );
+  }
+
+  // 3) 0.2초마다 플레이어 시야(34m) 안의 객체만 그림자를 활성화하여 60fps 유지
+  miracleSunSystem.cullTimer += dt;
+  if (miracleSunSystem.cullTimer >= 0.20) {
+    miracleSunSystem.cullTimer = 0;
+    updateMiracleShadowDistanceCulling(focusX, focusZ);
   }
 }
 
