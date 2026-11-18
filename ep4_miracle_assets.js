@@ -1,7 +1,7 @@
 // =========================================================================
 // [ep4_miracle_assets.js - 파트 1/2] 에피소드 4 전용 소프트 로우 폴리곤 에셋 & 태양 그림자 엔진
-// 1. 실시간 태양 궤도 이동(Dynamic Sun) 및 전 객체(사람·동물·나무·건물) 그림자 시스템
-// 2. 전면 개방형(Open-Front Arch) 다면체 후드·장발 구조 적용 — 얼굴 가림 및 살색 돌출 현상 완벽 해결
+// 1. 실시간 태양 궤도 이동(Dynamic Sun) 및 전 객체(사람·동물·나무·건물 장식) 그림자 시스템
+// 2. 전면 개방형(Open-Front Arch) 다면체 후드·장발 구조 적용 — 예수님 및 남녀 3종 캐릭터 팩토리
 // =========================================================================
 
 const _miracleDoubleSideMatCache = {};
@@ -24,6 +24,21 @@ function createDoubleSideLowPolyMesh(geo, hexColor, x = 0, y = 0, z = 0, castSha
     m.receiveShadow = true;
   }
   return m;
+}
+
+function pushTriangle(arr, a, b, c) {
+  arr.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
+}
+function pushQuad(arr, a, b, c, d) {
+  pushTriangle(arr, a, b, c);
+  pushTriangle(arr, a, c, d);
+}
+
+function buildBufferGeoFromTriangles(verts) {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+  geo.computeVertexNormals();
+  return geo;
 }
 
 // -------------------------------------------------------------------------
@@ -65,9 +80,9 @@ function setupMiracleDynamicSunAndShadows() {
   dirLight.shadow.camera.right = d;
   dirLight.shadow.camera.top = d;
   dirLight.shadow.camera.bottom = -d;
-  dirLight.shadow.bias = -0.0005;
+  dirLight.shadow.bias = -0.00018;
   if (dirLight.shadow.normalBias !== undefined) {
-    dirLight.shadow.normalBias = 0.02;
+    dirLight.shadow.normalBias = 0.015;
   }
   dirLight.shadow.camera.updateProjectionMatrix();
 
@@ -205,7 +220,6 @@ let _chamferedFaceGeo = null;
 function getChamferedFaceGeo() {
   if (_chamferedFaceGeo) return _chamferedFaceGeo;
 
-  // 가로 0.52(±0.26), 세로 0.50(±0.25), 깊이 0.42(-0.18 ~ +0.24)
   const w = 0.52, h = 0.50, d = 0.42;
   const geo = new THREE.BoxGeometry(w, h, d, 2, 2, 2);
   const pos = geo.attributes.position;
@@ -215,16 +229,13 @@ function getChamferedFaceGeo() {
     let y = pos.getY(i);
     let z = pos.getZ(i);
 
-    // 턱 아래 모서리를 살짝 갸름하게 다듬음
     if (y < -0.20) {
       x *= 0.88;
       if (z > 0.15) z = 0.22;
     }
-    // 정면 얼굴 평면(z = +0.22) 고정
     if (z > 0.18 && y >= -0.20) {
       z = 0.23;
     }
-    // 뒤통수와 정수리 모서리는 안쪽으로 오므려 두건 밖 돌출 원천 방지
     if (z < -0.10) {
       x *= 0.82;
       y *= 0.85;
@@ -238,27 +249,24 @@ function getChamferedFaceGeo() {
   return finalGeo;
 }
 
-// 2-4) [핵심 해결책] 얼굴 정면을 절대 가리지 않는 4분할 전면 개방형(Open-Front Arch) 다면체 후드 생성기
-//      - 원통 정점을 당기지 않고, ① 상단 돔(y > 0.20) + ② 좌우 날개(|x| > 0.25) + ③ 뒷자락(z < -0.14)으로 분리 조립!
+// 2-4) 얼굴 정면을 절대 가리지 않는 4분할 전면 개방형(Open-Front Arch) 다면체 후드 생성기
 function createOpenFrontHoodGroup(hoodColor, isFemale = false, agal1 = null, agal2 = null, veilBand = null) {
   const hoodGrp = new THREE.Group();
 
-  // ① 상단 돔 지붕 (얼굴 위쪽 y = +0.20 ~ +0.46 만 덮음 -> 눈과 이마를 절대 가리지 않음!)
+  // ① 상단 돔 지붕 (얼굴 위쪽 y = +0.20 ~ +0.46 만 덮음)
   const topDomeGeo = new THREE.CylinderGeometry(0.28, 0.39, 0.24, 8, 1, false);
   topDomeGeo.scale(1.04, 1.0, 0.88);
   const topDome = createLowPolyMesh(topDomeGeo.toNonIndexed(), hoodColor, 0, 0.33, -0.02);
   hoodGrp.add(topDome);
 
-  // 이마 위 전면 드리우기 챙 (y = +0.22, 얼굴 정면 위쪽 테두리만 깔끔하게 마감)
   const frontBrim = createLowPolyMesh(new THREE.BoxGeometry(0.62, 0.07, 0.16), hoodColor, 0, 0.22, 0.22);
   hoodGrp.add(frontBrim);
 
-  // ② 좌·우 측면 두건 날개 (|x| = 0.25 ~ 0.39 구간에만 위치 -> 얼굴 중앙 x ∈ [-0.25, +0.25] 은 100% 뚫려 있음!)
+  // ② 좌·우 측면 두건 날개 (얼굴 중앙 x ∈ [-0.25, +0.25] 은 100% 개방)
   const sideWingGeo = new THREE.BoxGeometry(0.14, 0.62, 0.46, 1, 2, 2);
   const sPos = sideWingGeo.attributes.position;
   for (let i = 0; i < sPos.count; i++) {
     let sx = sPos.getX(i), sy = sPos.getY(i), sz = sPos.getZ(i);
-    // 아래로 내려갈수록 살짝 넓어지다 맨 아래 끝단은 안쪽으로 접힘
     if (sy < -0.20) {
       sx *= 0.85;
       sz *= 0.90;
@@ -276,12 +284,11 @@ function createOpenFrontHoodGroup(hoodColor, isFemale = false, agal1 = null, aga
   wingR.rotation.z = -0.08;
   hoodGrp.add(wingL, wingR);
 
-  // ③ 후면 두건 뒷자락 (얼굴 뒤쪽 z = -0.14 ~ -0.32 만 감싸는 다면체 뒷벽)
+  // ③ 후면 두건 뒷자락
   const backGeo = new THREE.BoxGeometry(0.72, 0.62, 0.18, 3, 2, 1);
   const bPos = backGeo.attributes.position;
   for (let i = 0; i < bPos.count; i++) {
     let bx = bPos.getX(i), by = bPos.getY(i), bz = bPos.getZ(i);
-    // 뒷모습 중앙은 볼록하고 양옆과 하단은 다면체로 깎인 형태 (타깃 이미지 우측 뒷모습 완벽 재현)
     if (Math.abs(bx) > 0.25) {
       bz += 0.04;
       bx *= 0.94;
@@ -297,7 +304,7 @@ function createOpenFrontHoodGroup(hoodColor, isFemale = false, agal1 = null, aga
   const backCurtain = createLowPolyMesh(finalBackGeo, hoodColor, 0, -0.06, -0.22);
   hoodGrp.add(backCurtain);
 
-  // ④ 여성 전용: 턱 아래(y = -0.32)로 좌우 베일을 매끄럽게 이어주는 단일 턱 스카프
+  // ④ 여성 전용 턱 스카프 / 남성 전용 머리끈(Agal)
   if (isFemale) {
     const chinScarf = createLowPolyMesh(new THREE.BoxGeometry(0.62, 0.11, 0.28), hoodColor, 0, -0.31, 0.10);
     const chinVPoint = createLowPolyMesh(new THREE.ConeGeometry(0.22, 0.14, 4), hoodColor, 0, -0.40, 0.17);
@@ -312,7 +319,6 @@ function createOpenFrontHoodGroup(hoodColor, isFemale = false, agal1 = null, aga
       hoodGrp.add(vBand);
     }
   } else {
-    // 남성 전용: 상단 돔 둘레를 감싸는 베이지 머리끈(Agal)
     if (agal1) {
       const agalUpper = createLowPolyMesh(new THREE.CylinderGeometry(0.395, 0.405, 0.055, 8), agal1, 0, 0.29, -0.02);
       agalUpper.scale.set(1.04, 1.0, 0.88);
@@ -330,24 +336,20 @@ function createOpenFrontHoodGroup(hoodColor, isFemale = false, agal1 = null, aga
 
 // -------------------------------------------------------------------------
 // 3. [예수님 캐릭터 전용 오픈-프론트 5:5 장발 & 대각선 붉은 숄]
-//    - 예수님의 머리카락도 얼굴 정면 창을 절대 침범하지 않는 4분할 다면체 구조로 조립!
 // -------------------------------------------------------------------------
 function createJesusFacetedHairGroup(hairHex = '#4e2f1e') {
   const hairGrp = new THREE.Group();
 
-  // 1) 정수리 5:5 가르마 볼륨 (좌·우 다면체 윗머리 2조각 -> 가운데 가르마 골 표현)
   const topCrownL = createLowPolyMesh(new THREE.BoxGeometry(0.34, 0.18, 0.56), hairHex, -0.16, 0.30, -0.01);
   topCrownL.rotation.z = 0.12;
   const topCrownR = createLowPolyMesh(new THREE.BoxGeometry(0.34, 0.18, 0.56), hairHex,  0.16, 0.30, -0.01);
   topCrownR.rotation.z = -0.12;
 
-  // 2) 이마 양옆으로 갈라지는 5:5 앞머리 (y = +0.22 이상에만 위치하여 눈·눈썹을 절대 가리지 않음)
   const bangL = createLowPolyMesh(new THREE.BoxGeometry(0.24, 0.10, 0.12), hairHex, -0.15, 0.22, 0.24);
   bangL.rotation.z = 0.28;
   const bangR = createLowPolyMesh(new THREE.BoxGeometry(0.24, 0.10, 0.12), hairHex,  0.15, 0.22, 0.24);
   bangR.rotation.z = -0.28;
 
-  // 3) 얼굴 양옆 바깥(|x| = 0.26 ~ 0.38)으로 물결치며 내려오는 3단 웨이브 옆머리
   const wave1L = createLowPolyMesh(new THREE.BoxGeometry(0.13, 0.26, 0.24), hairHex, -0.31, 0.10, 0.14);
   wave1L.rotation.z = 0.10;
   const wave1R = createLowPolyMesh(new THREE.BoxGeometry(0.13, 0.26, 0.24), hairHex,  0.31, 0.10, 0.14);
@@ -363,7 +365,6 @@ function createJesusFacetedHairGroup(hairHex = '#4e2f1e') {
   const wave3R = createLowPolyMesh(new THREE.ConeGeometry(0.11, 0.22, 5), hairHex,  0.31, -0.32, 0.12);
   wave3R.rotation.x = Math.PI;
 
-  // 4) 뒷모습 다면체 장발 뒷머리 (z = -0.14 ~ -0.32 구간에서 뒤통수와 목 뒤를 풍성하게 덮음)
   const backHairGeo = new THREE.BoxGeometry(0.72, 0.68, 0.18, 3, 2, 1);
   const bPos = backHairGeo.attributes.position;
   for (let i = 0; i < bPos.count; i++) {
@@ -758,7 +759,6 @@ window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
     nose.rotation.y = Math.PI;
     const smileMouth = createLowPolyMesh(new THREE.BoxGeometry(0.095, 0.030, 0.025), '#b57c68', 0, -0.145, 0.242, false);
 
-    // 턱선을 감싸는 다면체 갈색 수염과 콧수염
     const chinBeard = createLowPolyMesh(new THREE.BoxGeometry(0.52, 0.14, 0.26), beardCol, 0, -0.24, 0.14);
     const chinPoint = createLowPolyMesh(new THREE.ConeGeometry(0.15, 0.10, 4), beardCol, 0, -0.32, 0.18);
     chinPoint.rotation.x = Math.PI;
@@ -894,7 +894,6 @@ window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
   const rArm = createSeamlessPonchoArm(false, cfg.shawl, cfg.stripe1, cfg.stripe2, cfg.sleeve, cfg.skin);
   g.add(lArm, rArm);
 
-  // 머리(Head) : 전면 개방형 아치 후드 적용으로 얼굴 가림/깨짐 100% 해결!
   const head = new THREE.Group();
   head.position.set(0, 2.02, 0);
 
@@ -932,7 +931,6 @@ window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
   }
 
   if (isFemale) {
-    // 여성 5:5 가르마 앞머리 (z = +0.242 로 얼굴면 위에 깔끔히 배치)
     const partedHairL = createLowPolyMesh(new THREE.BoxGeometry(0.20, 0.08, 0.04), cfg.hair, -0.11, 0.185, 0.242, false);
     partedHairL.rotation.z = 0.28;
     const partedHairR = createLowPolyMesh(new THREE.BoxGeometry(0.20, 0.08, 0.04), cfg.hair,  0.11, 0.185, 0.242, false);
@@ -941,7 +939,6 @@ window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
     const sideHairR   = createLowPolyMesh(new THREE.BoxGeometry(0.045, 0.34, 0.06), cfg.hair,  0.23, 0.01, 0.238, false);
     head.add(partedHairL, partedHairR, sideHairL, sideHairR);
   } else {
-    // 남성 앞머리 두 가닥 & 턱수염
     const bang1 = createLowPolyMesh(new THREE.BoxGeometry(0.11, 0.045, 0.03), cfg.hair, -0.09, 0.18, 0.242, false);
     bang1.rotation.z = 0.25;
     const bang2 = createLowPolyMesh(new THREE.BoxGeometry(0.08, 0.040, 0.03), cfg.hair, -0.01, 0.185, 0.242, false);
@@ -1020,36 +1017,32 @@ window.createMiracleHeroMesh = function () {
 };
 // =========================================================================
 // [ep4_miracle_assets.js - 파트 2/2]
-// 4. 확장된 오픈월드 지형 고도 계산기 (침수 방지 + 서쪽 완만한 바다 경사 + 외곽 오병이어 전망 언덕)
-// 5. 낮고 울퉁불퉁한 외곽 언덕(Bumpy Hills) + 소프트 로우폴리 동물(사슴·양·나귀·물고기)·나무·야생화
+// 6. 확장된 오픈월드 지형 고도 계산기 (넓어진 골고다 언덕 + 오병이어 전망 언덕 + 침수 해결)
+// 7. 깨짐 없는 닫힌 다면체 외곽 언덕(Closed Bumpy Mound) & 무릎 높이 불규칙 빛의 원(Knee-High Aura)
+// 8. 소프트 로우폴리 동물(사슴·양·나귀·물고기) & 다중 가지 수관 나무·야생화
 // =========================================================================
 
-// 기존(118)보다 훨씬 넓어진 오픈월드 반경 상수 (총 304 x 304 규모)
 window.MIRACLE_EXP_LIMIT = 152;
 
 // -------------------------------------------------------------------------
-// 4. [지형 고도 계산기 오버라이드]
-//    - 서쪽 해안선을 x = -92 로 이동하여 골고다 언덕(-66, 78) 등 내륙 지형 침수 완벽 해결
-//    - 동북쪽 맵 바깥 근처(x = 88, z = -82)에 마을 전체가 내려다보이는 높은 오병이어 언덕(높이 14.5) 생성
-//    - 북·동·남 가장자리는 낮고 완만한 구릉 능선으로 처리
+// 6. 확장된 오픈월드 지형 고도 계산기 오버라이드
 // -------------------------------------------------------------------------
 window.getMiracleOpenWorldGroundHeight = function (x, z) {
-  let h = 0.25; // 기본 내륙 지면 고도를 수면(-0.35)보다 높은 +0.25로 유지해 내륙 침수 원천 방지
+  let h = 0.25;
 
-  // 1) 서쪽(West, x < -72): 모래사장 없이 초원에서 넓은 바다(x < -92)까지 완만하게 내려가는 해안 경사
+  // 1) 서쪽(West, x < -70): 모래사장 없이 초원에서 넓은 바다(x < -92)까지 완만하게 내려가는 해안 경사
   const shoreLineX = -92 + Math.sin(z * 0.03) * 6.0 + Math.cos(z * 0.07) * 2.5;
   if (x < shoreLineX + 22) {
     const t = Math.max(0, (shoreLineX + 22 - x) / 22);
     const smoothSlope = t * t * (3 - Math.min(2.0, 2 * t));
-    h = 0.25 - smoothSlope * 0.65; // 해안선(shoreLineX)에서 정확히 수면(-0.40)과 만남
+    h = 0.25 - smoothSlope * 0.65;
     if (x < shoreLineX) {
       h -= (shoreLineX - x) * 0.08;
     }
     return Number(h.toFixed(3));
   }
 
-  // 2) [핵심 요청사항] 맵 동북쪽 바깥 근처의 웅장한 '오병이어 전망 언덕' (중심: x = 88, z = -82, 반경 46, 정상 높이 +14.5)
-  //    - 완만한 S자 경사로 걸어 올라갈 수 있으며, 정상에서 마을과 갈릴리 바다가 한눈에 내려다보임
+  // 2) 동북쪽 외곽 '오병이어 전망 언덕' (x = 88, z = -82, 정상 높이 +14.5)
   const bethDist = Math.hypot((x - 88) / 46, (z - (-82)) / 42);
   if (bethDist < 1.0) {
     const t = 1.0 - bethDist;
@@ -1057,43 +1050,44 @@ window.getMiracleOpenWorldGroundHeight = function (x, z) {
     h += t * t * (3 - 2 * t) * 14.2 + t * bump;
   }
 
-  // 3) 잃어버린 양의 유대 광야 바위 언덕 (서중부 내륙: x = -66, z = 12 — 침수 없이 높이 +5.6 유지)
-  const wildDist = Math.hypot((x - (-66)) / 24, (z - 12) / 24);
+  // 3) 잃어버린 양의 유대 광야 바위 언덕 (서중부 내륙: x = -66, z = 12)
+  const wildDist = Math.hypot((x - (-66)) / 25, (z - 12) / 25);
   if (wildDist < 1.0) {
     const t = 1.0 - wildDist;
-    const bump = Math.sin(x * 0.20 + 1.1) * Math.cos(z * 0.20) * 0.38;
-    h += t * t * (3 - 2 * t) * 5.6 + t * bump;
+    const bump = Math.sin(x * 0.18 + 1.1) * Math.cos(z * 0.18) * 0.32;
+    h += t * t * (3 - 2 * t) * 5.4 + t * bump;
   }
 
-  // 4) 골고다 십자가 언덕 (남서쪽 내륙: x = -66, z = 78 — 침수 없이 높이 +8.4 유지)
-  const golgothaDist = Math.hypot((x - (-66)) / 26, (z - 78) / 24);
+  // 4) 넓고 완만해진 골고다 십자가 언덕 (남서쪽 내륙: x = -62, z = 78, 반경 38x35, 정상 평탄부 확보)
+  const golgothaDist = Math.hypot((x - (-62)) / 38, (z - 78) / 35);
   if (golgothaDist < 1.0) {
-    const t = 1.0 - golgothaDist;
-    const bump = Math.sin(x * 0.18) * Math.cos(z * 0.18) * 0.42;
-    h += t * t * (3 - 2 * t) * 8.4 + t * bump;
+    const clampedD = Math.max(0, (golgothaDist - 0.22) / 0.78);
+    const t = 1.0 - Math.min(1.0, clampedD);
+    const bump = Math.sin(x * 0.15) * Math.cos(z * 0.15) * 0.35;
+    h += t * t * (3 - 2 * t) * 9.2 + t * bump;
   }
 
-  // 5) 감람산 승천 언덕 (남동쪽 외곽: x = 88, z = 74, 높이 +9.6)
-  const oliveDist = Math.hypot((x - 88) / 32, (z - 74) / 30);
+  // 5) 감람산 승천 언덕 (남동쪽 외곽: x = 88, z = 74)
+  const oliveDist = Math.hypot((x - 88) / 34, (z - 74) / 32);
   if (oliveDist < 1.0) {
     const t = 1.0 - oliveDist;
     const bump = Math.sin(x * 0.16) * Math.cos(z * 0.16) * 0.40;
     h += t * t * (3 - 2 * t) * 9.6 + t * bump;
   }
 
-  // 6) 북·동·남 3면 가장자리 낮은 구릉 융기 (기존보다 낮고 부드럽게 처리)
-  const eastEdge = Math.max(0, (x - 122) / 30);
-  const northEdge = Math.max(0, (-122 - z) / 30);
-  const southEdge = Math.max(0, (z - 122) / 30);
+  // 6) 북·동·남 3면 가장자리 낮은 구릉 융기
+  const eastEdge = Math.max(0, (x - 108) / 28);
+  const northEdge = Math.max(0, (-108 - z) / 28);
+  const southEdge = Math.max(0, (z - 108) / 28);
   const edgeFactor = Math.max(eastEdge, northEdge, southEdge);
   if (edgeFactor > 0) {
-    const edgeBump = Math.sin(x * 0.10) * Math.cos(z * 0.10) * 0.85;
-    h += edgeFactor * edgeFactor * 4.2 + edgeFactor * edgeBump;
+    const edgeBump = Math.sin(x * 0.10) * Math.cos(z * 0.10) * 0.75;
+    h += edgeFactor * edgeFactor * 4.5 + edgeFactor * edgeBump;
   }
 
-  // 7) 마을 도로 주변은 평탄하게, 초원은 부드러운 구릉 기복 유지
+  // 7) 마을 도로 주변 평탄화 및 초원 잔물결
   const centerRoadClearance = Math.min(1.0, Math.abs(x - Math.sin(z * 0.03) * 6.0) / 15.0);
-  const gentleWave = (Math.sin(x * 0.045) * Math.cos(z * 0.045) * 0.42) * centerRoadClearance;
+  const gentleWave = (Math.sin(x * 0.045) * Math.cos(z * 0.045) * 0.40) * centerRoadClearance;
   h += gentleWave;
 
   return Number(h.toFixed(3));
@@ -1104,13 +1098,15 @@ window.getMiracleGroundHeight = function (x, z, st) {
     return window.getMiracleOpenWorldGroundHeight(x, z);
   }
   if (miracleSubMode === 'main2_loaves') {
-    const hillT = Math.max(0, Math.min(1, (28 - z) / 64));
-    return hillT * hillT * (3 - 2 * hillT) * 7.5;
+    const hillT = Math.max(0, Math.min(1, (32 - z) / 62));
+    const bump = Math.sin(x * 0.14) * Math.cos(z * 0.14) * 0.38;
+    return Number((0.4 + hillT * hillT * (3 - 2 * hillT) * 13.2 + hillT * bump).toFixed(3));
   }
   if (miracleSubMode === 'main3_cross') {
-    if (z <= -10) {
-      const climbT = Math.max(0, Math.min(1, (-10 - z) / 52));
-      return climbT * 9.2;
+    if (z <= -8) {
+      const climbT = Math.max(0, Math.min(1, (-8 - z) / 46));
+      const bump = Math.sin(x * 0.16) * Math.cos(z * 0.16) * 0.28;
+      return Number((climbT * (9.4 + bump)).toFixed(3));
     }
     return 0;
   }
@@ -1121,55 +1117,227 @@ window.getMiracleGroundHeight = function (x, z, st) {
 };
 
 // -------------------------------------------------------------------------
-// 5. [가장자리 낮은 울퉁불퉁 다면체 언덕(Low Bumpy Hill) 생성기]
-//    - 뾰족하고 높은 산 대신, 낮고 둥글납작하면서 표면이 울퉁불퉁한 로우폴리 언덕을 겹쳐 배치
+// 7-1. [핵심 해결책] 정점 교차나 깨짐이 전혀 없는 방사형 다단 돔 언덕(Closed Manifold Bumpy Hill)
+//      - 구형 정점을 억지로 찌그러뜨리지 않고, 중심 꼭짓점에서 바깥 고리(Ring 1~4)와 지하 스커트(y = -6.0)까지
+//        순서대로 삼각망을 이어 만들어 안쪽이 절대 보이지 않으며, 강력한 충돌 박스로 내부 진입을 완벽 차단!
 // -------------------------------------------------------------------------
-function createBumpyLowPolyHillMesh(x, z, radiusX = 24, height = 7.5, radiusZ = 22, colorHex = '#84a955', seed = 0, addCollider = true) {
+function createBumpyLowPolyHillMesh(
+  x,
+  z,
+  radiusX = 24,
+  height = 7.5,
+  radiusZ = 22,
+  colorHex = '#84a955',
+  seed = 0,
+  addCollider = true
+) {
   const by = window.getMiracleOpenWorldGroundHeight(x, z);
-  const geo = new THREE.IcosahedronGeometry(1.0, 2);
-  const pos = geo.attributes.position;
+  const segs = 12;
+  const v = [];
 
-  for (let i = 0; i < pos.count; i++) {
-    let vx = pos.getX(i);
-    let vy = pos.getY(i);
-    let vz = pos.getZ(i);
+  // 4개의 동심원 고리(정상부 -> 중상부 -> 중하부 -> 지면 아래 스커트)
+  const ringSpecs = [
+    { rFrac: 0.28, yFrac: 0.90, bumpAmp: 0.08 },
+    { rFrac: 0.58, yFrac: 0.66, bumpAmp: 0.12 },
+    { rFrac: 0.88, yFrac: 0.30, bumpAmp: 0.10 },
+    { rFrac: 1.12, yFrac: -0.65, bumpAmp: 0.04 } // 지면 아래 깊숙이 내려가 틈새 노출 원천 차단
+  ];
 
-    if (vy < -0.05) {
-      vy = -0.25;
-      vx *= 1.12;
-      vz *= 1.12;
-    } else {
-      // 꼭대기를 완만하게 눌러 낮추고 표면에 울퉁불퉁한 다면체 굴곡 부여
-      const domeY = Math.pow(vy, 0.78) * 0.82;
-      const n1 = Math.sin(vx * 3.6 + seed * 1.7) * Math.cos(vz * 3.4 - seed * 1.3) * 0.15;
-      const n2 = Math.cos(vx * 5.8 - vz * 5.2 + seed) * 0.08;
-      vy = Math.max(0.10, domeY + n1 + n2);
-      vx *= (1.0 + n1 * 0.40);
-      vz *= (1.0 - n1 * 0.30 + n2 * 0.30);
+  const apex = [
+    Math.sin(seed * 2.1) * radiusX * 0.06,
+    height * (0.98 + Math.cos(seed * 1.7) * 0.05),
+    Math.cos(seed * 2.9) * radiusZ * 0.06
+  ];
+
+  const rings = ringSpecs.map((spec, rIdx) => {
+    const pts = [];
+    for (let i = 0; i < segs; i++) {
+      const ang = (i / segs) * Math.PI * 2;
+      // 반지름이 역전되지 않는 안전한 범위(0.86 ~ 1.14) 내에서만 울퉁불퉁한 다면체 요철 부여
+      const wave1 = Math.sin(ang * 3 + seed * 1.9 + rIdx * 1.3);
+      const wave2 = Math.cos(ang * 5 - seed * 2.3 + rIdx * 0.7);
+      const radialMod = 1.0 + (wave1 * 0.65 + wave2 * 0.35) * spec.bumpAmp;
+      const heightMod = (rIdx < 3) ? ((wave1 * 0.5 - wave2 * 0.5) * spec.bumpAmp * height * 0.85) : 0;
+
+      const px = Math.cos(ang) * radiusX * spec.rFrac * radialMod;
+      const pz = Math.sin(ang) * radiusZ * spec.rFrac * radialMod;
+      const py = height * spec.yFrac + heightMod;
+      pts.push([px, py, pz]);
     }
+    return pts;
+  });
 
-    pos.setXYZ(i, vx * radiusX, vy * height, vz * radiusZ);
+  // 정상 꼭짓점(apex)과 첫 번째 고리 연결 (시계 반대 방향 정점 순서 준수)
+  for (let i = 0; i < segs; i++) {
+    const ni = (i + 1) % segs;
+    pushTriangle(v, apex, rings[0][ni], rings[0][i]);
   }
 
-  const finalGeo = geo.toNonIndexed();
-  finalGeo.computeVertexNormals();
+  // 고리와 고리 사이 측면 다면체 연결
+  for (let r = 0; r < rings.length - 1; r++) {
+    const cur = rings[r];
+    const nxt = rings[r + 1];
+    for (let i = 0; i < segs; i++) {
+      const ni = (i + 1) % segs;
+      pushQuad(v, cur[i], cur[ni], nxt[ni], nxt[i]);
+    }
+  }
 
-  const mesh = createLowPolyMesh(finalGeo, colorHex, x, by - 0.4, z, true);
+  const finalGeo = buildBufferGeoFromTriangles(v);
+  // 양면 렌더링(DoubleSide)을 적용하여 혹시라도 카메라가 스치듯 지나가도 절대 투명하게 뚫려 보이지 않음
+  const mesh = createDoubleSideLowPolyMesh(finalGeo, colorHex, x, by, z, true);
   worldGroup.add(mesh);
 
   if (addCollider) {
     colliders.push({
-      minX: x - radiusX * 0.76,
-      maxX: x + radiusX * 0.76,
-      minZ: z - radiusZ * 0.76,
-      maxZ: z + radiusZ * 0.76
+      minX: x - radiusX * 0.90,
+      maxX: x + radiusX * 0.90,
+      minZ: z - radiusZ * 0.90,
+      maxZ: z + radiusZ * 0.90
     });
   }
   return mesh;
 }
 
 // -------------------------------------------------------------------------
-// 6. 사각·원통형을 배제한 소프트 로우 폴리곤 동물(사슴·양·나귀·물고기) & 다중 가지 나무·야생화
+// 7-2. [신규 요청사항] 비유 체험 · 사건 체험 NPC 전용 '무릎 높이 불규칙 빛의 원(오라)' 생성 및 반짝임 애니메이터
+//      - 긴 빛기둥 대신 사람 주변 무릎 높이(y = 0.35 ~ 0.62m)까지 불규칙한 파형으로 일렁이며 반짝이는 빛의 원!
+// -------------------------------------------------------------------------
+function createIrregularKneeLightAura(colorHex = 0x38bdf8, seed = 0) {
+  const auraGrp = new THREE.Group();
+  const segs = 20;
+
+  const buildWavyCrownGeo = (baseR, baseH, waveAmpR, waveAmpH, phaseShift) => {
+    const v = [];
+    const botPts = [];
+    const topPts = [];
+
+    for (let i = 0; i < segs; i++) {
+      const ang = (i / segs) * Math.PI * 2;
+      const w1 = Math.sin(ang * 3 + seed * 1.7 + phaseShift);
+      const w2 = Math.cos(ang * 5 - seed * 2.3 + phaseShift);
+      const w3 = Math.sin(ang * 7 + seed * 3.1);
+
+      const r = baseR + (w1 * 0.55 + w2 * 0.45) * waveAmpR;
+      // 무릎 높이(약 0.32m ~ 0.62m) 사이에서 불규칙한 왕관 파형으로 솟아오름
+      const h = Math.max(0.24, baseH + (w1 * 0.45 + w2 * 0.35 + w3 * 0.20) * waveAmpH);
+
+      botPts.push([Math.cos(ang) * r, 0.02, Math.sin(ang) * r]);
+      topPts.push([Math.cos(ang) * (r * 1.05), h, Math.sin(ang) * (r * 1.05)]);
+    }
+
+    for (let i = 0; i < segs; i++) {
+      const ni = (i + 1) % segs;
+      pushQuad(v, botPts[i], botPts[ni], topPts[ni], topPts[i]);
+    }
+    return buildBufferGeoFromTriangles(v);
+  };
+
+  // 외곽 불규칙 무릎 빛 장막 + 내부 밝은 코어 빛 장막
+  const outerMat = new THREE.MeshBasicMaterial({
+    color: colorHex,
+    transparent: true,
+    opacity: 0.48,
+    side: THREE.DoubleSide,
+    depthWrite: false
+  });
+  const innerMat = new THREE.MeshBasicMaterial({
+    color: 0xfef08a,
+    transparent: true,
+    opacity: 0.38,
+    side: THREE.DoubleSide,
+    depthWrite: false
+  });
+
+  const outerCrown = new THREE.Mesh(buildWavyCrownGeo(1.18, 0.48, 0.16, 0.18, 0), outerMat);
+  const innerCrown = new THREE.Mesh(buildWavyCrownGeo(0.92, 0.38, 0.12, 0.14, 1.5), innerMat);
+  auraGrp.add(outerCrown, innerCrown);
+
+  // 바닥 불규칙 다각형 빛 고리
+  const ringPts = [];
+  for (let i = 0; i < segs; i++) {
+    const ang = (i / segs) * Math.PI * 2;
+    const mod = 1.0 + Math.sin(ang * 4 + seed) * 0.10;
+    const rIn = 0.88 * mod;
+    const rOut = 1.32 * mod;
+    const nextAng = ((i + 1) / segs) * Math.PI * 2;
+    const nextMod = 1.0 + Math.sin(nextAng * 4 + seed) * 0.10;
+    const nrIn = 0.88 * nextMod;
+    const nrOut = 1.32 * nextMod;
+
+    pushQuad(
+      ringPts,
+      [Math.cos(ang) * rIn, 0.03, Math.sin(ang) * rIn],
+      [Math.cos(ang) * rOut, 0.03, Math.sin(ang) * rOut],
+      [Math.cos(nextAng) * nrOut, 0.03, Math.sin(nextAng) * nrOut],
+      [Math.cos(nextAng) * nrIn, 0.03, Math.sin(nextAng) * nrIn]
+    );
+  }
+  const groundRing = new THREE.Mesh(
+    buildBufferGeoFromTriangles(ringPts),
+    new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.65, side: THREE.DoubleSide })
+  );
+  auraGrp.add(groundRing);
+
+  // 무릎 높이 주변에서 반짝이는 작은 빛 결정(Sparkles) 8개
+  const sparkles = [];
+  const sparkGeo = new THREE.OctahedronGeometry(0.085, 0);
+  for (let s = 0; s < 8; s++) {
+    const sMat = new THREE.MeshBasicMaterial({
+      color: (s % 2 === 0) ? 0xffffff : colorHex,
+      transparent: true,
+      opacity: 0.85
+    });
+    const sp = new THREE.Mesh(sparkGeo, sMat);
+    const ang = (s / 8) * Math.PI * 2 + (seed % 1.5);
+    const rad = 1.05 + (s % 3) * 0.14;
+    const baseY = 0.18 + (s % 4) * 0.11; // 0.18m ~ 0.51m (무릎 이하 높이)
+    sp.position.set(Math.cos(ang) * rad, baseY, Math.sin(ang) * rad);
+    auraGrp.add(sp);
+    sparkles.push({ mesh: sp, ang, rad, baseY, phase: s * 0.85 });
+  }
+
+  auraGrp.userData = {
+    outerCrown,
+    innerCrown,
+    groundRing,
+    sparkles,
+    outerMat,
+    innerMat
+  };
+  return auraGrp;
+}
+
+function updateIrregularKneeLightAura(auraGrp, now, idx = 0) {
+  if (!auraGrp || !auraGrp.userData) return;
+  const u = auraGrp.userData;
+
+  // 불규칙한 파형이 서로 반대 방향으로 천천히 회전하며 무릎 높이에서 일렁임
+  if (u.outerCrown) {
+    u.outerCrown.rotation.y = now * 0.0008 + idx;
+    const sY = 0.88 + Math.sin(now * 0.005 + idx) * 0.18;
+    u.outerCrown.scale.set(1.0, sY, 1.0);
+  }
+  if (u.innerCrown) {
+    u.innerCrown.rotation.y = -now * 0.0011 - idx;
+    const sY2 = 0.90 + Math.cos(now * 0.006 + idx) * 0.16;
+    u.innerCrown.scale.set(1.0, sY2, 1.0);
+  }
+  if (u.outerMat) {
+    u.outerMat.opacity = 0.36 + Math.abs(Math.sin(now * 0.004 + idx)) * 0.28;
+  }
+  if (u.sparkles) {
+    u.sparkles.forEach(sp => {
+      const twinkle = 0.35 + Math.abs(Math.sin(now * 0.009 + sp.phase)) * 0.95;
+      sp.mesh.scale.set(twinkle, twinkle, twinkle);
+      sp.mesh.position.y = sp.baseY + Math.sin(now * 0.006 + sp.phase) * 0.08;
+      sp.mesh.rotation.y += 0.05;
+    });
+  }
+}
+
+// -------------------------------------------------------------------------
+// 8. 소프트 로우폴리 동물(사슴·양·나귀·물고기) & 다중 가지 나무·야생화
 // -------------------------------------------------------------------------
 function createSculptedLimbGeo(topR, botR, length, sides = 5, bendZ = 0) {
   const geo = new THREE.CylinderGeometry(topR, botR, length, sides, 2);
