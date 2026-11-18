@@ -44,6 +44,7 @@ window.getMiracleGroundHeight = function (x, z, st) {
 // 1. 오픈월드 스팟 -> 본 스테이지 화면 전환 진입기
 // -------------------------------------------------------------------------
 function enterMiracleMainStage(stageNum) {
+  if (typeof stopMiracleOpenWorldOgg === 'function') stopMiracleOpenWorldOgg(false);
   const wf = document.getElementById('white-fade');
   if (wf) wf.style.opacity = '0.92';
   playSfx('dove');
@@ -1789,10 +1790,12 @@ REGISTER_EPISODE('miracle', {
     return createMiracleHeroMesh();
   },
   onCloseScreen: function () {
-    hideAllMiracleCustomUI();
+  if (typeof stopMiracleOpenWorldOgg === 'function') stopMiracleOpenWorldOgg(true);
+  hideAllMiracleCustomUI();
   },
   clearState: function () {
-    hideAllMiracleCustomUI();
+  if (typeof stopMiracleOpenWorldOgg === 'function') stopMiracleOpenWorldOgg(true);
+  hideAllMiracleCustomUI();
     clearMiracleFieldEventObjects();
     miracleStageSpots = [];
     miracleEventSpots = [];
