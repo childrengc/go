@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>출발! 성경 탐험대! - 3D 복셀 어드벤처</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@500;700;900&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+    html, body {
+      margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+      font-family: 'Noto Sans KR', sans-serif; background: #0f172a;
+    }
+    .font-jua { font-family: 'Jua', sans-serif; }
+
+    /* 게임 내 멀티터치 조작 영역에만 touch-action: none 적용 */
+    .ingame-touch { touch-action: none; }
+
+    /* 도트 캔버스 전용 픽셀 선명화 렌더링 */
+    .pixel-canvas {
+      image-rendering: -moz-crisp-edges;
+      image-rendering: -webkit-optimize-contrast;
+      image-rendering: crisp-edges;
+      image-rendering: pixelated;
+    }
+
+    /* 얇고 반투명한 그림자를 적용한 슬림 패널 (상단 HUD 및 라벨용) */
+    .mc-panel {
+      background: rgba(15, 23, 42, 0.74);
+      border: 1.5px solid rgba(245, 158, 11, 0.78);
+      box-shadow: 0 2px 0 rgba(120, 53, 15, 0.38), 0 4px 8px rgba(0, 0, 0, 0.22);
+      backdrop-filter: blur(2px);
+    }
+    .mc-card {
+      background: #fffbeb;
+      border: 4px solid #b45309;
+      box-shadow: 0 6px 0 rgba(120, 53, 15, 0.65), 0 12px 24px rgba(0,0,0,0.45);
+    }
+    .mc-btn {
+      border: 2px solid rgba(0,0,0,0.32);
+      box-shadow: 0 3px 0 rgba(0,0,0,0.38);
+      transition: transform 0.06s ease, box-shadow 0.06s ease;
+      cursor: pointer;
+    }
+    .mc-btn:active {
+      transform: translateY(2px);
+      box-shadow: 0 1px 0 rgba(0,0,0,0.38);
+    }
+    .mc-btn-slim {
+      border: 1.5px solid rgba(255,255,255,0.22);
+      box-shadow: 0 1.5px 0 rgba(0,0,0,0.35), 0 2px 5px rgba(0,0,0,0.2);
+      transition: transform 0.06s ease;
+      cursor: pointer;
+    }
+    .mc-btn-slim:active { transform: translateY(1.5px); }
+
+    /* 우측 하단 반투명 소형 자물쇠 (그림자·테두리 완전 제거) */
+    .admin-lock-link {
+      box-shadow: none !important;
+      text-shadow: none !important;
+      filter: none !important;
+      border: none !important;
+      background: transparent !important;
+    }
+
+    .world-label {
+      position: absolute; transform: translate(-50%, -100%);
+      pointer-events: none; transition: opacity 0.15s ease; z-index: 15;
+    }
+    @keyframes popScale {
+      0% { transform: scale(0.4); opacity: 0; }
+      60% { transform: scale(1.18); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .count-anim { animation: popScale 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+
+    @keyframes floatPin {
+      0%, 100% { transform: translate(-50%, -50%) translateY(0px); }
+      50% { transform: translate(-50%, -50%) translateY(-3px); }
+    }
+    .map-pin-node {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      animation: floatPin 2.6s ease-in-out infinite;
+      border: 2px solid #451a03;
+      box-shadow: 0 3px 0 rgba(69, 26, 3, 0.65), 0 4px 10px rgba(0,0,0,0.35);
+    }
+    .map-pin-node:hover { z-index: 30; }
+
+    .modal-scroll {
+      max-height: 92dvh;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-y;
+    }
+
+    /* 오프닝 이름 입력 화면: 작은 화면 및 가로모드에서 스크롤 없이 한 화면에 들어오도록 비율 자동 조정 */
+    #screen-opening .opening-card {
+      max-height: 94dvh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    @media (max-height: 680px), (max-width: 380px) {
+      #screen-opening .opening-card { padding: 0.85rem 1rem !important; }
+      #screen-opening .opening-badge { font-size: 0.68rem !important; padding: 0.15rem 0.6rem !important; margin-bottom: 0.25rem !important; }
+      #screen-opening .opening-title { font-size: 1.55rem !important; margin-bottom: 0.1rem !important; }
+      #screen-opening .opening-sub { font-size: 0.7rem !important; margin-bottom: 0.35rem !important; }
+      #screen-opening .opening-rotate-hint { padding: 0.25rem 0.5rem !important; margin: 0.15rem 0 0.4rem 0 !important; font-size: 0.68rem !important; }
+      #screen-opening .opening-form-box { padding: 0.55rem 0.65rem !important; margin-bottom: 0.5rem !important; }
+      #screen-opening .opening-input { padding: 0.4rem 0.55rem !important; font-size: 0.8rem !important; }
+      #screen-opening .opening-start-btn { padding: 0.55rem !important; font-size: 0.95rem !important; }
+      #screen-opening .opening-footer { margin-top: 0.35rem !important; font-size: 0.68rem !important; }
+    }
+    @media (max-height: 540px) and (orientation: landscape) {
+      #screen-opening .opening-card {
+        max-width: 34rem !important;
+        padding: 0.55rem 1rem !important;
+      }
+      #screen-opening .opening-badge { font-size: 0.64rem !important; padding: 0.1rem 0.5rem !important; margin-bottom: 0.1rem !important; }
+      #screen-opening .opening-title { font-size: 1.3rem !important; margin-bottom: 0.05rem !important; }
+      #screen-opening .opening-sub { font-size: 0.65rem !important; margin-bottom: 0.2rem !important; }
+      #screen-opening .opening-rotate-hint { display: none !important; }
+      #screen-opening .opening-form-box { padding: 0.4rem 0.6rem !important; margin-bottom: 0.35rem !important; }
+      #screen-opening .opening-input { padding: 0.3rem 0.5rem !important; font-size: 0.78rem !important; }
+      #screen-opening .opening-start-btn { padding: 0.4rem !important; font-size: 0.88rem !important; }
+      #screen-opening .opening-footer { margin-top: 0.2rem !important; font-size: 0.64rem !important; }
+    }
+
+    /* 휴대폰 가로모드(높이 540px 이하) 최적화 */
+    @media (max-height: 540px) and (orientation: landscape) {
+      .landscape-modal-card {
+        max-width: 44rem !important;
+        padding: 0.7rem 1rem !important;
+        max-height: 94dvh !important;
+      }
+      .landscape-split {
+        display: grid;
+        grid-template-columns: 1fr 1.15fr;
+        gap: 0.75rem;
+        align-items: center;
+      }
+      .landscape-compact-title { font-size: 1.1rem !important; margin-bottom: 0.15rem !important; }
+      .landscape-compact-icon { font-size: 1.6rem !important; margin-bottom: 0.1rem !important; }
+      .landscape-compact-verse { padding: 0.45rem !important; margin-bottom: 0 !important; font-size: 0.72rem !important; }
+      .landscape-map-wrap { height: 70dvh !important; }
+      .map-pin-card { padding: 0.18rem 0.38rem !important; }
+    }
+
+    /* 휴대폰 세로모드 하단 조작 버튼(조이스틱 / 좌·우회전·시점변환 / 점프) 겹침 방지 */
+    @media (max-width: 640px) and (orientation: portrait) {
+      #joystick-zone {
+        left: 0.5rem !important;
+        bottom: 0.75rem !important;
+        width: 5.75rem !important;
+        height: 5.75rem !important;
+      }
+      #joystick-knob {
+        width: 2.5rem !important;
+        height: 2.5rem !important;
+        margin-top: -1.25rem !important;
+        margin-left: -1.25rem !important;
+      }
+      #action-zone {
+        right: 0.5rem !important;
+        bottom: 0.75rem !important;
+      }
+      #action-zone .jump-action-btn {
+        width: 4.1rem !important;
+        height: 4.1rem !important;
+        font-size: 0.85rem !important;
+      }
+      #cam-bottom-bar {
+        left: calc(50% + 13px) !important;
+        bottom: 0.75rem !important;
+        gap: 4px !important;
+        max-width: 128px !important;
+      }
+      #cam-bottom-bar > button {
+        width: 2.35rem !important;
+        height: 2.35rem !important;
+        border-radius: 0.65rem !important;
+      }
+    }
+  </style>
+</head>
+<body class="relative w-full h-full select-none">
+
+  <!-- 3D 캔버스 & 월드 라벨 -->
+  <div id="canvas-container" class="ingame-touch absolute inset-0 z-0"></div>
+  <div id="labels-container" class="absolute inset-0 pointer-events-none overflow-hidden z-10"></div>
+
+  <!-- 피격 시 붉은 플래시 / 페이드 연출 -->
+  <div id="damage-flash" class="fixed inset-0 bg-red-600 pointer-events-none opacity-0 transition-opacity duration-300 z-30"></div>
+  <div id="white-fade" class="fixed inset-0 bg-white pointer-events-none opacity-0 transition-opacity duration-500 z-40"></div>
+  <div id="black-fade" class="fixed inset-0 bg-slate-950 pointer-events-none opacity-0 transition-opacity duration-500 z-40 flex flex-col items-center justify-center text-center px-6">
+    <div id="black-fade-icon" class="text-6xl mb-4">🌧️</div>
+    <p id="black-fade-title" class="font-jua text-2xl sm:text-3xl text-amber-300 mb-2"></p>
+    <p id="black-fade-sub" class="text-sm sm:text-base text-slate-300"></p>
+  </div>
+
+  <!-- 스테이지 2 출발 카운트다운 오버레이 -->
+  <div id="stage2-countdown-overlay" style="display:none;" class="fixed inset-0 bg-slate-950/60 backdrop-blur-[2px] z-35 flex flex-col items-center justify-center pointer-events-none">
+    <div class="text-6xl mb-3 drop-shadow-lg">🌊</div>
+    <p class="font-jua text-amber-300 text-xl sm:text-2xl mb-2 drop-shadow">⚡ 애굽 병사 추격전 준비!</p>
+    <div id="stage2-countdown-num" class="font-jua text-7xl sm:text-8xl text-white drop-shadow-[0_6px_0_#b45309] count-anim">3</div>
+  </div>
+
+  <!-- 토스트 알림 -->
+  <div id="toast-box" class="fixed top-14 left-1/2 -translate-x-1/2 z-40 pointer-events-none opacity-0 transition-opacity duration-300 w-[88%] max-w-md">
+    <div class="mc-panel px-3 py-1.5 rounded-xl text-center">
+      <span id="toast-text" class="font-jua text-amber-200 text-[11px] sm:text-xs"></span>
+    </div>
+  </div>
+
+  <!-- 상단 HUD (얇고 슬림한 디자인 & 반투명 그림자 & 전체화면 토글 버튼 포함) -->
+  <div id="hud-top" class="hidden fixed top-1.5 left-2 right-2 z-20 flex flex-col gap-1 pointer-events-none">
+    <div class="flex items-center justify-between gap-1">
+      <div class="mc-panel px-2 py-0.5 rounded-lg flex items-center gap-1 pointer-events-auto">
+        <span id="hud-avatar-icon" class="text-sm">🧔🏻</span>
+        <span id="hud-player-tag" class="font-jua text-white text-[11px] sm:text-xs">대원</span>
+        <span class="text-amber-400 text-xs">·</span>
+        <span id="hud-stage-badge" class="font-jua text-amber-300 text-[11px] sm:text-xs">스테이지 1</span>
+      </div>
+
+      <div class="flex items-center gap-1 pointer-events-auto">
+        <div id="hud-block-box" class="hidden mc-panel px-2 py-0.5 rounded-lg items-center gap-1 bg-amber-950/75">
+          <span class="text-xs">🪵</span>
+          <span id="hud-block-text" class="font-jua text-amber-200 text-[11px]">통나무 0/2개</span>
+        </div>
+
+        <div id="hud-timer-box" class="hidden mc-panel px-2 py-0.5 rounded-lg items-center gap-1 bg-rose-950/75 border-rose-400/80">
+          <span class="text-xs">⏰</span>
+          <span id="hud-timer-val" class="font-jua text-rose-200 text-[11px] sm:text-xs">10.0초</span>
+        </div>
+
+        <div class="mc-panel px-2 py-0.5 rounded-lg flex items-center gap-1">
+          <span id="hud-counter-icon" class="text-xs">🐾</span>
+          <span id="hud-counter-text" class="font-jua text-emerald-300 text-[11px] sm:text-xs">0/7쌍</span>
+        </div>
+
+        <button id="hud-mode-btn" type="button" onclick="openScreen('screen-map')" class="mc-btn-slim px-2 py-0.5 rounded-lg bg-amber-500/90 hover:bg-amber-400 text-slate-950 font-jua text-[11px]">
+          🗺️맵
+        </button>
+        <button id="bgm-btn" type="button" onclick="toggleBgm()" class="mc-btn-slim w-6 h-6 rounded-lg bg-slate-800/85 text-white text-xs flex items-center justify-center" title="배경음악 켜기/끄기">
+          🎵
+        </button>
+        <button id="fullscreen-btn" type="button" onclick="toggleGameFullscreen()" class="mc-btn-slim w-6 h-6 rounded-lg bg-slate-800/85 text-white text-xs flex items-center justify-center" title="전체화면 전환">
+          ⛶
+        </button>
+      </div>
+    </div>
+
+    <div id="hud-mission-box" onclick="speakCurrentMission()" class="mc-panel px-2.5 py-0.5 rounded-lg self-center max-w-lg w-full text-center pointer-events-auto cursor-pointer">
+      <p class="text-amber-100 font-jua text-[11px] sm:text-xs truncate leading-tight">
+        🔊 <span id="hud-mission-text">미션 안내</span>
+      </p>
+      <p id="hud-compass-hint" class="text-[9px] text-amber-300/85 leading-tight">💛 머리 위 노란 화살표를 따라가 보세요! (터치 시 음성 안내)</p>
+    </div>
+  </div>
+
+  <!-- 좌측 하단 가상 조이스틱 -->
+  <div id="joystick-zone" style="display:none;" class="ingame-touch fixed bottom-4 left-4 w-28 h-28 rounded-full bg-slate-900/50 border-2 border-amber-400/65 z-20">
+    <div id="joystick-knob" class="w-12 h-12 rounded-full bg-amber-400/90 border-2 border-white shadow-md absolute top-1/2 left-1/2 -mt-6 -ml-6 pointer-events-none"></div>
+  </div>
+
+  <!-- 하단 중앙 시점 회전 바 (작고 슬림한 사이즈 + 멀티터치 즉시 반응) -->
+  <div id="cam-bottom-bar" style="display:none;" class="ingame-touch fixed bottom-3 left-1/2 -translate-x-1/2 z-20 items-center gap-1.5">
+    <button type="button" onpointerdown="event.preventDefault(); event.stopPropagation(); rotateCameraDeg(-25);" class="ingame-touch mc-btn-slim px-2 py-1 rounded-lg bg-slate-900/75 text-amber-200/95 font-jua text-[10px] sm:text-[11px]">
+      ↺ 좌회전
+    </button>
+    <button type="button" onpointerdown="event.preventDefault(); event.stopPropagation(); rotateCameraDeg(25);" class="ingame-touch mc-btn-slim px-2 py-1 rounded-lg bg-slate-900/75 text-amber-200/95 font-jua text-[10px] sm:text-[11px]">
+      우회전 ↻
+    </button>
+  </div>
+
+  <!-- 우측 하단 액션 & 점프 버튼 (조이스틱 조작 중 동시 터치 즉시 작동) -->
+  <div id="action-zone" style="display:none;" class="ingame-touch fixed bottom-4 right-4 z-20 flex flex-col items-end gap-1.5">
+    <button id="cert-open-btn" type="button" onpointerdown="event.preventDefault(); event.stopPropagation(); showEndingCertificate();" class="ingame-touch hidden mc-btn px-3.5 py-1.5 rounded-xl bg-amber-400 text-slate-950 font-jua text-xs sm:text-sm animate-bounce">
+      🏆 인증서 보기
+    </button>
+    <button id="puzzle-build-btn" type="button" onpointerdown="event.preventDefault(); event.stopPropagation(); triggerPuzzleBuildOrSwitch();" class="ingame-touch hidden mc-btn px-3.5 py-1.5 rounded-xl bg-sky-400 text-slate-950 font-jua text-xs animate-pulse">
+      🔨 다리 통나무 놓기!
+    </button>
+    <button id="context-action-btn" type="button" onpointerdown="event.preventDefault(); event.stopPropagation(); triggerContextAction();" class="ingame-touch hidden mc-btn px-3.5 py-2 rounded-xl bg-emerald-400 text-slate-950 font-jua text-xs sm:text-sm animate-bounce">
+      ✨ 액션 실행!
+    </button>
+    <button type="button" onpointerdown="event.preventDefault(); event.stopPropagation(); playerJump();" class="jump-action-btn ingame-touch mc-btn w-20 h-20 rounded-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-jua text-base flex flex-col items-center justify-center">
+      <span class="text-xl leading-none pointer-events-none">🦘</span>
+      <span class="pointer-events-none">점프</span>
+    </button>
+  </div>
+
+  <!-- =================================================================== -->
+  <!-- 화면 1: 오프닝 화면 (가로·소형 화면 1화면 맞춤 & 이름·생일 4자리 필수 입력 검증) -->
+  <!-- =================================================================== -->
+  <div id="screen-opening" class="fixed inset-0 z-30 flex items-center justify-center p-2 sm:p-3 bg-slate-950/45 backdrop-blur-[2px]">
+    <div class="mc-card opening-card relative w-full max-w-md rounded-3xl p-4 sm:p-6 text-center">
+      <div>
+        <div class="opening-badge inline-block px-3 py-0.5 rounded-full bg-amber-200 text-amber-900 font-jua text-xs mb-1.5">
+          ✨ 3D 바이블 어드벤처
+        </div>
+        <h1 class="opening-title font-jua text-2xl sm:text-4xl text-amber-900 mb-1">출발! 성경 탐험대!</h1>
+        <p class="opening-sub text-xs sm:text-sm text-slate-600 mb-2.5">말씀 속 주인공이 되어 믿음의 모험을 떠나요!</p>
+        <div class="opening-rotate-hint flex items-center justify-center gap-1.5 px-3 py-1 my-1.5 rounded-xl bg-sky-500/20 border border-sky-400/60 text-slate-900 text-xs font-jua shadow-inner animate-pulse">
+          <span>📱🔄</span>
+          <span>가로모드 가능해요! (화면을 가로로 돌리면 더 넓게 보여요)</span>
+        </div>
+      </div>
+
+      <div class="opening-form-box bg-amber-100/80 border-2 border-amber-400 rounded-2xl p-3 mb-3 text-left">
+        <div class="grid grid-cols-3 gap-2">
+          <div class="col-span-2">
+            <label for="opening-name-input" class="block font-jua text-amber-900 text-xs sm:text-sm mb-1">🎖️ 탐험 대원 이름 <span class="text-rose-600">*</span></label>
+            <input id="opening-name-input" type="text" maxlength="10" placeholder="예: 김광릉내"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault(); document.getElementById('opening-birth-input').focus();}"
+                   style="user-select: text; -webkit-user-select: text; touch-action: auto;"
+                   class="opening-input w-full px-3 py-2 rounded-xl border-2 border-amber-500 bg-white font-bold text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
+          </div>
+          <div class="col-span-1">
+            <label for="opening-birth-input" class="block font-jua text-amber-900 text-xs sm:text-sm mb-1">🎂 생일(4자리) <span class="text-rose-600">*</span></label>
+            <input id="opening-birth-input" type="tel" inputmode="numeric" maxlength="4" placeholder="예: 0709"
+                   oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 4);"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault(); safeGoToClassSelect();}"
+                   style="user-select: text; -webkit-user-select: text; touch-action: auto;"
+                   class="opening-input w-full px-2 py-2 rounded-xl border-2 border-amber-500 bg-white font-bold text-slate-900 text-sm text-center focus:outline-none focus:ring-2 focus:ring-amber-400" />
+          </div>
+        </div>
+        <p id="opening-input-warn" class="hidden text-[11px] font-bold text-rose-600 mt-1.5 text-center">
+          ⚠️ 이름과 생일 4자리를 모두 입력해야 출발할 수 있어요!
+        </p>
+      </div>
+
+      <div>
+        <button id="btn-start-explore" type="button"
+                onclick="safeGoToClassSelect()"
+                onpointerup="safeGoToClassSelect()"
+                class="opening-start-btn mc-btn w-full py-2.5 sm:py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-jua text-base sm:text-lg">
+          🚀 탐험 출발하기!
+        </button>
+
+        <p class="opening-footer mt-2.5 text-[11px] sm:text-xs font-jua text-amber-900/70 tracking-wide">
+          광릉내 재림교회 어린이부
+        </p>
+      </div>
+
+      <a href="admin.html" title="관리자 모드" class="admin-lock-link absolute bottom-2 right-3 text-xs opacity-30 hover:opacity-70 transition-opacity leading-none p-1">
+        🔒
+      </a>
+    </div>
+  </div>
+
+  <!-- =================================================================== -->
+  <!-- 화면 2: 반(난이도) 선택 화면 (하단 교회명 & 우측 하단 반투명 소형 자물쇠 포함) -->
+  <!-- =================================================================== -->
+  <div id="screen-class" class="hidden fixed inset-0 z-30 items-center justify-center p-3 bg-slate-950/55 backdrop-blur-[2px]">
+    <div class="mc-card modal-scroll relative w-full max-w-lg rounded-3xl p-4 sm:p-6 pb-5 text-center">
+      <p id="class-hello-name" class="font-jua text-xl sm:text-2xl text-amber-900 mb-1">🙌 대원님, 환영해요!</p>
+      <p class="text-xs text-slate-600 mb-3">나에게 맞는 난이도를 선택해 주세요!</p>
+
+      <div class="grid grid-cols-2 gap-2.5 mb-3 text-left">
+        <button type="button" onclick="requestGameFullscreen(); selectClassAndShowMap('kinder');" class="mc-btn p-3 rounded-2xl bg-yellow-100 hover:bg-yellow-200 border-amber-400">
+          <div class="font-jua text-base text-amber-900">🐣 유치반</div>
+          <p class="text-[11px] text-slate-600 mt-0.5">미취학 · 쉬운 길 안내 & 퀴즈 면제</p>
+        </button>
+        <button type="button" onclick="requestGameFullscreen(); selectClassAndShowMap('junior');" class="mc-btn p-3 rounded-2xl bg-emerald-100 hover:bg-emerald-200 border-emerald-500">
+          <div class="font-jua text-base text-emerald-950">🌱 유년반</div>
+          <p class="text-[11px] text-slate-600 mt-0.5">초등 1~3학년 · 표준 모험 & 말씀 퀴즈</p>
+        </button>
+        <button type="button" onclick="requestGameFullscreen(); selectClassAndShowMap('senior');" class="mc-btn p-3 rounded-2xl bg-sky-100 hover:bg-sky-200 border-sky-500">
+          <div class="font-jua text-base text-sky-950">🍎 소년반</div>
+          <p class="text-[11px] text-slate-600 mt-0.5">초등 4~6학년 · 화살표 숨김 & 심화 코스</p>
+        </button>
+        <button type="button" onclick="requestGameFullscreen(); selectClassAndShowMap('timeattack');" class="mc-btn p-3 rounded-2xl bg-rose-100 hover:bg-rose-200 border-rose-500">
+          <div class="font-jua text-base text-rose-950">⚡ 타임어택</div>
+          <p class="text-[11px] text-slate-600 mt-0.5">스피드 도전 · 시간 연장 아이템 모드</p>
+        </button>
+      </div>
+
+      <button type="button" onclick="openScreen('screen-opening')" class="mc-btn px-4 py-1.5 rounded-xl bg-slate-200 text-slate-700 font-jua text-xs">
+        ◀ 이름 다시 입력하기
+      </button>
+
+      <p class="mt-2.5 text-[11px] sm:text-xs font-jua text-amber-900/70 tracking-wide">
+        광릉내 재림교회 어린이부
+      </p>
+
+      <a href="admin.html" title="관리자 모드" class="admin-lock-link absolute bottom-2 right-3 text-xs opacity-30 hover:opacity-70 transition-opacity leading-none p-1">
+        🔒
+      </a>
+    </div>
+  </div>
+
+  <!-- =================================================================== -->
+  <!-- 화면 3: 도트(픽셀아트) 성경 월드맵 & 에피소드 1~4 이동경로 -->
+  <!-- =================================================================== -->
+  <div id="screen-map" class="hidden fixed inset-0 z-30 items-center justify-center p-2 sm:p-4 bg-slate-950/75 backdrop-blur-sm">
+    <div class="mc-card w-full max-w-5xl rounded-3xl p-2.5 sm:p-4 flex flex-col">
+      <div class="flex items-center justify-between gap-2 mb-1.5 px-1">
+        <div class="flex items-center gap-1.5">
+          <span class="text-lg sm:text-xl">🗺️</span>
+          <div>
+            <h2 class="font-jua text-sm sm:text-lg text-amber-950 leading-tight">성경 탐험 픽셀 월드맵</h2>
+            <p class="text-[10px] sm:text-xs text-slate-600">도트 지도 위의 탐험 경로(1→2→3→4)를 따라 에피소드를 선택하세요!</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span id="map-selected-badge" class="px-2 py-0.5 rounded-full bg-amber-200 border border-amber-500 font-jua text-amber-950 text-[10px] sm:text-xs">🌱 유년반</span>
+          <button type="button" onclick="openScreen('screen-class')" class="mc-btn px-2.5 py-0.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-jua text-[10px] sm:text-xs">
+            ◀ 반 변경
+          </button>
+          <button type="button" onclick="toggleGameFullscreen()" class="mc-btn px-2 py-0.5 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-950 font-jua text-[10px] sm:text-xs" title="전체화면 전환">
+            ⛶
+          </button>
+        </div>
+      </div>
+
+      <!-- 가변형 도트(픽셀아트) 캔버스 지도 영역 -->
+      <div class="landscape-map-wrap relative w-full h-[69dvh] max-h-[500px] min-h-[240px] rounded-2xl overflow-hidden border-4 border-amber-900 shadow-inner bg-[#6495c8]">
+        <canvas id="pixel-world-map" width="360" height="210" class="pixel-canvas w-full h-full block"></canvas>
+
+        <!-- 지도 위 에피소드 1 선택 핀 (좌상단: 아라랏산 & 방주 - 21%, 22%) -->
+        <button id="map-pin-noah" type="button" onclick="requestGameFullscreen(); launchEpisode('noah');" style="left: 21%; top: 22%;" class="map-pin-node map-pin-card rounded-xl bg-amber-50/95 hover:bg-white px-2 py-1 text-left">
+          <div class="flex items-center gap-1.5">
+            <span class="text-base sm:text-lg leading-none">🛶</span>
+            <div>
+              <span id="map-badge-noah" class="inline-block px-1.5 py-0.2 rounded bg-emerald-600 text-white font-jua text-[8px] sm:text-[9px] leading-tight">EP 1 · 출발</span>
+              <h3 class="font-jua text-amber-950 text-[11px] sm:text-xs leading-tight">노아의 방주</h3>
+            </div>
+          </div>
+        </button>
+
+        <!-- 지도 위 에피소드 2 선택 핀 (좌하단: 피라미드·홍해·시내산 - 26%, 78%) -->
+        <button id="map-pin-exodus" type="button" onclick="requestGameFullscreen(); launchEpisode('exodus');" style="left: 26%; top: 78%;" class="map-pin-node map-pin-card rounded-xl bg-sky-50/95 hover:bg-white px-2 py-1 text-left">
+          <div class="flex items-center gap-1.5">
+            <span class="text-base sm:text-lg leading-none">🌊</span>
+            <div>
+              <span id="map-badge-exodus" class="inline-block px-1.5 py-0.2 rounded bg-amber-500 text-slate-950 font-jua text-[8px] sm:text-[9px] leading-tight">EP 2 · 🔒오픈예정</span>
+              <h3 class="font-jua text-sky-950 text-[11px] sm:text-xs leading-tight">출애굽과 시내산</h3>
+            </div>
+          </div>
+        </button>
+
+        <!-- 지도 위 에피소드 3 선택 핀 (우하단: 베들레헴 성전·엘라 골짜기 - 67%, 75%) -->
+        <button id="map-pin-david" type="button" onclick="requestGameFullscreen(); launchEpisode('david');" style="left: 67%; top: 75%;" class="map-pin-node map-pin-card rounded-xl bg-slate-100/95 px-2 py-1 text-left opacity-92">
+          <div class="flex items-center gap-1.5">
+            <span class="text-base sm:text-lg leading-none">🪨</span>
+            <div>
+              <span id="map-badge-david" class="inline-block px-1.5 py-0.2 rounded bg-slate-600 text-white font-jua text-[8px] sm:text-[9px] leading-tight">EP 3 · 🔒잠김</span>
+              <h3 class="font-jua text-slate-800 text-[11px] sm:text-xs leading-tight">다윗과 골리앗</h3>
+            </div>
+          </div>
+        </button>
+
+        <!-- 지도 위 에피소드 4 선택 핀 (우상단: 갈릴리 호수·푸른 숲 - 77%, 24%) -->
+        <button id="map-pin-miracle" type="button" onclick="requestGameFullscreen(); launchEpisode('miracle');" style="left: 77%; top: 24%;" class="map-pin-node map-pin-card rounded-xl bg-slate-100/95 px-2 py-1 text-left opacity-92">
+          <div class="flex items-center gap-1.5">
+            <span class="text-base sm:text-lg leading-none">🍞</span>
+            <div>
+              <span id="map-badge-miracle" class="inline-block px-1.5 py-0.2 rounded bg-slate-600 text-white font-jua text-[8px] sm:text-[9px] leading-tight">EP 4 · 🔒잠김</span>
+              <h3 class="font-jua text-slate-800 text-[11px] sm:text-xs leading-tight">예수님의 기적</h3>
+            </div>
+          </div>
+        </button>
+      </div>
+
+      <p class="mt-1.5 text-center text-[11px] sm:text-xs font-jua text-amber-900/70 tracking-wide">
+        광릉내 재림교회 어린이부
+      </p>
+    </div>
+  </div>
+
+  <!-- =================================================================== -->
+  <!-- 월드맵 클리어 스테이지 선택 모달 (클리어 기록이 있는 대원에게 스테이지 선택 제공) -->
+  <!-- =================================================================== -->
+  <div id="episode-stage-select-modal" class="hidden fixed inset-0 z-50 items-center justify-center p-3 bg-slate-950/75 backdrop-blur-sm">
+    <div class="mc-card modal-scroll w-full max-w-sm rounded-3xl p-5 text-center">
+      <div id="ep-select-icon" class="text-4xl mb-1">🛶</div>
+      <h2 id="ep-select-title" class="font-jua text-xl sm:text-2xl text-amber-900 mb-1">에피소드 스테이지 선택</h2>
+      <p id="ep-select-desc" class="text-xs text-slate-600 mb-3">클리어한 스테이지를 자유롭게 선택해 출발할 수 있어요!</p>
+      <div id="ep-select-buttons" class="flex flex-col gap-2 mb-3"></div>
+      <button type="button" onclick="closeEpisodeStageSelectModal()" class="mc-btn w-full py-2 rounded-2xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-jua text-xs">
+        ◀ 월드맵으로 돌아가기
+      </button>
+    </div>
+  </div>
+
+  <!-- =================================================================== -->
+  <!-- 스테이지 클리어 & 말씀 퀴즈 모달 (모바일 가로모드 2단 레이아웃 지원) -->
+  <!-- =================================================================== -->
+  <div id="stage-modal" class="hidden fixed inset-0 z-50 items-center justify-center p-2 sm:p-4 bg-slate-950/75 backdrop-blur-sm">
+    <div class="mc-card modal-scroll landscape-modal-card w-full max-w-md rounded-3xl p-4 sm:p-6 text-center">
+      <div class="landscape-split">
+        <div>
+          <div class="landscape-compact-icon text-4xl sm:text-5xl mb-1">🎉</div>
+          <h2 id="modal-title" class="landscape-compact-title font-jua text-xl sm:text-2xl text-amber-900 mb-1">스테이지 클리어!</h2>
+          <p id="modal-desc" class="text-xs text-slate-600 mb-2.5">미션을 멋지게 완수했어요!</p>
+
+          <div class="landscape-compact-verse bg-amber-100 border-2 border-amber-400 rounded-2xl p-3 mb-3 text-left">
+            <div class="font-jua text-amber-900 text-xs mb-1">📖 오늘의 말씀</div>
+            <p id="modal-scripture-text" class="text-xs sm:text-sm font-bold text-slate-800 leading-relaxed"></p>
+          </div>
+        </div>
+
+        <div class="flex flex-col justify-between">
+          <div id="modal-quiz-box" class="bg-white border-2 border-amber-300 rounded-2xl p-3 mb-3 text-left">
+            <p id="modal-quiz-q" class="font-jua text-slate-900 text-xs sm:text-sm mb-2">퀴즈 질문</p>
+            <div id="modal-quiz-opts" class="flex flex-col gap-1.5"></div>
+            <p id="modal-quiz-feedback" class="hidden text-xs font-bold mt-2"></p>
+          </div>
+
+          <button id="modal-next-btn" type="button" onclick="proceedNextStage()" class="sticky bottom-0 z-10 mc-btn w-full py-2.5 sm:py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-white font-jua text-base sm:text-lg shadow-lg">
+            다음 스테이지로 이동 ▶
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =================================================================== -->
+  <!-- 재도전 모달 -->
+  <!-- =================================================================== -->
+  <div id="retry-modal" class="hidden fixed inset-0 z-50 items-center justify-center p-3 bg-slate-950/75 backdrop-blur-sm">
+    <div class="mc-card modal-scroll w-full max-w-sm rounded-3xl p-5 text-center">
+      <div id="retry-modal-icon" class="text-4xl sm:text-5xl mb-2">⏰</div>
+      <h2 id="retry-modal-title" class="font-jua text-xl sm:text-2xl text-rose-700 mb-1">다시 도전해 볼까요?</h2>
+      <p id="retry-modal-desc" class="text-xs sm:text-sm text-slate-700 mb-4 leading-relaxed"></p>
+      <div class="flex flex-col gap-2">
+        <button type="button" onclick="retryCurrentStage()" class="mc-btn w-full py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-jua text-base">
+          🔄 이 스테이지 다시 도전하기!
+        </button>
+        <button type="button" onclick="closeRetryAndOpenClass()" class="mc-btn w-full py-2 rounded-2xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-jua text-xs">
+          🗺️ 월드맵으로 나가기
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =================================================================== -->
+  <!-- 엔딩 달란트 인증서 모달 -->
+  <!-- =================================================================== -->
+  <div id="ending-modal" class="hidden fixed inset-0 z-50 items-center justify-center p-2 sm:p-4 bg-slate-950/75 backdrop-blur-sm">
+    <div class="mc-card modal-scroll landscape-modal-card w-full max-w-md rounded-3xl p-4 sm:p-6 text-center">
+      <div class="inline-block px-3 py-0.5 rounded-full bg-amber-300 text-amber-950 font-jua text-xs mb-1" id="ending-ep-badge">
+        🌈 에피소드 완주!
+      </div>
+      <h2 id="ending-main-title" class="font-jua text-2xl sm:text-3xl text-amber-900 mb-1">말씀 탐험 완주 인증서</h2>
+      <p id="ending-main-verse" class="text-[11px] sm:text-xs text-slate-600 mb-3"></p>
+
+      <div class="bg-white border-2 border-amber-400 rounded-2xl p-3 mb-3 text-left text-xs space-y-1">
+        <div class="flex justify-between"><span class="text-slate-500">대원 이름</span><span id="cert-name-display" class="font-bold text-slate-900"></span></div>
+        <div class="flex justify-between"><span class="text-slate-500">선택 과정</span><span id="cert-dept" class="font-bold text-amber-800"></span></div>
+        <div class="flex justify-between"><span class="text-slate-500">완주 미션</span><span id="cert-mission-display" class="font-bold text-emerald-700"></span></div>
+        <div class="flex justify-between pt-1 border-t border-amber-200"><span class="text-slate-500">달란트 인증코드</span><span id="cert-code" class="font-jua text-base text-rose-600">ARK-000</span></div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2">
+        <button type="button" onclick="closeEndingToLookAround()" class="mc-btn py-2.5 rounded-2xl bg-sky-400 hover:bg-sky-300 text-slate-950 font-jua text-xs sm:text-sm">
+          👀 엔딩 세상 둘러보기
+        </button>
+        <button type="button" onclick="openScreen('screen-map')" class="mc-btn py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-jua text-xs sm:text-sm">
+          🗺️ 월드맵으로 이동
+        </button>
+      </div>
+
+      <p class="mt-2.5 text-[11px] sm:text-xs font-jua text-amber-900/70 tracking-wide">
+        광릉내 재림교회 어린이부
+      </p>
+    </div>
+  </div>
+
+  <!-- 게임 스크립트 로드 (core.js -> ep1 -> ep2 -> ep3 -> ep4 순서로 1회씩만 로드) -->
+  <script src="core.js"></script>
+  <script src="ep1_noah.js"></script>
+  <script src="ep2_exodus.js"></script>
+  <script src="ep3_david_base.js"></script>
+  <script src="ep3_david_st1_2.js"></script>
+  <script src="ep3_david_st3_end.js"></script>
+  <script src="ep4_miracle_base.js"></script>
+  <script src="ep4_miracle_assets.js"></script>
+  <script src="ep4_miracle_world.js"></script>
+  <script src="ep4_miracle_stages.js"></script>
+  
+
+  <!-- 전체화면 자동 전환 & 화면 전환 보장 & 16비트 도트 월드맵 엔진 -->
+  <script>
+    function requestGameFullscreen() {
+      const docEl = document.documentElement;
+      try {
+        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+          if (docEl.requestFullscreen) {
+            docEl.requestFullscreen().catch(() => {});
+          } else if (docEl.webkitRequestFullscreen) {
+            docEl.webkitRequestFullscreen();
+          }
+        }
+      } catch (e) {}
+    }
+
+    function toggleGameFullscreen() {
+      const docEl = document.documentElement;
+      try {
+        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+          if (docEl.requestFullscreen) docEl.requestFullscreen().catch(() => {});
+          else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen();
+        } else {
+          if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+          else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+        }
+      } catch (e) {}
+    }
+
+    let _lastStartTap = 0;
+    function safeGoToClassSelect() {
+      const now = Date.now();
+      if (now - _lastStartTap < 250) return;
+      _lastStartTap = now;
+
+      const inputEl = document.getElementById('opening-name-input');
+      const birthEl = document.getElementById('opening-birth-input');
+      const warnEl = document.getElementById('opening-input-warn');
+      const rawName = inputEl ? inputEl.value.trim() : '';
+      const rawBirth = birthEl ? birthEl.value.replace(/[^0-9]/g, '').trim() : '';
+
+      // 이름과 생일(4자리) 필수 입력 검증
+      if (!rawName || rawBirth.length !== 4) {
+        if (warnEl) {
+          warnEl.classList.remove('hidden');
+          warnEl.textContent = !rawName
+            ? '⚠️ 탐험 대원 이름을 입력해 주세요!'
+            : '⚠️ 생일 4자리 숫자(예: 0504)를 정확히 입력해 주세요!';
+        }
+        if (typeof playSfx === 'function') playSfx('wrong');
+        if (typeof showToast === 'function') {
+          showToast(!rawName ? '⚠️ 탐험 대원 이름을 입력해 주세요!' : '⚠️ 생일 4자리(예: 0504)를 입력해 주세요!');
+        }
+        if (!rawName && inputEl) inputEl.focus();
+        else if (birthEl) birthEl.focus();
+        return;
+      }
+
+      if (warnEl) warnEl.classList.add('hidden');
+      if (inputEl) inputEl.blur();
+      if (birthEl) birthEl.blur();
+
+      requestGameFullscreen();
+
+      if (typeof goToClassSelect === 'function') {
+        goToClassSelect();
+        return;
+      }
+
+      const baseName = rawName;
+      window.explorerName = `${baseName}(${rawBirth})`;
+      if (typeof explorerName !== 'undefined') explorerName = window.explorerName;
+
+      const helloEl = document.getElementById('class-hello-name');
+      if (helloEl) helloEl.textContent = `🙌 ${baseName} (${rawBirth}) 대원님, 환영해요!`;
+
+      if (typeof openScreen === 'function') {
+        openScreen('screen-class');
+      } else {
+        const sOpen = document.getElementById('screen-opening');
+        const sClass = document.getElementById('screen-class');
+        if (sOpen) { sOpen.classList.add('hidden'); sOpen.classList.remove('flex'); }
+        if (sClass) { sClass.classList.remove('hidden'); sClass.classList.add('flex'); }
+      }
+
+      try {
+        if (typeof playSfx === 'function') playSfx('rescue');
+        if (typeof startMenuAdventureBgm === 'function') startMenuAdventureBgm();
+        if (typeof syncPlayerProgressFromSheet === 'function') syncPlayerProgressFromSheet();
+      } catch (e) {}
+    }
+
+    // =====================================================================
+    // 도트(픽셀아트) 월드맵 생성 및 실시간 애니메이션 엔진 (360 x 210 도트 해상도)
+    // =====================================================================
+    (function initPixelWorldMap() {
+      const cvs = document.getElementById('pixel-world-map');
+      if (!cvs) return;
+      const ctx = cvs.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+
+      const W = 360, H = 210;
+      const baseCanvas = document.createElement('canvas');
+      baseCanvas.width = W; baseCanvas.height = H;
+      const bctx = baseCanvas.getContext('2d');
+      bctx.imageSmoothingEnabled = false;
+
+      function pRect(c, x, y, w, h, col) {
+        c.fillStyle = col;
+        c.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+      }
+
+      function pDisk(c, cx, cy, rx, ry, col) {
+        c.fillStyle = col;
+        const x0 = Math.floor(cx - rx), x1 = Math.ceil(cx + rx);
+        const y0 = Math.floor(cy - ry), y1 = Math.ceil(cy + ry);
+        for (let y = y0; y <= y1; y++) {
+          for (let x = x0; x <= x1; x++) {
+            const dx = (x - cx) / rx, dy = (y - cy) / ry;
+            if (dx * dx + dy * dy <= 1.0) c.fillRect(x, y, 1, 1);
+          }
+        }
+      }
+
+      function pLine(c, x0, y0, x1, y1, col, thick = 1) {
+        c.fillStyle = col;
+        x0 = Math.round(x0); y0 = Math.round(y0);
+        x1 = Math.round(x1); y1 = Math.round(y1);
+        const dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+        const dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+        let err = dx + dy;
+        while (true) {
+          c.fillRect(x0 - Math.floor(thick / 2), y0 - Math.floor(thick / 2), thick, thick);
+          if (x0 === x1 && y0 === y1) break;
+          const e2 = 2 * err;
+          if (e2 >= dy) { err += dy; x0 += sx; }
+          if (e2 <= dx) { err += dx; y0 += sy; }
+        }
+      }
+
+      const landMask = new Uint8Array(W * H);
+      const greenMask = new Uint8Array(W * H);
+      const waterMask = new Uint8Array(W * H);
+
+      const blobs = [
+        [182, 108, 128, 76],
+        [118, 66, 72, 46],
+        [102, 142, 76, 48],
+        [205, 148, 88, 48],
+        [248, 72, 68, 50],
+        [258, 122, 68, 46]
+      ];
+      const greenBlobs = [
+        [244, 68, 64, 46],
+        [262, 108, 52, 36],
+        [210, 52, 36, 26],
+        // 우측 상단 작은 섬 전용 비대칭 녹지 군락 (자연스러운 곡선 형태)
+        [329, 21, 20, 12],
+        [338, 25, 15, 10]
+      ];
+      const smallIsland = [332, 24, 24, 15];
+
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          let v = 0;
+          for (let i = 0; i < blobs.length; i++) {
+            const [bx, by, rx, ry] = blobs[i];
+            const d = ((x - bx) / rx) ** 2 + ((y - by) / ry) ** 2;
+            if (d < 1.0) v += (1.0 - d);
+          }
+          const wave = Math.sin(x * 0.11) * Math.cos(y * 0.13) * 0.08;
+          const isSubIsle = (((x - smallIsland[0]) / smallIsland[2]) ** 2 + ((y - smallIsland[1]) / smallIsland[3]) ** 2) < 1.0;
+
+          if (v + wave > 0.28 || isSubIsle) {
+            landMask[y * W + x] = 1;
+            let gv = 0;
+            for (let j = 0; j < greenBlobs.length; j++) {
+              const [gx, gy, grx, gry] = greenBlobs[j];
+              const gd = ((x - gx) / grx) ** 2 + ((y - gy) / gry) ** 2;
+              if (gd < 1.0) gv += (1.0 - gd);
+            }
+            const isleWave = Math.sin(x * 0.24 + 0.7) * Math.cos(y * 0.28 - 0.4) * 0.14;
+            if (gv + (isSubIsle ? isleWave : wave * 0.5) > 0.25) {
+              greenMask[y * W + x] = 1;
+            }
+          }
+        }
+      }
+
+      function markWaterDisk(cx, cy, rx, ry) {
+        for (let y = Math.max(0, Math.floor(cy - ry)); y <= Math.min(H - 1, Math.ceil(cy + ry)); y++) {
+          for (let x = Math.max(0, Math.floor(cx - rx)); x <= Math.min(W - 1, Math.ceil(cx + rx)); x++) {
+            if (((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1.0) {
+              waterMask[y * W + x] = 1;
+            }
+          }
+        }
+      }
+      markWaterDisk(122, 92, 18, 11);
+      markWaterDisk(264, 62, 19, 12);
+
+      for (let t = 0; t <= 120; t++) {
+        const p = t / 120;
+        const rx1 = Math.round(138 + Math.sin(p * 5) * 8 + p * 35);
+        const ry1 = Math.round(192 - p * 84);
+        markWaterDisk(rx1, ry1, 2.2, 2.2);
+
+        const rx2 = Math.round(235 + Math.sin(p * 6) * 6 + p * 38);
+        const ry2 = Math.round(28 + p * 74);
+        markWaterDisk(rx2, ry2, 1.8, 1.8);
+      }
+
+      function buildStaticPixelMap() {
+        pRect(bctx, 0, 0, W, H, '#6fa0d0');
+        for (let y = 0; y < H; y += 2) {
+          for (let x = 0; x < W; x += 4) {
+            if ((x + y) % 8 === 0) pRect(bctx, x, y, 2, 1, '#6393c3');
+          }
+        }
+
+        for (let y = 2; y < H - 2; y++) {
+          for (let x = 2; x < W - 2; x++) {
+            const idx = y * W + x;
+            if (!landMask[idx]) {
+              let nearLand = false;
+              for (let dy = -3; dy <= 3 && !nearLand; dy++) {
+                for (let dx = -3; dx <= 3; dx++) {
+                  if (landMask[(y + dy) * W + (x + dx)]) { nearLand = true; break; }
+                }
+              }
+              if (nearLand) pRect(bctx, x, y, 1, 1, '#9cc4e4');
+              continue;
+            }
+
+            const isEdge = !landMask[(y - 1) * W + x] || !landMask[(y + 1) * W + x] ||
+                           !landMask[y * W + (x - 1)] || !landMask[y * W + (x + 1)];
+            const isSouthCliff = !landMask[(y + 2) * W + x] || !landMask[(y + 3) * W + x];
+
+            if (isEdge) {
+              pRect(bctx, x, y, 1, 1, '#5c3c24');
+            } else if (isSouthCliff) {
+              pRect(bctx, x, y, 1, 1, '#c88c4b');
+            } else if (waterMask[idx]) {
+              pRect(bctx, x, y, 1, 1, '#5b94c6');
+              if (!waterMask[(y - 1) * W + x]) pRect(bctx, x, y, 1, 1, '#9bc6e6');
+            } else if (greenMask[idx]) {
+              const shade = ((x + y) % 7 === 0) ? '#59a94e' : '#4a9342';
+              pRect(bctx, x, y, 1, 1, shade);
+              if (!greenMask[(y + 1) * W + x] || !greenMask[y * W + (x - 1)]) {
+                pRect(bctx, x, y, 1, 1, '#366e31');
+              }
+            } else {
+              const sandCol = ((x * 3 + y * 5) % 11 === 0) ? '#eac07e' : '#f3cb8b';
+              pRect(bctx, x, y, 1, 1, sandCol);
+            }
+          }
+        }
+
+        const dunes = [[155, 76], [168, 92], [182, 82], [112, 128], [132, 136], [176, 118], [92, 152]];
+        dunes.forEach(([dx, dy]) => {
+          pLine(bctx, dx - 6, dy + 2, dx, dy - 2, '#d6a461', 1);
+          pLine(bctx, dx, dy - 2, dx + 7, dy + 2, '#c48f4c', 1);
+        });
+
+        function drawSeaRocks(rx, ry) {
+          pDisk(bctx, rx, ry + 2, 8, 2, '#abd0ec');
+          pRect(bctx, rx - 5, ry - 2, 4, 4, '#5a6275');
+          pRect(bctx, rx - 4, ry - 4, 2, 2, '#737d94');
+          pRect(bctx, rx + 1, ry - 3, 5, 5, '#474e5e');
+          pRect(bctx, rx + 2, ry - 5, 3, 2, '#646d82');
+        }
+        drawSeaRocks(32, 68);
+        drawSeaRocks(46, 138);
+        drawSeaRocks(126, 202);
+        drawSeaRocks(338, 178);
+
+        drawPixelRainbow(bctx, 88, 34);
+        drawPixelNoahArk(bctx, 98, 52);
+
+        drawPixelPalm(bctx, 88, 86);
+        drawPixelPalm(bctx, 98, 96);
+        drawPixelPalm(bctx, 106, 82);
+        drawPixelPalm(bctx, 138, 84);
+        drawPixelPalm(bctx, 144, 96);
+        drawPixelPalm(bctx, 94, 108);
+        drawPixelElephant(bctx, 148, 92);
+        drawPixelCamel(bctx, 162, 68);
+        drawPixelCamel(bctx, 106, 122);
+
+        drawPixelSinaiMountain(bctx, 74, 136);
+        drawPixelStatue(bctx, 108, 156);
+        drawPixelStatue(bctx, 128, 158);
+        pRect(bctx, 145, 156, 16, 8, '#9bc6e6');
+        pRect(bctx, 145, 158, 16, 4, '#e7bf7e');
+        drawPixelPyramid(bctx, 204, 158, 22, 15);
+        drawPixelPyramid(bctx, 226, 164, 28, 19);
+        drawPixelPyramid(bctx, 248, 156, 20, 14);
+        drawPixelSphinx(bctx, 192, 172);
+
+        [[62, 126], [68, 162], [86, 168], [166, 182], [278, 162]].forEach(([cx, cy]) => drawPixelCactus(bctx, cx, cy));
+        [[92, 176], [136, 178], [176, 148], [268, 168]].forEach(([px, py]) => drawPixelPot(bctx, px, py));
+
+        drawPixelGrandPalace(bctx, 226, 122);
+        drawPixelHouse(bctx, 168, 118);
+        drawPixelHouse(bctx, 178, 124);
+        drawPixelHouse(bctx, 286, 126);
+        drawPixelHouse(bctx, 294, 136);
+        drawPixelTent(bctx, 258, 92, 18, 15);
+        drawPixelTent(bctx, 280, 88, 13, 11);
+        drawPixelTent(bctx, 286, 102, 12, 10);
+
+        [[222, 36], [236, 40], [274, 42], [292, 52], [302, 68], [298, 86], [242, 82], [228, 94]].forEach(([tx, ty]) => {
+          drawPixelRoundTree(bctx, tx, ty);
+        });
+      }
+
+      function drawPixelRainbow(c, cx, cy) {
+        const cols = ['#ef4444', '#f97316', '#facc15', '#22c55e', '#38bdf8'];
+        cols.forEach((col, i) => {
+          const r = 26 - i * 2;
+          for (let a = Math.PI; a <= Math.PI * 2; a += 0.04) {
+            const x = Math.round(cx + Math.cos(a) * r);
+            const y = Math.round(cy + Math.sin(a) * (r * 0.65));
+            pRect(c, x, y, 2, 2, col);
+          }
+        });
+      }
+
+      function drawPixelNoahArk(c, cx, cy) {
+        for (let i = -28; i <= 28; i++) {
+          const yOff = Math.round(-i * 0.38);
+          const halfH = Math.max(3, Math.round(10 - (i * i) / 95));
+          pRect(c, cx + i, cy + yOff - halfH, 2, halfH * 2, '#7c4d2b');
+          pRect(c, cx + i, cy + yOff - halfH, 2, 2, '#4a2c18');
+          pRect(c, cx + i, cy + yOff + halfH - 1, 2, 2, '#4a2c18');
+          if (i % 4 === 0) pRect(c, cx + i, cy + yOff - halfH + 2, 1, halfH * 2 - 4, '#5e381e');
+        }
+        pRect(c, cx - 12, cy - 10, 22, 8, '#9c6339');
+        pRect(c, cx - 14, cy - 13, 26, 4, '#b87747');
+        pRect(c, cx - 2, cy - 28, 3, 22, '#4a2c18');
+        pRect(c, cx - 14, cy - 25, 14, 10, '#cbd5e1');
+        pRect(c, cx - 12, cy - 23, 10, 6, '#94a3b8');
+      }
+
+      function drawPixelSinaiMountain(c, cx, cy) {
+        for (let y = 0; y < 18; y++) {
+          const w = 4 + Math.floor(y * 1.35);
+          pRect(c, cx - w, cy - 12 + y, w * 2, 1, '#8c6239');
+          pRect(c, cx - w, cy - 12 + y, 2, 1, '#593b1f');
+          pRect(c, cx + w - 2, cy - 12 + y, 2, 1, '#593b1f');
+        }
+        pRect(c, cx - 3, cy - 13, 6, 3, '#f97316');
+        pRect(c, cx - 2, cy - 12, 4, 5, '#facc15');
+      }
+
+      function drawPixelStatue(c, cx, cy) {
+        pRect(c, cx - 5, cy + 8, 10, 4, '#b88b4a');
+        pRect(c, cx - 4, cy - 10, 8, 18, '#d9ab66');
+        pRect(c, cx - 4, cy - 10, 2, 18, '#efca8c');
+        pRect(c, cx + 2, cy - 10, 2, 18, '#a6793b');
+        pRect(c, cx - 3, cy - 15, 6, 5, '#d9ab66');
+        pRect(c, cx - 1, cy - 13, 2, 2, '#4a2c18');
+      }
+
+      function drawPixelPyramid(c, cx, cy, halfW, h) {
+        for (let y = 0; y < h; y++) {
+          const w = Math.max(1, Math.round((y / h) * halfW));
+          pRect(c, cx - w, cy - h + y, w, 1, '#f3ca82');
+          pRect(c, cx, cy - h + y, w, 1, '#d19e54');
+          pRect(c, cx - w, cy - h + y, 1, 1, '#7c5325');
+          pRect(c, cx + w - 1, cy - h + y, 1, 1, '#7c5325');
+        }
+        pRect(c, cx - 2, cy - h, 4, 3, '#fef08a');
+      }
+
+      function drawPixelSphinx(c, cx, cy) {
+        pRect(c, cx - 12, cy, 22, 8, '#d9ab66');
+        pRect(c, cx - 12, cy, 22, 2, '#efca8c');
+        pRect(c, cx - 16, cy + 4, 6, 4, '#c4934e');
+        pRect(c, cx - 11, cy - 8, 9, 9, '#e5b873');
+        pRect(c, cx - 9, cy - 6, 5, 6, '#f3ca82');
+        pRect(c, cx - 8, cy - 4, 1, 1, '#4a2c18');
+        pRect(c, cx - 6, cy - 4, 1, 1, '#4a2c18');
+      }
+
+      function drawPixelGrandPalace(c, cx, cy) {
+        pRect(c, cx - 26, cy - 8, 52, 22, '#f5d6ce');
+        pRect(c, cx - 26, cy - 8, 52, 2, '#7c3f38');
+        pRect(c, cx - 26, cy + 12, 52, 2, '#7c3f38');
+        pRect(c, cx - 6, cy - 2, 12, 14, '#c98c82');
+        pRect(c, cx - 4, cy, 8, 12, '#8c4f47');
+        pRect(c, cx - 18, cy, 5, 9, '#c98c82');
+        pRect(c, cx + 13, cy, 5, 9, '#c98c82');
+        pDisk(c, cx, cy - 14, 12, 8, '#d95b72');
+        pDisk(c, cx - 3, cy - 15, 6, 5, '#f28fa1');
+        pRect(c, cx - 1, cy - 24, 2, 3, '#fde047');
+        pDisk(c, cx - 16, cy - 11, 6, 4, '#d95b72');
+        pDisk(c, cx + 16, cy - 11, 6, 4, '#d95b72');
+        pRect(c, cx - 31, cy - 18, 4, 32, '#f5d6ce');
+        pRect(c, cx + 27, cy - 18, 4, 32, '#f5d6ce');
+        pRect(c, cx - 32, cy - 20, 6, 3, '#d95b72');
+        pRect(c, cx + 26, cy - 20, 6, 3, '#d95b72');
+      }
+
+      function drawPixelTent(c, cx, cy, halfW, h) {
+        for (let y = 0; y < h; y++) {
+          const w = Math.max(1, Math.round((y / h) * halfW));
+          pRect(c, cx - w, cy - h + y, w, 1, '#d69e6b');
+          pRect(c, cx, cy - h + y, w, 1, '#ab7446');
+        }
+        pRect(c, cx - 3, cy - 6, 6, 6, '#3b2313');
+      }
+
+      function drawPixelHouse(c, cx, cy) {
+        pRect(c, cx - 5, cy - 4, 10, 8, '#f5dec4');
+        pRect(c, cx - 5, cy - 4, 10, 2, '#d4a67a');
+        pRect(c, cx + 1, cy - 3, 4, 7, '#d9b591');
+        pRect(c, cx - 3, cy - 1, 2, 2, '#5c3c24');
+        pRect(c, cx + 2, cy, 2, 4, '#5c3c24');
+      }
+
+      function drawPixelPalm(c, cx, cy) {
+        pLine(c, cx, cy, cx - 1, cy - 8, '#7c4d2b', 2);
+        pDisk(c, cx - 5, cy - 9, 4, 2, '#2e7d32');
+        pDisk(c, cx + 3, cy - 9, 4, 2, '#388e3c');
+        pDisk(c, cx - 1, cy - 11, 5, 2, '#4caf50');
+      }
+
+      function drawPixelRoundTree(c, cx, cy) {
+        pRect(c, cx - 1, cy, 3, 5, '#5c3c24');
+        pDisk(c, cx, cy - 4, 6, 5, '#2e6b27');
+        pDisk(c, cx - 1, cy - 5, 5, 4, '#4caf50');
+      }
+
+      function drawPixelCamel(c, cx, cy) {
+        pRect(c, cx - 4, cy - 3, 8, 4, '#c89250');
+        pRect(c, cx - 2, cy - 6, 4, 3, '#b82d46');
+        pRect(c, cx - 6, cy - 7, 2, 5, '#c89250');
+        pRect(c, cx - 8, cy - 7, 3, 2, '#c89250');
+        pRect(c, cx - 4, cy + 1, 1, 4, '#8c5e2a');
+        pRect(c, cx + 3, cy + 1, 1, 4, '#8c5e2a');
+      }
+
+      function drawPixelElephant(c, cx, cy) {
+        pDisk(c, cx, cy - 3, 6, 5, '#64748b');
+        pRect(c, cx - 3, cy - 7, 6, 3, '#dc2626');
+        pRect(c, cx - 8, cy - 5, 4, 4, '#64748b');
+        pRect(c, cx - 9, cy - 2, 2, 4, '#64748b');
+        pRect(c, cx - 4, cy + 1, 2, 3, '#475569');
+        pRect(c, cx + 2, cy + 1, 2, 3, '#475569');
+      }
+
+      function drawPixelCactus(c, cx, cy) {
+        pRect(c, cx - 1, cy - 6, 3, 7, '#2e7d32');
+        pRect(c, cx - 4, cy - 4, 3, 2, '#2e7d32');
+        pRect(c, cx - 4, cy - 6, 2, 3, '#2e7d32');
+        pRect(c, cx + 2, cy - 3, 3, 2, '#2e7d32');
+        pRect(c, cx + 3, cy - 5, 2, 3, '#2e7d32');
+      }
+
+      function drawPixelPot(c, cx, cy) {
+        pDisk(c, cx, cy, 3, 3, '#d97706');
+        pRect(c, cx - 3, cy - 1, 6, 1, '#38bdf8');
+        pRect(c, cx - 2, cy - 4, 4, 2, '#b45309');
+      }
+
+      buildStaticPixelMap();
+
+      const clouds = [
+        { x: 28, y: 22, s: 1.0, spd: 0.012 },
+        { x: 145, y: 18, s: 1.2, spd: 0.015 },
+        { x: 285, y: 16, s: 0.9, spd: 0.010 },
+        { x: 52, y: 105, s: 0.85, spd: 0.014 },
+        { x: 245, y: 74, s: 1.0, spd: 0.011 },
+        { x: 155, y: 136, s: 0.9, spd: 0.013 },
+        { x: 318, y: 148, s: 1.1, spd: 0.012 },
+        { x: 64, y: 188, s: 1.0, spd: 0.016 }
+      ];
+
+      const whirlpools = [
+        [24, 32], [186, 24], [32, 186], [308, 192]
+      ];
+
+      const routePoints = [];
+      const segments = [
+        [[76, 48], [62, 105], [94, 162]],
+        [[94, 162], [172, 182], [242, 156]],
+        [[242, 156], [282, 112], [276, 52]]
+      ];
+      segments.forEach(seg => {
+        const [p0, p1, p2] = seg;
+        for (let t = 0; t <= 24; t++) {
+          const u = t / 24, inv = 1 - u;
+          const rx = inv * inv * p0[0] + 2 * inv * u * p1[0] + u * u * p2[0];
+          const ry = inv * inv * p0[1] + 2 * inv * u * p1[1] + u * u * p2[1];
+          routePoints.push([Math.round(rx), Math.round(ry)]);
+        }
+      });
+
+      function drawPixelCloud(c, cx, cy, scale) {
+        const r = Math.round(6 * scale);
+        pDisk(c, cx + 2, cy + 5, r * 1.8, r * 0.7, 'rgba(30, 58, 95, 0.22)');
+        pDisk(c, cx, cy + 1, r * 1.7, r * 0.75, '#dbeafe');
+        pDisk(c, cx - r * 0.8, cy, r * 0.9, r * 0.8, '#ffffff');
+        pDisk(c, cx + r * 0.8, cy, r * 0.85, r * 0.75, '#ffffff');
+        pDisk(c, cx, cy - r * 0.35, r * 1.1, r * 0.95, '#ffffff');
+      }
+
+      function renderPixelMapFrame(now) {
+        const screenMap = document.getElementById('screen-map');
+        if (screenMap && !screenMap.classList.contains('hidden')) {
+          ctx.drawImage(baseCanvas, 0, 0);
+
+          const tick = Math.floor(now / 180);
+
+          whirlpools.forEach(([wx, wy], idx) => {
+            pDisk(ctx, wx, wy, 13, 8, '#87b5de');
+            pDisk(ctx, wx, wy, 9, 5, '#6fa0d0');
+            pDisk(ctx, wx + ((tick + idx) % 3 - 1), wy, 5, 3, '#b8dcf5');
+            pRect(ctx, wx - 1, wy - 1, 3, 2, '#ffffff');
+          });
+
+          const flameH = 2 + (tick % 3);
+          pRect(ctx, 72, 121 - flameH, 4, flameH, '#fef08a');
+          pRect(ctx, 73, 118 - flameH, 2, 2, '#ef4444');
+
+          const boatY = 61 + (tick % 2);
+          pRect(ctx, 259, boatY, 10, 3, '#78350f');
+          pRect(ctx, 263, boatY - 6, 1, 6, '#451a03');
+          pRect(ctx, 264, boatY - 5, 4, 4, '#ffffff');
+
+          for (let i = 0; i < routePoints.length; i++) {
+            const [rx, ry] = routePoints[i];
+            pRect(ctx, rx - 1, ry - 1, 3, 3, '#fef08a');
+            if ((i - (tick % 4) + 400) % 4 < 2) {
+              pRect(ctx, rx, ry, 2, 2, '#dc2626');
+            }
+          }
+
+          const arrowIndices = [12, 37, 62];
+          arrowIndices.forEach(ai => {
+            const [ax, ay] = routePoints[ai];
+            pDisk(ctx, ax, ay, 4, 4, '#dc2626');
+            pRect(ctx, ax - 1, ay - 1, 3, 3, '#fef08a');
+          });
+
+          clouds.forEach(cl => {
+            cl.x += cl.spd;
+            if (cl.x > W + 24) cl.x = -24;
+            drawPixelCloud(ctx, Math.round(cl.x), cl.y, cl.s);
+          });
+        }
+        requestAnimationFrame(renderPixelMapFrame);
+      }
+      requestAnimationFrame(renderPixelMapFrame);
+    })();
+  </script>
+</body>
+</html>
