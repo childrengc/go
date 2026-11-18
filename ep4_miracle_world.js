@@ -1730,6 +1730,11 @@ function buildMiracleOpenWorld(restoreSavedPos = false) {
       ? '✨ 부활 이후의 갈릴리와 예루살렘 오픈월드입니다! 엠마오·도마·바닷가 아침식사를 체험하고 감람산으로 오르세요!'
       : '🗺️ 성경 오픈월드에 오신 것을 환영합니다! 빛기둥이 켜진 순서(1→2→3→4)대로 메인 스테이지를 진행해 보세요!'
   );
+
+  // ✅ 오픈월드 진입 및 스테이지 클리어 후 복귀 시 즉시 ogg 배경음 재생 시작
+  if (typeof playMiracleOpenWorldOgg === 'function') {
+    playMiracleOpenWorldOgg();
+  }
 }
 
 window.returnToMiracleOpenWorld = function () {
