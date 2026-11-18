@@ -198,28 +198,56 @@ function getMiracleNotebookTotalCount() {
 }
 
 // -------------------------------------------------------------------------
-// 3. [초경량 오디오 시스템]
-//    - 오픈월드(openworld): 'assets/music/miracle01.ogg' 하드웨어 디코딩 루프 재생 (CPU 연산 부하 0)
-//    - 메인 스테이지(1~4) 및 엔딩: 기존 Web Audio API 코드 음원 재생
+// 3. [자동 폴백 & 화면 진단 포함] 오픈월드 BGM 오디오 시스템
 // -------------------------------------------------------------------------
 let _miracleOpenWorldOgg = null;
 let _miracleOggUnlockBound = false;
+let _miracleOggCandidateIdx = 0;
+
+// 숨겨진 이중 확장자나 대소문자, 대체 포맷까지 자동으로 순서대로 시도
+const MIRACLE_BGM_CANDIDATES = [
+  'assets/music/miracle01.ogg',
+  'assets/music/miracle01.ogg.mp3',
+  'assets/music/miracle01.mp3',
+  'assets/music/miracle01.wav',
+  'assets/music/Miracle01.ogg'
+];
 
 function getMiracleOpenWorldOgg() {
   if (!_miracleOpenWorldOgg) {
-    _miracleOpenWorldOgg = new Audio('./assets/music/miracle01.ogg');
+    _miracleOggCandidateIdx = 0;
+    _miracleOpenWorldOgg = new Audio(MIRACLE_BGM_CANDIDATES[0]);
     _miracleOpenWorldOgg.loop = true;
     _miracleOpenWorldOgg.preload = 'auto';
-    _miracleOpenWorldOgg.volume = 0.55;
+    _miracleOpenWorldOgg.volume = 0.65;
 
-    _miracleOpenWorldOgg.addEventListener('error', (e) => {
-      console.warn('[EP4 BGM] miracle01.ogg 파일을 불러오지 못했습니다. 경로(assets/music/miracle01.ogg)를 확인하세요.', e);
+    _miracleOpenWorldOgg.addEventListener('error', () => {
+      const failedPath = MIRACLE_BGM_CANDIDATES[_miracleOggCandidateIdx];
+      const errCode = _miracleOpenWorldOgg.error ? _miracleOpenWorldOgg.error.code : 0;
+      console.warn(`[EP4 BGM] 로드 실패 (${failedPath}), 에러코드: ${errCode}`);
+
+      // 다음 후보 파일 경로가 있으면 자동으로 재시도
+      if (_miracleOggCandidateIdx + 1 < MIRACLE_BGM_CANDIDATES.length) {
+        _miracleOggCandidateIdx++;
+        _miracleOpenWorldOgg.src = MIRACLE_BGM_CANDIDATES[_miracleOggCandidateIdx];
+        _miracleOpenWorldOgg.load();
+        if (miracleSubMode === 'openworld') {
+          _miracleOpenWorldOgg.play().catch(() => {});
+        }
+      } else {
+        // 모든 후보 경로가 실패했을 때 인게임 화면에 정확한 원인 표시
+        const reason = (errCode === 3 || errCode === 4)
+          ? '파일이 없거나(404) 정식 Ogg 코덱이 아닙니다(확장자만 바꾼 파일인지 확인)'
+          : `오디오 에러코드 ${errCode}`;
+        if (typeof showToast === 'function') {
+          showToast(`⚠️ BGM 재생 실패: ${reason} [assets/music/miracle01.ogg]`);
+        }
+      }
     });
   }
   return _miracleOpenWorldOgg;
 }
 
-// 사용자의 첫 화면 터치/마우스 클릭/키보드 입력 시 즉시 브라우저 오디오 잠금을 해제하고 재생
 function bindMiracleOggUserGestureUnlock() {
   if (_miracleOggUnlockBound) return;
   _miracleOggUnlockBound = true;
@@ -242,25 +270,12 @@ function playMiracleOpenWorldOgg() {
   if (typeof currentEpisode !== 'undefined' && currentEpisode !== 'miracle') return;
   if (miracleSubMode !== 'openworld') return;
 
-  const isMuted =
-    (typeof isBgmMuted !== 'undefined' && isBgmMuted) ||
-    (typeof bgmMuted !== 'undefined' && bgmMuted) ||
-    (typeof isMuted !== 'undefined' && isMuted) ||
-    (typeof soundEnabled !== 'undefined' && !soundEnabled) ||
-    (typeof bgmEnabled !== 'undefined' && !bgmEnabled);
-
   const audio = getMiracleOpenWorldOgg();
-  if (isMuted) {
-    if (!audio.paused) audio.pause();
-    return;
-  }
-
   if (audio.paused) {
     const playPromise = audio.play();
     if (playPromise !== undefined) {
       playPromise.catch((err) => {
-        // 자동재생 정책 대기 시 다음 클릭/터치(unlockHandler)에서 즉시 재생됨
-        console.debug('[EP4 BGM] 사용자 터치 대기 중:', err.name);
+        console.debug('[EP4 BGM] 터치 후 재생 대기:', err.name);
       });
     }
   }
