@@ -1933,15 +1933,12 @@ function updateMiracleEndingFrame(dt, now) {
 }
 
 // -------------------------------------------------------------------------
-// 7. 에피소드 4 플러그인 등록 (REGISTER_EPISODE)
+// 7. 에피소드 4 플러그인 등록 (REGISTER_EPISODE) - 시작부터 끝(});)까지 완전한 블록
 // -------------------------------------------------------------------------
 if (typeof EPISODE_MASTER_ADMIN_LOCK !== 'undefined') {
   EPISODE_MASTER_ADMIN_LOCK.miracle = false;
 }
 
-// -------------------------------------------------------------------------
-// [캐시 우회 안전장치] ep4_miracle_base.js 캐시 여부와 무관하게 오픈월드 신디사이저 강제 차단 및 ogg 재생
-// -------------------------------------------------------------------------
 if (typeof window.playMiracleOpenWorldOgg !== 'function') {
   let _fallbackOgg = null;
   window.playMiracleOpenWorldOgg = function () {
@@ -1975,7 +1972,6 @@ REGISTER_EPISODE('miracle', {
   getBaseGroundHeight: function (x, z, st) {
     return window.getMiracleGroundHeight(x, z, st);
   },
-  // ✅ 오픈월드에서는 base.js의 신디사이저 함수를 아예 호출하지 않고 즉시 차단!
   scheduleBgmBeat: function (ctx, step, st, mode, playing, timeRem, toFreq) {
     if (miracleSubMode === 'openworld') {
       if (typeof window.playMiracleOpenWorldOgg === 'function') {
@@ -1988,34 +1984,16 @@ REGISTER_EPISODE('miracle', {
     }
     return scheduleMiracleBgmBeat(ctx, step, st, mode, playing, timeRem, toFreq);
   },
-
-REGISTER_EPISODE('miracle', {
-  locked: false,
-  avatarIcon: '🕊️',
-  scripture: MIRACLE_SCRIPTURE,
-  certMeta: {
-    badge: '🕊️ 에피소드 4 : 예수님의 기적과 부활·재림 언약 완주!',
-    title: '갈릴리에서 감람산까지, 다시 오실 예수님을 기다려요!',
-    verse: '"하늘로 올려지신 이 예수는 하늘로 가심을 본 그대로 오시리라" (사도행전 1:11)',
-    mission: '갈릴리 바다·오병이어·십자가의 길·빈 무덤 부활 및 복음서 오픈월드 완주',
-    prefix: 'JES-'
-  },
-  getBaseGroundHeight: function (x, z, st) {
-    return window.getMiracleGroundHeight(x, z, st);
-  },
-  scheduleBgmBeat: function (ctx, step, st, mode, playing, timeRem, toFreq) {
-    return scheduleMiracleBgmBeat(ctx, step, st, mode, playing, timeRem, toFreq);
-  },
   createHeroMesh: function () {
     return createMiracleHeroMesh();
   },
   onCloseScreen: function () {
-  if (typeof stopMiracleOpenWorldOgg === 'function') stopMiracleOpenWorldOgg(true);
-  hideAllMiracleCustomUI();
+    if (typeof window.stopMiracleOpenWorldOgg === 'function') window.stopMiracleOpenWorldOgg(true);
+    hideAllMiracleCustomUI();
   },
   clearState: function () {
-  if (typeof stopMiracleOpenWorldOgg === 'function') stopMiracleOpenWorldOgg(true);
-  hideAllMiracleCustomUI();
+    if (typeof window.stopMiracleOpenWorldOgg === 'function') window.stopMiracleOpenWorldOgg(true);
+    hideAllMiracleCustomUI();
     clearMiracleFieldEventObjects();
     miracleStageSpots = [];
     miracleEventSpots = [];
@@ -2108,7 +2086,6 @@ REGISTER_EPISODE('miracle', {
     isPlaying = true;
     isTimeAttackActive = false;
     document.getElementById('hud-timer-box').classList.add('hidden');
-    // 스테이지 클리어 후 오픈월드 안전 위치로 복귀하며, 스팟 재진입 잠금(_requireLeaveZone)으로 시작 창이 다시 뜨지 않음
     buildMiracleOpenWorld(true);
     if (typeof syncMiracleMainStageSequentialBeams === 'function') {
       syncMiracleMainStageSequentialBeams();
