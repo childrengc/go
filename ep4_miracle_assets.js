@@ -1,7 +1,7 @@
 // =========================================================================
 // [ep4_miracle_assets.js - 파트 1/2] 에피소드 4 전용 소프트 로우 폴리곤 에셋 & 태양 그림자 엔진
 // 1. 실시간 태양 궤도 이동(Dynamic Sun) 및 전 객체(사람·동물·나무·건물) 그림자 시스템
-// 2. 예수님 전용 모델링(5:5 장발 + 밝은 주름 로브 + 대각선 붉은 숄) & 남녀 3종 캐릭터 (두건 살색 돌출 완벽 제거)
+// 2. 전면 개방형(Open-Front Arch) 다면체 후드·장발 구조 적용 — 얼굴 가림 및 살색 돌출 현상 완벽 해결
 // =========================================================================
 
 const _miracleDoubleSideMatCache = {};
@@ -24,21 +24,6 @@ function createDoubleSideLowPolyMesh(geo, hexColor, x = 0, y = 0, z = 0, castSha
     m.receiveShadow = true;
   }
   return m;
-}
-
-function pushTriangle(arr, a, b, c) {
-  arr.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
-}
-function pushQuad(arr, a, b, c, d) {
-  pushTriangle(arr, a, b, c);
-  pushTriangle(arr, a, c, d);
-}
-
-function buildBufferGeoFromTriangles(verts) {
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
-  geo.computeVertexNormals();
-  return geo;
 }
 
 // -------------------------------------------------------------------------
@@ -144,7 +129,7 @@ function updateMiracleDynamicSun(dt, now) {
 }
 
 // -------------------------------------------------------------------------
-// 2. 공통 인체 & 의복 지오메트리 빌더 (살색 돌출 원천 차단 + 예수님 전용 모델링 포함)
+// 2. 인체 비례 의복 & 전면 개방형(Open-Front) 헤드/후드 빌더
 // -------------------------------------------------------------------------
 
 // 2-1) 12각 아코디언 주름(Pleated) A라인 롱 스커트 지오메트리
@@ -188,12 +173,12 @@ function getPleatedAlineSkirtGeo() {
   return finalGeo;
 }
 
-// 2-2) 역삼각형 인체 상체(Torso) 지오메트리 (어깨·목 부분은 숄/로브 안쪽에 완전히 묻히도록 테이퍼링)
+// 2-2) 슬림한 역삼각형 인체 상체(Torso) 지오메트리
 let _anatomicalUpperTorsoGeo = null;
 function getAnatomicalUpperTorsoGeo() {
   if (_anatomicalUpperTorsoGeo) return _anatomicalUpperTorsoGeo;
 
-  const geo = new THREE.CylinderGeometry(0.26, 0.23, 0.54, 8, 2, false);
+  const geo = new THREE.CylinderGeometry(0.25, 0.22, 0.52, 8, 2, false);
   const pos = geo.attributes.position;
 
   for (let i = 0; i < pos.count; i++) {
@@ -201,10 +186,10 @@ function getAnatomicalUpperTorsoGeo() {
     let y = pos.getY(i);
     let z = pos.getZ(i);
 
-    z *= 0.65;
-    if (y > 0.18) {
-      x *= 0.82;
-      z *= 0.82;
+    z *= 0.64;
+    if (y > 0.16) {
+      x *= 0.80;
+      z *= 0.80;
     }
     pos.setXYZ(i, x, y, z);
   }
@@ -215,51 +200,35 @@ function getAnatomicalUpperTorsoGeo() {
   return finalGeo;
 }
 
-// 2-3) [핵심 수정] 두건/머리카락 밖으로 살색 모서리가 절대 튀어나오지 않는 테이퍼링 얼굴 지오메트리
-//      - 정면 얼굴면(z > 0)만 평평하게 유지하고, 관자놀이·정수리·뒤통수를 안쪽으로 깊게 깎아 두건 내부에 완전히 수납
+// 2-3) 다면체 얼굴 본체 (후드 안쪽에 완전히 수납되면서 정면 얼굴은 평평하게 노출)
 let _chamferedFaceGeo = null;
 function getChamferedFaceGeo() {
   if (_chamferedFaceGeo) return _chamferedFaceGeo;
 
-  const w = 0.66, h = 0.66, d = 0.56;
-  const geo = new THREE.BoxGeometry(w, h, d, 3, 3, 3);
+  // 가로 0.52(±0.26), 세로 0.50(±0.25), 깊이 0.42(-0.18 ~ +0.24)
+  const w = 0.52, h = 0.50, d = 0.42;
+  const geo = new THREE.BoxGeometry(w, h, d, 2, 2, 2);
   const pos = geo.attributes.position;
 
   for (let i = 0; i < pos.count; i++) {
     let x = pos.getX(i);
     let y = pos.getY(i);
     let z = pos.getZ(i);
-    const nx = x / (w * 0.5);
-    const ny = y / (h * 0.5);
-    const nz = z / (d * 0.5);
-    const ax = Math.abs(nx);
-    const ay = Math.abs(ny);
-    const az = Math.abs(nz);
 
-    // 정면 얼굴(nz > 0.5)은 깔끔한 다면체 평면으로 유지하되 가장자리만 살짝 깎음
-    if (nz > 0.5) {
-      if (ax > 0.85) x *= 0.90;
-      if (ny > 0.85) y *= 0.88;
-      if (ny < -0.85) {
-        x *= 0.80;
-        z *= 0.90;
-      }
-      z = 0.285; // 정면 얼굴 평면 고정
-    } else {
-      // 옆머리·정수리·뒤통수 정점들은 안쪽으로 강하게 오므려 두건이나 머리카락을 절대 뚫지 못하게 함!
-      x *= 0.72;
-      if (ny > 0.2) {
-        y *= 0.78;
-        x *= 0.82;
-      }
-      if (nz < 0) {
-        z *= 0.55; // 뒤통수 대폭 축소
-      }
-      if (ny < -0.8) {
-        x *= 0.75;
-      }
+    // 턱 아래 모서리를 살짝 갸름하게 다듬음
+    if (y < -0.20) {
+      x *= 0.88;
+      if (z > 0.15) z = 0.22;
     }
-
+    // 정면 얼굴 평면(z = +0.22) 고정
+    if (z > 0.18 && y >= -0.20) {
+      z = 0.23;
+    }
+    // 뒤통수와 정수리 모서리는 안쪽으로 오므려 두건 밖 돌출 원천 방지
+    if (z < -0.10) {
+      x *= 0.82;
+      y *= 0.85;
+    }
     pos.setXYZ(i, x, y, z);
   }
 
@@ -269,167 +238,164 @@ function getChamferedFaceGeo() {
   return finalGeo;
 }
 
-// 2-4) [핵심 수정] 얼굴 상단·옆·뒤를 넉넉한 여유 공간으로 완벽히 감싸는 다면체 후드(수드라/베일) 지오메트리
-let _cleanHoodShellGeo = null;
-function getCleanHoodShellGeo() {
-  if (_cleanHoodShellGeo) return _cleanHoodShellGeo;
+// 2-4) [핵심 해결책] 얼굴 정면을 절대 가리지 않는 4분할 전면 개방형(Open-Front Arch) 다면체 후드 생성기
+//      - 원통 정점을 당기지 않고, ① 상단 돔(y > 0.20) + ② 좌우 날개(|x| > 0.25) + ③ 뒷자락(z < -0.14)으로 분리 조립!
+function createOpenFrontHoodGroup(hoodColor, isFemale = false, agal1 = null, agal2 = null, veilBand = null) {
+  const hoodGrp = new THREE.Group();
 
-  const geo = new THREE.CylinderGeometry(0.38, 0.45, 0.94, 8, 4, false);
-  const pos = geo.attributes.position;
+  // ① 상단 돔 지붕 (얼굴 위쪽 y = +0.20 ~ +0.46 만 덮음 -> 눈과 이마를 절대 가리지 않음!)
+  const topDomeGeo = new THREE.CylinderGeometry(0.28, 0.39, 0.24, 8, 1, false);
+  topDomeGeo.scale(1.04, 1.0, 0.88);
+  const topDome = createLowPolyMesh(topDomeGeo.toNonIndexed(), hoodColor, 0, 0.33, -0.02);
+  hoodGrp.add(topDome);
 
-  for (let i = 0; i < pos.count; i++) {
-    let x = pos.getX(i);
-    let y = pos.getY(i);
-    let z = pos.getZ(i);
+  // 이마 위 전면 드리우기 챙 (y = +0.22, 얼굴 정면 위쪽 테두리만 깔끔하게 마감)
+  const frontBrim = createLowPolyMesh(new THREE.BoxGeometry(0.62, 0.07, 0.16), hoodColor, 0, 0.22, 0.22);
+  hoodGrp.add(frontBrim);
 
-    const yn = y / 0.47; // -1 ~ +1
-
-    if (yn > 0.85) {
-      // 정수리 다면체 돔 (얼굴 정수리 y=0.25 보다 훨씬 높은 y=0.50~0.55 유지)
-      x *= 0.76;
-      z *= 0.76;
-      y = 0.50 + (1.0 - Math.hypot(x, z)) * 0.06;
-    } else if (yn > 0.35) {
-      x *= 1.08;
-      z *= 1.02;
-    } else if (yn > -0.45) {
-      x *= 1.16;
-      z *= 1.06;
-    } else {
-      x *= 0.95;
-      z *= 0.90;
+  // ② 좌·우 측면 두건 날개 (|x| = 0.25 ~ 0.39 구간에만 위치 -> 얼굴 중앙 x ∈ [-0.25, +0.25] 은 100% 뚫려 있음!)
+  const sideWingGeo = new THREE.BoxGeometry(0.14, 0.62, 0.46, 1, 2, 2);
+  const sPos = sideWingGeo.attributes.position;
+  for (let i = 0; i < sPos.count; i++) {
+    let sx = sPos.getX(i), sy = sPos.getY(i), sz = sPos.getZ(i);
+    // 아래로 내려갈수록 살짝 넓어지다 맨 아래 끝단은 안쪽으로 접힘
+    if (sy < -0.20) {
+      sx *= 0.85;
+      sz *= 0.90;
+    } else if (sy < 0.05) {
+      sx *= 1.08;
     }
+    sPos.setXYZ(i, sx, sy, sz);
+  }
+  const finalSideGeo = sideWingGeo.toNonIndexed();
+  finalSideGeo.computeVertexNormals();
 
-    // 앞쪽 얼굴 개구부(Opening): 이마 위(y = 0.25)와 양볼 옆(x = ±0.35) 바깥으로 두건을 깔끔하게 성형
-    if (z > 0.10 && yn < 0.38) {
-      if (Math.abs(x) < 0.28) {
-        y = Math.max(y, 0.25);
-        z = 0.34;
-      } else {
-        x = Math.sign(x) * 0.36;
-        z = 0.30;
-      }
+  const wingL = createLowPolyMesh(finalSideGeo, hoodColor, -0.31, -0.06, 0.01);
+  wingL.rotation.z = 0.08;
+  const wingR = createLowPolyMesh(finalSideGeo, hoodColor,  0.31, -0.06, 0.01);
+  wingR.rotation.z = -0.08;
+  hoodGrp.add(wingL, wingR);
+
+  // ③ 후면 두건 뒷자락 (얼굴 뒤쪽 z = -0.14 ~ -0.32 만 감싸는 다면체 뒷벽)
+  const backGeo = new THREE.BoxGeometry(0.72, 0.62, 0.18, 3, 2, 1);
+  const bPos = backGeo.attributes.position;
+  for (let i = 0; i < bPos.count; i++) {
+    let bx = bPos.getX(i), by = bPos.getY(i), bz = bPos.getZ(i);
+    // 뒷모습 중앙은 볼록하고 양옆과 하단은 다면체로 깎인 형태 (타깃 이미지 우측 뒷모습 완벽 재현)
+    if (Math.abs(bx) > 0.25) {
+      bz += 0.04;
+      bx *= 0.94;
     }
+    if (by < -0.20) {
+      bx *= 0.86;
+      bz += 0.05;
+    }
+    bPos.setXYZ(i, bx, by, bz);
+  }
+  const finalBackGeo = backGeo.toNonIndexed();
+  finalBackGeo.computeVertexNormals();
+  const backCurtain = createLowPolyMesh(finalBackGeo, hoodColor, 0, -0.06, -0.22);
+  hoodGrp.add(backCurtain);
 
-    pos.setXYZ(i, x, y, z);
+  // ④ 여성 전용: 턱 아래(y = -0.32)로 좌우 베일을 매끄럽게 이어주는 단일 턱 스카프
+  if (isFemale) {
+    const chinScarf = createLowPolyMesh(new THREE.BoxGeometry(0.62, 0.11, 0.28), hoodColor, 0, -0.31, 0.10);
+    const chinVPoint = createLowPolyMesh(new THREE.ConeGeometry(0.22, 0.14, 4), hoodColor, 0, -0.40, 0.17);
+    chinVPoint.rotation.x = Math.PI;
+    chinVPoint.rotation.y = Math.PI / 4;
+    chinVPoint.scale.set(1.15, 1.0, 0.45);
+    hoodGrp.add(chinScarf, chinVPoint);
+
+    if (veilBand) {
+      const vBand = createLowPolyMesh(new THREE.CylinderGeometry(0.39, 0.40, 0.048, 8), veilBand, 0, 0.26, -0.02);
+      vBand.scale.set(1.04, 1.0, 0.88);
+      hoodGrp.add(vBand);
+    }
+  } else {
+    // 남성 전용: 상단 돔 둘레를 감싸는 베이지 머리끈(Agal)
+    if (agal1) {
+      const agalUpper = createLowPolyMesh(new THREE.CylinderGeometry(0.395, 0.405, 0.055, 8), agal1, 0, 0.29, -0.02);
+      agalUpper.scale.set(1.04, 1.0, 0.88);
+      hoodGrp.add(agalUpper);
+    }
+    if (agal2) {
+      const agalLower = createLowPolyMesh(new THREE.CylinderGeometry(0.405, 0.415, 0.052, 8), agal2, 0, 0.23, -0.02);
+      agalLower.scale.set(1.04, 1.0, 0.88);
+      hoodGrp.add(agalLower);
+    }
   }
 
-  const finalGeo = geo.toNonIndexed();
-  finalGeo.computeVertexNormals();
-  _cleanHoodShellGeo = finalGeo;
-  return finalGeo;
+  return hoodGrp;
 }
 
 // -------------------------------------------------------------------------
-// 3. [예수님 캐릭터 전용 에셋: Gemini_Generated_Image_wssrukwssrukwssr.png 100% 반영]
-//    - 3-1) 5:5 센터 가르마 다면체 웨이브 장발 (앞·옆·뒤 일체형)
-//    - 3-2) 입 주변이 보이는 다면체 갈색 수염
-//    - 3-3) 왼쪽 어깨에서 오른쪽 치마 밑단으로 흐르는 4단 주름 붉은 숄(Red Sash)
-//    - 3-4) 넓게 퍼지는 아이보리 화이트 긴 소매
+// 3. [예수님 캐릭터 전용 오픈-프론트 5:5 장발 & 대각선 붉은 숄]
+//    - 예수님의 머리카락도 얼굴 정면 창을 절대 침범하지 않는 4분할 다면체 구조로 조립!
 // -------------------------------------------------------------------------
-let _jesusBackHairGeo = null;
 function createJesusFacetedHairGroup(hairHex = '#4e2f1e') {
   const hairGrp = new THREE.Group();
 
-  // 1) 정수리~뒷머리~어깨까지 덮는 일체형 다면체 장발 돔 (타깃 이미지 우측 뒷모습 완벽 재현)
-  if (!_jesusBackHairGeo) {
-    const geo = new THREE.CylinderGeometry(0.36, 0.44, 0.94, 8, 4, false);
-    const pos = geo.attributes.position;
-    for (let i = 0; i < pos.count; i++) {
-      let x = pos.getX(i);
-      let y = pos.getY(i);
-      let z = pos.getZ(i);
-      const yn = y / 0.47;
+  // 1) 정수리 5:5 가르마 볼륨 (좌·우 다면체 윗머리 2조각 -> 가운데 가르마 골 표현)
+  const topCrownL = createLowPolyMesh(new THREE.BoxGeometry(0.34, 0.18, 0.56), hairHex, -0.16, 0.30, -0.01);
+  topCrownL.rotation.z = 0.12;
+  const topCrownR = createLowPolyMesh(new THREE.BoxGeometry(0.34, 0.18, 0.56), hairHex,  0.16, 0.30, -0.01);
+  topCrownR.rotation.z = -0.12;
 
-      if (yn > 0.85) {
-        // 정수리 5:5 가르마 홈(x=0 부근은 살짝 낮고 양옆이 볼록한 M자형 정수리)
-        x *= 0.78;
-        z *= 0.78;
-        const centerPartDip = (Math.abs(x) < 0.08) ? -0.03 : 0.04;
-        y = 0.48 + centerPartDip;
-      } else if (yn > 0.30) {
-        x *= 1.10;
-        z *= 1.02;
-      } else if (yn > -0.45) {
-        // 귀 옆~볼 옆 웨이브 볼륨
-        x *= 1.18;
-        z *= 1.05;
-      } else {
-        // 어깨 위 하단 테이퍼링
-        x *= 1.02;
-        z *= 0.92;
-      }
+  // 2) 이마 양옆으로 갈라지는 5:5 앞머리 (y = +0.22 이상에만 위치하여 눈·눈썹을 절대 가리지 않음)
+  const bangL = createLowPolyMesh(new THREE.BoxGeometry(0.24, 0.10, 0.12), hairHex, -0.15, 0.22, 0.24);
+  bangL.rotation.z = 0.28;
+  const bangR = createLowPolyMesh(new THREE.BoxGeometry(0.24, 0.10, 0.12), hairHex,  0.15, 0.22, 0.24);
+  bangR.rotation.z = -0.28;
 
-      // 앞얼굴 창 확보
-      if (z > 0.08 && yn < 0.38) {
-        if (Math.abs(x) < 0.28) {
-          y = Math.max(y, 0.26);
-          z = 0.32;
-        } else {
-          x = Math.sign(x) * 0.36;
-          z = 0.27;
-        }
-      }
-      // 뒷머리 중앙 다면체 능선 강조
-      if (z < -0.25 && Math.abs(x) < 0.12) {
-        z -= 0.04;
-      }
+  // 3) 얼굴 양옆 바깥(|x| = 0.26 ~ 0.38)으로 물결치며 내려오는 3단 웨이브 옆머리
+  const wave1L = createLowPolyMesh(new THREE.BoxGeometry(0.13, 0.26, 0.24), hairHex, -0.31, 0.10, 0.14);
+  wave1L.rotation.z = 0.10;
+  const wave1R = createLowPolyMesh(new THREE.BoxGeometry(0.13, 0.26, 0.24), hairHex,  0.31, 0.10, 0.14);
+  wave1R.rotation.z = -0.10;
 
-      pos.setXYZ(i, x, y, z);
+  const wave2L = createLowPolyMesh(new THREE.BoxGeometry(0.14, 0.26, 0.24), hairHex, -0.33, -0.12, 0.12);
+  wave2L.rotation.z = -0.08;
+  const wave2R = createLowPolyMesh(new THREE.BoxGeometry(0.14, 0.26, 0.24), hairHex,  0.33, -0.12, 0.12);
+  wave2R.rotation.z =  0.08;
+
+  const wave3L = createLowPolyMesh(new THREE.ConeGeometry(0.11, 0.22, 5), hairHex, -0.31, -0.32, 0.12);
+  wave3L.rotation.x = Math.PI;
+  const wave3R = createLowPolyMesh(new THREE.ConeGeometry(0.11, 0.22, 5), hairHex,  0.31, -0.32, 0.12);
+  wave3R.rotation.x = Math.PI;
+
+  // 4) 뒷모습 다면체 장발 뒷머리 (z = -0.14 ~ -0.32 구간에서 뒤통수와 목 뒤를 풍성하게 덮음)
+  const backHairGeo = new THREE.BoxGeometry(0.72, 0.68, 0.18, 3, 2, 1);
+  const bPos = backHairGeo.attributes.position;
+  for (let i = 0; i < bPos.count; i++) {
+    let bx = bPos.getX(i), by = bPos.getY(i), bz = bPos.getZ(i);
+    if (Math.abs(bx) > 0.25) bz += 0.04;
+    if (by < -0.25) {
+      bx *= 0.88;
+      bz += 0.04;
     }
-    const finalGeo = geo.toNonIndexed();
-    finalGeo.computeVertexNormals();
-    _jesusBackHairGeo = finalGeo;
+    bPos.setXYZ(i, bx, by, bz);
   }
+  const finalBackHairGeo = backHairGeo.toNonIndexed();
+  finalBackHairGeo.computeVertexNormals();
+  const backHairMesh = createLowPolyMesh(finalBackHairGeo, hairHex, 0, -0.04, -0.21);
 
-  const backHairMesh = createDoubleSideLowPolyMesh(_jesusBackHairGeo, hairHex, 0, 0.02, -0.03);
-  hairGrp.add(backHairMesh);
-
-  // 2) 정면 5:5 센터 가르마 앞머리 & 양옆 3단 웨이브 옆머리 (타깃 이미지 좌측 앞모습 완벽 재현)
-  const browWaveL = createLowPolyMesh(new THREE.BoxGeometry(0.26, 0.13, 0.14), hairHex, -0.14, 0.27, 0.28);
-  browWaveL.rotation.set(0.1, 0.15, 0.32);
-  const browWaveR = createLowPolyMesh(new THREE.BoxGeometry(0.26, 0.13, 0.14), hairHex,  0.14, 0.27, 0.28);
-  browWaveR.rotation.set(0.1, -0.15, -0.32);
-
-  // 양옆으로 물결치며 내려오는 측면 장발 웨이브 블록
-  const waveUpperL = createLowPolyMesh(new THREE.BoxGeometry(0.14, 0.30, 0.22), hairHex, -0.36, 0.10, 0.20);
-  waveUpperL.rotation.z = 0.12;
-  const waveUpperR = createLowPolyMesh(new THREE.BoxGeometry(0.14, 0.30, 0.22), hairHex,  0.36, 0.10, 0.20);
-  waveUpperR.rotation.z = -0.12;
-
-  const waveMidL = createLowPolyMesh(new THREE.BoxGeometry(0.15, 0.28, 0.22), hairHex, -0.38, -0.14, 0.18);
-  waveMidL.rotation.z = -0.10;
-  const waveMidR = createLowPolyMesh(new THREE.BoxGeometry(0.15, 0.28, 0.22), hairHex,  0.38, -0.14, 0.18);
-  waveMidR.rotation.z =  0.10;
-
-  const waveLowL = createLowPolyMesh(new THREE.ConeGeometry(0.12, 0.24, 5), hairHex, -0.35, -0.34, 0.16);
-  waveLowL.rotation.x = Math.PI;
-  waveLowL.rotation.z = -0.15;
-  const waveLowR = createLowPolyMesh(new THREE.ConeGeometry(0.12, 0.24, 5), hairHex,  0.35, -0.34, 0.16);
-  waveLowR.rotation.x = Math.PI;
-  waveLowR.rotation.z =  0.15;
-
-  hairGrp.add(browWaveL, browWaveR, waveUpperL, waveUpperR, waveMidL, waveMidR, waveLowL, waveLowR);
+  hairGrp.add(topCrownL, topCrownR, bangL, bangR, wave1L, wave1R, wave2L, wave2R, wave3L, wave3R, backHairMesh);
   return hairGrp;
 }
 
-// 예수님 전용 왼쪽 어깨 -> 오른쪽 치마 밑단 대각선 붉은 숄(Red Sash) 생성기 (4단 주름 능선 반영)
-function createJesusDiagonalRedSashGroup(sashHex = '#c83228', foldHex = '#b02820') {
+function createJesusDiagonalRedSashGroup(sashHex = '#c83228', foldHex = '#ad261d') {
   const sashGrp = new THREE.Group();
 
-  // 1) 왼쪽 어깨(x = +0.20) 꼭대기를 감싸는 어깨 드레이프 캡
   const shoulderPad = createLowPolyMesh(new THREE.BoxGeometry(0.22, 0.10, 0.30), sashHex, 0.19, 1.50, 0.0);
   shoulderPad.rotation.z = -0.18;
   sashGrp.add(shoulderPad);
 
-  // 2) 전면 및 후면 대각선 주름 스트립 4줄 (왼쪽 어깨 위 x=+0.19, y=1.48 에서 오른쪽 무릎 위 x=-0.30, y=0.36 으로 사선 흐름)
   const strips = 4;
   for (let i = 0; i < strips; i++) {
     const offset = (i - 1.5) * 0.052;
     const col = (i % 2 === 0) ? sashHex : foldHex;
     const zProtrude = (i % 2 === 0) ? 0.012 : 0.0;
 
-    // 전면 대각선 주름 띠
     const fStart = new THREE.Vector3(0.19 + offset * 0.7, 1.48 - offset * 0.3, 0.165 + zProtrude);
     const fMid   = new THREE.Vector3(0.01 + offset * 0.8, 0.98,                0.215 + zProtrude);
     const fEnd   = new THREE.Vector3(-0.26 + offset * 0.7, 0.36 + offset * 0.4, 0.295 + zProtrude);
@@ -439,7 +405,6 @@ function createJesusDiagonalRedSashGroup(sashHex = '#c83228', foldHex = '#b02820
     const fLower = createBranchSegmentMesh(fEnd, fMid,   0.046, 0.042, col);
     fLower.scale.z = 0.45;
 
-    // 후면 대각선 주름 띠 (타깃 이미지 우측 뒷모습 완벽 재현)
     const bStart = new THREE.Vector3(0.19 + offset * 0.7, 1.48 - offset * 0.3, -0.165 - zProtrude);
     const bMid   = new THREE.Vector3(0.01 + offset * 0.8, 0.98,                -0.210 - zProtrude);
     const bEnd   = new THREE.Vector3(-0.26 + offset * 0.7, 0.36 + offset * 0.4, -0.285 - zProtrude);
@@ -452,7 +417,6 @@ function createJesusDiagonalRedSashGroup(sashHex = '#c83228', foldHex = '#b02820
     sashGrp.add(fUpper, fLower, bUpper, bLower);
   }
 
-  // 3) 오른쪽 치마 옆면(x < 0, y = 0.34 ~ 0.62)에서 앞·뒤 대각선 숄이 만나는 측면 랩(Side Wrap)
   const rightSideWrap = createLowPolyMesh(new THREE.CylinderGeometry(0.32, 0.38, 0.28, 8, 1, true, Math.PI * 1.15, Math.PI * 0.70), sashHex, -0.02, 0.46, 0);
   rightSideWrap.scale.set(1.02, 1.0, 0.78);
   sashGrp.add(rightSideWrap);
@@ -460,7 +424,6 @@ function createJesusDiagonalRedSashGroup(sashHex = '#c83228', foldHex = '#b02820
   return sashGrp;
 }
 
-// 예수님 전용 넓게 퍼지는 아이보리 화이트 긴 소매 양팔 빌더
 function createJesusBellSleeveArm(isLeft, robeHex = '#e8e6e2', cuffHex = '#d8d5d0', skinHex = '#f2cfb4') {
   const side = isLeft ? -1 : 1;
   const armGrp = new THREE.Group();
@@ -469,11 +432,9 @@ function createJesusBellSleeveArm(isLeft, robeHex = '#e8e6e2', cuffHex = '#d8d5d
   const pivot = new THREE.Group();
   pivot.rotation.z = side * 0.24;
 
-  // 어깨 캡
   const shCap = createLowPolyMesh(new THREE.DodecahedronGeometry(0.135, 0), robeHex, 0, 0.01, 0);
   pivot.add(shCap);
 
-  // 아래로 넓게 퍼지는 6각 다면체 벨 슬리브(Bell Sleeve)
   const sleeveLen = 0.48;
   const sGeo = new THREE.CylinderGeometry(0.125, 0.21, sleeveLen, 6, 1, false);
   sGeo.translate(0, -sleeveLen * 0.5, 0);
@@ -481,7 +442,6 @@ function createJesusBellSleeveArm(isLeft, robeHex = '#e8e6e2', cuffHex = '#d8d5d
   const sMesh = createLowPolyMesh(sGeo.toNonIndexed(), robeHex, 0, 0, 0);
   pivot.add(sMesh);
 
-  // 소매 안쪽 얇은 속소매 단 & 다면체 손
   const innerCuff = createLowPolyMesh(new THREE.CylinderGeometry(0.095, 0.105, 0.08, 6), cuffHex, 0, -0.50, 0);
   const palm = createLowPolyMesh(new THREE.BoxGeometry(0.10, 0.12, 0.12), skinHex, 0, -0.58, 0.01);
   const fingers = createLowPolyMesh(new THREE.BoxGeometry(0.09, 0.08, 0.10), skinHex, -side * 0.015, -0.65, 0.01);
@@ -495,12 +455,11 @@ function createJesusBellSleeveArm(isLeft, robeHex = '#e8e6e2', cuffHex = '#d8d5d
 }
 
 // -------------------------------------------------------------------------
-// 4. 일반 캐릭터용 판초 숄, 술 패널, 소매, 허리띠 빌더
+// 4. 일반 캐릭터용 숄, 술 패널, 소매, 허리띠 빌더
 // -------------------------------------------------------------------------
 function createCleanIsraeliteMantleGroup(shawlHex, stripe1Hex, stripe2Hex, isFemale) {
   const mantleGrp = new THREE.Group();
 
-  // 어깨 상단 요크 (갈색 몸통 어깨와 목 둘레를 완전히 덮어 살색이나 속옷이 튀어나오지 않게 함)
   const shoulderYoke = createLowPolyMesh(new THREE.CylinderGeometry(0.19, 0.34, 0.16, 8), shawlHex, 0, 1.49, -0.01);
   shoulderYoke.scale.set(1.10, 1.0, 0.72);
   mantleGrp.add(shoulderYoke);
@@ -513,18 +472,6 @@ function createCleanIsraeliteMantleGroup(shawlHex, stripe1Hex, stripe2Hex, isFem
   frontBandR.rotation.z =  0.05;
   frontBandR.rotation.x = -0.04;
   mantleGrp.add(frontBandL, frontBandR);
-
-  if (isFemale) {
-    const neckWrapL = createLowPolyMesh(new THREE.BoxGeometry(0.24, 0.14, 0.14), shawlHex, -0.09, 1.54, 0.14);
-    neckWrapL.rotation.z = -0.26;
-    const neckWrapR = createLowPolyMesh(new THREE.BoxGeometry(0.24, 0.14, 0.14), shawlHex,  0.09, 1.54, 0.14);
-    neckWrapR.rotation.z =  0.26;
-    const neckTip   = createLowPolyMesh(new THREE.ConeGeometry(0.16, 0.18, 4), shawlHex, 0, 1.45, 0.17);
-    neckTip.rotation.x = Math.PI;
-    neckTip.rotation.y = Math.PI / 4;
-    neckTip.scale.set(1.1, 1.0, 0.45);
-    mantleGrp.add(neckWrapL, neckWrapR, neckTip);
-  }
 
   const backGeo = new THREE.BoxGeometry(0.74, 0.50, 0.05, 2, 2, 1);
   const bPos = backGeo.attributes.position;
@@ -701,7 +648,7 @@ function createEllipticalDoubleRopeBelt(beltHex, knotHex, withFrontTassels = tru
 }
 
 // -------------------------------------------------------------------------
-// 5. 남성 3종 · 여성 3종 변형 팔레트 및 메인 캐릭터 조립 함수
+// 5. 남성 3종 · 여성 3종 변형 팔레트 및 메인 캐릭터 생성 함수
 // -------------------------------------------------------------------------
 const ISRAELITE_MALE_VARIANTS = [
   {
@@ -757,9 +704,7 @@ const ISRAELITE_FEMALE_VARIANTS = [
 window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
   const g = new THREE.Group();
 
-  // =======================================================================
-  // [A] 예수님 캐릭터 전용 빌드 (Gemini_Generated_Image_wssrukwssrukwssr.png 완벽 구현)
-  // =======================================================================
+  // [A] 예수님 전용 모델링 (5:5 장발 + 밝은 주름 로브 + 대각선 붉은 숄)
   if (preset === 'jesus') {
     const robeCol   = '#e8e6e2';
     const skinCol   = '#f2cfb4';
@@ -784,54 +729,48 @@ window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
     const lLeg = buildJesusLeg(true);
     const rLeg = buildJesusLeg(false);
 
-    // 밝은 회백색 12각 주름 롱 로브 + 슬림 인체 상체 + 라운드 칼라 요크
     const skirtMesh  = createLowPolyMesh(getPleatedAlineSkirtGeo(), robeCol, 0, 0.58, 0);
     const bodiceMesh = createLowPolyMesh(getAnatomicalUpperTorsoGeo(), robeCol, 0, 1.24, 0);
     const collarYoke = createLowPolyMesh(new THREE.CylinderGeometry(0.17, 0.27, 0.10, 8), robeCol, 0, 1.49, 0);
     collarYoke.scale.set(1.04, 1.0, 0.68);
-    const neck = createLowPolyMesh(new THREE.CylinderGeometry(0.095, 0.11, 0.18, 6), skinCol, 0, 1.56, 0, false);
+    const neck = createLowPolyMesh(new THREE.CylinderGeometry(0.09, 0.105, 0.18, 6), skinCol, 0, 1.56, 0, false);
 
-    // 허리띠 & 왼쪽 어깨에서 오른쪽 치마로 가로지르는 4단 주름 붉은 대각선 숄(Sash)
     const beltGrp = createEllipticalDoubleRopeBelt(beltCol, '#826b54', false);
     const redSashGrp = createJesusDiagonalRedSashGroup(sashCol, foldCol);
 
-    // 넓은 벨 슬리브 양팔
     const lArm = createJesusBellSleeveArm(true, robeCol, '#d8d5d0', skinCol);
     const rArm = createJesusBellSleeveArm(false, robeCol, '#d8d5d0', skinCol);
 
-    // 머리: 다면체 얼굴 + 5:5 가르마 웨이브 장발 + 따뜻한 갈색 각진 턱수염과 미소
     const head = new THREE.Group();
-    head.position.set(0, 2.04, 0);
+    head.position.set(0, 2.02, 0);
 
     const faceMesh = createLowPolyMesh(getChamferedFaceGeo(), skinCol, 0, 0, 0);
     const eyeCol = '#1e1815';
-    const eyeL = createLowPolyMesh(new THREE.BoxGeometry(0.078, 0.142, 0.036), eyeCol, -0.135, 0.035, 0.282, false);
-    const eyeR = createLowPolyMesh(new THREE.BoxGeometry(0.078, 0.142, 0.036), eyeCol,  0.135, 0.035, 0.282, false);
+    const eyeL = createLowPolyMesh(new THREE.BoxGeometry(0.068, 0.13, 0.025), eyeCol, -0.115, 0.03, 0.238, false);
+    const eyeR = createLowPolyMesh(new THREE.BoxGeometry(0.068, 0.13, 0.025), eyeCol,  0.115, 0.03, 0.238, false);
 
-    const browL = createLowPolyMesh(new THREE.BoxGeometry(0.132, 0.038, 0.040), hairCol, -0.135, 0.155, 0.285, false);
+    const browL = createLowPolyMesh(new THREE.BoxGeometry(0.115, 0.034, 0.025), hairCol, -0.115, 0.135, 0.240, false);
     browL.rotation.z = 0.06;
-    const browR = createLowPolyMesh(new THREE.BoxGeometry(0.132, 0.038, 0.040), hairCol,  0.135, 0.155, 0.285, false);
+    const browR = createLowPolyMesh(new THREE.BoxGeometry(0.115, 0.034, 0.025), hairCol,  0.115, 0.135, 0.240, false);
     browR.rotation.z = -0.06;
 
-    const nose = createLowPolyMesh(new THREE.ConeGeometry(0.045, 0.125, 3), skinCol, 0, -0.01, 0.305, false);
+    const nose = createLowPolyMesh(new THREE.ConeGeometry(0.042, 0.115, 3), skinCol, 0, -0.01, 0.255, false);
     nose.rotation.y = Math.PI;
-    const smileMouth = createLowPolyMesh(new THREE.BoxGeometry(0.11, 0.032, 0.036), '#b57c68', 0, -0.15, 0.286, false);
+    const smileMouth = createLowPolyMesh(new THREE.BoxGeometry(0.095, 0.030, 0.025), '#b57c68', 0, -0.145, 0.242, false);
 
-    // 턱선을 감싸는 각진 갈색 수염과 콧수염
-    const chinBeard = createLowPolyMesh(new THREE.CylinderGeometry(0.33, 0.22, 0.20, 6), beardCol, 0, -0.28, 0.09);
-    chinBeard.rotation.y = Math.PI / 6;
-    chinBeard.scale.set(1.02, 1.0, 0.72);
-    const chinPoint = createLowPolyMesh(new THREE.ConeGeometry(0.16, 0.12, 4), beardCol, 0, -0.36, 0.19);
+    // 턱선을 감싸는 다면체 갈색 수염과 콧수염
+    const chinBeard = createLowPolyMesh(new THREE.BoxGeometry(0.52, 0.14, 0.26), beardCol, 0, -0.24, 0.14);
+    const chinPoint = createLowPolyMesh(new THREE.ConeGeometry(0.15, 0.10, 4), beardCol, 0, -0.32, 0.18);
     chinPoint.rotation.x = Math.PI;
     chinPoint.rotation.y = Math.PI / 4;
     chinPoint.scale.set(1.1, 1.0, 0.65);
 
-    const sideBeardL = createLowPolyMesh(new THREE.BoxGeometry(0.075, 0.36, 0.15), beardCol, -0.30, -0.04, 0.19);
-    const sideBeardR = createLowPolyMesh(new THREE.BoxGeometry(0.075, 0.36, 0.15), beardCol,  0.30, -0.04, 0.19);
-    const stacheTop  = createLowPolyMesh(new THREE.BoxGeometry(0.25, 0.044, 0.045), beardCol, 0, -0.095, 0.292, false);
-    const stacheL    = createLowPolyMesh(new THREE.BoxGeometry(0.052, 0.12, 0.045), beardCol, -0.115, -0.15, 0.292, false);
+    const sideBeardL = createLowPolyMesh(new THREE.BoxGeometry(0.065, 0.30, 0.12), beardCol, -0.235, -0.04, 0.19);
+    const sideBeardR = createLowPolyMesh(new THREE.BoxGeometry(0.065, 0.30, 0.12), beardCol,  0.235, -0.04, 0.19);
+    const stacheTop  = createLowPolyMesh(new THREE.BoxGeometry(0.22, 0.040, 0.030), beardCol, 0, -0.095, 0.245, false);
+    const stacheL    = createLowPolyMesh(new THREE.BoxGeometry(0.045, 0.11, 0.030), beardCol, -0.10, -0.145, 0.245, false);
     stacheL.rotation.z = 0.16;
-    const stacheR    = createLowPolyMesh(new THREE.BoxGeometry(0.052, 0.12, 0.045), beardCol,  0.115, -0.15, 0.292, false);
+    const stacheR    = createLowPolyMesh(new THREE.BoxGeometry(0.045, 0.11, 0.030), beardCol,  0.10, -0.145, 0.245, false);
     stacheR.rotation.z = -0.16;
 
     const hairGroup = createJesusFacetedHairGroup(hairCol);
@@ -854,9 +793,7 @@ window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
     return g;
   }
 
-  // =======================================================================
-  // [B] 그 외 일반 인물 (남성 3종 · 여성 3종 · 주인공 · 삭개오 · 아이 · 병사 · 천사)
-  // =======================================================================
+  // [B] 일반 인물 (남성 3종 · 여성 3종 · 주인공 · 삭개오 · 아이 · 병사 · 천사)
   let isFemale = false;
   let cfg = null;
   let sc = 1.0;
@@ -945,8 +882,7 @@ window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
 
   const skirtMesh  = createLowPolyMesh(getPleatedAlineSkirtGeo(), skirtCol, 0, 0.58, 0);
   const bodiceMesh = createLowPolyMesh(getAnatomicalUpperTorsoGeo(), bodiceCol, 0, 1.24, 0);
-  // 목 반지름을 0.095로 슬림하게 줄여 옷 칼라 위로 살색이 절대 튀어나오지 않게 함
-  const neck = createLowPolyMesh(new THREE.CylinderGeometry(0.095, 0.11, 0.18, 6), cfg.skin, 0, 1.56, 0, false);
+  const neck       = createLowPolyMesh(new THREE.CylinderGeometry(0.09, 0.105, 0.18, 6), cfg.skin, 0, 1.56, 0, false);
 
   g.add(lLeg, rLeg, skirtMesh, bodiceMesh, neck);
 
@@ -958,90 +894,77 @@ window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
   const rArm = createSeamlessPonchoArm(false, cfg.shawl, cfg.stripe1, cfg.stripe2, cfg.sleeve, cfg.skin);
   g.add(lArm, rArm);
 
-  // 머리(Head) : 테이퍼링된 얼굴(두건 밖 돌출 제로) + 수염 + 넉넉한 다면체 후드
+  // 머리(Head) : 전면 개방형 아치 후드 적용으로 얼굴 가림/깨짐 100% 해결!
   const head = new THREE.Group();
-  head.position.set(0, 2.04, 0);
+  head.position.set(0, 2.02, 0);
 
   const faceMesh = createLowPolyMesh(getChamferedFaceGeo(), cfg.skin, 0, 0, 0);
   const eyeCol = '#1e1815';
-  const eyeL = createLowPolyMesh(new THREE.BoxGeometry(0.078, 0.142, 0.036), eyeCol, -0.135, 0.035, 0.282, false);
-  const eyeR = createLowPolyMesh(new THREE.BoxGeometry(0.078, 0.142, 0.036), eyeCol,  0.135, 0.035, 0.282, false);
+  const eyeL = createLowPolyMesh(new THREE.BoxGeometry(0.068, 0.13, 0.025), eyeCol, -0.115, 0.03, 0.238, false);
+  const eyeR = createLowPolyMesh(new THREE.BoxGeometry(0.068, 0.13, 0.025), eyeCol,  0.115, 0.03, 0.238, false);
 
-  const browL = createLowPolyMesh(new THREE.BoxGeometry(0.132, 0.036, 0.040), cfg.hair, -0.135, 0.155, 0.285, false);
+  const browL = createLowPolyMesh(new THREE.BoxGeometry(0.115, 0.034, 0.025), cfg.hair, -0.115, 0.135, 0.240, false);
   browL.rotation.z = 0.06;
-  const browR = createLowPolyMesh(new THREE.BoxGeometry(0.132, 0.036, 0.040), cfg.hair,  0.135, 0.155, 0.285, false);
+  const browR = createLowPolyMesh(new THREE.BoxGeometry(0.115, 0.034, 0.025), cfg.hair,  0.115, 0.135, 0.240, false);
   browR.rotation.z = -0.06;
 
-  const nose = createLowPolyMesh(new THREE.ConeGeometry(0.045, 0.125, 3), cfg.skin, 0, -0.01, 0.305, false);
+  const nose = createLowPolyMesh(new THREE.ConeGeometry(0.042, 0.115, 3), cfg.skin, 0, -0.01, 0.255, false);
   nose.rotation.y = Math.PI;
-  const smileMouth = createLowPolyMesh(new THREE.BoxGeometry(0.11, 0.032, 0.036), '#b57c68', 0, -0.15, 0.286, false);
+  const smileMouth = createLowPolyMesh(new THREE.BoxGeometry(0.095, 0.030, 0.025), '#b57c68', 0, -0.145, 0.242, false);
 
   head.add(faceMesh, eyeL, eyeR, browL, browR, nose, smileMouth);
 
   const hoodColor = isFemale ? cfg.veil : cfg.headcloth;
   if (cfg.headwear === 'helmet') {
-    const helm = createLowPolyMesh(new THREE.DodecahedronGeometry(0.46, 0), '#64748b', 0, 0.18, -0.02);
+    const helm = createLowPolyMesh(new THREE.DodecahedronGeometry(0.42, 0), '#64748b', 0, 0.18, -0.02);
     helm.scale.set(1.06, 0.85, 1.06);
-    const crest = createLowPolyMesh(new THREE.BoxGeometry(0.13, 0.26, 0.58), '#dc2626', 0, 0.46, -0.02);
+    const crest = createLowPolyMesh(new THREE.BoxGeometry(0.13, 0.26, 0.56), '#dc2626', 0, 0.44, -0.02);
     head.add(helm, crest);
   } else {
-    const hoodShell = createDoubleSideLowPolyMesh(getCleanHoodShellGeo(), hoodColor, 0, 0.02, -0.02);
-    head.add(hoodShell);
+    const openHood = createOpenFrontHoodGroup(
+      hoodColor,
+      isFemale,
+      cfg.agal1,
+      cfg.headwear === 'sudra_double' ? cfg.agal2 : null,
+      cfg.veilBand
+    );
+    head.add(openHood);
   }
 
   if (isFemale) {
-    const partedHairL = createLowPolyMesh(new THREE.BoxGeometry(0.22, 0.12, 0.09), cfg.hair, -0.11, 0.22, 0.26, false);
-    partedHairL.rotation.z = 0.30;
-    const partedHairR = createLowPolyMesh(new THREE.BoxGeometry(0.22, 0.12, 0.09), cfg.hair,  0.11, 0.22, 0.26, false);
-    partedHairR.rotation.z = -0.30;
-    const sideHairL   = createLowPolyMesh(new THREE.BoxGeometry(0.065, 0.36, 0.12), cfg.hair, -0.30, 0.01, 0.20, false);
-    const sideHairR   = createLowPolyMesh(new THREE.BoxGeometry(0.065, 0.36, 0.12), cfg.hair,  0.30, 0.01, 0.20, false);
-    const chinWrap    = createLowPolyMesh(new THREE.BoxGeometry(0.54, 0.12, 0.26), cfg.veil, 0, -0.37, 0.12);
-    head.add(partedHairL, partedHairR, sideHairL, sideHairR, chinWrap);
-
-    if (cfg.veilBand) {
-      const vBand = createLowPolyMesh(new THREE.CylinderGeometry(0.45, 0.46, 0.050, 8), cfg.veilBand, 0, 0.26, -0.01);
-      head.add(vBand);
-    }
+    // 여성 5:5 가르마 앞머리 (z = +0.242 로 얼굴면 위에 깔끔히 배치)
+    const partedHairL = createLowPolyMesh(new THREE.BoxGeometry(0.20, 0.08, 0.04), cfg.hair, -0.11, 0.185, 0.242, false);
+    partedHairL.rotation.z = 0.28;
+    const partedHairR = createLowPolyMesh(new THREE.BoxGeometry(0.20, 0.08, 0.04), cfg.hair,  0.11, 0.185, 0.242, false);
+    partedHairR.rotation.z = -0.28;
+    const sideHairL   = createLowPolyMesh(new THREE.BoxGeometry(0.045, 0.34, 0.06), cfg.hair, -0.23, 0.01, 0.238, false);
+    const sideHairR   = createLowPolyMesh(new THREE.BoxGeometry(0.045, 0.34, 0.06), cfg.hair,  0.23, 0.01, 0.238, false);
+    head.add(partedHairL, partedHairR, sideHairL, sideHairR);
   } else {
-    const bang1 = createLowPolyMesh(new THREE.BoxGeometry(0.12, 0.055, 0.04), cfg.hair, -0.10, 0.205, 0.285, false);
+    // 남성 앞머리 두 가닥 & 턱수염
+    const bang1 = createLowPolyMesh(new THREE.BoxGeometry(0.11, 0.045, 0.03), cfg.hair, -0.09, 0.18, 0.242, false);
     bang1.rotation.z = 0.25;
-    const bang2 = createLowPolyMesh(new THREE.BoxGeometry(0.09, 0.048, 0.04), cfg.hair, -0.01, 0.215, 0.285, false);
+    const bang2 = createLowPolyMesh(new THREE.BoxGeometry(0.08, 0.040, 0.03), cfg.hair, -0.01, 0.185, 0.242, false);
     bang2.rotation.z = 0.18;
     head.add(bang1, bang2);
 
     if (cfg.beardStyle && cfg.beardStyle !== 'none') {
-      const bHeight = (cfg.beardStyle === 'full') ? 0.18 : 0.14;
-      const chinBeard = createLowPolyMesh(new THREE.CylinderGeometry(0.33, 0.23, bHeight, 6), cfg.hair, 0, -0.28, 0.09);
-      chinBeard.rotation.y = Math.PI / 6;
-      chinBeard.scale.set(1.02, 1.0, 0.72);
-
-      const sideBeardL = createLowPolyMesh(new THREE.BoxGeometry(0.07, 0.36, 0.14), cfg.hair, -0.30, -0.03, 0.19);
-      const sideBeardR = createLowPolyMesh(new THREE.BoxGeometry(0.07, 0.36, 0.14), cfg.hair,  0.30, -0.03, 0.19);
-      const stacheTop  = createLowPolyMesh(new THREE.BoxGeometry(0.25, 0.044, 0.042), cfg.hair, 0, -0.095, 0.292, false);
-      const stacheL    = createLowPolyMesh(new THREE.BoxGeometry(0.05, 0.12, 0.042), cfg.hair, -0.115, -0.15, 0.292, false);
+      const bHeight = (cfg.beardStyle === 'full') ? 0.15 : 0.12;
+      const chinBeard  = createLowPolyMesh(new THREE.BoxGeometry(0.50, bHeight, 0.24), cfg.hair, 0, -0.24, 0.14);
+      const sideBeardL = createLowPolyMesh(new THREE.BoxGeometry(0.06, 0.30, 0.10), cfg.hair, -0.23, -0.04, 0.20);
+      const sideBeardR = createLowPolyMesh(new THREE.BoxGeometry(0.06, 0.30, 0.10), cfg.hair,  0.23, -0.04, 0.20);
+      const stacheTop  = createLowPolyMesh(new THREE.BoxGeometry(0.21, 0.038, 0.03), cfg.hair, 0, -0.095, 0.245, false);
+      const stacheL    = createLowPolyMesh(new THREE.BoxGeometry(0.042, 0.10, 0.03), cfg.hair, -0.095, -0.145, 0.245, false);
       stacheL.rotation.z = 0.15;
-      const stacheR    = createLowPolyMesh(new THREE.BoxGeometry(0.05, 0.12, 0.042), cfg.hair,  0.115, -0.15, 0.292, false);
+      const stacheR    = createLowPolyMesh(new THREE.BoxGeometry(0.042, 0.10, 0.03), cfg.hair,  0.095, -0.145, 0.245, false);
       stacheR.rotation.z = -0.15;
       head.add(chinBeard, sideBeardL, sideBeardR, stacheTop, stacheL, stacheR);
-    }
-
-    if (cfg.headwear !== 'helmet') {
-      const agalUpper = createLowPolyMesh(new THREE.CylinderGeometry(0.455, 0.465, 0.058, 8), cfg.agal1, 0, 0.28, -0.01);
-      agalUpper.rotation.x = 0.04;
-      head.add(agalUpper);
-
-      if (cfg.headwear === 'sudra_double') {
-        const agalLower = createLowPolyMesh(new THREE.CylinderGeometry(0.465, 0.475, 0.054, 8), cfg.agal2, 0, 0.22, -0.01);
-        agalLower.rotation.x = 0.04;
-        head.add(agalLower);
-      }
     }
   }
 
   if (cfg.hasHalo) {
     const haloRing = new THREE.Mesh(
-      new THREE.RingGeometry(0.52, 0.68, 16),
+      new THREE.RingGeometry(0.50, 0.65, 16),
       new THREE.MeshBasicMaterial({ color: 0xfef08a, side: THREE.DoubleSide, transparent: true, opacity: 0.80 })
     );
     haloRing.position.set(0, 0.14, -0.34);
