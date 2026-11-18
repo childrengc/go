@@ -1,7 +1,7 @@
 // =========================================================================
 // [ep4_miracle_base.js - 파트 1/2] 에피소드 4 : 예수님의 기적과 부활
 // - 성경 말씀/퀴즈 DB, 나의 복음서 수첩(36종), 1분(60초) 갈릴리 복음서 BGM
-// - 확장된 오픈월드 지형 고도 계산기 및 소프트 로우 폴리곤 자연물(구름·바위·나무·배) 팩토리
+// - 확장된 오픈월드 지형 고도 계산기(넓어진 골고다 언덕 포함) 및 소프트 로우 폴리곤 자연물 팩토리
 // =========================================================================
 
 const MIRACLE_SCRIPTURE = {
@@ -54,7 +54,7 @@ const MIRACLE_SCRIPTURE = {
 // -------------------------------------------------------------------------
 // 1. 에피소드 4 전역 상태 변수 선언
 // -------------------------------------------------------------------------
-const MIRACLE_WORLD_LIMIT = 152; // 확장된 오픈월드 반경 (304 x 304 규모)
+const MIRACLE_WORLD_LIMIT = 152;
 window.MIRACLE_EXP_LIMIT = 152;
 
 let miracleSubMode = 'openworld'; // 'openworld' | 'main1_galilee' | 'main2_loaves' | 'main3_cross' | 'main4_tomb' | 'minigame' | 'ascension'
@@ -79,6 +79,7 @@ let miracleDialogState = {
   quiz: null,
   onConfirm: null,
   onCancel: null,
+  onReplay: null,
   typingTimer: null
 };
 
@@ -366,7 +367,7 @@ function scheduleMiracleBgmBeat(ctx, step, st, mode, playing, timeRem, toFreq) {
 }
 
 // -------------------------------------------------------------------------
-// 4. 소프트 로우 폴리곤 재질 캐시 및 확장 지형 고도 계산기
+// 4. 소프트 로우 폴리곤 재질 캐시 및 확장 지형 고도 계산기 (골고다 언덕 확장 포함)
 // -------------------------------------------------------------------------
 const miracleLowPolyMatCache = {};
 function matLowPoly(hexColor, isEmissive = false, opacity = 1.0) {
@@ -390,7 +391,7 @@ function matLowPoly(hexColor, isEmissive = false, opacity = 1.0) {
 }
 
 function getMiracleOpenWorldGroundHeight(x, z) {
-  let h = 0.25; // 내륙 기본 고도를 수면(-0.40)보다 높은 +0.25로 유지해 침수 원천 방지
+  let h = 0.25;
 
   // 1) 서쪽(West, x < -70): 모래사장 없이 초원에서 넓은 바다(x < -92)까지 완만하게 내려가는 해안 경사
   const shoreLineX = -92 + Math.sin(z * 0.03) * 6.0 + Math.cos(z * 0.07) * 2.5;
@@ -404,7 +405,7 @@ function getMiracleOpenWorldGroundHeight(x, z) {
     return Number(h.toFixed(3));
   }
 
-  // 2) 맵 동북쪽 바깥 근처의 웅장한 '오병이어 전망 언덕' (x = 88, z = -82, 정상 높이 +14.5)
+  // 2) 동북쪽 외곽 '오병이어 전망 언덕' (x = 88, z = -82, 정상 높이 +14.5)
   const bethDist = Math.hypot((x - 88) / 46, (z - (-82)) / 42);
   if (bethDist < 1.0) {
     const t = 1.0 - bethDist;
@@ -413,23 +414,25 @@ function getMiracleOpenWorldGroundHeight(x, z) {
   }
 
   // 3) 잃어버린 양의 유대 광야 바위 언덕 (서중부 내륙: x = -66, z = 12)
-  const wildDist = Math.hypot((x - (-66)) / 24, (z - 12) / 24);
+  const wildDist = Math.hypot((x - (-66)) / 25, (z - 12) / 25);
   if (wildDist < 1.0) {
     const t = 1.0 - wildDist;
-    const bump = Math.sin(x * 0.20 + 1.1) * Math.cos(z * 0.20) * 0.38;
-    h += t * t * (3 - 2 * t) * 5.6 + t * bump;
+    const bump = Math.sin(x * 0.18 + 1.1) * Math.cos(z * 0.18) * 0.32;
+    h += t * t * (3 - 2 * t) * 5.4 + t * bump;
   }
 
-  // 4) 골고다 십자가 언덕 (남서쪽 내륙: x = -66, z = 78)
-  const golgothaDist = Math.hypot((x - (-66)) / 26, (z - 78) / 24);
+  // 4) [요청사항 반영] 훨씬 넓고 웅장해진 골고다 십자가 언덕 (남서쪽 내륙: x = -62, z = 78, 반경 38x35, 정상 평탄부 확보)
+  const golgothaDist = Math.hypot((x - (-62)) / 38, (z - 78) / 35);
   if (golgothaDist < 1.0) {
-    const t = 1.0 - golgothaDist;
-    const bump = Math.sin(x * 0.18) * Math.cos(z * 0.18) * 0.42;
-    h += t * t * (3 - 2 * t) * 8.4 + t * bump;
+    // 정상 부근(golgothaDist < 0.35)은 세 십자가가 넉넉히 서도록 완만한 고원 형태로 구성
+    const clampedD = Math.max(0, (golgothaDist - 0.22) / 0.78);
+    const t = 1.0 - Math.min(1.0, clampedD);
+    const bump = Math.sin(x * 0.15) * Math.cos(z * 0.15) * 0.35;
+    h += t * t * (3 - 2 * t) * 9.2 + t * bump;
   }
 
   // 5) 감람산 승천 언덕 (남동쪽 외곽: x = 88, z = 74)
-  const oliveDist = Math.hypot((x - 88) / 32, (z - 74) / 30);
+  const oliveDist = Math.hypot((x - 88) / 34, (z - 74) / 32);
   if (oliveDist < 1.0) {
     const t = 1.0 - oliveDist;
     const bump = Math.sin(x * 0.16) * Math.cos(z * 0.16) * 0.40;
@@ -437,18 +440,18 @@ function getMiracleOpenWorldGroundHeight(x, z) {
   }
 
   // 6) 북·동·남 3면 가장자리 낮은 구릉 융기
-  const eastEdge = Math.max(0, (x - 122) / 30);
-  const northEdge = Math.max(0, (-122 - z) / 30);
-  const southEdge = Math.max(0, (z - 122) / 30);
+  const eastEdge = Math.max(0, (x - 108) / 28);
+  const northEdge = Math.max(0, (-108 - z) / 28);
+  const southEdge = Math.max(0, (z - 108) / 28);
   const edgeFactor = Math.max(eastEdge, northEdge, southEdge);
   if (edgeFactor > 0) {
-    const edgeBump = Math.sin(x * 0.10) * Math.cos(z * 0.10) * 0.85;
-    h += edgeFactor * edgeFactor * 4.2 + edgeFactor * edgeBump;
+    const edgeBump = Math.sin(x * 0.10) * Math.cos(z * 0.10) * 0.75;
+    h += edgeFactor * edgeFactor * 4.5 + edgeFactor * edgeBump;
   }
 
   // 7) 마을 도로 주변 평탄화 및 초원 잔물결
   const centerRoadClearance = Math.min(1.0, Math.abs(x - Math.sin(z * 0.03) * 6.0) / 15.0);
-  const gentleWave = (Math.sin(x * 0.045) * Math.cos(z * 0.045) * 0.42) * centerRoadClearance;
+  const gentleWave = (Math.sin(x * 0.045) * Math.cos(z * 0.045) * 0.40) * centerRoadClearance;
   h += gentleWave;
 
   return Number(h.toFixed(3));
@@ -466,7 +469,7 @@ function getMiracleGroundHeight(x, z, st) {
   if (miracleSubMode === 'main3_cross') {
     if (z <= -8) {
       const climbT = Math.max(0, Math.min(1, (-8 - z) / 46));
-      const bump = Math.sin(x * 0.18) * Math.cos(z * 0.18) * 0.32;
+      const bump = Math.sin(x * 0.16) * Math.cos(z * 0.16) * 0.28;
       return Number((climbT * (9.4 + bump)).toFixed(3));
     }
     return 0;
@@ -713,16 +716,15 @@ function createLowPolyGalileeBoat(scale = 1.0) {
   boatGrp.add(hull, deck, mast, yard, sail);
   boatGrp.userData = { hull, deck, sail };
   return boatGrp;
-}// =========================================================================
+}
+// =========================================================================
 // [ep4_miracle_base.js - 파트 2/2]
-// 6. 비정형(Organic Low-Poly) 고대 유대 건축물 팩토리 (2층 방·비정형 창틀·돌출 벽돌·서까래·전 장식물 그림자)
-// 7. 캐릭터 생성 기본 폴백 & 나의 복음서 수첩 UI 및 미션 거절(나중에 하기) 대화창 시스템
+// 6. 비정형(Organic Low-Poly) 고대 유대 건축물 팩토리
+//    - 2층 벽면 돌출 벽돌 위치 오프셋 보정 (공중 부양 해결)
+//    - 회전된 모든 건물의 외벽 계단 물리 발판 생성 & 옆 건물 2층/옥상 점프 이동 지원
+// 7. 나의 복음서 수첩 UI 및 대화창 (미션 거절 버튼 & 완료 미션 [🔄 미션 다시하기] 버튼 포함)
 // =========================================================================
 
-// -------------------------------------------------------------------------
-// 6. [레퍼런스 이미지(Gemini_Generated_Image_puwinipuwinipuwi.png) 완벽 반영]
-//    비정형(Organic Low-Poly) 고대 유대 건축물 5종 팩토리 + 모든 돌출 장식물 그림자 부여
-// -------------------------------------------------------------------------
 function _organicHash(n) {
   const s = Math.sin(n * 127.1 + 311.7) * 43758.5453;
   return s - Math.floor(s);
@@ -766,7 +768,7 @@ function createOrganicBoxGeo(w, h, d, seed = 1, irregularity = 0.055, topTaper =
   return finalGeo;
 }
 
-// 벽면에 튀어나온 비정형 돌출 벽돌(Irregular Protruding Relief Brick) — 그림자 생성(castShadow = true)!
+// 벽면에 튀어나온 비정형 돌출 벽돌 (그림자 생성 활성화)
 function createIrregularWallBrickMesh(bw, bh, bd, colorHex, seed = 1) {
   const geo = new THREE.BoxGeometry(bw, bh, bd, 1, 1, 1);
   const pos = geo.attributes.position;
@@ -797,55 +799,73 @@ function createIrregularWallBrickMesh(bw, bh, bd, colorHex, seed = 1) {
   return mesh;
 }
 
-// 사방 벽면에 비정형 돌출 벽돌들을 배치하는 헬퍼
-function addScatteredIrregularBricksToWall(parentGrp, wallW, wallH, wallD, baseY, brickHex1, brickHex2, seedBase) {
+// [버그 수정 완료] offsetX, offsetZ 파라미터를 추가하여 2층 방 벽면에도 정확히 밀착되도록 수정!
+function addScatteredIrregularBricksToWall(
+  parentGrp,
+  wallW,
+  wallH,
+  wallD,
+  baseY,
+  brickHex1,
+  brickHex2,
+  seedBase,
+  offsetX = 0,
+  offsetZ = 0
+) {
+  // 상단 테이퍼링(위로 갈수록 좁아지는 벽면 기울기)에 맞춰 벽돌 부착 깊이 자동 보정
   const fbPositions = [
-    [-wallW * 0.34, wallH * 0.72, 1],
-    [-wallW * 0.24, wallH * 0.62, 1],
-    [ wallW * 0.28, wallH * 0.76, 1],
-    [ wallW * 0.35, wallH * 0.34, 1],
-    [-wallW * 0.32, wallH * 0.28, 1],
-    [-wallW * 0.26, wallH * 0.74, -1],
-    [ wallW * 0.18, wallH * 0.64, -1],
-    [ wallW * 0.30, wallH * 0.30, -1],
-    [-wallW * 0.15, wallH * 0.35, -1]
+    [-wallW * 0.32, wallH * 0.70, 1],
+    [-wallW * 0.22, wallH * 0.58, 1],
+    [ wallW * 0.26, wallH * 0.72, 1],
+    [ wallW * 0.32, wallH * 0.32, 1],
+    [-wallW * 0.30, wallH * 0.26, 1],
+    [-wallW * 0.24, wallH * 0.70, -1],
+    [ wallW * 0.18, wallH * 0.60, -1],
+    [ wallW * 0.28, wallH * 0.28, -1],
+    [-wallW * 0.14, wallH * 0.34, -1]
   ];
 
   fbPositions.forEach(([bx, by, zSide], idx) => {
     const s = seedBase + idx * 7.3;
-    const bw = 0.48 + _organicHash(s) * 0.36;
-    const bh = 0.22 + _organicHash(s + 1) * 0.14;
-    const bd = 0.16 + _organicHash(s + 2) * 0.08;
+    const bw = 0.46 + _organicHash(s) * 0.32;
+    const bh = 0.20 + _organicHash(s + 1) * 0.13;
+    const bd = 0.15 + _organicHash(s + 2) * 0.06;
     const col = (idx % 2 === 0) ? brickHex1 : brickHex2;
     const brick = createIrregularWallBrickMesh(bw, bh, bd, col, s);
-    brick.position.set(bx, baseY + by, zSide * (wallD * 0.5 + bd * 0.35));
+
+    const taperAtY = 1.0 - (by / wallH) * 0.04;
+    const surfaceZ = (wallD * 0.5) * taperAtY;
+    brick.position.set(offsetX + bx * taperAtY, baseY + by, offsetZ + zSide * (surfaceZ + bd * 0.22));
     if (zSide < 0) brick.rotation.y = Math.PI;
     parentGrp.add(brick);
   });
 
   const lrPositions = [
-    [-1, wallH * 0.74, -wallD * 0.26],
-    [-1, wallH * 0.32,  wallD * 0.22],
-    [-1, wallH * 0.56,  wallD * 0.05],
-    [ 1, wallH * 0.70,  wallD * 0.25],
-    [ 1, wallH * 0.60, -wallD * 0.18],
-    [ 1, wallH * 0.28, -wallD * 0.24]
+    [-1, wallH * 0.68, -wallD * 0.24],
+    [-1, wallH * 0.30,  wallD * 0.20],
+    [-1, wallH * 0.52,  wallD * 0.04],
+    [ 1, wallH * 0.66,  wallD * 0.22],
+    [ 1, wallH * 0.56, -wallD * 0.16],
+    [ 1, wallH * 0.26, -wallD * 0.22]
   ];
 
   lrPositions.forEach(([xSide, by, bz], idx) => {
     const s = seedBase + 100 + idx * 9.1;
-    const bw = 0.46 + _organicHash(s) * 0.34;
-    const bh = 0.22 + _organicHash(s + 1) * 0.14;
-    const bd = 0.16 + _organicHash(s + 2) * 0.08;
+    const bw = 0.44 + _organicHash(s) * 0.30;
+    const bh = 0.20 + _organicHash(s + 1) * 0.13;
+    const bd = 0.15 + _organicHash(s + 2) * 0.06;
     const col = (idx % 2 === 0) ? brickHex2 : brickHex1;
     const brick = createIrregularWallBrickMesh(bw, bh, bd, col, s);
+
+    const taperAtY = 1.0 - (by / wallH) * 0.04;
+    const surfaceX = (wallW * 0.5) * taperAtY;
     brick.rotation.y = xSide > 0 ? Math.PI / 2 : -Math.PI / 2;
-    brick.position.set(xSide * (wallW * 0.5 + bd * 0.35), baseY + by, bz);
+    brick.position.set(offsetX + xSide * (surfaceX + bd * 0.22), baseY + by, offsetZ + bz * taperAtY);
     parentGrp.add(brick);
   });
 }
 
-// 비정형(Organic) 창틀과 창문 조립기 — 모든 창틀 그림자 활성화!
+// 비정형(Organic) 창틀과 창문 조립기
 function createOrganicWindowGroup(winW, winH, frameHex, sillHex, voidHex, seed = 1) {
   const winGrp = new THREE.Group();
 
@@ -854,41 +874,41 @@ function createOrganicWindowGroup(winW, winH, frameHex, sillHex, voidHex, seed =
   winGrp.add(paneVoid, mullionV);
 
   const topLintel = createLowPolyMesh(
-    createOrganicBoxGeo(winW + 0.42, 0.22, 0.28, seed + 2, 0.12, 0.92, 2),
+    createOrganicBoxGeo(winW + 0.42, 0.22, 0.26, seed + 2, 0.12, 0.92, 2),
     frameHex,
     (_organicHash(seed) - 0.5) * 0.05,
     winH * 0.5 + 0.08,
-    0.06,
+    0.05,
     true
   );
   topLintel.rotation.z = (_organicHash(seed + 3) - 0.5) * 0.07;
 
   const botSill = createLowPolyMesh(
-    createOrganicBoxGeo(winW + 0.38, 0.18, 0.30, seed + 4, 0.12, 1.04, 2),
+    createOrganicBoxGeo(winW + 0.38, 0.18, 0.28, seed + 4, 0.12, 1.04, 2),
     sillHex,
     (_organicHash(seed + 5) - 0.5) * 0.04,
     -winH * 0.5 - 0.07,
-    0.07,
+    0.06,
     true
   );
   botSill.rotation.z = (_organicHash(seed + 6) - 0.5) * 0.06;
 
   const leftJamb = createLowPolyMesh(
-    createOrganicBoxGeo(0.18, winH + 0.16, 0.24, seed + 7, 0.12, 0.94, 2),
+    createOrganicBoxGeo(0.18, winH + 0.16, 0.22, seed + 7, 0.12, 0.94, 2),
     sillHex,
     -winW * 0.5 - 0.07,
     0,
-    0.05,
+    0.04,
     true
   );
   leftJamb.rotation.z = 0.03;
 
   const rightJamb = createLowPolyMesh(
-    createOrganicBoxGeo(0.18, winH + 0.16, 0.24, seed + 8, 0.12, 0.94, 2),
+    createOrganicBoxGeo(0.18, winH + 0.16, 0.22, seed + 8, 0.12, 0.94, 2),
     sillHex,
     winW * 0.5 + 0.07,
     0,
-    0.05,
+    0.04,
     true
   );
   rightJamb.rotation.z = -0.03;
@@ -897,7 +917,7 @@ function createOrganicWindowGroup(winW, winH, frameHex, sillHex, voidHex, seed =
   return winGrp;
 }
 
-// 1층 깊은 아치형 입구(Deep Arched Alcove) 생성기 — 그림자 포함!
+// 1층 깊은 아치형 입구(Deep Arched Alcove)
 function createOrganicArchedEntranceGroup(archW, archH, frameHex, darkHex, doorWoodHex, seed = 1) {
   const archGrp = new THREE.Group();
 
@@ -912,19 +932,19 @@ function createOrganicArchedEntranceGroup(archW, archH, frameHex, darkHex, doorW
 
   const pierH = archH * 0.62;
   const pierL = createLowPolyMesh(
-    createOrganicBoxGeo(0.34, pierH, 0.46, seed + 10, 0.09, 0.95, 2),
+    createOrganicBoxGeo(0.34, pierH, 0.44, seed + 10, 0.09, 0.95, 2),
     frameHex,
     -archW * 0.5,
     pierH * 0.5,
-    0.10,
+    0.09,
     true
   );
   const pierR = createLowPolyMesh(
-    createOrganicBoxGeo(0.34, pierH, 0.46, seed + 11, 0.09, 0.95, 2),
+    createOrganicBoxGeo(0.34, pierH, 0.44, seed + 11, 0.09, 0.95, 2),
     frameHex,
     archW * 0.5,
     pierH * 0.5,
-    0.10,
+    0.09,
     true
   );
   archGrp.add(pierL, pierR);
@@ -940,11 +960,11 @@ function createOrganicArchedEntranceGroup(archW, archH, frameHex, darkHex, doorW
     const stoneLen = (Math.PI * radius) / archSegs + 0.12;
 
     const archStone = createLowPolyMesh(
-      createOrganicBoxGeo(0.34, stoneLen, 0.48, seed + 20 + i, 0.10, 0.94, 1),
+      createOrganicBoxGeo(0.34, stoneLen, 0.46, seed + 20 + i, 0.10, 0.94, 1),
       frameHex,
       ax,
       ay,
-      0.11,
+      0.10,
       true
     );
     archStone.rotation.z = midT - Math.PI * 0.5;
@@ -954,22 +974,22 @@ function createOrganicArchedEntranceGroup(archW, archH, frameHex, darkHex, doorW
   return archGrp;
 }
 
-// 2층 방 전용 비정형 나무 출입문 & 돌출 문틀 조립기
+// 2층 방 전용 비정형 나무 출입문 & 돌출 문틀
 function createOrganicUpperDoorGroup(doorW, doorH, frameHex, woodHex, seed = 1) {
   const dGrp = new THREE.Group();
 
   const plankDoor = createLowPolyMesh(createOrganicBoxGeo(doorW, doorH, 0.16, seed, 0.05, 0.98, 2), woodHex, 0, doorH * 0.5, 0.02, true);
-  const jambL = createLowPolyMesh(createOrganicBoxGeo(0.20, doorH + 0.12, 0.28, seed + 1, 0.10, 0.95, 2), frameHex, -doorW * 0.5 - 0.08, doorH * 0.5, 0.06, true);
-  const jambR = createLowPolyMesh(createOrganicBoxGeo(0.20, doorH + 0.12, 0.28, seed + 2, 0.10, 0.95, 2), frameHex,  doorW * 0.5 + 0.08, doorH * 0.5, 0.06, true);
-  const lintel = createLowPolyMesh(createOrganicBoxGeo(doorW + 0.52, 0.24, 0.34, seed + 3, 0.11, 0.92, 2), frameHex, 0, doorH + 0.10, 0.08, true);
+  const jambL = createLowPolyMesh(createOrganicBoxGeo(0.20, doorH + 0.12, 0.26, seed + 1, 0.10, 0.95, 2), frameHex, -doorW * 0.5 - 0.08, doorH * 0.5, 0.05, true);
+  const jambR = createLowPolyMesh(createOrganicBoxGeo(0.20, doorH + 0.12, 0.26, seed + 2, 0.10, 0.95, 2), frameHex,  doorW * 0.5 + 0.08, doorH * 0.5, 0.05, true);
+  const lintel = createLowPolyMesh(createOrganicBoxGeo(doorW + 0.52, 0.24, 0.30, seed + 3, 0.11, 0.92, 2), frameHex, 0, doorH + 0.10, 0.06, true);
   lintel.rotation.z = (_organicHash(seed + 4) - 0.5) * 0.06;
 
   dGrp.add(plankDoor, jambL, jambR, lintel);
   return dGrp;
 }
 
-// 벽 위로 튀어나와 그림자를 드리우는 비정형 서까래 돌출목(Protruding Roof Beam)
-function createOrganicRoofBeamMesh(length = 0.72, woodHex = '#6b4226', seed = 1) {
+// 비정형 서까래 돌출목 (벽면에서 바깥으로 정확히 이어지도록 중심 배치)
+function createOrganicRoofBeamMesh(length = 0.68, woodHex = '#6b4226', seed = 1) {
   const geo = new THREE.CylinderGeometry(0.11, 0.13, length, 6, 1, false);
   const pos = geo.attributes.position;
   for (let i = 0; i < pos.count; i++) {
@@ -996,7 +1016,6 @@ function createOrganicTerraceBench(woodHex = '#7c4d2b', seed = 1) {
   return bGrp;
 }
 
-// 토기 항아리 생성기 (그림자 활성화)
 function createJudeanClayPotMesh(scale = 1.0, colorHex = '#b86232') {
   const potGrp = new THREE.Group();
   const belly = createLowPolyMesh(new THREE.DodecahedronGeometry(0.34 * scale, 0), colorHex, 0, 0.30 * scale, 0, true);
@@ -1006,7 +1025,10 @@ function createJudeanClayPotMesh(scale = 1.0, colorHex = '#b86232') {
   return potGrp;
 }
 
-// 메인 빌딩 생성 함수
+// -------------------------------------------------------------------------
+// 메인 빌딩 생성 함수 (`addLowPolyVillageHouse`)
+// - 모든 외벽 계단을 실제로 걸어 올라가 2층 테라스 및 옆 건물 옥상으로 점프 이동 가능!
+// -------------------------------------------------------------------------
 function addLowPolyVillageHouse(
   cx,
   cz,
@@ -1044,6 +1066,13 @@ function addLowPolyVillageHouse(
   const hasSecondFloorRoom = (variant === 1 || variant === 3);
   const showExteriorStairs = withRoofStairs || hasSecondFloorRoom || (variant === 0);
   const stairSide = withRoofStairs ? 1 : ((variant % 2 === 0) ? -1 : 1);
+
+  const cosYaw = Math.cos(facingYaw);
+  const sinYaw = Math.sin(facingYaw);
+  const toWorldXZ = (lx, lz) => ({
+    wx: cx + lx * cosYaw + lz * sinYaw,
+    wz: cz - lx * sinYaw + lz * cosYaw
+  });
 
   // [A] 1층 비정형 본채 & 상단 돌출 띠장 & 옥상 파라펫 난간
   const mainBodyGeo = createOrganicBoxGeo(w, h, d, seed, 0.045, 0.96, 2);
@@ -1097,9 +1126,10 @@ function addLowPolyVillageHouse(
     }
   });
 
-  addScatteredIrregularBricksToWall(houseGrp, w * 0.96, h + pH * 0.6, d * 0.96, 0, brickCol1, brickCol2, seed + 20);
+  // 1층 외벽 비정형 돌출 벽돌 배치 (중심 오프셋 0, 0)
+  addScatteredIrregularBricksToWall(houseGrp, w * 0.96, h, d * 0.96, 0, brickCol1, brickCol2, seed + 20, 0, 0);
 
-  // [B] 1층 정면 깊은 아치형 입구 & 비정형 창문 & 토기 항아리
+  // [B] 1층 정면 아치형 입구 & 비정형 창문 & 토기 항아리
   const doorX = -w * 0.12;
   const archedEntrance = createOrganicArchedEntranceGroup(1.85, 2.55, trimCol, darkVoid, woodCol, seed + 40);
   archedEntrance.position.set(doorX, 0, d * 0.5 - 0.04);
@@ -1108,16 +1138,17 @@ function addLowPolyVillageHouse(
 
   const sideWin1 = createOrganicWindowGroup(0.95, 1.10, brickCol1, trimCol, darkVoid, seed + 50);
   sideWin1.rotation.y = -stairSide * (Math.PI / 2);
-  sideWin1.position.set(-stairSide * (w * 0.5 - 0.04), h * 0.58, 0.4);
+  sideWin1.position.set(-stairSide * (w * 0.5 - 0.06), h * 0.58, 0.4);
   houseGrp.add(sideWin1);
 
   if (!hasSecondFloorRoom) {
     const beamCnt = 4;
     for (let b = 0; b < beamCnt; b++) {
       const bx = -w * 0.34 + (b / (beamCnt - 1)) * (w * 0.68);
-      const rafter = createOrganicRoofBeamMesh(0.75, woodCol, seed + 60 + b);
+      const rafter = createOrganicRoofBeamMesh(0.68, woodCol, seed + 60 + b);
       rafter.rotation.x = Math.PI / 2 + 0.05;
-      rafter.position.set(bx, h - 0.35, d * 0.5 + 0.22);
+      // 한쪽 끝은 벽면 안쪽에 묻히고 바깥으로만 돌출되도록 위치 보정
+      rafter.position.set(bx, h - 0.35, d * 0.5 + 0.12);
       houseGrp.add(rafter);
     }
   }
@@ -1132,14 +1163,14 @@ function addLowPolyVillageHouse(
 
   // [C] 2층 방(Upper Chamber) & 테라스 벤치 & 서까래 돌출목 (variant 1, 3)
   if (hasSecondFloorRoom) {
-    const uW = w * 0.60;
-    const uH = 3.15;
-    const uD = d * 0.64;
+    const uW = w * 0.58;
+    const uH = 3.10;
+    const uD = d * 0.62;
     const uX = -stairSide * (w * 0.16);
     const uZ = -d * 0.12;
 
     const upperBody = registerFadeMesh(
-      createLowPolyMesh(createOrganicBoxGeo(uW, uH, uD, seed + 70, 0.05, 0.95, 2), wallCol, uX, h + uH * 0.5, uZ, true)
+      createLowPolyMesh(createOrganicBoxGeo(uW, uH, uD, seed + 70, 0.045, 0.96, 2), wallCol, uX, h + uH * 0.5, uZ, true)
     );
     const upperRoofSlab = registerFadeMesh(
       createLowPolyMesh(createOrganicBoxGeo(uW - 0.22, 0.16, uD - 0.22, seed + 71, 0.03, 1.0, 1), trimCol, uX, h + uH - 0.08, uZ, true)
@@ -1151,49 +1182,51 @@ function addLowPolyVillageHouse(
     const upParaR = registerFadeMesh(createLowPolyMesh(createOrganicBoxGeo(upT, upH, uD, seed + 75, 0.06, 0.95, 1), trimCol, uX + uW * 0.5 - upT * 0.5, h + uH + upH * 0.4, uZ, true));
     houseGrp.add(upperBody, upperRoofSlab, upParaF, upParaB, upParaL, upParaR);
 
-    addScatteredIrregularBricksToWall(houseGrp, uW * 0.94, uH, uD * 0.94, h, brickCol1, brickCol2, seed + 80);
+    // ✅ [버그 수정 완료] uX, uZ 오프셋을 전달하여 2층 돌출 벽돌이 허공에 뜨지 않고 2층 벽면에 정확히 밀착됨!
+    addScatteredIrregularBricksToWall(houseGrp, uW * 0.95, uH, uD * 0.95, h, brickCol1, brickCol2, seed + 80, uX, uZ);
 
-    const upperDoor = createOrganicUpperDoorGroup(1.15, 2.15, trimCol, woodCol, seed + 90);
-    upperDoor.position.set(uX - uW * 0.22, h, uZ + uD * 0.5 - 0.02);
+    const upperDoor = createOrganicUpperDoorGroup(1.12, 2.10, trimCol, woodCol, seed + 90);
+    upperDoor.position.set(uX - uW * 0.20, h, uZ + uD * 0.5 - 0.04);
     houseGrp.add(upperDoor);
 
-    const upperFrontWin = createOrganicWindowGroup(0.82, 0.98, brickCol1, trimCol, darkVoid, seed + 95);
-    upperFrontWin.position.set(uX + uW * 0.24, h + 1.35, uZ + uD * 0.5 - 0.02);
+    const upperFrontWin = createOrganicWindowGroup(0.80, 0.96, brickCol1, trimCol, darkVoid, seed + 95);
+    upperFrontWin.position.set(uX + uW * 0.22, h + 1.35, uZ + uD * 0.5 - 0.05);
     houseGrp.add(upperFrontWin);
 
-    const upperSideWin = createOrganicWindowGroup(0.82, 0.98, brickCol1, trimCol, darkVoid, seed + 98);
+    const upperSideWin = createOrganicWindowGroup(0.80, 0.96, brickCol1, trimCol, darkVoid, seed + 98);
     upperSideWin.rotation.y = stairSide * (Math.PI / 2);
-    upperSideWin.position.set(uX + stairSide * (uW * 0.5 - 0.02), h + 1.35, uZ + 0.15);
+    upperSideWin.position.set(uX + stairSide * (uW * 0.5 - 0.05), h + 1.35, uZ + 0.12);
     houseGrp.add(upperSideWin);
 
-    const upperBackWin = createOrganicWindowGroup(0.78, 0.92, brickCol1, trimCol, darkVoid, seed + 99);
+    const upperBackWin = createOrganicWindowGroup(0.76, 0.90, brickCol1, trimCol, darkVoid, seed + 99);
     upperBackWin.rotation.y = Math.PI;
-    upperBackWin.position.set(uX + 0.4, h + 1.35, uZ - uD * 0.5 + 0.02);
+    upperBackWin.position.set(uX + 0.35, h + 1.35, uZ - uD * 0.5 + 0.05);
     houseGrp.add(upperBackWin);
 
+    // 2층 서까래 돌출목 (벽면 안쪽에서부터 바깥으로 연결되어 절대 허공에 뜨지 않음)
     for (let b = 0; b < 4; b++) {
       const bx = uX - uW * 0.34 + (b / 3) * (uW * 0.68);
-      const backBeam = createOrganicRoofBeamMesh(0.76, woodCol, seed + 110 + b);
-      backBeam.rotation.x = Math.PI / 2 - 0.06;
-      backBeam.position.set(bx, h + uH - 0.42, uZ - uD * 0.5 - 0.22);
+      const backBeam = createOrganicRoofBeamMesh(0.68, woodCol, seed + 110 + b);
+      backBeam.rotation.x = Math.PI / 2 - 0.05;
+      backBeam.position.set(bx, h + uH - 0.40, uZ - uD * 0.5 - 0.10);
       houseGrp.add(backBeam);
     }
     for (let b = 0; b < 3; b++) {
-      const bz = uZ - uD * 0.30 + (b / 2) * (uD * 0.60);
-      const sideBeam = createOrganicRoofBeamMesh(0.72, woodCol, seed + 120 + b);
+      const bz = uZ - uD * 0.28 + (b / 2) * (uD * 0.56);
+      const sideBeam = createOrganicRoofBeamMesh(0.66, woodCol, seed + 120 + b);
       sideBeam.rotation.z = Math.PI / 2;
-      sideBeam.position.set(uX - stairSide * (uW * 0.5 + 0.22), h + uH - 0.42, bz);
+      sideBeam.position.set(uX - stairSide * (uW * 0.5 + 0.10), h + uH - 0.40, bz);
       houseGrp.add(sideBeam);
     }
 
     const terraceBench = createOrganicTerraceBench(woodCol, seed + 130);
-    terraceBench.position.set(uX + uW * 0.18, h, uZ + uD * 0.5 + 0.62);
+    terraceBench.position.set(uX + uW * 0.18, h, uZ + uD * 0.5 + 0.58);
     const terracePot = createJudeanClayPotMesh(0.85, '#b86232');
-    terracePot.position.set(stairSide * (w * 0.34), h, -d * 0.34);
+    terracePot.position.set(stairSide * (w * 0.32), h, -d * 0.32);
     houseGrp.add(terraceBench, terracePot);
 
-    const awW = 1.85, awD = 3.2;
-    const awX = -stairSide * (w * 0.5 + awW * 0.45);
+    const awW = 1.80, awD = 3.1;
+    const awX = -stairSide * (w * 0.5 + awW * 0.42);
     const sideAwning = registerFadeMesh(
       createLowPolyMesh(createOrganicBoxGeo(awW, 0.14, awD, seed + 140, 0.07, 1.0, 2), woodCol, awX, h * 0.68, -0.4, true)
     );
@@ -1201,9 +1234,21 @@ function addLowPolyVillageHouse(
     const awPost1 = createLowPolyMesh(new THREE.CylinderGeometry(0.09, 0.11, h * 0.66, 6), woodCol, awX - stairSide * (awW * 0.38), h * 0.33, -0.4 - awD * 0.38, true);
     const awPost2 = createLowPolyMesh(new THREE.CylinderGeometry(0.09, 0.11, h * 0.66, 6), woodCol, awX - stairSide * (awW * 0.38), h * 0.33, -0.4 + awD * 0.38, true);
     houseGrp.add(sideAwning, awPost1, awPost2);
+
+    // 2층 방 자체도 플랫폼으로 등록하여, 2층 테라스에서는 벽으로 작용하고 더 높은 곳에서 점프하면 2층 방 지붕 위에도 올라갈 수 있음!
+    const uWorld = toWorldXZ(uX, uZ);
+    const uEffW = (uW * 0.5 * Math.abs(cosYaw)) + (uD * 0.5 * Math.abs(sinYaw)) + 0.18;
+    const uEffD = (uW * 0.5 * Math.abs(sinYaw)) + (uD * 0.5 * Math.abs(cosYaw)) + 0.18;
+    platforms.push({
+      minX: uWorld.wx - uEffW,
+      maxX: uWorld.wx + uEffW,
+      minZ: uWorld.wz - uEffD,
+      maxZ: uWorld.wz + uEffD,
+      topY: by + h + uH
+    });
   }
 
-  // [D] 시장 상점형 가옥(variant === 2) 전면 나무 차양 및 과일 상자 유지
+  // [D] 시장 상점형 가옥(variant === 2) 전면 나무 차양
   if (variant === 2) {
     const awW = 3.2, awD = 1.9;
     const awX = w * 0.22, awZ = d * 0.5 + awD * 0.5;
@@ -1219,57 +1264,62 @@ function addLowPolyVillageHouse(
     houseGrp.add(awning, p1, p2, crate, fruit1, fruit2);
   }
 
-  // [E] 건물 옆면을 따라 올라가는 비정형 외벽 돌계단
+  // [E] 모든 외벽 돌계단에 회전각(facingYaw)을 반영한 물리 발판 등록 — 걸어서 2층 테라스 및 옥상 등반 가능!
   if (showExteriorStairs) {
-    const stairW = 1.58;
-    const stairLocalX = stairSide * (w * 0.5 + stairW * 0.5 - 0.05);
+    const stairW = 1.68;
+    const stairLocalX = stairSide * (w * 0.5 + stairW * 0.5 - 0.06);
     const stepCount = 9;
     const stairSpanD = d * 0.88;
+    const stepDepth = stairSpanD / stepCount;
 
     for (let s = 1; s <= stepCount; s++) {
       const sh = (h / stepCount) * s;
-      const sz = (d * 0.5) - (s - 0.5) * (stairSpanD / stepCount);
-      const stepGeo = createOrganicBoxGeo(stairW, sh, stairSpanD / stepCount + 0.05, seed + 200 + s, 0.04, 0.98, 1);
+      const sz = (d * 0.5) - (s - 0.5) * stepDepth;
+      const stepGeo = createOrganicBoxGeo(stairW, sh, stepDepth + 0.06, seed + 200 + s, 0.035, 0.98, 1);
       const stepMesh = registerFadeMesh(
         createLowPolyMesh(stepGeo, trimCol, stairLocalX, sh * 0.5, sz, true)
       );
       houseGrp.add(stepMesh);
 
-      if (withRoofStairs && Math.abs(facingYaw) < 0.05) {
-        const worldStairX = cx + stairLocalX;
-        const worldStairZ = cz + sz;
-        platforms.push({
-          minX: worldStairX - stairW * 0.55,
-          maxX: worldStairX + stairW * 0.55,
-          minZ: worldStairZ - (stairSpanD / (stepCount * 2)) - 0.15,
-          maxZ: worldStairZ + (stairSpanD / (stepCount * 2)) + 0.15,
-          topY: by + sh
-        });
-      }
+      const stWorld = toWorldXZ(stairLocalX, sz);
+      const padR = Math.max(stairW, stepDepth) * 0.58;
+      platforms.push({
+        minX: stWorld.wx - padR,
+        maxX: stWorld.wx + padR,
+        minZ: stWorld.wz - padR,
+        maxZ: stWorld.wz + padR,
+        topY: by + sh
+      });
     }
+
+    // 계단 맨 위 칸에서 2층 테라스로 자연스럽게 이어지는 상단 랜딩 발판 추가
+    const topLandWorld = toWorldXZ(stairSide * (w * 0.45), -d * 0.25);
+    platforms.push({
+      minX: topLandWorld.wx - 1.25,
+      maxX: topLandWorld.wx + 1.25,
+      minZ: topLandWorld.wz - 1.25,
+      maxZ: topLandWorld.wz + 1.25,
+      topY: by + h + 0.05
+    });
   }
 
   houseGrp.position.set(cx, by, cz);
   houseGrp.rotation.y = facingYaw;
   worldGroup.add(houseGrp);
 
-  const cosY = Math.abs(Math.cos(facingYaw));
-  const sinY = Math.abs(Math.sin(facingYaw));
-  const effHalfW = (w * 0.5 * cosY) + (d * 0.5 * sinY) + 0.30;
-  const effHalfD = (w * 0.5 * sinY) + (d * 0.5 * cosY) + 0.30;
+  // [핵심 수정] 무한 높이 colliders 대신 1층 옥상 높이(by + h + 0.05) 플랫폼으로만 등록하여
+  // 지상에서는 벽처럼 막히고, 계단으로 올라오거나 옆 건물에서 점프하면 2층 테라스/옥상 위를 자유롭게 활보할 수 있음!
+  const absCos = Math.abs(cosYaw);
+  const absSin = Math.abs(sinYaw);
+  const effHalfW = (w * 0.5 * absCos) + (d * 0.5 * absSin) + 0.22;
+  const effHalfD = (w * 0.5 * absSin) + (d * 0.5 * absCos) + 0.22;
 
-  colliders.push({
-    minX: cx - effHalfW,
-    maxX: cx + effHalfW,
-    minZ: cz - effHalfD,
-    maxZ: cz + effHalfD
-  });
   platforms.push({
     minX: cx - effHalfW,
     maxX: cx + effHalfW,
     minZ: cz - effHalfD,
     maxZ: cz + effHalfD,
-    topY: by + h
+    topY: by + h + 0.05
   });
 
   return houseGrp;
@@ -1329,7 +1379,7 @@ function createMiracleHeroMesh() {
 }
 
 // -------------------------------------------------------------------------
-// 8. 에피소드 4 전용 커스텀 UI ('나의 복음서 수첩' & 미션 거절 버튼이 포함된 대화창)
+// 8. 에피소드 4 전용 커스텀 UI ('나의 복음서 수첩' & 미션 거절 + [🔄 미션 다시하기] 대화창)
 // -------------------------------------------------------------------------
 let currentNotebookTab = 'all';
 
@@ -1385,6 +1435,7 @@ function ensureMiracleCustomUI() {
         </div>
       </div>
 
+      <!-- [하단 대화창: 거절 버튼 + 완료 미션 다시하기 버튼 지원] -->
       <div id="miracle-dialog-modal" class="hidden pointer-events-auto mt-auto mb-28 mc-panel bg-amber-50/95 border-4 border-amber-700 rounded-3xl p-4 max-w-md w-[92%] text-slate-900 shadow-2xl flex flex-col gap-2">
         <div class="flex items-center justify-between gap-2">
           <span id="miracle-dialog-speaker" class="px-3 py-0.5 rounded-full bg-amber-800 text-amber-100 font-jua text-xs sm:text-sm">주민</span>
@@ -1392,7 +1443,10 @@ function ensureMiracleCustomUI() {
         </div>
         <p id="miracle-dialog-text" class="font-bold text-xs sm:text-sm leading-relaxed min-h-[40px] text-slate-800"></p>
         <div id="miracle-dialog-quiz-box" class="hidden flex-col gap-1.5 mt-1"></div>
-        <div class="flex justify-end gap-2 mt-1">
+        <div class="flex flex-wrap justify-end gap-2 mt-1">
+          <button id="miracle-dialog-replay-btn" type="button" onclick="replayMiracleDialogMission()" class="hidden mc-btn px-3.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-jua text-xs sm:text-sm">
+            🔄 미션 다시하기
+          </button>
           <button id="miracle-dialog-cancel-btn" type="button" onclick="cancelMiracleDialog()" class="hidden mc-btn px-3.5 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-jua text-xs sm:text-sm">
             거절 (나중에 하기) ✕
           </button>
@@ -1532,6 +1586,7 @@ function openMiracleDialog(options) {
   const quizBox = document.getElementById('miracle-dialog-quiz-box');
   const confirmBtn = document.getElementById('miracle-dialog-confirm-btn');
   const cancelBtn = document.getElementById('miracle-dialog-cancel-btn');
+  const replayBtn = document.getElementById('miracle-dialog-replay-btn');
   if (!modal) return;
 
   const catMeta = {
@@ -1539,12 +1594,14 @@ function openMiracleDialog(options) {
     eyewitness: { label: '🔵 목격담 (직접 경험한 증언)',         cls: 'bg-sky-200 text-sky-950' },
     word:       { label: '🟣 말씀 (예수님의 직접 가르침)',       cls: 'bg-purple-200 text-purple-950' },
     parable:    { label: '🌱 비유 (예수님이 들려주신 교훈 이야기)', cls: 'bg-emerald-200 text-emerald-950' },
-    story:      { label: '✨ 복음서 사건 체험',                  cls: 'bg-rose-200 text-rose-950' }
+    story:      { label: '✨ 복음서 사건 체험',                  cls: 'bg-rose-200 text-rose-950' },
+    greeting:   { label: '😊 반가운 인사 (완료한 여정)',         cls: 'bg-emerald-200 text-emerald-950' }
   }[options.category || 'rumor'];
 
   miracleDialogState.active = true;
   miracleDialogState.onConfirm = options.onConfirm || null;
   miracleDialogState.onCancel = options.onCancel || null;
+  miracleDialogState.onReplay = options.onReplay || null;
 
   if (options.notebookId) {
     unlockMiracleNotebookEntry(options.notebookId, false);
@@ -1556,6 +1613,17 @@ function openMiracleDialog(options) {
   textEl.textContent = options.text || '';
   speakText(options.text || '');
 
+  // 완료된 미션의 인사 대화창일 때 [🔄 미션 다시하기] 버튼 표시
+  if (replayBtn) {
+    if (typeof options.onReplay === 'function') {
+      replayBtn.classList.remove('hidden');
+      replayBtn.textContent = options.replayText || '🔄 미션 다시하기';
+    } else {
+      replayBtn.classList.add('hidden');
+    }
+  }
+
+  // 신규 미션/스테이지 수락 창일 때 [거절 (나중에 하기)] 버튼 표시
   if (cancelBtn) {
     if (typeof options.onConfirm === 'function' || options.showCancel) {
       cancelBtn.classList.remove('hidden');
@@ -1607,6 +1675,7 @@ window.confirmMiracleDialog = function () {
   const cb = miracleDialogState.onConfirm;
   miracleDialogState.onConfirm = null;
   miracleDialogState.onCancel = null;
+  miracleDialogState.onReplay = null;
   if (typeof cb === 'function') cb();
 };
 
@@ -1617,11 +1686,26 @@ window.cancelMiracleDialog = function () {
   const cancelCb = miracleDialogState.onCancel;
   miracleDialogState.onConfirm = null;
   miracleDialogState.onCancel = null;
+  miracleDialogState.onReplay = null;
   playSfx('step');
   if (typeof cancelCb === 'function') {
     cancelCb();
   } else {
     showToast('✋ 미션을 거절했어요. 준비되면 언제든 다시 찾아오세요!');
+  }
+};
+
+window.replayMiracleDialogMission = function () {
+  const modal = document.getElementById('miracle-dialog-modal');
+  if (modal) modal.classList.add('hidden');
+  miracleDialogState.active = false;
+  const replayCb = miracleDialogState.onReplay;
+  miracleDialogState.onConfirm = null;
+  miracleDialogState.onCancel = null;
+  miracleDialogState.onReplay = null;
+  playSfx('switch');
+  if (typeof replayCb === 'function') {
+    replayCb();
   }
 };
 
