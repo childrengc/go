@@ -2301,22 +2301,38 @@ function startVoxelGame(mode, targetStage = 1, fromMapSelect = false) {
   guideArrowGroup.visible = (mode !== 'senior');
   document.getElementById('hud-compass-hint').classList.toggle('hidden', mode === 'senior');
 
+  // ✅ [수정된 안전 폴백 분기] 에피소드 3(david)과 에피소드 4(miracle)가 에피소드 1로 빠지지 않도록 보완
   if (targetStage === 4) {
-    buildEndingWorld();
+    if (currentEpisode === 'david' && typeof buildDavidEndingWorld === 'function' && (!epPlugin || !epPlugin.buildEndingWorld)) {
+      buildDavidEndingWorld();
+    } else if (currentEpisode === 'miracle' && typeof buildMiracleEndingWorld === 'function' && (!epPlugin || !epPlugin.buildEndingWorld)) {
+      buildMiracleEndingWorld();
+    } else {
+      buildEndingWorld();
+    }
   } else if (epPlugin && typeof epPlugin.buildStage === 'function') {
     epPlugin.buildStage(targetStage);
-  } else if (targetStage === 1) {
-    if (currentEpisode === 'exodus' && typeof buildExodusStage1World === 'function') buildExodusStage1World();
-    else if (typeof buildNoahStage1World === 'function') buildNoahStage1World();
-  } else if (targetStage === 2) {
-    if (currentEpisode === 'exodus' && typeof buildExodusStage2World === 'function') buildExodusStage2World();
-    else if (typeof buildNoahArkInteriorMaze === 'function') buildNoahArkInteriorMaze(2);
-  } else if (targetStage === 3) {
-    if (currentEpisode === 'exodus' && typeof buildExodusStage3World === 'function') buildExodusStage3World();
-    else if (typeof buildNoahArkInteriorMaze === 'function') buildNoahArkInteriorMaze(3);
+  } else if (currentEpisode === 'david') {
+    if (targetStage === 1 && typeof buildDavidStage1World === 'function') buildDavidStage1World();
+    else if (targetStage === 2 && typeof buildDavidStage2World === 'function') buildDavidStage2World();
+    else if (targetStage === 3 && typeof buildDavidStage3World === 'function') buildDavidStage3World();
+    else showToast('⚠️ 에피소드 3 파일을 불러오지 못했습니다.');
+  } else if (currentEpisode === 'miracle') {
+    if (targetStage === 1 && typeof buildMiracleOpenWorld === 'function') buildMiracleOpenWorld(false);
+    else if (targetStage === 2 && typeof buildMiracleMainStage2Loaves === 'function') buildMiracleMainStage2Loaves();
+    else if (targetStage === 3 && typeof buildMiracleMainStage3Cross === 'function') buildMiracleMainStage3Cross();
+    else showToast('⚠️ 에피소드 4 파일을 불러오지 못했습니다.');
+  } else if (currentEpisode === 'exodus') {
+    if (targetStage === 1 && typeof buildExodusStage1World === 'function') buildExodusStage1World();
+    else if (targetStage === 2 && typeof buildExodusStage2World === 'function') buildExodusStage2World();
+    else if (targetStage === 3 && typeof buildExodusStage3World === 'function') buildExodusStage3World();
+  } else {
+    if (targetStage === 1 && typeof buildNoahStage1World === 'function') buildNoahStage1World();
+    else if (targetStage === 2 && typeof buildNoahArkInteriorMaze === 'function') buildNoahArkInteriorMaze(2);
+    else if (targetStage === 3 && typeof buildNoahArkInteriorMaze === 'function') buildNoahArkInteriorMaze(3);
   }
-  startStageBgm(targetStage);
 
+  startStageBgm(targetStage);
   getAndIncrementPlayCount(explorerName);
   sendGameLogToSheet(targetStage === 1 ? '▶ 게임시작' : `🚀 스테이지${targetStage} 바로진입`, targetStage, '-');
 }
