@@ -1,14 +1,13 @@
 // =========================================================================
 // [ep4_miracle_world.js - 파트 1/3] 에피소드 4 : 확장된 소프트 로우 폴리곤 오픈월드 지형·외곽 언덕·길가 마을·생태계
-// - 맵 대폭 확장(반경 152) 및 골고다 언덕 등 내륙 지형 침수 완벽 해결
-// - 서쪽(West): 모래사장이 없는 완만한 초원 해안 경사 + 드넓은 갈릴리 바다
-// - 북·동·남 3면: 높이를 낮춘 울퉁불퉁한 다면체 언덕을 2중으로 겹쳐 자연스러운 경계 형성
-// - 동북쪽 외곽(x = 88, z = -82): 마을 전체가 한눈에 내려다보이는 높은 '오병이어 전망 언덕'과 오솔길
+// - 가장자리 언덕 내부 진입 완벽 차단 (연속 충돌벽 Colliders + 경계 제한)
+// - 계단으로 건물 2층 등반 후 인접한 옆 건물 옥상·2층으로 점프 이동할 수 있는 근접 마을 배치
 // =========================================================================
 
 let miracleWorldMissionObjects = [];
 let miracleActiveFieldEvent = null;
 let miracleWanderingActors = []; // 자연스럽게 걸어 다니는 마을 주민 & 초원 동물(사슴·양) 배열
+let miracleGolgothaCrossesGroup = null; // 스테이지 3(예수님 십자가 사건)부터 등장하는 골고다 세 십자가 그룹
 
 // 머리 위 태그(.world-label) 근접 표시 거리 상수 (가까이 다가갔을 때만 표시)
 const MIRACLE_TAG_DIST_SPOT = 13.0;
@@ -54,40 +53,47 @@ function createLowPolyWoodenCart(x, z, rotY = 0) {
 }
 
 // -------------------------------------------------------------------------
-// 2. 북·동·남 3면 가장자리 낮은 울퉁불퉁 다면체 언덕(Low Bumpy Hills) 2중 배치
-//    - 서쪽(바다 방향)은 탁 트이게 열어두고, 나머지 3면 가장자리는 낮은 언덕을 겹쳐 배치해 이탈 방지
+// 2. 북·동·남 3면 가장자리 낮은 울퉁불퉁 다면체 언덕 2중 배치 & 내부 진입 차단벽
+//    - 닫힌 다면체 언덕을 겹쳐 배치해 틈새를 없애고, 안쪽 경계선을 따라 연속 충돌벽을 세워 언덕 속 진입을 원천 차단!
 // -------------------------------------------------------------------------
 function buildLowPolyPerimeterMountainRange() {
   if (typeof createBumpyLowPolyHillMesh !== 'function') return;
 
   const hillCols = ['#7fa650', '#6d943e', '#8ab058', '#789c4a', '#8c8578'];
 
-  // 1) 북쪽(North) 가장자리 낮은 겹침 언덕 (x = -82 부터 x = +136 까지)
+  // 1) 북쪽(North) 가장자리 겹침 언덕 (z = -122 ~ -140)
   for (let i = 0; i < 15; i++) {
-    const hx = -80 + i * 15.5;
-    const hz1 = -132 - (i % 2) * 6;
-    const hz2 = -148 - ((i + 1) % 2) * 7;
-    createBumpyLowPolyHillMesh(hx, hz1, 18 + (i % 3) * 3, 6.2 + (i % 3) * 1.8, 16, hillCols[i % hillCols.length], i + 1, true);
-    createBumpyLowPolyHillMesh(hx + 7, hz2, 24 + (i % 2) * 4, 9.5 + (i % 4) * 2.2, 20, hillCols[(i + 2) % hillCols.length], i + 20, false);
+    const hx = -82 + i * 15.0;
+    const hz1 = -122 - (i % 2) * 5;
+    const hz2 = -138 - ((i + 1) % 2) * 6;
+    createBumpyLowPolyHillMesh(hx, hz1, 19 + (i % 3) * 3, 6.2 + (i % 3) * 1.6, 17, hillCols[i % hillCols.length], i + 1, true);
+    createBumpyLowPolyHillMesh(hx + 7, hz2, 24 + (i % 2) * 4, 9.2 + (i % 4) * 2.0, 20, hillCols[(i + 2) % hillCols.length], i + 20, true);
   }
 
-  // 2) 동쪽(East) 가장자리 낮은 겹침 언덕 (z = -124 부터 z = +126 까지)
+  // 2) 동쪽(East) 가장자리 겹침 언덕 (x = +122 ~ +140)
   for (let i = 0; i < 17; i++) {
-    const hz = -124 + i * 15.5;
-    const hx1 = 132 + (i % 2) * 6;
-    const hx2 = 148 + ((i + 1) % 2) * 7;
-    createBumpyLowPolyHillMesh(hx1, hz, 17, 6.5 + (i % 3) * 1.8, 18 + (i % 3) * 3, hillCols[i % hillCols.length], i + 40, true);
-    createBumpyLowPolyHillMesh(hx2, hz + 6, 24, 10.0 + (i % 3) * 2.4, 22, hillCols[(i + 1) % hillCols.length], i + 60, false);
+    const hz = -120 + i * 15.0;
+    const hx1 = 122 + (i % 2) * 5;
+    const hx2 = 138 + ((i + 1) % 2) * 6;
+    createBumpyLowPolyHillMesh(hx1, hz, 17, 6.4 + (i % 3) * 1.6, 19 + (i % 3) * 3, hillCols[i % hillCols.length], i + 40, true);
+    createBumpyLowPolyHillMesh(hx2, hz + 6, 24, 9.6 + (i % 3) * 2.2, 22, hillCols[(i + 1) % hillCols.length], i + 60, true);
   }
 
-  // 3) 남쪽(South) 가장자리 낮은 겹침 언덕 (x = -82 부터 x = +136 까지)
+  // 3) 남쪽(South) 가장자리 겹침 언덕 (z = +122 ~ +140)
   for (let i = 0; i < 15; i++) {
-    const hx = -80 + i * 15.5;
-    const hz1 = 132 + (i % 2) * 6;
-    const hz2 = 148 + ((i + 1) % 2) * 7;
-    createBumpyLowPolyHillMesh(hx, hz1, 18 + (i % 3) * 3, 6.4 + (i % 3) * 1.8, 16, hillCols[(i + 1) % hillCols.length], i + 80, true);
-    createBumpyLowPolyHillMesh(hx - 6, hz2, 24 + (i % 2) * 4, 9.8 + (i % 4) * 2.2, 20, hillCols[(i + 3) % hillCols.length], i + 100, false);
+    const hx = -82 + i * 15.0;
+    const hz1 = 122 + (i % 2) * 5;
+    const hz2 = 138 + ((i + 1) % 2) * 6;
+    createBumpyLowPolyHillMesh(hx, hz1, 19 + (i % 3) * 3, 6.3 + (i % 3) * 1.6, 17, hillCols[(i + 1) % hillCols.length], i + 80, true);
+    createBumpyLowPolyHillMesh(hx - 6, hz2, 24 + (i % 2) * 4, 9.5 + (i % 4) * 2.0, 20, hillCols[(i + 3) % hillCols.length], i + 100, true);
   }
+
+  // 4) [언덕 내부 진입 원천 차단] 북·동·남 언덕 기슭 바로 앞(±106.5)에 빈틈없는 연속 충돌벽 등록
+  colliders.push(
+    { minX: -120, maxX:  160, minZ: -170, maxZ: -106.0 }, // 북쪽 언덕 차단벽
+    { minX: -120, maxX:  160, minZ:  106.0, maxZ: 170 },  // 남쪽 언덕 차단벽
+    { minX:  106.0, maxX: 170, minZ: -170, maxZ:  170 }   // 동쪽 언덕 차단벽
+  );
 }
 
 // -------------------------------------------------------------------------
@@ -99,24 +105,24 @@ function buildSoftLowPolyWorldTerrain() {
   }
 
   const worldRad = window.MIRACLE_EXP_LIMIT || 152;
-  const size = worldRad * 2.35; // 약 356 x 356 규모의 드넓은 월드 지형
-  const segs = 112;
+  const size = worldRad * 2.35;
+  const segs = 116;
   const geo = new THREE.PlaneGeometry(size, size, segs, segs);
   geo.rotateX(-Math.PI / 2);
 
   const posAttr = geo.attributes.position;
   const colors = [];
 
-  const cDeepSeaBed  = new THREE.Color('#0369a1');
-  const cCoastalHerb = new THREE.Color('#86b049');
-  const cWarmMeadow  = new THREE.Color('#9ec164');
-  const cHillOlive   = new THREE.Color('#7ca344');
-  const cHillTopGrass= new THREE.Color('#6b9436');
-  const cInlandOchre = new THREE.Color('#d8be7d');
-  const cDirtRoad    = new THREE.Color('#c89d6c');
-  const cRoadEdge    = new THREE.Color('#d8b482');
-  const cPlazaStone  = new THREE.Color('#d6ccc2');
-  const cGolgotha    = new THREE.Color('#8c8275');
+  const cDeepSeaBed   = new THREE.Color('#0369a1');
+  const cCoastalHerb  = new THREE.Color('#86b049');
+  const cWarmMeadow   = new THREE.Color('#9ec164');
+  const cHillOlive    = new THREE.Color('#7ca344');
+  const cHillTopGrass = new THREE.Color('#6b9436');
+  const cInlandOchre  = new THREE.Color('#d8be7d');
+  const cDirtRoad     = new THREE.Color('#c89d6c');
+  const cRoadEdge     = new THREE.Color('#d8b482');
+  const cPlazaStone   = new THREE.Color('#d6ccc2');
+  const cGolgotha     = new THREE.Color('#8c8275');
 
   for (let i = 0; i < posAttr.count; i++) {
     const vx = posAttr.getX(i);
@@ -128,19 +134,13 @@ function buildSoftLowPolyWorldTerrain() {
     const roadCenterX = getMiracleMainRoadCenterX(vz);
     const distFromMainRoad = Math.abs(vx - roadCenterX);
 
-    // 1) 가버나움에서 동북쪽 외곽 '오병이어 전망 언덕(x = 88, z = -82)' 정상까지 이어지는 완만한 등반 오솔길
     const bethRoadTargetZ = -52 - Math.max(0, Math.min(1, (vx - 6) / 82)) * 30 + Math.sin(vx * 0.08) * 3.2;
     const onBethsaidaHillTrail = (vx >= 2 && vx <= 90 && Math.abs(vz - bethRoadTargetZ) < 3.8);
-
-    // 2) 서쪽 바다 선착장(x = -88, z = -68)으로 이어지는 해안 오솔길
     const onGalileePierTrail = (vx >= -88 && vx <= roadCenterX + 2 && Math.abs(vz - (-68 + Math.sin(vx * 0.06) * 2.5)) < 3.6);
-
-    // 3) 수가성·여리고 횡단 지선 도로 및 골고다·감람산 등반 길
     const onJerichoBranch = (vz > -12 && vz < 6 && vx > -34 && vx < 56);
-    const onGolgothaTrail = (vz > 52 && vz < 82 && Math.abs(vx - (-8 - (vz - 52) * 1.9)) < 3.8);
+    const onGolgothaTrail = (vz > 52 && vz < 82 && Math.abs(vx - (-8 - (vz - 52) * 1.8)) < 4.2);
     const onOliveMountTrail = (vx >= 10 && vx <= 90 && Math.abs(vz - (58 + (vx - 10) * 0.2)) < 3.8);
 
-    // 서쪽 해안선 (x ≈ -92): 모래사장 없이 초원 경사가 곧바로 바다로 진입
     const shoreLineX = -92 + Math.sin(vz * 0.03) * 6.0 + Math.cos(vz * 0.07) * 2.5;
 
     if (vx < shoreLineX - 1.5) {
@@ -159,7 +159,7 @@ function buildSoftLowPolyWorldTerrain() {
       vCol.copy(cDirtRoad);
     } else if (distFromMainRoad < 6.5) {
       vCol.copy(cRoadEdge);
-    } else if (vx < -44 && vz > 54 && vy > 1.8) {
+    } else if (vx < -34 && vz > 50 && vy > 1.8) {
       vCol.copy(cGolgotha);
     } else if (vy > 7.5) {
       vCol.copy(cHillTopGrass);
@@ -189,7 +189,6 @@ function buildSoftLowPolyWorldTerrain() {
   terrainMesh.receiveShadow = true;
   worldGroup.add(terrainMesh);
 
-  // 북·동·남 3면 가장자리 낮은 울퉁불퉁 겹침 언덕 생성
   buildLowPolyPerimeterMountainRange();
 
   // 서쪽(West, x < -92) 전체를 가득 채우는 모래사장 없는 드넓은 바다 수면
@@ -213,12 +212,12 @@ function buildSoftLowPolyWorldTerrain() {
   wideWestSea.receiveShadow = true;
   worldGroup.add(wideWestSea);
 
-  // 확장된 맵 이동 경계 (서쪽 물가 x = -91 까지 완만한 경사로 내려가 볼 수 있고, 동북쪽 오병이어 언덕 x = 120 까지 자유 탐험)
+  // 가장자리 언덕 안쪽으로 들어갈 수 없도록 안전 경계 설정 (-91.0 ~ +105.5)
   currentMapRectBounds = {
     minX: -91.0,
-    maxX:  120.0,
-    minZ: -120.0,
-    maxZ:  120.0
+    maxX:  105.5,
+    minZ: -105.5,
+    maxZ:  105.5
   };
 
   // 서쪽 바다 해안 선착장(부두, x = -90, z = -68) 및 정박된 갈릴리 목선
@@ -257,49 +256,55 @@ function buildSoftLowPolyWorldTerrain() {
 }
 
 // -------------------------------------------------------------------------
-// 4. 길가 고대 유대 건축물 행렬 & 풍성한 나무·야생화 & 걸어 다니는 주민·동물(사슴·양) 스폰
+// 4. 길가 고대 유대 건축물 행렬 (인접 건물 옥상·2층 점프 이동이 가능한 클러스터 포함) & 생태계 스폰
 // -------------------------------------------------------------------------
 function buildMiracleRoadsideVillagesAndForests() {
   miracleWanderingActors = [];
 
+  // 건물들을 2~3채씩 가깝게(중심 간격 7.2~7.8m, 옥상 간 틈새 1.2~1.6m) 군집 배치하여
+  // 한 건물의 외벽 계단으로 2층 테라스에 올라간 뒤 옆 건물 옥상이나 2층으로 점프해 넘어갈 수 있도록 설계!
   const roadsideBuildingSpecs = [
-    // 북부 가나 · 갈릴리 마을 거리
-    { x: -16, z: -88, v: 1, yaw:  0.25, sc: 1.00 },
-    { x:  12, z: -88, v: 0, yaw: -0.20, sc: 0.96 },
-    { x:  13, z: -76, v: 2, yaw: -Math.PI / 2 + 0.12, sc: 1.02 },
-    { x: -15, z: -58, v: 3, yaw:  Math.PI / 2 - 0.15, sc: 0.95 },
-    { x: -14, z: -44, v: 0, yaw:  Math.PI / 2 - 0.10, sc: 1.00 },
-    // 가버나움 거리 & 오병이어 언덕 초입 길가
-    { x:   9, z: -56, v: 2, yaw:  0.0,  sc: 0.94 },
-    { x:  35, z: -46, v: 1, yaw: -0.35, sc: 1.00 },
-    { x: -14, z: -30, v: 4, yaw:  Math.PI / 2 - 0.18, sc: 0.95 },
-    { x:  14, z: -30, v: 1, yaw: -Math.PI / 2 + 0.15, sc: 1.02 },
-    // 중부 사마리아 · 수가성 · 여리고 교차로 길가
-    { x: -15, z: -18, v: 2, yaw:  Math.PI / 2 - 0.12, sc: 0.96 },
-    { x:  15, z: -16, v: 0, yaw: -Math.PI / 2 + 0.14, sc: 1.00 },
-    { x:  16, z:  -2, v: 3, yaw: -Math.PI / 2 + 0.08, sc: 1.04 },
-    { x:  52, z:  -8, v: 1, yaw: -Math.PI / 2,        sc: 1.02 },
-    { x:  52, z:   6, v: 0, yaw: -Math.PI / 2 + 0.10, sc: 0.96 },
-    { x:  44, z:  14, v: 2, yaw:  Math.PI - 0.25,     sc: 0.95 },
-    // 유대 광야 · 여리고~예루살렘 순례길 가장자리
-    { x: -14, z:  10, v: 0, yaw:  Math.PI / 2 - 0.12, sc: 0.96 },
-    { x: -15, z:  24, v: 3, yaw:  Math.PI / 2 - 0.08, sc: 1.02 },
-    { x:  14, z:  32, v: 2, yaw: -Math.PI / 2 + 0.15, sc: 0.95 },
-    { x: -15, z:  36, v: 1, yaw:  Math.PI / 2 - 0.10, sc: 1.00 },
-    // 남부 예루살렘 성안 거리 & 다락방 골목
-    { x: -16, z:  48, v: 2, yaw:  Math.PI / 2,        sc: 0.95 },
-    { x:  16, z:  48, v: 1, yaw: -Math.PI / 2,        sc: 1.00 },
-    { x:  25, z:  56, v: 3, yaw: -Math.PI / 2 + 0.12, sc: 1.02 },
-    { x: -36, z:  54, v: 0, yaw:  0.20,               sc: 0.96 },
-    { x:  24, z:  72, v: 4, yaw: -Math.PI / 2 + 0.18, sc: 0.95 },
-    { x:  14, z:  84, v: 1, yaw:  Math.PI - 0.15,     sc: 1.00 }
+    // [클러스터 1: 북부 가나 서쪽 루프탑 연속 점프 구간]
+    { x: -16.0, z: -88.0, v: 1, yaw:  Math.PI / 2, sc: 1.00 },
+    { x: -16.0, z: -80.2, v: 0, yaw:  Math.PI / 2, sc: 0.98 },
+    // [클러스터 2: 북부 가나 동쪽 루프탑 연속 점프 구간]
+    { x:  13.0, z: -86.0, v: 3, yaw: -Math.PI / 2, sc: 1.00 },
+    { x:  13.0, z: -78.2, v: 2, yaw: -Math.PI / 2, sc: 0.98 },
+    { x:  13.0, z: -70.6, v: 0, yaw: -Math.PI / 2, sc: 0.96 },
+    // [클러스터 3: 갈릴리 서쪽 길가 2연속 가옥]
+    { x: -15.0, z: -56.0, v: 3, yaw:  Math.PI / 2, sc: 0.98 },
+    { x: -15.0, z: -48.4, v: 0, yaw:  Math.PI / 2, sc: 0.98 },
+    // [클러스터 4: 가버나움 중풍병자 집(22, -52)과 옥상 점프로 이어지는 이웃집(13.5, -52)]
+    { x:  13.5, z: -52.0, v: 2, yaw:  0.0,         sc: 0.96 },
+    { x:  35.0, z: -46.0, v: 1, yaw: -0.25,        sc: 1.00 },
+    // [클러스터 5: 중북부 순례길 양옆 마주보는 2층 가옥 클러스터]
+    { x: -14.5, z: -31.0, v: 1, yaw:  Math.PI / 2, sc: 1.00 },
+    { x: -14.5, z: -23.2, v: 4, yaw:  Math.PI / 2, sc: 0.96 },
+    { x:  14.5, z: -30.0, v: 3, yaw: -Math.PI / 2, sc: 1.00 },
+    { x:  14.5, z: -22.2, v: 0, yaw: -Math.PI / 2, sc: 0.98 },
+    // [클러스터 6: 사마리아 · 여리고 입구 연속 루프탑 가옥]
+    { x:  15.5, z: -10.0, v: 0, yaw: -Math.PI / 2, sc: 0.98 },
+    { x:  15.5, z:  -2.2, v: 3, yaw: -Math.PI / 2, sc: 1.02 },
+    { x:  52.0, z:  -7.5, v: 1, yaw: -Math.PI / 2, sc: 1.00 },
+    { x:  52.0, z:   0.3, v: 0, yaw: -Math.PI / 2, sc: 0.98 },
+    { x:  52.0, z:   7.9, v: 2, yaw: -Math.PI / 2, sc: 0.96 },
+    // [클러스터 7: 유대 광야 ~ 예루살렘 성문 앞 연속 가옥]
+    { x: -14.5, z:  16.0, v: 0, yaw:  Math.PI / 2, sc: 0.98 },
+    { x: -14.5, z:  23.8, v: 3, yaw:  Math.PI / 2, sc: 1.00 },
+    { x: -14.5, z:  31.6, v: 1, yaw:  Math.PI / 2, sc: 0.98 },
+    { x:  14.5, z:  32.0, v: 2, yaw: -Math.PI / 2, sc: 0.96 },
+    // [클러스터 8: 남부 예루살렘 성안 거리 & 마가의 다락방(-24, 58) 이웃 가옥]
+    { x: -15.2, z:  58.0, v: 0, yaw:  0.0,         sc: 0.96 }, // 다락방(-24, 58)에서 점프로 건너갈 수 있는 옆집!
+    { x:  16.0, z:  48.0, v: 1, yaw: -Math.PI / 2, sc: 1.00 },
+    { x:  16.0, z:  55.8, v: 3, yaw: -Math.PI / 2, sc: 1.00 },
+    { x:  24.0, z:  72.0, v: 4, yaw: -Math.PI / 2, sc: 0.96 },
+    { x:  24.0, z:  79.4, v: 1, yaw: -Math.PI / 2, sc: 1.00 }
   ];
 
   roadsideBuildingSpecs.forEach(b => {
     addJudeanRoadsideBuilding(b.x, b.z, b.v, b.yaw, b.sc, false);
   });
 
-  // 길가 생활 소품: 나무 수레 & 소프트 로우폴리 나귀
   createLowPolyWoodenCart(-9.5, -48, 0.25);
   createLowPolyWoodenCart( 9.8,  -8, -0.35);
   createLowPolyWoodenCart(-9.2,  30, 0.18);
@@ -307,33 +312,32 @@ function buildMiracleRoadsideVillagesAndForests() {
   createLowPolyDonkey(-9.8,  16,  0.8);
   createLowPolyDonkey( 9.5,  54, -1.2);
 
-  // 오병이어 전망 언덕(x = 88, z = -82) 및 감람산, 초원 능선에 다중 가지 대목 배치
   if (typeof addLowPolyCanopyTree === 'function') {
     addLowPolyCanopyTree( 74, -92, 1.35, true);
-    addLowPolyCanopyTree(102, -76, 1.35, true);
+    addLowPolyCanopyTree( 98, -76, 1.35, true);
     addLowPolyCanopyTree(-48, -32, 1.25, true);
     addLowPolyCanopyTree( 58, -22, 1.25, true);
-    addLowPolyCanopyTree( 96,  68, 1.30, true);
+    addLowPolyCanopyTree( 94,  68, 1.30, true);
   }
 
   const oliveSpots = [
-    [-42, -88], [-26, -88], [26, -84], [48, -88], [66, -102], [106, -94],
-    [56, -54],  [98, -58],  [82, -106],[44, -72], [28, -66],  [108, -72],
-    [-38, -42], [28, -40],  [52, -36], [76, -40], [96, -28],  [-56, -28],
-    [-64, -16], [28, -18],  [68, -18], [92,  -4], [84,  18],  [-48,   4],
-    [-54,  28], [-38,  36], [36,  38], [62,  42], [96,  46],  [104,  66],
-    [68,   82], [92,   88], [76,  98], [48,  94], [-48,  92], [-32, 102],
-    [-76,  48], [-82,  66], [-52, 64], [32, 102], [  4, 104]
+    [-42, -88], [-26, -88], [26, -84], [48, -88], [66, -98], [100, -92],
+    [56, -54],  [96, -58],  [82, -100],[44, -72], [28, -66], [100, -72],
+    [-38, -42], [28, -40],  [52, -36], [76, -40], [94, -28], [-56, -28],
+    [-64, -16], [28, -18],  [68, -18], [92,  -4], [84,  18], [-48,   4],
+    [-54,  28], [-38,  36], [36,  38], [62,  42], [94,  46], [ 98,  66],
+    [68,   82], [92,   88], [76,  96], [48,  94], [-48, 92], [-32,  98],
+    [-82,  48], [-86,  66], [-38, 60], [32,  98], [  4, 98]
   ];
   oliveSpots.forEach(([tx, tz], i) => {
     addLowPolyOliveTree(tx, tz, 1.0 + (i % 3) * 0.18, true);
   });
 
   const cypressSpots = [
-    [-32, -104], [-12, -106], [ 8, -104], [28, -104], [64, -108], [104, -104],
-    [-78,  -36], [-72,  -22], [-80,  -4], [-78,  26], [-82,  42],
-    [-78,   72], [-74,   90], [-56,  98], [-40, 102], [-10, 106],
-    [102,   28], [108,   48], [104,  82], [ 58, 104], [ 38, -88], [ 46, -94]
+    [-32, -98], [-12, -100], [ 8, -98], [28, -98], [64, -100], [98, -98],
+    [-78, -36], [-72,  -22], [-80, -4], [-78, 26], [-82,  42],
+    [-82,  72], [-78,   90], [-56, 96], [-40, 98], [-10, 100],
+    [ 98,  28], [100,   48], [ 98, 82], [ 58, 98], [ 38, -88], [46, -94]
   ];
   cypressSpots.forEach(([cx, cz], i) => {
     addLowPolyCypressPineTree(cx, cz, 0.95 + (i % 3) * 0.22, true);
@@ -358,26 +362,23 @@ function buildMiracleRoadsideVillagesAndForests() {
   const rockSpots = [
     [66, -88, 1.7], [96, -68, 2.0], [-36, -48, 1.5], [34, -26, 1.6],
     [-44, -16, 1.8], [-58,  8, 2.1], [-74, 18, 1.9], [ 6,  18, 2.0],
-    [12,  14, 1.6], [48,  18, 1.8], [-52, 72, 2.2], [-74, 74, 2.0],
+    [12,  14, 1.6], [48,  18, 1.8], [-48, 72, 2.2], [-76, 74, 2.0],
     [72,  62, 1.7], [94,  68, 1.9], [-30, 88, 1.8]
   ];
   rockSpots.forEach(([rx, rz, rad], idx) => {
     addLowPolyRock(rx, rz, rad, 0.78, idx % 2 === 0 ? '#94a3b8' : '#8c8275', true);
   });
 
-  // 초원과 언덕에 피어난 다면체 야생화 60군데 배치
   if (typeof addLowPolyWildflowerCluster === 'function') {
     for (let f = 0; f < 60; f++) {
-      const fx = -74 + ((f * 41) % 184);
-      const fz = -104 + ((f * 59) % 208);
+      const fx = -74 + ((f * 41) % 170);
+      const fz = -96 + ((f * 59) % 192);
       if (Math.abs(fx - getMiracleMainRoadCenterX(fz)) < 5.5) continue;
       addLowPolyWildflowerCluster(fx, fz, 0.95 + (f % 3) * 0.18);
     }
   }
 
-  // [핵심 복구] 오픈월드 전역에서 자연스럽게 걸어 다니는 주민(남·여·아이) 14명 & 동물(사슴·양) 12마리 스폰!
   const wanderingConfigs = [
-    // 마을 길과 언덕을 거니는 주민들
     { kind: 'person', preset: 'villager', x:  -2, z: -74, rad: 10.0, spd: 1.9 },
     { kind: 'person', preset: 'woman',    x:   5, z: -52, rad: 9.0,  spd: 1.8 },
     { kind: 'person', preset: 'villager', x:  22, z: -60, rad: 8.5,  spd: 1.9 },
@@ -392,10 +393,9 @@ function buildMiracleRoadsideVillagesAndForests() {
     { kind: 'person', preset: 'woman',    x:   4, z:  56, rad: 9.0,  spd: 1.8 },
     { kind: 'person', preset: 'villager', x: -10, z:  66, rad: 8.5,  spd: 1.9 },
     { kind: 'person', preset: 'child',    x:  12, z:  60, rad: 7.0,  spd: 2.2 },
-    // 초원과 언덕, 해안가를 거니는 사슴(Deer)과 양(Sheep)
     { kind: 'deer',   x: -56, z: -52, rad: 9.0, spd: 2.1 },
     { kind: 'deer',   x:  64, z: -86, rad: 9.0, spd: 2.1 },
-    { kind: 'deer',   x:  96, z: -66, rad: 8.5, spd: 2.0 },
+    { kind: 'deer',   x:  92, z: -66, rad: 8.5, spd: 2.0 },
     { kind: 'deer',   x: -42, z: -24, rad: 8.5, spd: 2.0 },
     { kind: 'deer',   x:  72, z:  42, rad: 9.0, spd: 2.1 },
     { kind: 'deer',   x:  82, z:  84, rad: 8.5, spd: 2.0 },
@@ -436,15 +436,13 @@ function buildMiracleRoadsideVillagesAndForests() {
   });
 }
 // =========================================================================
-// [ep4_miracle_world.js - 파트 2/3] 랜드마크 · 오병이어 전망 언덕 · 발밑 빛기둥 스팟 · 소문 NPC · 17종 이벤트 카탈로그
+// [ep4_miracle_world.js - 파트 2/3] 랜드마크 · 순차 빛기둥(1→2→3) · 무릎 높이 빛의 원 · 17종 이벤트 카탈로그
 // =========================================================================
 
 // -------------------------------------------------------------------------
 // 4. 오픈월드 3대 권역 핵심 성경 랜드마크 & 외곽 오병이어 전망 언덕 배치
 // -------------------------------------------------------------------------
 function buildMiracleRegionalLandmarks() {
-  const worldRad = window.MIRACLE_EXP_LIMIT || 152;
-
   // [A. 북부 갈릴리 권역]
   // 1) 가나 혼인잔치 집 (x = -4, z = -78)
   addLowPolyVillageHouse(-4, -78, 9.2, 4.2, 7.2, '#f5e6c8', '#d97706', false, 1, 0);
@@ -460,7 +458,6 @@ function buildMiracleRegionalLandmarks() {
   // 3) 동북쪽 외곽 '오병이어 전망 언덕' (x = 88, z = -82, 높이 약 14.5m — 마을과 바다가 한눈에 내려다보이는 언덕)
   const bethTopY = getMiracleOpenWorldGroundHeight(88, -82);
   addLowPolyRock(88, -86, 2.2, 0.65, '#cbd5e1', true);
-  // 언덕 사면에 둘러앉아 마을을 내려다보며 말씀을 기다리는 무리들 배치
   for (let i = 0; i < 10; i++) {
     const ang = (i / 10) * Math.PI * 1.2 + Math.PI * 0.4;
     const rad = 7.0 + (i % 2) * 3.5;
@@ -522,14 +519,23 @@ function buildMiracleRegionalLandmarks() {
   // 3) 마가의 다락방 복층 석조 건물 (x = -24, z = 58)
   addLowPolyVillageHouse(-24, 58, 8.8, 4.3, 7.0, '#f2e3c9', '#c89654', true, 1, 0);
 
-  // 4) 골고다 언덕 위 세 십자가 (x = -66, z = 78 — 침수 없이 높이 +8.6m 언덕 정상에 우뚝 솟음)
-  [[-66, 78, 1.30], [-71, 79, 0.96], [-61, 79, 0.96]].forEach(([cx, cz, sc]) => {
+  // 4) 넓어진 골고다 언덕(x = -62, z = 78) 위의 세 십자가
+  //    - 예수님 십자가 사건(스테이지 3) 차례가 되거나 클리어한 시점부터 언덕 정상에 등장하도록 그룹화!
+  miracleGolgothaCrossesGroup = new THREE.Group();
+  [[-62, 78, 1.38], [-68.5, 79.5, 1.05], [-55.5, 79.5, 1.05]].forEach(([cx, cz, sc]) => {
     const cy = getMiracleOpenWorldGroundHeight(cx, cz);
-    const vBeam = createLowPolyMesh(new THREE.CylinderGeometry(0.18 * sc, 0.22 * sc, 5.0 * sc, 6), '#5c2d0c', cx, cy + 2.5 * sc, cz);
-    const hBeam = createLowPolyMesh(new THREE.CylinderGeometry(0.15 * sc, 0.15 * sc, 3.0 * sc, 6), '#5c2d0c', cx, cy + 3.7 * sc, cz);
+    const mound = createLowPolyMesh(new THREE.DodecahedronGeometry(0.95 * sc, 0), '#78716c', cx, cy + 0.3 * sc, cz);
+    mound.scale.set(1.2, 0.55, 1.2);
+    const vBeam = createLowPolyMesh(new THREE.CylinderGeometry(0.20 * sc, 0.24 * sc, 5.4 * sc, 6), '#5c2d0c', cx, cy + 2.7 * sc, cz);
+    const hBeam = createLowPolyMesh(new THREE.CylinderGeometry(0.16 * sc, 0.16 * sc, 3.2 * sc, 6), '#5c2d0c', cx, cy + 3.9 * sc, cz);
     hBeam.rotation.z = Math.PI / 2;
-    worldGroup.add(vBeam, hBeam);
+    miracleGolgothaCrossesGroup.add(mound, vBeam, hBeam);
   });
+  // 스테이지 3(십자가 사건) 차례가 되었거나 클리어한 경우 표시
+  miracleGolgothaCrossesGroup.visible = Boolean(
+    miracleMainStagesCleared[2] || miracleMainStagesCleared[3] || miracleIsPostResurrection
+  );
+  worldGroup.add(miracleGolgothaCrossesGroup);
 
   // 5) 동산의 빈 무덤 다면체 바위 굴 외관 (x = -22, z = 92)
   const tombY = getMiracleOpenWorldGroundHeight(-22, 92);
@@ -542,21 +548,21 @@ function buildMiracleRegionalLandmarks() {
   wallMeshes.push(tombMound);
   colliders.push({ minX: -27.5, maxX: -16.5, minZ: 88.5, maxZ: 96.5 });
 
-  // 6) 확장된 외곽 숲 및 하늘의 다면체 로우 폴리곤 구름 22개 배치
-  for (let i = 0; i < 56; i++) {
-    const ang = (i / 56) * Math.PI * 2;
-    const rad = 116 - (i % 3) * 4.5;
+  // 6) 외곽 숲 및 하늘 구름 22개 배치
+  for (let i = 0; i < 48; i++) {
+    const ang = (i / 48) * Math.PI * 2;
+    const rad = 100 - (i % 3) * 4.0;
     const tx = Math.cos(ang) * rad;
     const tz = Math.sin(ang) * rad;
-    if (tx < -78) continue; // 서쪽 바다 수면 제외
+    if (tx < -76) continue;
     if (i % 3 === 0) addLowPolyCypressPineTree(tx, tz, 1.15, true);
     else if (i % 4 === 0) addLowPolyPalmTree(tx, tz, 1.15, true);
     else addLowPolyOliveTree(tx, tz, 1.2, true);
   }
 
   for (let c = 0; c < 22; c++) {
-    const cx = -115 + (c * 37) % 230;
-    const cz = -115 + (c * 53) % 230;
+    const cx = -105 + (c * 37) % 210;
+    const cz = -105 + (c * 53) % 210;
     const cl = createLowPolyCloudGroup(1.15 + (c % 3) * 0.28, false);
     cl.position.set(cx, 28 + (c % 4) * 2.5, cz);
     worldGroup.add(cl);
@@ -565,35 +571,59 @@ function buildMiracleRegionalLandmarks() {
 }
 
 // -------------------------------------------------------------------------
-// 5. 사람 발바닥(y = 0)에서부터 곧바로 올라오는 미션 빛기둥 & 메인 스테이지 스팟
+// 5. [핵심 요청사항]
+//    - 메인 스테이지 담당 캐릭터: 하늘까지 솟는 긴 빛기둥(useTallBeam = true)을 1→2→3→4 순서대로 한 곳씩만 부여!
+//    - 비유·사건 체험 캐릭터: 긴 빛기둥 대신 발밑에서 무릎 높이까지 반짝이는 불규칙 빛의 원(useTallBeam = false) 부여!
 // -------------------------------------------------------------------------
-function createMiracleSpotMarker(x, z, colorHex, iconTitle, npcPreset = 'disciple') {
+function createMiracleSpotMarker(x, z, colorHex, iconTitle, npcPreset = 'disciple', useTallBeam = true) {
   const by = getMiracleOpenWorldGroundHeight(x, z);
   const grp = new THREE.Group();
 
-  const beamGeo = new THREE.CylinderGeometry(1.08, 1.08, 48, 16, 1, true);
-  beamGeo.translate(0, 24, 0);
-  const beamMat = new THREE.MeshBasicMaterial({
-    color: colorHex,
-    transparent: true,
-    opacity: 0.28,
-    side: THREE.DoubleSide,
-    depthWrite: false
-  });
-  const beam = new THREE.Mesh(beamGeo, beamMat);
-  beam.position.set(0, 0.02, 0);
+  let beam = null;
+  let ring = null;
+  let kneeAura = null;
 
-  const ring = new THREE.Mesh(
-    new THREE.RingGeometry(1.35, 1.95, 24),
-    new THREE.MeshBasicMaterial({ color: colorHex, side: THREE.DoubleSide })
-  );
-  ring.rotation.x = -Math.PI / 2;
-  ring.position.set(0, 0.06, 0);
+  if (useTallBeam) {
+    // 메인 스테이지 전용: 사람 발바닥(y = 0)에서 하늘로 솟는 빛기둥
+    const beamGeo = new THREE.CylinderGeometry(1.08, 1.08, 48, 16, 1, true);
+    beamGeo.translate(0, 24, 0);
+    const beamMat = new THREE.MeshBasicMaterial({
+      color: colorHex,
+      transparent: true,
+      opacity: 0.30,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    beam = new THREE.Mesh(beamGeo, beamMat);
+    beam.position.set(0, 0.02, 0);
+
+    ring = new THREE.Mesh(
+      new THREE.RingGeometry(1.35, 1.95, 24),
+      new THREE.MeshBasicMaterial({ color: colorHex, side: THREE.DoubleSide })
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(0, 0.06, 0);
+    grp.add(beam, ring);
+  } else {
+    // 비유 체험 & 사건 체험 전용: 사람 주변 무릎 높이까지 올라오는 불규칙 반짝이는 빛의 원!
+    if (typeof createIrregularKneeLightAura === 'function') {
+      kneeAura = createIrregularKneeLightAura(colorHex, Math.abs(Math.round(x * 7 + z * 13)));
+      grp.add(kneeAura);
+    } else {
+      ring = new THREE.Mesh(
+        new THREE.RingGeometry(1.15, 1.65, 20),
+        new THREE.MeshBasicMaterial({ color: colorHex, side: THREE.DoubleSide })
+      );
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.set(0, 0.06, 0);
+      grp.add(ring);
+    }
+  }
 
   const guideNpc = createLowPolyPersonMesh(npcPreset, Math.abs(Math.round(x + z)));
   guideNpc.position.set(0, 0, 0);
+  grp.add(guideNpc);
 
-  grp.add(beam, ring, guideNpc);
   grp.position.set(x, by, z);
   worldGroup.add(grp);
 
@@ -604,10 +634,50 @@ function createMiracleSpotMarker(x, z, colorHex, iconTitle, npcPreset = 'discipl
     group: grp,
     beam,
     ring,
+    kneeAura,
     npcMesh: guideNpc,
     pos: new THREE.Vector3(x, by + 0.5, z),
     label: lbl
   };
+}
+
+// 현재 진행해야 할 다음 메인 스테이지 번호(1 -> 2 -> 3 -> 4 -> 5)를 반환
+function getNextActiveMainStageNumber() {
+  if (!miracleMainStagesCleared[1]) return 1;
+  if (!miracleMainStagesCleared[2]) return 2;
+  if (!miracleMainStagesCleared[3]) return 3;
+  if (!miracleMainStagesCleared[4]) return 4;
+  return 5; // 1~4 모두 클리어 시 감람산 승천(5) 차례
+}
+
+// 메인 스테이지 빛기둥을 1 -> 2 -> 3 -> 4 순서대로 현재 차례인 캐릭터에게만 켜주는 동기화 함수
+function syncMiracleMainStageSequentialBeams() {
+  const activeStageNum = getNextActiveMainStageNumber();
+
+  miracleStageSpots.forEach(sp => {
+    const isCleared = Boolean(miracleMainStagesCleared[sp.stageNum]);
+    sp.cleared = isCleared;
+
+    const isCurrentTurn = (sp.stageNum === activeStageNum);
+    if (sp.beam) {
+      // 오직 현재 차례인 메인 스테이지 담당 캐릭터에게만 빛기둥 표시!
+      sp.beam.visible = isCurrentTurn;
+    }
+    if (sp.ring && sp.ring.material) {
+      sp.ring.material.color.setHex(isCleared ? 0x10b981 : (isCurrentTurn ? sp.color : 0x64748b));
+      sp.ring.visible = isCurrentTurn || isCleared;
+    }
+    if (sp.label) {
+      sp.label.innerHTML = isCleared
+        ? `✅ ${sp.title}`
+        : (isCurrentTurn ? `✨ ${sp.title}` : `🔒 ${sp.title} (스테이지 ${sp.stageNum - 1} 완료 후 진행)`);
+    }
+  });
+
+  // 스테이지 2 클리어 이후(스테이지 3 차례부터) 오픈월드 골고다 언덕 위에 세 십자가 표시
+  if (miracleGolgothaCrossesGroup) {
+    miracleGolgothaCrossesGroup.visible = (activeStageNum >= 3 || miracleIsPostResurrection);
+  }
 }
 
 function spawnMiracleMainStageSpots() {
@@ -622,7 +692,8 @@ function spawnMiracleMainStageSpots() {
       npcPreset: 'disciple',
       title: '⛵ [메인 스테이지 1] 갈릴리 바다: 물고기 잡기와 폭풍우',
       introSpeaker: '어부 시몬 베드로',
-      introText: '"선생님께서 배에 오르셨네! 함께 갈릴리 바다 깊은 곳으로 나가 그물을 내리고 항해를 시작해 볼까?"'
+      introText: '"선생님께서 배에 오르셨네! 함께 갈릴리 바다 깊은 곳으로 나가 그물을 내리고 항해를 시작해 볼까?"',
+      greetingText: '"할렐루야! 그때 거센 폭풍우를 말씀 한마디로 잠잠하게 하신 예수님의 권능은 정말 놀라웠어! 다음 여정도 힘내서 다녀오게!"'
     },
     {
       stageNum: 2,
@@ -632,7 +703,8 @@ function spawnMiracleMainStageSpots() {
       npcPreset: 'disciple',
       title: '🍞 [메인 스테이지 2] 오병이어 사건: 마을이 내려다보이는 벳새다 언덕',
       introSpeaker: '제자 빌립과 안드레',
-      introText: '"이 높은 언덕 위에서 내려다보니 마을과 갈릴리 바다가 한눈에 보이는구나! 예수님의 말씀을 들으러 모인 큰 무리를 먹이시는 오병이어 기적을 시작해 볼까?"'
+      introText: '"이 높은 언덕 위에서 내려다보니 마을과 갈릴리 바다가 한눈에 보이는구나! 예수님의 말씀을 들으러 모인 큰 무리를 먹이시는 오병이어 기적을 시작해 볼까?"',
+      greetingText: '"반가워! 어린아이의 작은 도시락 하나로 오천 명이 배불리 먹고 열두 광주리나 남았던 기적을 우리 모두 잊지 못할 거야!"'
     },
     {
       stageNum: 3,
@@ -642,7 +714,8 @@ function spawnMiracleMainStageSpots() {
       npcPreset: 'soldier',
       title: '✝️ [메인 스테이지 3] 십자가 사건: 골고다로 가는 길',
       introSpeaker: '예루살렘 여인들',
-      introText: '"예수님께서 무거운 십자가를 지고 골고다 언덕으로 가고 계셔! 어서 그분이 가시는 길을 찾아가 도와드리자!"'
+      introText: '"예수님께서 무거운 십자가를 지고 골고다 언덕으로 가고 계셔! 어서 그분이 가시는 길을 찾아가 도와드리자!"',
+      greetingText: '"구레네 시몬처럼 예수님과 함께 골고다 언덕까지 십자가를 지고 올라가 주어서 정말 고마워요! 우리를 향한 예수님의 크신 사랑을 기억해요."'
     },
     {
       stageNum: 4,
@@ -652,7 +725,8 @@ function spawnMiracleMainStageSpots() {
       npcPreset: 'woman',
       title: '🌅 [메인 스테이지 4] 빈 무덤 찾기: 안식일 후 첫날 새벽',
       introSpeaker: '막달라 마리아',
-      introText: '"안식일이 지나고 새벽이 밝았어요! 마을 사람들의 단서를 따라 예수님이 묻히신 동산 무덤을 찾아가요!"'
+      introText: '"안식일이 지나고 새벽이 밝았어요! 마을 사람들의 단서를 따라 예수님이 묻히신 동산 무덤을 찾아가요!"',
+      greetingText: '"예수님께서 말씀하시던 대로 다시 살아나셨어요! 이제 부활하신 예수님의 증언들을 만나고 동남쪽 감람산으로 올라가 보세요!"'
     }
   ];
 
@@ -662,13 +736,15 @@ function spawnMiracleMainStageSpots() {
       cfg.x,
       cfg.z,
       cleared ? 0x22c55e : cfg.color,
-      cleared ? `✅ ${cfg.title} (완료·재도전 가능)` : cfg.title,
-      cfg.npcPreset
+      cfg.title,
+      cfg.npcPreset,
+      true // 메인 스테이지만 긴 빛기둥 생성
     );
     miracleStageSpots.push({
       ...cfg,
       ...marker,
-      cleared
+      cleared,
+      _requireLeaveZone: false
     });
   });
 
@@ -676,7 +752,8 @@ function spawnMiracleMainStageSpots() {
     const ascMarker = createMiracleSpotMarker(
       88, 74, 0xfef08a,
       '👑 [최종 엔딩] 감람산 : 예수님의 승천과 재림의 약속',
-      'jesus'
+      'jesus',
+      true
     );
     miracleStageSpots.push({
       stageNum: 5,
@@ -686,10 +763,14 @@ function spawnMiracleMainStageSpots() {
       title: '👑 [최종 엔딩] 감람산 : 예수님의 승천과 재림의 약속',
       introSpeaker: '부활하신 예수님',
       introText: '"하늘과 땅의 모든 권세를 내게 주셨으니, 그러므로 너희는 가서 모든 민족을 제자로 삼으라! 볼지어다 내가 세상 끝날까지 너희와 항상 함께 있으리라!"',
+      greetingText: '"볼지어다 내가 세상 끝날까지 너희와 항상 함께 있으리라!"',
       ...ascMarker,
-      cleared: false
+      cleared: false,
+      _requireLeaveZone: false
     });
   }
+
+  syncMiracleMainStageSequentialBeams();
 }
 
 function spawnMiracleRumorNpcs() {
@@ -752,6 +833,7 @@ function spawnMiracleRumorNpcs() {
 
 // -------------------------------------------------------------------------
 // 6. 선택형 이벤트(10종) + 비유 미니게임(4종) + 부활 이후 이벤트(3종) 카탈로그
+//    - [버그 수정 완료] 잃어버린 양(par_sheep)의 y 오프셋을 0으로 수정하여 공중 부양 현상 완벽 제거!
 // -------------------------------------------------------------------------
 function getMiracleOptionalEventsCatalog() {
   return [
@@ -764,6 +846,7 @@ function getMiracleOptionalEventsCatalog() {
       npcPreset: 'woman',
       speaker: '혼인잔치 하인',
       introText: '"잔치 포도주가 다 떨어졌어요! 예수님께서 저기 있는 돌항아리 6개에 물을 아구까지 채우라고 하셨어요. 주변 우물 물통 6개를 항아리로 옮겨 주세요!"',
+      greetingText: '"샬롬! 아까 돌항아리에 물을 가득 채워 주신 덕분에 잔치에 가장 향기로운 포도주가 넘쳐났답니다. 정말 고마워요!"',
       missionType: 'collect_deliver',
       itemCount: 6,
       itemColor: '#38bdf8',
@@ -788,6 +871,7 @@ function getMiracleOptionalEventsCatalog() {
       npcPreset: 'disciple',
       speaker: '중풍병자의 네 친구',
       introText: '"사람들이 문 앞을 가득 메워 예수님께 갈 수가 없어요! 저희와 함께 들것을 메고 오른쪽 외벽 돌계단을 따라 집 지붕 위로 올라가 주세요!"',
+      greetingText: '"평안하신가요! 함께 지붕 위로 들것을 옮겨 주신 덕분에 우리 친구가 죄 사함을 받고 건강하게 걸어서 집으로 돌아갔어요!"',
       missionType: 'escort_guide',
       escortType: 'stretcher',
       goalPos: { x: 22, y: 4.0, z: -52 },
@@ -810,6 +894,7 @@ function getMiracleOptionalEventsCatalog() {
       npcPreset: 'child',
       speaker: '갈릴리 어린이들',
       introText: '"예수님을 꼭 만나고 싶은데 어른들이 많아서 길을 모르겠어요! 저기 감람나무 아래 계신 예수님께 우리를 데려다주세요!"',
+      greetingText: '"안녕! 예수님께서 우리를 품에 안아 주시고 머리 위에 손을 얹어 축복해 주셨어! 정말 따뜻하고 기뻤어!"',
       missionType: 'escort_guide',
       escortType: 'children',
       goalPos: { x: 42, y: 0, z: -48 },
@@ -832,6 +917,7 @@ function getMiracleOptionalEventsCatalog() {
       npcPreset: 'woman',
       speaker: '수가성 여인',
       introText: '"우물가에서 만난 분이 제게 영원히 목마르지 않는 생수를 주겠다고 하셨어요! 제가 물동이를 두고 저기 수가성 마을 주민 3명에게 달려가 이 소식을 전할 수 있게 함께 가주세요!"',
+      greetingText: '"반가워요! 예수님께서 주신 영생하도록 솟아나는 샘물 덕분에 제 마음의 목마름이 완전히 사라졌답니다!"',
       missionType: 'collect_deliver',
       itemCount: 3,
       itemColor: '#38bdf8',
@@ -856,6 +942,7 @@ function getMiracleOptionalEventsCatalog() {
       npcPreset: 'zacchaeus',
       speaker: '여리고 주민',
       introText: '"예수님이 여리고를 지나가신대요! 키가 작은 세리장 삭개오가 군중 너머 커다란 돌무화과나무(뽕나무) 위로 올라갔는데, 나무 주변으로 다가가 삭개오를 찾아보세요!"',
+      greetingText: '"할렐루야! 예수님께서 오늘 삭개오의 집에 머무시며 구원이 이 집에 이르렀다고 선포하셨어요!"',
       missionType: 'find_observe',
       findTargetPos: { x: 39.6, y: 2.8, z: -3.4 },
       findTargetLabel: '🌳 뽕나무 가지 위의 삭개오 발견!',
@@ -877,6 +964,7 @@ function getMiracleOptionalEventsCatalog() {
       npcPreset: 'disciple',
       speaker: '선한 사마리아인 (예수님의 비유 체험)',
       introText: '"[📖 예수님이 들려주신 비유 이야기] 강도를 만나 다친 여행자가 길가에 쓰러져 있어요! 주변에서 치료용 기름·포도주 붕대 3개를 모아 다친 여행자를 싸매고 주막으로 옮겨 주세요!"',
+      greetingText: '"평안하시길! 다친 이웃을 불쌍히 여기고 자비를 베푸는 사람이야말로 예수님이 말씀하신 진정한 이웃이랍니다!"',
       missionType: 'collect_deliver',
       itemCount: 3,
       itemColor: '#f43f5e',
@@ -901,6 +989,7 @@ function getMiracleOptionalEventsCatalog() {
       npcPreset: 'disciple',
       speaker: '고침 받은 나병환자',
       introText: '"예수님께서 저희 열 명을 모두 깨끗하게 고쳐 주셨어요! 아홉 명은 그냥 가버렸지만, 예수님 발 앞에 엎드려 감사드린 한 사람을 찾아가 보세요!"',
+      greetingText: '"감사합니다! 예수님께 돌아와 하나님께 영광을 돌릴 때 \'네 믿음이 너를 구원하였다\'는 귀한 말씀을 들었답니다!"',
       missionType: 'find_observe',
       findTargetPos: { x: -35, y: 0, z: 12 },
       findTargetLabel: '🙏 돌아와 하나님께 영광을 돌린 사마리아인',
@@ -922,6 +1011,7 @@ function getMiracleOptionalEventsCatalog() {
       npcPreset: 'disciple',
       speaker: '예루살렘 환영 무리',
       introText: '"예수님이 겸손하게 나귀를 타시고 예루살렘 성문으로 오십니다! 주변의 종려나무 가지 5개를 모아 성문 앞 행렬 길에 펼쳐 주세요!"',
+      greetingText: '"호산나 다윗의 자손이여! 주의 이름으로 오시는 평화의 왕을 함께 맞이할 수 있어 참 기뻤습니다!"',
       missionType: 'collect_deliver',
       itemCount: 5,
       itemColor: '#22c55e',
@@ -946,6 +1036,7 @@ function getMiracleOptionalEventsCatalog() {
       npcPreset: 'disciple',
       speaker: '사도 요한',
       introText: '"다락방에서 저녁 잡수시던 자리에서 예수님이 일어나셨어요! 주변에 놓인 [물대야, 깨끗한 물, 수건] 3가지를 모아 예수님 앞 섬김 자리로 가져다주세요!"',
+      greetingText: '"예수님께서 친히 우리의 발을 씻겨 주시며 보여 주신 겸손과 사랑의 새 계명을 평생 마음에 새기겠습니다!"',
       missionType: 'collect_deliver',
       itemCount: 3,
       itemColor: '#67e8f9',
@@ -970,6 +1061,7 @@ function getMiracleOptionalEventsCatalog() {
       npcPreset: 'woman',
       speaker: '성전 앞 제자',
       introText: '"예수님께서 성전 헌금함 맞은편에 앉아 사람들이 어떻게 헌금하는지 보고 계세요. 성전 뜰 동쪽 모퉁이에서 조용히 두 렙돈을 드린 과부를 찾아가 보세요!"',
+      greetingText: '"하나님은 겉모습이나 금액의 많고 적음이 아니라, 마음을 다해 드리는 중심을 가장 귀하게 보신다는 것을 배웠어요!"',
       missionType: 'find_observe',
       findTargetPos: { x: 14, y: 0, z: 69 },
       findTargetLabel: '🪙 정성껏 두 렙돈을 넣은 가난한 과부',
@@ -991,6 +1083,7 @@ function getMiracleOptionalEventsCatalog() {
       npcPreset: 'disciple',
       speaker: '예수님의 비유 이야기',
       introText: '"[📖 예수님이 들려주신 비유] 씨 뿌리는 사람이 씨를 뿌리러 나갔어요! 길가나 돌밭, 가시떨기가 아닌 부드럽고 좋은 옥토 밭에 말씀의 씨앗 4개를 심어 30배, 60배, 100배의 열매를 맺게 해보세요!"',
+      greetingText: '"반가워요! 좋은 땅에 심긴 씨앗처럼 하나님의 말씀을 듣고 깨달아 30배, 60배, 100배의 풍성한 열매를 맺어가길 축복해요!"',
       missionType: 'collect_deliver',
       itemCount: 4,
       itemColor: '#fde047',
@@ -1015,8 +1108,10 @@ function getMiracleOptionalEventsCatalog() {
       npcPreset: 'disciple',
       speaker: '선한 목자 비유',
       introText: '"[📖 예수님이 들려주신 비유] 아흔아홉 마리 양을 두고 광야 바위 언덕에서 길을 잃고 떨고 있는 어린 양 한 마리를 찾아 목자의 품으로 데려오세요!"',
+      greetingText: '"고마워요! 잃어버린 양 한 마리까지 끝까지 찾아내어 어깨에 메고 기뻐하시는 선한 목자 예수님의 사랑을 늘 기억해요!"',
       missionType: 'find_observe',
-      findTargetPos: { x: -75, y: 1.2, z: 8 },
+      // ✅ [버그 수정 완료] y: 0 으로 설정하여 바위 언덕 지면 고도 위에 정확히 착지 (공중 부양 현상 제거)
+      findTargetPos: { x: -73, y: 0, z: 9 },
       findTargetLabel: '🐑 바위 언덕 위 잃어버린 양 한 마리!',
       completeSpeaker: '예수님',
       completeText: '"찾아내면 즐거워 어깨에 메고 집에 와서 벗과 이웃을 불러 모으고 말하되 나와 함께 즐기자 나의 잃은 양을 찾아내었노라 하리라!" (눅 15:3~7)',
@@ -1036,6 +1131,7 @@ function getMiracleOptionalEventsCatalog() {
       npcPreset: 'disciple',
       speaker: '지혜로운 건축자 비유',
       introText: '"[📖 예수님이 들려주신 비유] 비가 내리고 창수가 나도 무너지지 않도록, 모래땅이 아닌 든든한 바위(반석) 위로 주춧돌 4개를 옮겨 집을 세워 보세요!"',
+      greetingText: '"든든한 반석 위에 멋진 집이 세워졌어요! 예수님의 말씀을 듣고 행하는 지혜로운 삶을 살아가요!"',
       missionType: 'collect_deliver',
       itemCount: 4,
       itemColor: '#94a3b8',
@@ -1060,6 +1156,7 @@ function getMiracleOptionalEventsCatalog() {
       npcPreset: 'child',
       speaker: '천국 겨자씨 비유',
       introText: '"[📖 예수님이 들려주신 비유] 모든 씨보다 작은 겨자씨 한 알이 자라나 새들이 깃드는 큰 나무가 되도록, 주변의 생명수 물방울 3개를 모아 새싹에 주세요!"',
+      greetingText: '"작은 겨자씨 한 알이 이렇게 큰 나무로 자라났어요! 우리 마음속 천국의 믿음도 이렇게 무럭무럭 자라날 거예요!"',
       missionType: 'collect_deliver',
       itemCount: 3,
       itemColor: '#38bdf8',
@@ -1089,6 +1186,7 @@ function getMiraclePostResurrectionEventsCatalog() {
       npcPreset: 'disciple',
       speaker: '엠마오로 가는 글로바와 친구',
       introText: '"슬픈 기색으로 엠마오로 내려가던 저희에게 한 나그네가 다가와 성경을 풀어주셨어요! 저희와 함께 엠마오 마을 식탁까지 동행해 주세요!"',
+      greetingText: '"길에서 우리에게 말씀하시고 성경을 풀어 주실 때에 우리 속에서 마음이 뜨겁지 아니하더냐! 주님이 참으로 살아나셨습니다!"',
       missionType: 'escort_guide',
       escortType: 'emmaus',
       goalPos: { x: -58, y: 0, z: 32 },
@@ -1111,6 +1209,7 @@ function getMiraclePostResurrectionEventsCatalog() {
       npcPreset: 'disciple',
       speaker: '사도 도마',
       introText: '"다른 제자들이 주님을 보았다고 했지만 저는 믿지 못했습니다... 그때 닫힌 문들 가운데 서신 예수님께 다가가 증언을 확인해 보세요!"',
+      greetingText: '"나의 주님이시요 나의 하나님이시니이다! 보지 못하고 믿는 자들에게 주시는 예수님의 복이 함께하시길 바랍니다!"',
       missionType: 'find_observe',
       findTargetPos: { x: -22, y: 0, z: 54 },
       findTargetLabel: '✨ 평강을 선언하시는 부활의 예수님',
@@ -1132,6 +1231,7 @@ function getMiraclePostResurrectionEventsCatalog() {
       npcPreset: 'jesus',
       speaker: '바닷가에 서신 예수님',
       introText: '"얘들아, 밤새 고기를 잡느라 수고하였다! 배 오른편에 그물을 던져 잡은 물고기를 가져와 숯불 위에서 함께 아침 조반을 먹자!"',
+      greetingText: '"내가 너희를 사랑한 것 같이 너희도 서로 사랑하고 내 어린 양을 먹이라!"',
       missionType: 'collect_deliver',
       itemCount: 3,
       itemColor: '#38bdf8',
@@ -1150,7 +1250,7 @@ function getMiraclePostResurrectionEventsCatalog() {
   ];
 }
 // =========================================================================
-// [ep4_miracle_world.js - 파트 3/3] 필드 이벤트 실행기 · 주민/동물 보행 AI · 실시간 태양 그림자 & 오픈월드 루프
+// [ep4_miracle_world.js - 파트 3/3] 필드 이벤트 실행기 · 무릎 빛의 원 반짝임 · 완료 미션 인사/다시하기 · 오픈월드 루프
 // =========================================================================
 
 function spawnMiracleOptionalEventSpots() {
@@ -1162,19 +1262,21 @@ function spawnMiracleOptionalEventSpots() {
 
   allCatalog.forEach(ev => {
     const isCompleted = ev.unlockNotebookIds && ev.unlockNotebookIds.every(id => miracleCollectedIds.has(id));
+    // useTallBeam = false 로 설정하여 긴 빛기둥 대신 무릎 높이의 불규칙 빛의 원(kneeAura) 적용!
     const marker = createMiracleSpotMarker(
       ev.x,
       ev.z,
       isCompleted ? 0x10b981 : ev.color,
-      isCompleted ? `✅ ${ev.title}` : ev.title,
-      ev.npcPreset
+      isCompleted ? `✅ ${ev.title} (인사·다시하기)` : ev.title,
+      ev.npcPreset,
+      false
     );
-    marker.beam.scale.set(0.65, 0.72, 0.65);
 
     miracleEventSpots.push({
       ...ev,
       ...marker,
-      completed: isCompleted
+      completed: isCompleted,
+      _requireLeaveZone: false
     });
   });
 }
@@ -1193,6 +1295,8 @@ function clearMiracleFieldEventObjects() {
 
 function startMiracleFieldEvent(evSpot) {
   clearMiracleFieldEventObjects();
+  evSpot._requireLeaveZone = true;
+
   miracleActiveFieldEvent = {
     spot: evSpot,
     type: evSpot.missionType,
@@ -1285,7 +1389,9 @@ function startMiracleFieldEvent(evSpot) {
 
     const gx = evSpot.goalPos.x;
     const gz = evSpot.goalPos.z;
-    const gy = evSpot.goalPos.y || getMiracleOpenWorldGroundHeight(gx, gz);
+    const gy = evSpot.goalPos.y
+      ? (getMiracleOpenWorldGroundHeight(gx, gz) + evSpot.goalPos.y)
+      : getMiracleOpenWorldGroundHeight(gx, gz);
     const gGrp = new THREE.Group();
     const gRing = new THREE.Mesh(
       new THREE.RingGeometry(1.6, 2.3, 24),
@@ -1300,7 +1406,7 @@ function startMiracleFieldEvent(evSpot) {
 
     const gLbl = createWorldLabel(evSpot.goalLabel);
     gLbl.style.opacity = '0';
-    const targetObj = { mesh: gGrp, pos: new THREE.Vector3(gx, gy + 0.5, gz), label: gLbl };
+    const targetObj = { mesh: gGrp, pos: new THREE.Vector3(gx, gy + 0.5, gz), label: gLbl, goalY: gy };
     miracleWorldMissionObjects.push(targetObj);
     miracleActiveFieldEvent.targetZone = targetObj;
 
@@ -1308,9 +1414,11 @@ function startMiracleFieldEvent(evSpot) {
   } else if (evSpot.missionType === 'find_observe') {
     const fx = evSpot.findTargetPos.x;
     const fz = evSpot.findTargetPos.z;
-    const fy = (evSpot.findTargetPos.y !== undefined && evSpot.findTargetPos.y > 0)
-      ? (getMiracleOpenWorldGroundHeight(fx, fz) + evSpot.findTargetPos.y)
-      : getMiracleOpenWorldGroundHeight(fx, fz);
+    // 잃어버린 양(par_sheep) 등 지면 위 목표물은 정확히 지면 고도에 착지하도록 보정
+    const baseGroundY = getMiracleOpenWorldGroundHeight(fx, fz);
+    const fy = (evSpot.id === 'ev_zacchaeus' && evSpot.findTargetPos.y)
+      ? (baseGroundY + evSpot.findTargetPos.y)
+      : baseGroundY;
 
     const fGrp = new THREE.Group();
     const targetPerson = (evSpot.id === 'par_sheep')
@@ -1339,19 +1447,28 @@ function startMiracleFieldEvent(evSpot) {
 function finishMiracleFieldEvent(evSpot) {
   clearMiracleFieldEventObjects();
   evSpot.completed = true;
+  evSpot._requireLeaveZone = true;
+  evSpot._prompted = performance.now();
+
   if (evSpot.ring && evSpot.ring.material) evSpot.ring.material.color.setHex(0x10b981);
-  if (evSpot.beam && evSpot.beam.material) evSpot.beam.material.color.setHex(0x10b981);
-  if (evSpot.label) evSpot.label.innerHTML = `✅ ${evSpot.title}`;
+  if (evSpot.kneeAura && evSpot.kneeAura.userData) {
+    const ku = evSpot.kneeAura.userData;
+    if (ku.outerMat) ku.outerMat.color.setHex(0x10b981);
+    if (ku.groundRing && ku.groundRing.material) ku.groundRing.material.color.setHex(0x10b981);
+  }
+  if (evSpot.label) evSpot.label.innerHTML = `✅ ${evSpot.title} (인사·다시하기)`;
 
   if (Array.isArray(evSpot.unlockNotebookIds)) {
     evSpot.unlockNotebookIds.forEach(id => unlockMiracleNotebookEntry(id, false));
   }
 
-  if (evSpot.id === 'par_mustard') {
+  if (evSpot.id === 'par_mustard' && !evSpot._treeGrown) {
+    evSpot._treeGrown = true;
     if (typeof addLowPolyCanopyTree === 'function') addLowPolyCanopyTree(evSpot.x + 4, evSpot.z, 1.45, true);
     else createLowPolySycamoreTree(evSpot.x + 4, evSpot.z, 1.65);
   }
-  if (evSpot.id === 'par_builder') {
+  if (evSpot.id === 'par_builder' && !evSpot._houseBuilt) {
+    evSpot._houseBuilt = true;
     addJudeanRoadsideBuilding(evSpot.x + 5, evSpot.z - 3, 1, 0, 0.92, false);
   }
 
@@ -1421,9 +1538,10 @@ function updateMiracleFieldEventFrame(dt, now) {
     if (fe.targetZone) {
       const tz = fe.targetZone;
       const td = Math.hypot(playerPos.x - tz.pos.x, playerPos.z - tz.pos.z);
-      const dy = Math.abs(playerPos.y - (evSpot.goalPos.y || 0));
+      const expectedY = (tz.goalY !== undefined) ? tz.goalY : (evSpot.goalPos.y || 0);
+      const dy = Math.abs(playerPos.y - expectedY);
       updateWorldLabelPos(tz.label, tz.pos, td < MIRACLE_TAG_DIST_SPOT);
-      if (td < 3.2 && dy < 2.2) {
+      if (td < 3.2 && dy < 2.4) {
         finishMiracleFieldEvent(evSpot);
       }
     }
@@ -1440,7 +1558,7 @@ function updateMiracleFieldEventFrame(dt, now) {
 }
 
 // -------------------------------------------------------------------------
-// 8. 사람·동물 자연스러운 2D 보행 AI 헬퍼 (팔다리 스윙 & 장애물 회피 & 플레이어 근접 시 바라보기)
+// 8. 사람·동물 자연스러운 2D 보행 AI 헬퍼
 // -------------------------------------------------------------------------
 function updateMiracleActorWalkAI(actor, dt, now, stopNearPlayerDist = 3.2) {
   const m = actor.mesh;
@@ -1450,7 +1568,6 @@ function updateMiracleActorWalkAI(actor, dt, now, stopNearPlayerDist = 3.2) {
   const curZ = m.position.z;
   const dToPlayer = Math.hypot(playerPos.x - curX, playerPos.z - curZ);
 
-  // 플레이어가 가까이 다가오면 걸음을 멈추고 플레이어를 부드럽게 바라봄
   if (dToPlayer < stopNearPlayerDist) {
     const facePlayerAng = Math.atan2(playerPos.x - curX, playerPos.z - curZ);
     actor.heading = lerpAngle(actor.heading || 0, facePlayerAng, dt * 8.0);
@@ -1461,7 +1578,6 @@ function updateMiracleActorWalkAI(actor, dt, now, stopNearPlayerDist = 3.2) {
     return;
   }
 
-  // 잠시 멈춰 숨을 고르거나 주변을 둘러보는 대기 타이머
   if (actor.waitTimer > 0) {
     actor.waitTimer -= dt;
     if (u.lLeg && u.rLeg) { u.lLeg.rotation.x = 0; u.rLeg.rotation.x = 0; }
@@ -1493,8 +1609,7 @@ function updateMiracleActorWalkAI(actor, dt, now, stopNearPlayerDist = 3.2) {
   const nz = curZ + (dz / dist) * step;
   const ny = getMiracleOpenWorldGroundHeight(nx, nz);
 
-  // 바다 수면(ny < -0.25)이나 건물/나무 충돌 구역이면 즉시 다른 방향으로 전환
-  if (ny < -0.25 || !isSpawnSpotClear(nx, nz, 0.55)) {
+  if (ny < -0.25 || nx > 103 || nz < -103 || nz > 103 || !isSpawnSpotClear(nx, nz, 0.55)) {
     pickNewTarget(true);
     return;
   }
@@ -1504,7 +1619,6 @@ function updateMiracleActorWalkAI(actor, dt, now, stopNearPlayerDist = 3.2) {
   actor.heading = lerpAngle(actor.heading || desiredAng, desiredAng, dt * 8.5);
   m.rotation.y = actor.heading;
 
-  // 팔다리 / 네 다리 보행 스윙 애니메이션
   const walkSwing = Math.sin(now * 0.012 + (actor.phase || 0)) * 0.55;
   if (u.lLeg && u.rLeg) {
     u.lLeg.rotation.x = walkSwing;
@@ -1525,6 +1639,26 @@ function updateMiracleActorWalkAI(actor, dt, now, stopNearPlayerDist = 3.2) {
 // -------------------------------------------------------------------------
 // 9. 오픈월드 메인 진입 & 프레임 업데이트 루프
 // -------------------------------------------------------------------------
+// 스테이지 진입 전 오픈월드 복귀 좌표를 스팟 반경 바깥(5.2m 거리)으로 안전하게 저장하는 헬퍼
+function saveSafeOpenWorldReturnPosition(spotX, spotZ) {
+  let dx = playerPos.x - spotX;
+  let dz = playerPos.z - spotZ;
+  const len = Math.hypot(dx, dz);
+  if (len < 0.1) {
+    dx = 0;
+    dz = 1;
+  } else {
+    dx /= len;
+    dz /= len;
+  }
+  const safeDist = 5.2;
+  const rx = THREE.MathUtils.clamp(spotX + dx * safeDist, -89.0, 103.0);
+  const rz = THREE.MathUtils.clamp(spotZ + dz * safeDist, -103.0, 103.0);
+  const ry = getMiracleOpenWorldGroundHeight(rx, rz);
+  miracleSavedOpenWorldPos.set(rx, ry, rz);
+  miracleSavedOpenWorldYaw = cameraYaw;
+}
+
 function buildMiracleOpenWorld(restoreSavedPos = false) {
   clearWorld();
   ensureMiracleCustomUI();
@@ -1544,16 +1678,17 @@ function buildMiracleOpenWorld(restoreSavedPos = false) {
   spawnMiracleOptionalEventSpots();
   spawnMiracleRumorNpcs();
 
-  // 확장된 오픈월드 이동 경계 유지
+  // 가장자리 언덕 안쪽 진입 차단 경계 유지
   currentMapRectBounds = {
     minX: -91.0,
-    maxX:  120.0,
-    minZ: -120.0,
-    maxZ:  120.0
+    maxX:  105.5,
+    minZ: -105.5,
+    maxZ:  105.5
   };
 
   if (restoreSavedPos && miracleSavedOpenWorldPos) {
     playerPos.copy(miracleSavedOpenWorldPos);
+    playerPos.y = getMiracleOpenWorldGroundHeight(playerPos.x, playerPos.z);
     cameraYaw = miracleSavedOpenWorldYaw;
     cameraTargetYaw = miracleSavedOpenWorldYaw;
   } else {
@@ -1562,6 +1697,24 @@ function buildMiracleOpenWorld(restoreSavedPos = false) {
     cameraYaw = 0;
     cameraTargetYaw = 0;
   }
+
+  // [핵심 수정] 오픈월드로 복귀한 직후 플레이어 주변(4.8m 이내)에 있는 모든 스팟은
+  // 플레이어가 한 번 구역을 벗어났다가 다시 다가올 때까지 대화창이 자동으로 뜨지 않도록 잠금!
+  const nowTs = performance.now();
+  miracleStageSpots.forEach(sp => {
+    const d = Math.hypot(playerPos.x - sp.pos.x, playerPos.z - sp.pos.z);
+    if (d < 4.8) {
+      sp._requireLeaveZone = true;
+      sp._prompted = nowTs;
+    }
+  });
+  miracleEventSpots.forEach(ev => {
+    const d = Math.hypot(playerPos.x - ev.pos.x, playerPos.z - ev.pos.z);
+    if (d < 4.8) {
+      ev._requireLeaveZone = true;
+      ev._prompted = nowTs;
+    }
+  });
 
   lastGroundedY = playerPos.y;
   playerVelY = 0;
@@ -1575,7 +1728,7 @@ function buildMiracleOpenWorld(restoreSavedPos = false) {
   showToast(
     miracleIsPostResurrection
       ? '✨ 부활 이후의 갈릴리와 예루살렘 오픈월드입니다! 엠마오·도마·바닷가 아침식사를 체험하고 감람산으로 오르세요!'
-      : '🗺️ 넓어진 성경 오픈월드에 오신 것을 환영합니다! 동북쪽 오병이어 언덕에 올라 마을과 바다를 내려다보세요!'
+      : '🗺️ 성경 오픈월드에 오신 것을 환영합니다! 빛기둥이 켜진 순서(1→2→3→4)대로 메인 스테이지를 진행해 보세요!'
   );
 }
 
@@ -1589,7 +1742,6 @@ window.returnToMiracleOpenWorld = function () {
 function updateMiracleOpenWorldFrame(dt, now) {
   positionMiracleLeftHudBelowTopBar();
 
-  // 실시간 태양 이동 및 전 객체 그림자 각도 업데이트
   if (typeof updateMiracleDynamicSun === 'function') {
     updateMiracleDynamicSun(dt, now);
   }
@@ -1607,10 +1759,18 @@ function updateMiracleOpenWorldFrame(dt, now) {
     }
   });
 
-  // 마을 행인 & 초원 사슴/양 자연스러운 보행 업데이트
   miracleWanderingActors.forEach(actor => {
     updateMiracleActorWalkAI(actor, dt, now, 2.8);
   });
+
+  // 비유·사건 체험 NPC 주변의 무릎 높이 불규칙 빛의 원(kneeAura) 실시간 반짝임 애니메이션
+  if (typeof updateIrregularKneeLightAura === 'function') {
+    miracleEventSpots.forEach((ev, idx) => {
+      if (ev.kneeAura) {
+        updateIrregularKneeLightAura(ev.kneeAura, now, idx);
+      }
+    });
+  }
 
   if (miracleDialogState.active) return;
 
@@ -1618,13 +1778,15 @@ function updateMiracleOpenWorldFrame(dt, now) {
     updateMiracleFieldEventFrame(dt, now);
   }
 
-  let nearestMainSpot = null;
-  let minMainDist = 9999;
+  const activeStageNum = getNextActiveMainStageNumber();
+  let currentActiveStageSpot = null;
 
-  // 1) 4대 메인 스테이지 진입 스팟 (가까이 다가갔을 때만 태그 표시, 거절 가능)
+  // 1) 메인 스테이지 스팟 업데이트 (빛기둥은 현재 순서인 스테이지 캐릭터에게만 표시!)
   miracleStageSpots.forEach((sp, idx) => {
-    const pulse = 1.0 + Math.sin(now * 0.004 + idx) * 0.15;
-    if (sp.beam) sp.beam.scale.set(pulse, 1, pulse);
+    if (sp.beam && sp.beam.visible) {
+      const pulse = 1.0 + Math.sin(now * 0.004 + idx) * 0.15;
+      sp.beam.scale.set(pulse, 1, pulse);
+    }
 
     const d = Math.hypot(playerPos.x - sp.pos.x, playerPos.z - sp.pos.z);
     updateWorldLabelPos(sp.label, sp.pos, d < MIRACLE_TAG_DIST_SPOT);
@@ -1634,42 +1796,68 @@ function updateMiracleOpenWorldFrame(dt, now) {
       sp.npcMesh.rotation.y = lerpAngle(sp.npcMesh.rotation.y, targetAng, dt * 6.0);
     }
 
-    if (!sp.cleared && d < minMainDist) {
-      minMainDist = d;
-      nearestMainSpot = sp;
+    if (sp.stageNum === activeStageNum) {
+      currentActiveStageSpot = sp;
     }
 
-    if (d < 3.4 && (!sp._prompted || now - sp._prompted > 5500)) {
+    // 스팟 구역을 한 번 벗어나야(_requireLeaveZone 해제) 다시 대화창이 열림
+    if (sp._requireLeaveZone) {
+      if (d > 4.3) sp._requireLeaveZone = false;
+      return;
+    }
+
+    if (d < 3.3 && (!sp._prompted || now - sp._prompted > 5500)) {
       sp._prompted = now;
-      openMiracleDialog({
-        speaker: sp.introSpeaker,
-        category: 'story',
-        text: sp.introText,
-        showCancel: true,
-        cancelText: '거절 (나중에 하기) ✕',
-        btnText: sp.stageNum === 5 ? '👑 감람산 승천·재림 언약 보기 ▶' : `🚀 메인 스테이지 ${sp.stageNum} 시작하기 ▶`,
-        onConfirm: () => {
-          miracleSavedOpenWorldPos.copy(playerPos);
-          miracleSavedOpenWorldYaw = cameraYaw;
-          if (sp.stageNum === 5 && typeof startMiracleAscensionEnding === 'function') {
-            startMiracleAscensionEnding();
-          } else if (typeof enterMiracleMainStage === 'function') {
-            enterMiracleMainStage(sp.stageNum);
-          }
-        },
-        onCancel: () => {
-          sp._prompted = performance.now();
-          showToast('✋ 스테이지 입장을 보류했어요. 오픈월드를 더 둘러본 뒤 언제든 다시 오세요!');
+      sp._requireLeaveZone = true;
+
+      const launchThisStage = () => {
+        saveSafeOpenWorldReturnPosition(sp.x, sp.z);
+        if (sp.stageNum === 5 && typeof startMiracleAscensionEnding === 'function') {
+          startMiracleAscensionEnding();
+        } else if (typeof enterMiracleMainStage === 'function') {
+          enterMiracleMainStage(sp.stageNum);
         }
-      });
+      };
+
+      if (sp.cleared) {
+        // ✅ [완료한 스테이지]: 시작 창 대신 반가운 인사말 + 하단 [🔄 미션 다시하기] 버튼 출력!
+        openMiracleDialog({
+          speaker: sp.introSpeaker,
+          category: 'greeting',
+          text: sp.greetingText || `"반가워요! 함께 완수했던 메인 스테이지 ${sp.stageNum}의 감동이 아직도 생생하네요!"`,
+          btnText: '반갑게 인사 나누기 👋',
+          replayText: `🔄 스테이지 ${sp.stageNum} 다시하기`,
+          onReplay: launchThisStage
+        });
+      } else if (sp.stageNum > activeStageNum) {
+        // 아직 앞선 순서의 스테이지를 클리어하지 않은 경우 순서 안내
+        openMiracleDialog({
+          speaker: sp.introSpeaker,
+          category: 'story',
+          text: `"아직 앞선 여정이 남아 있어요! 먼저 빛기둥이 비추고 있는 [메인 스테이지 ${activeStageNum}]을(를) 순서대로 완료하고 오세요!"`,
+          btnText: '네, 순서대로 다녀올게요! ▶'
+        });
+      } else {
+        // 현재 차례인 메인 스테이지 시작 창
+        openMiracleDialog({
+          speaker: sp.introSpeaker,
+          category: 'story',
+          text: sp.introText,
+          showCancel: true,
+          cancelText: '거절 (나중에 하기) ✕',
+          btnText: sp.stageNum === 5 ? '👑 감람산 승천·재림 언약 보기 ▶' : `🚀 메인 스테이지 ${sp.stageNum} 시작하기 ▶`,
+          onConfirm: launchThisStage,
+          onCancel: () => {
+            sp._prompted = performance.now();
+            showToast('✋ 스테이지 입장을 보류했어요. 오픈월드를 더 둘러본 뒤 언제든 다시 오세요!');
+          }
+        });
+      }
     }
   });
 
-  // 2) 선택형 오픈월드 이벤트 & 비유 미니게임 스팟 (가까이 다가갔을 때만 태그 표시, 거절 가능)
-  miracleEventSpots.forEach((ev, idx) => {
-    const pulse = 0.65 + Math.sin(now * 0.005 + idx) * 0.08;
-    if (ev.beam) ev.beam.scale.set(pulse, 0.72, pulse);
-
+  // 2) 선택형 오픈월드 이벤트 & 비유 미니게임 스팟 (무릎 높이 빛의 원 + 완료 시 인사 및 다시하기 버튼)
+  miracleEventSpots.forEach((ev) => {
     const d = Math.hypot(playerPos.x - ev.pos.x, playerPos.z - ev.pos.z);
     updateWorldLabelPos(ev.label, ev.pos, d < MIRACLE_TAG_DIST_SPOT);
 
@@ -1678,31 +1866,52 @@ function updateMiracleOpenWorldFrame(dt, now) {
       ev.npcMesh.rotation.y = lerpAngle(ev.npcMesh.rotation.y, targetAng, dt * 6.0);
     }
 
+    if (ev._requireLeaveZone) {
+      if (d > 4.2) ev._requireLeaveZone = false;
+      return;
+    }
+
     if (
-      d < 3.1 &&
+      d < 3.0 &&
       (!miracleActiveFieldEvent || miracleActiveFieldEvent.spot !== ev) &&
-      (!ev._prompted || now - ev._prompted > 6000)
+      (!ev._prompted || now - ev._prompted > 5500)
     ) {
       ev._prompted = now;
-      openMiracleDialog({
-        speaker: ev.speaker,
-        category: ev.category,
-        text: ev.introText,
-        showCancel: true,
-        cancelText: '거절 (나중에 하기) ✕',
-        btnText: '🙌 미션 수락하기!',
-        onConfirm: () => {
-          startMiracleFieldEvent(ev);
-        },
-        onCancel: () => {
-          ev._prompted = performance.now();
-          showToast('✋ 미션을 거절했어요. 준비되면 언제든 다시 말을 걸어 주세요!');
-        }
-      });
+      ev._requireLeaveZone = true;
+
+      if (ev.completed) {
+        // ✅ [완료한 비유·사건 미션]: 시작 창 대신 반가운 인사말 + 하단 [🔄 미션 다시하기] 버튼 출력!
+        openMiracleDialog({
+          speaker: ev.speaker,
+          category: 'greeting',
+          text: ev.greetingText || `"샬롬! 아까 함께 나누었던 은혜로운 이야기를 기억하고 계시군요! 반가워요!"`,
+          btnText: '반갑게 인사 나누기 👋',
+          replayText: '🔄 미션 다시하기',
+          onReplay: () => {
+            startMiracleFieldEvent(ev);
+          }
+        });
+      } else {
+        openMiracleDialog({
+          speaker: ev.speaker,
+          category: ev.category,
+          text: ev.introText,
+          showCancel: true,
+          cancelText: '거절 (나중에 하기) ✕',
+          btnText: '🙌 미션 수락하기!',
+          onConfirm: () => {
+            startMiracleFieldEvent(ev);
+          },
+          onCancel: () => {
+            ev._prompted = performance.now();
+            showToast('✋ 미션을 거절했어요. 준비되면 언제든 다시 말을 걸어 주세요!');
+          }
+        });
+      }
     }
   });
 
-  // 3) 길을 걷다 만나는 소문 · 목격담 · 말씀 NPC (자연스러운 2D 보행 + 가까이 가면 태그 표시)
+  // 3) 길을 걷다 만나는 소문 · 목격담 · 말씀 NPC
   miracleRumorNpcs.forEach((rn) => {
     updateMiracleActorWalkAI(rn, dt, now, 3.4);
     rn.pos.set(rn.mesh.position.x, rn.mesh.position.y + 0.5, rn.mesh.position.z);
@@ -1735,8 +1944,8 @@ function updateMiracleOpenWorldFrame(dt, now) {
         ? uncollected.pos
         : (fe.targetZone ? fe.targetZone.pos : null);
     }
-    if (!guideTarget && nearestMainSpot) {
-      guideTarget = nearestMainSpot.pos;
+    if (!guideTarget && currentActiveStageSpot) {
+      guideTarget = currentActiveStageSpot.pos;
     } else if (!guideTarget && miracleStageSpots.length > 0) {
       guideTarget = miracleStageSpots[miracleStageSpots.length - 1].pos;
     }
