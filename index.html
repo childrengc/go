@@ -2,11 +2,14 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>출발! 성경 탐험대! - 3D 어드벤처</title>
+  <title>출발! 성경 탐험대! - 3D 복셀 어드벤처</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@500;700;900&display=swap" rel="stylesheet" />
@@ -568,6 +571,9 @@
           🗺️ 월드맵으로 이동
         </button>
       </div>
+      <button id="ending-return-openworld-btn" type="button" onclick="closeEndingToReturnMiracleOpenWorld()" class="hidden mt-2 mc-btn w-full py-2.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-white font-jua text-xs sm:text-sm">
+        🌍 오픈월드로 돌아가 남은 미션·수첩 채우기
+      </button>
 
       <p class="mt-2.5 text-[11px] sm:text-xs font-jua text-amber-900/70 tracking-wide">
         광릉내 재림교회 어린이부
@@ -575,17 +581,33 @@
     </div>
   </div>
 
-<!-- 게임 스크립트 로드 (전체 스크립트 캐시 강제 갱신 ?v=5 적용) -->
-  <script src="core.js?v=5"></script>
-  <script src="ep1_noah.js?v=5"></script>
-  <script src="ep2_exodus.js?v=5"></script>
-  <script src="ep3_david_base.js?v=5"></script>
-  <script src="ep3_david_st1_2.js?v=5"></script>
-  <script src="ep3_david_st3_end.js?v=5"></script>
-  <script src="ep4_miracle_base.js?v=5"></script>
-  <script src="ep4_miracle_assets.js?v=5"></script>
-  <script src="ep4_miracle_world.js?v=5"></script>
-  <script src="ep4_miracle_stages.js?v=5"></script>
+<!-- 게임 스크립트 로드 (전체 스크립트 캐시 강제 갱신 ?v=7 및 버전 일관성 자동 검증 적용) -->
+  <script src="core.js?v=7"></script>
+  <script src="ep1_noah.js?v=7"></script>
+  <script src="ep2_exodus.js?v=7"></script>
+  <script src="ep3_david_base.js?v=7"></script>
+  <script src="ep3_david_st1_2.js?v=7"></script>
+  <script src="ep3_david_st3_end.js?v=7"></script>
+  <script src="ep4_miracle_base.js?v=7"></script>
+  <script src="ep4_miracle_assets.js?v=7"></script>
+  <script src="ep4_miracle_world.js?v=7"></script>
+  <script src="ep4_miracle_stages.js?v=7"></script>
+  <script>
+    // GitHub Pages CDN·브라우저 부분 캐시로 신·구버전 스크립트가 뒤섞여 로드되는 현상을 자동 감지해 1회 강제 새로고침
+    (function verifyScriptBuildConsistency() {
+      const EXPECTED = '20261120_v7';
+      const vers = window.__GAME_BUILD_VERSIONS__ || {};
+      const keys = ['core', 'ep4_base', 'ep4_assets', 'ep4_world', 'ep4_stages'];
+      const mismatch = keys.some(k => vers[k] !== EXPECTED);
+      if (mismatch && location.protocol !== 'file:') {
+        const u = new URL(location.href);
+        if (u.searchParams.get('_bv') !== EXPECTED) {
+          u.searchParams.set('_bv', EXPECTED);
+          location.replace(u.toString());
+        }
+      }
+    })();
+  </script>
   
 
   <!-- 전체화면 자동 전환 & 화면 전환 보장 & 16비트 도트 월드맵 엔진 -->

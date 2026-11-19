@@ -291,20 +291,25 @@ function updateMosesFollowers(dt, now) {
       const curZ = f.mesh.position.z;
 
       for (const bz of buildZones) {
-        const gapSouthZ = bz.zSouthEdge + 0.65;
-        const gapNorthZ = bz.zNorthEdge - 0.65;
+        const localEdge = (bz.canyonDef && typeof getExodusCanyonEdges === 'function')
+          ? getExodusCanyonEdges(bz.canyonDef, curX)
+          : { zCenter: bz.zCenter, zSouth: bz.zSouthEdge, zNorth: bz.zNorthEdge };
+        const gapSouthZ = Math.max(bz.zSouthEdge, localEdge.zSouth) + 0.65;
+        const gapNorthZ = Math.min(bz.zNorthEdge, localEdge.zNorth) - 0.65;
+        const localCenterZ = localEdge.zCenter;
         const walkMinX = bz.x - bz.w / 2 + 0.68;
         const walkMaxX = bz.x + bz.w / 2 - 0.68;
         const ratio = Math.min(1, Math.max(0, (bz.placedBlocks || 0) / bz.reqBlocks));
+        const builtSpan = (bz.bridgeTotalLen || (bz.trenchDepthW + 1.1));
         const builtNorthZ = ratio > 0
-          ? (bz.zSouthEdge + 0.55) - (bz.trenchDepthW + 1.1) * ratio
+          ? (bz.zSouthEdge + 0.7) - builtSpan * ratio
           : gapSouthZ;
 
         const inBridgeCorridorX = (curX >= walkMinX - 0.22 && curX <= walkMaxX + 0.22);
-        const mosesEnteredOrCrossedNorth = (playerPos.z < gapSouthZ - 0.25) &&
-          (playerPos.z <= gapNorthZ + 0.25 || Math.abs(playerPos.x - bz.x) <= bz.w / 2 + 1.2);
-        const mosesEnteredOrCrossedSouth = (playerPos.z > gapNorthZ + 0.25) &&
-          (playerPos.z >= gapSouthZ - 0.25 || Math.abs(playerPos.x - bz.x) <= bz.w / 2 + 1.2);
+        const mosesEnteredOrCrossedNorth = (playerPos.z < bz.zSouthEdge + 0.45) &&
+          (playerPos.z <= bz.zNorthEdge - 0.35 || Math.abs(playerPos.x - bz.x) <= bz.w / 2 + 1.2);
+        const mosesEnteredOrCrossedSouth = (playerPos.z > bz.zNorthEdge - 0.45) &&
+          (playerPos.z >= bz.zSouthEdge + 0.35 || Math.abs(playerPos.x - bz.x) <= bz.w / 2 + 1.2);
 
         // 1) 백성이 현재 다리 위(협곡 Z 구간 내부)에 있는 경우
         if (curZ < gapSouthZ - 0.05 && curZ > gapNorthZ + 0.05 && inBridgeCorridorX) {
@@ -314,29 +319,26 @@ function updateMosesFollowers(dt, now) {
           }
         }
         // 2) 백성이 남쪽 절벽 위에 있고 목표 Z가 협곡/북쪽으로 넘어가는 경우
-        else if (curZ >= bz.zCenter && targetZ < gapSouthZ) {
+        else if (curZ >= localCenterZ && targetZ < gapSouthZ) {
           if (ratio <= 0 || !mosesEnteredOrCrossedNorth) {
-            // 모세가 아직 남쪽 절벽에 있으면 다리 쪽으로 끌려가지 않고 절벽 끝선만 유지
-            targetZ = gapSouthZ + 0.15;
+            targetZ = localEdge.zSouth + 0.80;
           } else if (!inBridgeCorridorX) {
-            // 모세가 다리를 건너갔는데 백성이 다리 X폭 바깥에 있으면 먼저 남쪽 다리 입구 앞으로 이동
             targetX = THREE.MathUtils.clamp(bz.x + f.col * 0.75, walkMinX, walkMaxX);
-            targetZ = gapSouthZ + 0.15;
+            targetZ = Math.max(bz.zSouthEdge + 0.85, localEdge.zSouth + 0.80);
           } else {
-            // 다리 입구 안에 정렬되었으면 다리 위로 진입
             targetX = THREE.MathUtils.clamp(targetX, walkMinX, walkMaxX);
             if (ratio < 1 && targetZ < builtNorthZ + 0.35) {
-              targetZ = Math.min(gapSouthZ, builtNorthZ + 0.35);
+              targetZ = Math.min(bz.zSouthEdge + 0.65, builtNorthZ + 0.35);
             }
           }
         }
         // 3) 백성이 북쪽 절벽 위에 있고 목표 Z가 협곡/남쪽으로 넘어가는 경우
-        else if (curZ < bz.zCenter && targetZ > gapNorthZ) {
+        else if (curZ < localCenterZ && targetZ > gapNorthZ) {
           if (ratio < 1 || !mosesEnteredOrCrossedSouth) {
-            targetZ = gapNorthZ - 0.15;
+            targetZ = localEdge.zNorth - 0.80;
           } else if (!inBridgeCorridorX) {
             targetX = THREE.MathUtils.clamp(bz.x + f.col * 0.75, walkMinX, walkMaxX);
-            targetZ = gapNorthZ - 0.15;
+            targetZ = Math.min(bz.zNorthEdge - 0.85, localEdge.zNorth - 0.80);
           } else {
             targetX = THREE.MathUtils.clamp(targetX, walkMinX, walkMaxX);
           }
@@ -362,20 +364,23 @@ function updateMosesFollowers(dt, now) {
     let onBridgeSurface = false;
     if (currentStage === 1 && buildZones.length > 0) {
       for (const bz of buildZones) {
-        const gapSouthZ = bz.zSouthEdge + 0.60;
-        const gapNorthZ = bz.zNorthEdge - 0.60;
+        const localEdge = (bz.canyonDef && typeof getExodusCanyonEdges === 'function')
+          ? getExodusCanyonEdges(bz.canyonDef, f.mesh.position.x)
+          : { zCenter: bz.zCenter, zSouth: bz.zSouthEdge, zNorth: bz.zNorthEdge };
+        const gapSouthZ = localEdge.zSouth + 0.60;
+        const gapNorthZ = localEdge.zNorth - 0.60;
         const walkMinX = bz.x - bz.w / 2 + 0.68;
         const walkMaxX = bz.x + bz.w / 2 - 0.68;
         const ratio = Math.min(1, Math.max(0, (bz.placedBlocks || 0) / bz.reqBlocks));
+        const builtSpan = (bz.bridgeTotalLen || (bz.trenchDepthW + 1.1));
         const builtNorthZ = ratio > 0
-          ? (bz.zSouthEdge + 0.55) - (bz.trenchDepthW + 1.1) * ratio
+          ? (bz.zSouthEdge + 0.7) - builtSpan * ratio
           : gapSouthZ;
 
         if (f.mesh.position.z < gapSouthZ && f.mesh.position.z > gapNorthZ) {
           const isInsideBridgeX = (f.mesh.position.x >= bz.x - bz.w / 2 - 0.15 && f.mesh.position.x <= bz.x + bz.w / 2 + 0.15);
           if (ratio <= 0 || !isInsideBridgeX) {
-            // 다리 바깥 절벽에서는 다리로 순간이동시키지 않고 절벽 끝에 위치 고정
-            f.mesh.position.z = (f.mesh.position.z >= bz.zCenter) ? gapSouthZ : gapNorthZ;
+            f.mesh.position.z = (f.mesh.position.z >= localEdge.zCenter) ? gapSouthZ : gapNorthZ;
           } else {
             f.mesh.position.x = THREE.MathUtils.clamp(f.mesh.position.x, walkMinX, walkMaxX);
             if (ratio < 1 && f.mesh.position.z < builtNorthZ + 0.3) {
@@ -546,32 +551,247 @@ function performTreeChop(tr) {
   }
 }
 
-function createChasmWithBridgePuzzle(zCenter, trenchDepthW, halfMapW, bridgeConfigs, isCliffChasm = false) {
-  const zSouthEdge = zCenter + trenchDepthW / 2, zNorthEdge = zCenter - trenchDepthW / 2;
-  const ySouth = getBaseGroundHeight(0, zSouthEdge), yNorth = getBaseGroundHeight(0, zNorthEdge), yMid = (ySouth + yNorth) * 0.5;
-  const slopeAngle = Math.atan2(yNorth - ySouth, trenchDepthW);
+// -------------------------------------------------------------------------
+// [에피소드 2 스테이지 1] 곡선형·가변 너비 협곡 계산기 (최소 폭 >= 10.8m로 점프 도하 원천 불가)
+// - 소년반(및 확장 모드) 3개 골짜기마다 완전히 다른 곡선 형태 & 너비 변화 적용
+// -------------------------------------------------------------------------
+function getExodusCanyonEdges(cliff, x) {
+  const shape = (cliff && cliff.shape) ? cliff.shape : 'gentle_curve';
+  const baseZ = (cliff && cliff.z !== undefined) ? cliff.z : 0;
+  let zCenter = baseZ;
+  let width = 12.2;
+
+  if (shape === 's_wave') {
+    // 1번 골짜기: 완만한 S자 대곡선 + 좌우 가변 너비 (11.0m ~ 15.6m)
+    zCenter = baseZ + Math.sin(x * 0.105) * 4.2 + Math.cos(x * 0.055) * 1.1;
+    width = 13.1 + Math.sin(x * 0.165 + 0.5) * 2.1 + Math.cos(x * 0.09) * 0.4;
+  } else if (shape === 'arch_bow') {
+    // 2번 골짜기: 중앙이 북쪽으로 활처럼 휘는 아치형 곡선 + 중심/측면 폭 변화 (11.0m ~ 15.9m)
+    zCenter = baseZ - Math.cos(x * 0.088) * 4.4 + Math.sin(x * 0.175) * 1.15;
+    width = 13.3 - Math.cos(x * 0.138) * 2.15 + Math.sin(x * 0.21) * 0.55;
+  } else if (shape === 'zigzag_meander') {
+    // 3번 골짜기: 굽이치는 사행(Meander) 이중 굴곡 + 리드미컬한 폭 변화 (11.0m ~ 15.5m)
+    zCenter = baseZ + Math.sin(x * 0.145 + 1.2) * 3.4 - Math.sin(x * 0.265) * 1.75;
+    width = 13.2 + Math.cos(x * 0.18 - 0.6) * 2.25;
+  } else {
+    // 유치반 단일 골짜기: 부드러운 곡선 + 점프 불가 가변 너비 (10.8m ~ 13.8m)
+    zCenter = baseZ + Math.sin(x * 0.11 + 0.4) * 3.0;
+    width = 12.3 + Math.cos(x * 0.155) * 1.45;
+  }
+
+  // 플레이어 최대 점프 도달 거리(~9.0m)보다 충분히 넓은 최소 폭(10.8m) 강제 보장
+  width = Math.max(10.8, width);
+  return {
+    zCenter,
+    width,
+    zSouth: zCenter + width * 0.5,
+    zNorth: zCenter - width * 0.5
+  };
+}
+
+function buildCurvedExodusDesertBand(halfW, xSteps, getZSouthFn, getZNorthFn, sandMat) {
+  const zSteps = 8;
+  const positions = [];
+  const uvs = [];
+  const indices = [];
+
+  for (let ix = 0; ix <= xSteps; ix++) {
+    const ux = ix / xSteps;
+    const x = -halfW + ux * (halfW * 2);
+    const zS = getZSouthFn(x);
+    const zN = getZNorthFn(x);
+    for (let iz = 0; iz <= zSteps; iz++) {
+      const vz = iz / zSteps;
+      const z = zS + (zN - zS) * vz;
+      const y = getBaseGroundHeight(x, z);
+      positions.push(x, y, z);
+      uvs.push(x * 0.12, z * 0.12);
+    }
+  }
+
+  const stride = zSteps + 1;
+  for (let ix = 0; ix < xSteps; ix++) {
+    for (let iz = 0; iz < zSteps; iz++) {
+      const a = ix * stride + iz;
+      const b = (ix + 1) * stride + iz;
+      const c = ix * stride + (iz + 1);
+      const d = (ix + 1) * stride + (iz + 1);
+      // 위(+Y)를 향하는 삼각형 와인딩
+      indices.push(a, b, d, a, d, c);
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  const mesh = new THREE.Mesh(geo, sandMat);
+  mesh.receiveShadow = true;
+  worldGroup.add(mesh);
+  return mesh;
+}
+
+function buildCurvedCliffWallRibbon(halfW, xSteps, getZEdgeFn, faceNorth, wallMat, rimMat) {
+  const positions = [];
+  const uvs = [];
+  const indices = [];
+  const wallDepth = 22.0;
+
+  for (let ix = 0; ix <= xSteps; ix++) {
+    const x = -halfW + (ix / xSteps) * (halfW * 2);
+    const z = getZEdgeFn(x);
+    const topY = getBaseGroundHeight(x, z);
+    positions.push(x, topY + 0.04, z);
+    positions.push(x, topY - wallDepth, z);
+    uvs.push(ix * 0.35, 1);
+    uvs.push(ix * 0.35, 0);
+  }
+
+  for (let ix = 0; ix < xSteps; ix++) {
+    const t0 = ix * 2;
+    const b0 = ix * 2 + 1;
+    const t1 = (ix + 1) * 2;
+    const b1 = (ix + 1) * 2 + 1;
+    if (faceNorth) {
+      // 남쪽 절벽 벽면 -> 협곡 안쪽(-Z)을 향하는 외향 노멀
+      indices.push(t0, t1, b1, t0, b1, b0);
+    } else {
+      // 북쪽 절벽 벽면 -> 협곡 안쪽(+Z)을 향하는 외향 노멀
+      indices.push(t0, b0, b1, t0, b1, t1);
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  const wallMesh = new THREE.Mesh(geo, wallMat);
+  wallMesh.receiveShadow = true;
+  worldGroup.add(wallMesh);
+
+  // 곡선 협곡 가장자리가 또렷하게 보이도록 상단 사암 암반 테두리 띠 추가
+  const rimPos = [];
+  const rimUvs = [];
+  const rimIdx = [];
+  const lipOffset = faceNorth ? 0.55 : -0.55;
+  for (let ix = 0; ix <= xSteps; ix++) {
+    const x = -halfW + (ix / xSteps) * (halfW * 2);
+    const zEdge = getZEdgeFn(x);
+    const zBack = zEdge + lipOffset;
+    const yEdge = getBaseGroundHeight(x, zEdge) + 0.08;
+    const yBack = getBaseGroundHeight(x, zBack) + 0.05;
+    rimPos.push(x, yEdge, zEdge);
+    rimPos.push(x, yBack, zBack);
+    rimUvs.push(ix * 0.3, 0);
+    rimUvs.push(ix * 0.3, 1);
+  }
+  for (let ix = 0; ix < xSteps; ix++) {
+    const a = ix * 2, b = ix * 2 + 1, c = (ix + 1) * 2, d = (ix + 1) * 2 + 1;
+    // 위(+Y)를 향하는 외향 노멀
+    if (faceNorth) rimIdx.push(a, b, d, a, d, c);
+    else rimIdx.push(a, c, d, a, d, b);
+  }
+  const rimGeo = new THREE.BufferGeometry();
+  rimGeo.setAttribute('position', new THREE.Float32BufferAttribute(rimPos, 3));
+  rimGeo.setAttribute('uv', new THREE.Float32BufferAttribute(rimUvs, 2));
+  rimGeo.setIndex(rimIdx);
+  rimGeo.computeVertexNormals();
+  const rimMesh = new THREE.Mesh(rimGeo, rimMat);
+  rimMesh.receiveShadow = true;
+  worldGroup.add(rimMesh);
+}
+
+function createChasmWithBridgePuzzle(zCenter, trenchDepthW, halfMapW, bridgeConfigs, isCliffChasm = false, canyonDef = null) {
+  const sampleEdge = (x) => canyonDef
+    ? getExodusCanyonEdges(canyonDef, x)
+    : { zCenter, width: trenchDepthW, zSouth: zCenter + trenchDepthW / 2, zNorth: zCenter - trenchDepthW / 2 };
 
   if (isCliffChasm) {
     const cliffWallMat = matVoxelCached('#78350f', '#451a03');
+    const rimMat = matVoxelCached('#b45309', '#78350f');
     const sideCanyonMat = matVoxelCached('#92400e', '#78350f');
     const abyssMat = matVoxelCached('#1c1917', '#0c0a09');
-    worldGroup.add(
-      createBox(halfMapW * 2 - 0.2, 36, 0.8, cliffWallMat, 0, ySouth - 18.08, zSouthEdge + 0.4),
-      createBox(halfMapW * 2 - 0.2, 36, 0.8, cliffWallMat, 0, yNorth - 18.08, zNorthEdge - 0.4),
-      createBox(halfMapW * 2 + 52, 6, trenchDepthW + 8, abyssMat, 0, yMid - 15.0, zCenter, false),
-      createBox(16, 40, trenchDepthW + 1.4, sideCanyonMat, -(halfMapW + 8.2), yMid - 6.5, zCenter),
-      createBox(16, 40, trenchDepthW + 1.4, sideCanyonMat, (halfMapW + 8.2), yMid - 6.5, zCenter)
-    );
+
+    if (canyonDef) {
+      const xSteps = 56;
+      buildCurvedCliffWallRibbon(halfMapW, xSteps, (x) => sampleEdge(x).zSouth, true, cliffWallMat, rimMat);
+      buildCurvedCliffWallRibbon(halfMapW, xSteps, (x) => sampleEdge(x).zNorth, false, cliffWallMat, rimMat);
+
+      let maxSouth = -9999, minNorth = 9999;
+      for (let sx = -halfMapW; sx <= halfMapW; sx += 2) {
+        const e = sampleEdge(sx);
+        if (e.zSouth > maxSouth) maxSouth = e.zSouth;
+        if (e.zNorth < minNorth) minNorth = e.zNorth;
+      }
+      const envCenter = (maxSouth + minNorth) * 0.5;
+      const envDepth = (maxSouth - minNorth) + 6.0;
+      const yMidEnv = getBaseGroundHeight(0, envCenter);
+      worldGroup.add(
+        createBox(halfMapW * 2 + 52, 6, envDepth, abyssMat, 0, yMidEnv - 15.0, envCenter, false),
+        createBox(16, 40, envDepth, sideCanyonMat, -(halfMapW + 8.2), yMidEnv - 6.5, envCenter),
+        createBox(16, 40, envDepth, sideCanyonMat,  (halfMapW + 8.2), yMidEnv - 6.5, envCenter)
+      );
+    } else {
+      const zSouthEdge = zCenter + trenchDepthW / 2, zNorthEdge = zCenter - trenchDepthW / 2;
+      const ySouth = getBaseGroundHeight(0, zSouthEdge), yNorth = getBaseGroundHeight(0, zNorthEdge), yMid = (ySouth + yNorth) * 0.5;
+      worldGroup.add(
+        createBox(halfMapW * 2 - 0.2, 36, 0.8, cliffWallMat, 0, ySouth - 18.08, zSouthEdge + 0.4),
+        createBox(halfMapW * 2 - 0.2, 36, 0.8, cliffWallMat, 0, yNorth - 18.08, zNorthEdge - 0.4),
+        createBox(halfMapW * 2 + 52, 6, trenchDepthW + 8, abyssMat, 0, yMid - 15.0, zCenter, false),
+        createBox(16, 40, trenchDepthW + 1.4, sideCanyonMat, -(halfMapW + 8.2), yMid - 6.5, zCenter),
+        createBox(16, 40, trenchDepthW + 1.4, sideCanyonMat,  (halfMapW + 8.2), yMid - 6.5, zCenter)
+      );
+    }
   }
+
+  // 곡선 절벽 구간을 1.6m 단위 세그먼트로 충돌체 분할 등록하여 곡선 윤곽 그대로 추락·점프 도하 차단
+  const pushCurvedChasmColliders = (xStart, xEnd) => {
+    if (xEnd <= xStart + 0.35) return;
+    if (!canyonDef) {
+      colliders.push({ minX: xStart, maxX: xEnd, minZ: zCenter - trenchDepthW / 2 - 0.4, maxZ: zCenter + trenchDepthW / 2 + 0.4 });
+      return;
+    }
+    const segW = 1.6;
+    for (let sx = xStart; sx < xEnd; sx += segW) {
+      const sx1 = Math.min(xEnd, sx + segW);
+      const eL = sampleEdge(sx);
+      const eM = sampleEdge((sx + sx1) * 0.5);
+      const eR = sampleEdge(sx1);
+      const segNorth = Math.min(eL.zNorth, eM.zNorth, eR.zNorth) - 0.30;
+      const segSouth = Math.max(eL.zSouth, eM.zSouth, eR.zSouth) + 0.30;
+      colliders.push({ minX: sx, maxX: sx1, minZ: segNorth, maxZ: segSouth });
+    }
+  };
 
   const sorted = [...bridgeConfigs].sort((a, b) => a.x - b.x);
   let curX = -halfMapW;
   sorted.forEach((cfg) => {
     const bLeft = cfg.x - cfg.w / 2, bRight = cfg.x + cfg.w / 2;
-    if (bLeft > curX + 0.5) colliders.push({ minX: curX, maxX: bLeft, minZ: zNorthEdge - 0.4, maxZ: zSouthEdge + 0.4 });
+    pushCurvedChasmColliders(curX, bLeft);
     curX = bRight;
 
-    const bridgeCollider = { minX: bLeft - 0.2, maxX: bRight + 0.2, minZ: zNorthEdge - 0.4, maxZ: zSouthEdge + 0.4, active: true };
+    // 다리 폭 구간 내 곡선 절벽의 남·북 최대 경계를 측정해 현지 골짜기 너비에 정확히 비례하는 다리 스팬 계산
+    let localSouth = -9999, localNorth = 9999;
+    const samples = 7;
+    for (let s = 0; s < samples; s++) {
+      const sx = bLeft + (s / (samples - 1)) * cfg.w;
+      const e = sampleEdge(sx);
+      if (e.zSouth > localSouth) localSouth = e.zSouth;
+      if (e.zNorth < localNorth) localNorth = e.zNorth;
+    }
+    const localCenter = (localSouth + localNorth) * 0.5;
+    const localDepth = Math.max(10.8, localSouth - localNorth);
+    const bridgeOverhang = 0.75; // 곡선 절벽 양쪽 끝에 단단히 맞물리는 여유 길이
+    const bridgeTotalLen = localDepth + bridgeOverhang * 2;
+
+    const ySouth = getBaseGroundHeight(cfg.x, localSouth);
+    const yNorth = getBaseGroundHeight(cfg.x, localNorth);
+    const yMid = (ySouth + yNorth) * 0.5;
+    const slopeAngle = Math.atan2(yNorth - ySouth, localDepth);
+
+    const bridgeCollider = { minX: bLeft - 0.2, maxX: bRight + 0.2, minZ: localNorth - 0.35, maxZ: localSouth + 0.35, active: true };
     colliders.push(bridgeCollider);
 
     const bpGroup = new THREE.Group();
@@ -581,37 +801,74 @@ function createChasmWithBridgePuzzle(zCenter, trenchDepthW, halfMapW, bridgeConf
     const reqCount = cfg.reqBlocks || 2;
     const lbl = createWorldLabel(`🪵 ${cfg.title} (0/${reqCount}개 · 통나무 모아 건설)`);
     const zoneObj = {
-      id: cfg.id, title: cfg.title, x: cfg.x, w: cfg.w, zCenter, zSouthEdge, zNorthEdge, ySouth, yNorth, yMid, trenchDepthW,
-      pos: new THREE.Vector3(cfg.x, ySouth + 0.5, zSouthEdge + 1.4), centerPos: new THREE.Vector3(cfg.x, yMid + 0.5, zCenter),
-      reqBlocks: reqCount, placedBlocks: 0, built: false, colliderRef: bridgeCollider, bpGroup, solidGroup, label: lbl,
+      id: cfg.id,
+      title: cfg.title,
+      x: cfg.x,
+      w: cfg.w,
+      zCenter: localCenter,
+      zSouthEdge: localSouth,
+      zNorthEdge: localNorth,
+      ySouth,
+      yNorth,
+      yMid,
+      trenchDepthW: localDepth,
+      bridgeTotalLen,
+      canyonDef,
+      pos: new THREE.Vector3(cfg.x, ySouth + 0.5, localSouth + 1.5),
+      centerPos: new THREE.Vector3(cfg.x, yMid + 0.5, localCenter),
+      reqBlocks: reqCount,
+      placedBlocks: 0,
+      built: false,
+      colliderRef: bridgeCollider,
+      bpGroup,
+      solidGroup,
+      label: lbl,
       rebuildBridgeMesh: function () {
         while (this.solidGroup.children.length > 0) this.solidGroup.remove(this.solidGroup.children[0]);
         while (this.bpGroup.children.length > 0) this.bpGroup.remove(this.bpGroup.children[0]);
 
         const ratio = Math.min(1, Math.max(0, this.placedBlocks / this.reqBlocks));
+        const startZ = this.zSouthEdge + bridgeOverhang;
+        const endZ = this.zNorthEdge - bridgeOverhang;
+        const spanLen = startZ - endZ;
 
-        let builtNorthZ = this.zSouthEdge;
+        let builtNorthZ = startZ;
         if (ratio > 0) {
-          const builtLen = (this.trenchDepthW + 1.1) * ratio;
-          const curCenterZ = (this.zSouthEdge + 0.55) - builtLen / 2;
-          builtNorthZ = (this.zSouthEdge + 0.55) - builtLen;
-          const curY = THREE.MathUtils.lerp(this.ySouth, this.yNorth, ratio * 0.5);
+          // 필요 재료 수량(reqBlocks)은 그대로 유지하되, 골짜기 너비(spanLen)에 정확히 비례해 1칸씩 완성!
+          const builtLen = spanLen * ratio;
+          const curCenterZ = startZ - builtLen * 0.5;
+          builtNorthZ = startZ - builtLen;
+          const curY = getBaseGroundHeight(this.x, curCenterZ);
           const plankMat = new THREE.MeshLambertMaterial({ map: makeLogBarkTex() });
           const railMat = matVoxelCached('#5c2d0c', '#451a03');
+          const tieMat = matVoxelCached('#92400e', '#78350f');
+
           const plank = createBox(this.w, 0.48, builtLen, plankMat, this.x, curY - 0.22, curCenterZ);
           const railL = createBox(0.32, 0.65, builtLen, railMat, this.x - this.w / 2 + 0.18, curY + 0.22, curCenterZ);
           const railR = createBox(0.32, 0.65, builtLen, railMat, this.x + this.w / 2 - 0.18, curY + 0.22, curCenterZ);
           plank.rotation.x = slopeAngle; railL.rotation.x = slopeAngle; railR.rotation.x = slopeAngle;
           this.solidGroup.add(plank, railL, railR);
+
+          // 골짜기 폭에 비례해 배치되는 가로 침목 & 난간 기둥 디테일
+          const segCount = Math.max(1, this.placedBlocks);
+          const segStep = spanLen / this.reqBlocks;
+          for (let k = 0; k < segCount; k++) {
+            const kz = startZ - (k + 0.5) * segStep;
+            const ky = getBaseGroundHeight(this.x, kz);
+            const postL = createBox(0.36, 1.05, 0.36, railMat, this.x - this.w / 2 + 0.18, ky + 0.40, kz, false);
+            const postR = createBox(0.36, 1.05, 0.36, railMat, this.x + this.w / 2 - 0.18, ky + 0.40, kz, false);
+            const crossTie = createBox(this.w - 0.5, 0.12, Math.min(0.45, segStep * 0.22), tieMat, this.x, ky + 0.04, kz, false);
+            crossTie.rotation.x = slopeAngle;
+            this.solidGroup.add(postL, postR, crossTie);
+          }
         }
 
         if (ratio < 1) {
           this.bpGroup.visible = true;
-          const remSouthZ = (ratio > 0) ? Math.min(this.zSouthEdge, builtNorthZ) : this.zSouthEdge;
-          const remLen = Math.max(0.2, remSouthZ - this.zNorthEdge);
-          const remCenterZ = (remSouthZ + this.zNorthEdge) * 0.5;
-          const tCenter = THREE.MathUtils.clamp((this.zSouthEdge - remCenterZ) / this.trenchDepthW, 0, 1);
-          const remY = THREE.MathUtils.lerp(this.ySouth, this.yNorth, tCenter);
+          const remSouthZ = (ratio > 0) ? Math.min(startZ, builtNorthZ) : startZ;
+          const remLen = Math.max(0.25, remSouthZ - endZ);
+          const remCenterZ = (remSouthZ + endZ) * 0.5;
+          const remY = getBaseGroundHeight(this.x, remCenterZ);
 
           const bpMesh = createBox(
             this.w, 0.35, remLen,
@@ -632,7 +889,7 @@ function createChasmWithBridgePuzzle(zCenter, trenchDepthW, halfMapW, bridgeConf
     zoneObj.rebuildBridgeMesh();
     buildZones.push(zoneObj);
   });
-  if (halfMapW > curX + 0.5) colliders.push({ minX: curX, maxX: halfMapW, minZ: zNorthEdge - 0.4, maxZ: zSouthEdge + 0.4 });
+  pushCurvedChasmColliders(curX, halfMapW);
 }
 
 function spawnExodusSkyCloudsAndGulls(northZ) {
@@ -669,60 +926,83 @@ function buildExodusStage1World() {
 
   buildEgyptianPyramidBackdrop(southZ, topHillY, 1.0);
 
+  // [요청 반영] 소년반(및 확장 모드)의 3개 골짜기 모양을 각각 다르게(S곡선 · 아치형 · 사행 이중굴곡) 구성하고
+  //            너비는 구간마다 변화하되 제일 좁은 구간도 점프 불가(>= 10.8m)로 설정!
   const cliffDefinitions = isExtended
     ? [
-        { id: 'cliff1', z: 42, depth: 9.2, x: (currentMode === 'senior' ? -10 : 0), req: EXODUS_STAGE1_BRIDGE_BLOCKS, title: '첫 번째 협곡 다리' },
-        { id: 'cliff2', z: -2, depth: 9.2, x: (currentMode === 'senior' ? 11 : 0),  req: EXODUS_STAGE1_BRIDGE_BLOCKS, title: '두 번째 협곡 다리' },
-        { id: 'cliff3', z: -46, depth: 9.2, x: (currentMode === 'senior' ? -8 : 0), req: EXODUS_STAGE1_BRIDGE_BLOCKS, title: '세 번째 협곡 다리' }
+        { id: 'cliff1', z:  42, depth: 13.0, shape: 's_wave',         x: (currentMode === 'senior' ? -10 : 0), req: EXODUS_STAGE1_BRIDGE_BLOCKS, title: '첫 번째 곡선 협곡 다리' },
+        { id: 'cliff2', z:  -2, depth: 13.2, shape: 'arch_bow',       x: (currentMode === 'senior' ?  11 : 0), req: EXODUS_STAGE1_BRIDGE_BLOCKS, title: '두 번째 아치 협곡 다리' },
+        { id: 'cliff3', z: -46, depth: 13.1, shape: 'zigzag_meander', x: (currentMode === 'senior' ?  -8 : 0), req: EXODUS_STAGE1_BRIDGE_BLOCKS, title: '세 번째 굽이 협곡 다리' }
       ]
-    : [ { id: 'cliff1', z: -2, depth: 5.4, x: 0, req: 8, title: '광야 협곡 통나무다리' } ];
+    : [ { id: 'cliff1', z: -2, depth: 12.2, shape: 'gentle_curve', x: 0, req: 8, title: '광야 곡선 협곡 통나무다리' } ];
 
+  // 곡선 협곡 경계(zSouth(x) ~ zNorth(x))에 완벽히 밀착되는 연속 곡면 사막 지형 밴드 생성
   const sandMat = new THREE.MeshLambertMaterial({ map: makeDesertSandTex() });
-  for (let z = southZ + 22; z > northZ; z -= 2.0) {
-    const midZ = z - 1.0;
-    if (cliffDefinitions.some(c => midZ <= c.z + c.depth / 2 + 0.85 && midZ >= c.z - c.depth / 2 - 0.85)) continue;
-    const sandBox = createBox(halfW * 2, 18.0, 1.98, sandMat, 0, getBaseGroundHeight(0, midZ) - 9.0, midZ, false);
-    sandBox.receiveShadow = true;
-    worldGroup.add(sandBox);
+  const xSteps = 56;
+  for (let b = 0; b <= cliffDefinitions.length; b++) {
+    const getBandSouth = (b === 0)
+      ? (() => southZ + 22)
+      : ((x) => getExodusCanyonEdges(cliffDefinitions[b - 1], x).zNorth);
+    const getBandNorth = (b === cliffDefinitions.length)
+      ? (() => northZ)
+      : ((x) => getExodusCanyonEdges(cliffDefinitions[b], x).zSouth);
+    buildCurvedExodusDesertBand(halfW, xSteps, getBandSouth, getBandNorth, sandMat);
   }
-  // 협곡 절벽 벽면과 모래 지형 사이의 경계 틈새를 빈틈없이 메움
-  cliffDefinitions.forEach(c => {
-    const sCapZ = c.z + c.depth / 2 + 1.4;
-    const nCapZ = c.z - c.depth / 2 - 1.4;
-    const sCap = createBox(halfW * 2, 18.0, 1.3, sandMat, 0, getBaseGroundHeight(0, sCapZ) - 9.0, sCapZ, false);
-    const nCap = createBox(halfW * 2, 18.0, 1.3, sandMat, 0, getBaseGroundHeight(0, nCapZ) - 9.0, nCapZ, false);
-    sCap.receiveShadow = true; nCap.receiveShadow = true;
-    worldGroup.add(sCap, nCap);
-  });
 
   cliffDefinitions.forEach(c => {
-    createChasmWithBridgePuzzle(c.z, c.depth, halfW, [{ id: c.id, x: c.x, w: 6.4, reqBlocks: c.req, title: c.title }], true);
+    createChasmWithBridgePuzzle(c.z, c.depth, halfW, [{ id: c.id, x: c.x, w: 6.4, reqBlocks: c.req, title: c.title }], true, c);
   });
 
   if (guideArrowGroup) guideArrowGroup.visible = (currentMode !== 'senior');
 
-  const zoneEdges = [southZ - 3.5];
-  cliffDefinitions.forEach(c => { zoneEdges.push(c.z + c.depth / 2 - 2.2, c.z - c.depth / 2 + 2.2); });
-  zoneEdges.push(northZ + 8);
+  // 각 지대의 안전 Z 범위 계산 (곡선 협곡의 최대 돌출을 고려해 장애물/통나무가 절벽 안에 스폰되지 않게 함)
+  const isInsideOrNearAnyCanyon = (tx, tz, pad = 2.6) => {
+    return cliffDefinitions.some(cd => {
+      const e = getExodusCanyonEdges(cd, tx);
+      return tz <= e.zSouth + pad && tz >= e.zNorth - pad;
+    });
+  };
+
+  const bandMaxSouth = (idx) => {
+    if (idx === 0) return southZ - 3.5;
+    let minN = 9999;
+    for (let sx = -halfW; sx <= halfW; sx += 2) {
+      const e = getExodusCanyonEdges(cliffDefinitions[idx - 1], sx);
+      if (e.zNorth < minN) minN = e.zNorth;
+    }
+    return minN - 2.6;
+  };
+  const bandMinNorth = (idx) => {
+    if (idx === cliffDefinitions.length) return northZ + 8.0;
+    let maxS = -9999;
+    for (let sx = -halfW; sx <= halfW; sx += 2) {
+      const e = getExodusCanyonEdges(cliffDefinitions[idx], sx);
+      if (e.zSouth > maxS) maxS = e.zSouth;
+    }
+    return maxS + 2.6;
+  };
 
   for (let zIdx = 0; zIdx <= cliffDefinitions.length; zIdx++) {
-    const zMax = zoneEdges[zIdx * 2], zMin = zoneEdges[zIdx * 2 + 1];
-    if (zMax === undefined || zMin === undefined || zMax <= zMin) continue;
+    const zMax = bandMaxSouth(zIdx);
+    const zMin = bandMinNorth(zIdx);
+    if (zMax <= zMin + 1.0) continue;
     const cliff = cliffDefinitions[Math.min(zIdx, cliffDefinitions.length - 1)];
-    const zoneBounds = { minX: -halfW + 4.5, maxX: halfW - 4.5, minZ: zMin + 1.8, maxZ: zMax - 1.8 };
+    const zoneBounds = { minX: -halfW + 4.5, maxX: halfW - 4.5, minZ: zMin, maxZ: zMax };
 
     const isChoppingZone = (isExtended && zIdx === 1);
     const isMixedLastZone = (isExtended && zIdx === 2);
     const rockCount = isExtended ? 10 : 3;
-    const treeCount = isExtended ? ((isChoppingZone || isMixedLastZone) ? 12 : 20) : 4;
+    const treeCount = isExtended ? ((isChoppingZone || isMixedLastZone) ? 12 : 18) : 4;
     const placedObstacles = [];
 
     const isNearEntryOrExit = (tx, tz) => {
+      if (isInsideOrNearAnyCanyon(tx, tz, 2.8)) return true;
       if (Math.hypot(tx, tz - (southZ - 6)) < 6.2 || Math.hypot(tx, tz - (northZ + 4.5)) < 6.2) return true;
-      return cliffDefinitions.some(cd =>
-        Math.hypot(tx - cd.x, tz - (cd.z + cd.depth / 2)) < 5.8 ||
-        Math.hypot(tx - cd.x, tz - (cd.z - cd.depth / 2)) < 5.8
-      );
+      return cliffDefinitions.some(cd => {
+        const eb = getExodusCanyonEdges(cd, cd.x);
+        return Math.hypot(tx - cd.x, tz - eb.zSouth) < 6.0 ||
+               Math.hypot(tx - cd.x, tz - eb.zNorth) < 6.0;
+      });
     };
 
     if (zIdx < cliffDefinitions.length) {

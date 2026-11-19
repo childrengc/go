@@ -2,6 +2,9 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>관리자 페이지 - 출발! 탐험대! (광릉내 재림교회 어린이부)</title>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -202,7 +205,7 @@
                 <span class="font-jua text-xs text-amber-200 w-20">${m.label}</span>
                 <div class="flex flex-wrap gap-1 flex-1 justify-end">
                   ${[1, 2, 3, 4].map(st => `
-                    <button onclick="jumpToStage('${ep.key}', '${m.key}', ${st})"
+                    <button type="button" onclick="jumpToStage('${ep.key}', '${m.key}', ${st})"
                       class="mc-btn px-2 py-1 rounded-lg ${st === 4 ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950' : ep.btnBg} font-jua text-xs">
                       ${st === 4 ? '🏆엔딩' : '스테이지 ' + st}
                     </button>
@@ -217,8 +220,24 @@
 
     function jumpToStage(ep, mode, stage) {
       const name = document.getElementById('test-player-name').value.trim() || '관리자';
-      const params = new URLSearchParams({ ep, mode, stage, name });
-      window.location.href = `index.html?${params.toString()}`;
+      const payload = { ep: String(ep), mode: String(mode), stage: Number(stage), name, ts: Date.now() };
+      try {
+        sessionStorage.setItem('bible_admin_direct_jump', JSON.stringify(payload));
+      } catch (e) {}
+      const params = new URLSearchParams({
+        ep: payload.ep,
+        mode: payload.mode,
+        stage: String(payload.stage),
+        name: payload.name,
+        _t: String(payload.ts)
+      });
+      const hashParams = new URLSearchParams({
+        ep: payload.ep,
+        mode: payload.mode,
+        stage: String(payload.stage),
+        name: payload.name
+      });
+      window.location.href = `index.html?${params.toString()}#${hashParams.toString()}`;
     }
 
     async function fetchSheetRecords() {

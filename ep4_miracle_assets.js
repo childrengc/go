@@ -5,6 +5,9 @@
 // 3. 인체 비례 의복 & 전면 개방형(Open-Front Arch) 다면체 후드·장발 구조
 // =========================================================================
 
+window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
+window.__GAME_BUILD_VERSIONS__.ep4_assets = '20261120_v7';
+
 const _miracleDoubleSideMatCache = {};
 function matLowPolyDouble(hexColor) {
   if (!_miracleDoubleSideMatCache[hexColor]) {
@@ -2536,6 +2539,7 @@ function createBranchSegmentMesh(p1, p2, rBottom, rTop, colorHex) {
 }
 
 function addLowPolyCanopyTree(x, z, scale = 1.0, addCol = true) {
+  if (typeof recordMiracleWorldTree === 'function') recordMiracleWorldTree(x, z, 'canopy', scale);
   const by = typeof getMiracleOpenWorldGroundHeight === 'function' ? getMiracleOpenWorldGroundHeight(x, z) : 0;
   const grp = new THREE.Group();
   const barkCol = '#6b442a', leafDark = '#527324', leafMid = '#6d9432', leafLite = '#8ab340';
@@ -2580,6 +2584,7 @@ window.addLowPolyOliveTree = function (x, z, scale = 1.0, addCol = true) {
   if (Math.abs(Math.round(x * 3 + z * 5)) % 4 === 0) {
     return addLowPolyCanopyTree(x, z, scale * 0.88, addCol);
   }
+  if (typeof recordMiracleWorldTree === 'function') recordMiracleWorldTree(x, z, 'olive', scale);
 
   const by = typeof getMiracleOpenWorldGroundHeight === 'function' ? getMiracleOpenWorldGroundHeight(x, z) : 0;
   const grp = new THREE.Group();
@@ -2612,6 +2617,7 @@ window.addLowPolyOliveTree = function (x, z, scale = 1.0, addCol = true) {
 };
 
 window.addLowPolyCypressPineTree = function (x, z, scale = 1.0, addCol = true) {
+  if (typeof recordMiracleWorldTree === 'function') recordMiracleWorldTree(x, z, 'cypress', scale);
   const by = typeof getMiracleOpenWorldGroundHeight === 'function' ? getMiracleOpenWorldGroundHeight(x, z) : 0;
   const grp = new THREE.Group();
 

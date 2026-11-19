@@ -3,6 +3,8 @@
 // - 가장자리 언덕 내부 진입 완벽 차단 (연속 충돌벽 Colliders + 경계 제한)
 // - 계단으로 건물 2층 등반 후 인접한 옆 건물 옥상·2층으로 점프 이동할 수 있는 근접 마을 배치
 // =========================================================================
+window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
+window.__GAME_BUILD_VERSIONS__.ep4_world = '20261120_v7';
 
 let miracleWorldMissionObjects = [];
 let miracleActiveFieldEvent = null;
@@ -176,7 +178,8 @@ function createOrganicStreetPropCluster(x, z, rotY = 0, seed = 1) {
 function buildLowPolyPerimeterMountainRange() {
   if (typeof createBumpyLowPolyHillMesh !== 'function') return;
 
-  const hillCols = ['#7fa650', '#6d943e', '#8ab058', '#789c4a', '#8c8578'];
+  // 기존 따뜻한 올리브 톤과 싱그러운 초록색을 자연스럽게 혼합한 외곽 산맥 팔레트
+  const hillCols = ['#529336', '#6da344', '#428329', '#7fa650', '#5e9b3c', '#3c7a26'];
 
   // 1) 북쪽(North) 가장자리 겹침 언덕 (z = -122 ~ -140)
   for (let i = 0; i < 15; i++) {
@@ -277,9 +280,9 @@ function buildHillsideStoneTerraceWalls() {
   addDryStoneWallCurve([[-82, 0], [-70, -4], [-56, -2], [-48, 8]], 3, 381);
   addDryStoneWallCurve([[-52, 22], [-62, 28], [-76, 26]], 2, 421);
 
-  // 5) 마을 언덕길 가장자리 낮은 장식 돌담 (레퍼런스 이미지 스타일)
+  // 5) 마을 언덕길 가장자리 낮은 장식 돌담 (레퍼런스 이미지 스타일 — 여리고 여관 진입로 여유 확보)
   addDryStoneWallCurve([[-24, -66], [-19, -58], [-20, -46]], 2, 461);
-  addDryStoneWallCurve([[22, 14], [28, 22], [32, 32]], 2, 501);
+  addDryStoneWallCurve([[32, 14], [36, 22], [38, 32]], 2, 501);
 
   if (typeof mergeStaticLowPolyGroupToVertexColor === 'function') {
     mergeStaticLowPolyGroupToVertexColor(stoneWallGrp, { registerWall: false, castShadow: true });
@@ -411,9 +414,11 @@ function buildSoftLowPolyWorldTerrain() {
   const cCoastalEarth = new THREE.Color('#c9b372');
   const cWarmMeadow   = new THREE.Color('#b6b968'); // 따뜻한 지중해 연두-황토 로우폴리 대지
   const cSunlitOchre  = new THREE.Color('#d8b674'); // 레퍼런스 이미지 스타일 따뜻한 황토 평원
-  const cSlopeOchre   = new THREE.Color('#cf9f60'); // 언덕 경사면 사암/황토 면
-  const cHillOlive    = new THREE.Color('#8ea854'); // 언덕 중턱 올리브 잔디 면
-  const cHillTopGrass = new THREE.Color('#7c9a45'); // 언덕 정상 올리브 그린
+  const cSlopeOchre   = new THREE.Color('#cf9f60'); // 기존 산·언덕 사암/황토 면
+  const cSlopeGreen   = new THREE.Color('#5a983e'); // 산 사면에 혼합되는 싱그러운 초록 면
+  const cHillOlive    = new THREE.Color('#6a9b43'); // 기존 올리브와 초록색을 혼합한 산 중턱
+  const cHillGreen    = new THREE.Color('#478932'); // 진한 초록 산 능선
+  const cHillTopGrass = new THREE.Color('#569438'); // 산 정상 초록+올리브 혼합 그린
   const cDirtRoad     = new THREE.Color('#dfb984'); // 햇살 받은 밝은 모래흙 길
   const cRoadEdge     = new THREE.Color('#d4ac76');
   const cPlazaBed     = new THREE.Color('#c7baa4'); // 성전 큰벽돌 바닥 하부 석재 줄눈층
@@ -477,12 +482,15 @@ function buildSoftLowPolyWorldTerrain() {
     } else if (mx < -34 && mz > 48 && my > 1.8) {
       fCol.copy(cGolgotha);
     } else if (my > 2.0 && slopeFlat < 0.945) {
-      // 언덕 사면의 따뜻한 사암/황토 로우폴리 층 표현 (레퍼런스 이미지 참고)
-      fCol.copy(cSlopeOchre);
+      // 산·언덕 경사면: 기존 사암/황토색과 초록색을 삼각형 패치 단위로 자연스럽게 혼합!
+      const mtnMix = hash2(Math.floor(mx * 0.16) + 3.1, Math.floor(mz * 0.16) - 1.7);
+      fCol.copy(cSlopeOchre).lerp(cSlopeGreen, 0.34 + mtnMix * 0.42);
     } else if (my > 6.8) {
-      fCol.copy(cHillTopGrass);
+      const topMix = hash2(Math.floor(mx * 0.18), Math.floor(mz * 0.18));
+      fCol.copy(cHillTopGrass).lerp(cHillGreen, 0.25 + topMix * 0.50);
     } else if (my > 2.2) {
-      fCol.copy(cHillOlive);
+      const midMix = hash2(Math.floor(mx * 0.15) + 7.3, Math.floor(mz * 0.15));
+      fCol.copy(cHillOlive).lerp(cHillGreen, 0.20 + midMix * 0.42);
     } else {
       // 평원은 따뜻한 황토와 지중해 연두색이 로우 폴리곤 면 단위로 자연스럽게 어우러지도록 패치 배색
       const patch = hash2(Math.floor(mx * 0.14), Math.floor(mz * 0.14));
@@ -545,15 +553,17 @@ function buildSoftLowPolyWorldTerrain() {
     maxZ:  105.5
   };
 
-  // 서쪽 바다 해안 선착장(부두, x = -90, z = -68) 및 정박된 갈릴리 목선
-  const pierGrp = new THREE.Group();
-  pierGrp.add(
-    createLowPolyMesh(new THREE.BoxGeometry(12.5, 0.35, 3.8), '#92400e', -90, 0.22, -68),
-    createLowPolyMesh(new THREE.CylinderGeometry(0.22, 0.22, 2.4, 6), '#5c2d0c', -95.0, -0.5, -66.5),
-    createLowPolyMesh(new THREE.CylinderGeometry(0.22, 0.22, 2.4, 6), '#5c2d0c', -95.0, -0.5, -69.5)
-  );
+  // 서쪽 바다 해안 비정형 소프트 로우폴리 선착장 다리(부두, x = -90, z = -68) 및 정박된 갈릴리 목선
+  const pierGrp = (typeof createOrganicGalileePierGroup === 'function')
+    ? createOrganicGalileePierGroup(12.8, 3.8, 41)
+    : (() => {
+        const g = new THREE.Group();
+        g.add(createLowPolyMesh(new THREE.BoxGeometry(12.5, 0.35, 3.8), '#92400e', 0, 0.22, 0));
+        return g;
+      })();
+  pierGrp.position.set(-90, 0.0, -68);
   worldGroup.add(pierGrp);
-  platforms.push({ minX: -96.5, maxX: -83.5, minZ: -70.0, maxZ: -66.0, topY: 0.40 });
+  platforms.push({ minX: -96.5, maxX: -83.5, minZ: -70.0, maxZ: -66.0, topY: 0.36 });
 
   const dockedBoat = createLowPolyGalileeBoat(0.95);
   dockedBoat.position.set(-99.5, -0.38, -68.0);
@@ -592,31 +602,31 @@ function buildMiracleRoadsideVillagesAndForests() {
     // [클러스터 1: 북부 가나 서쪽 가옥 구간]
     { x: -16.5, z: -89.0, v: 1, yaw:  Math.PI / 2, sc: 0.98, m: 'stonebrick' },
     { x: -16.5, z: -79.2, v: 0, yaw:  Math.PI / 2, sc: 0.96 },
-    // [클러스터 2: 북부 가나 동쪽 가옥 구간]
-    { x:  13.5, z: -88.5, v: 3, yaw: -Math.PI / 2, sc: 0.98 },
-    { x:  13.5, z: -78.6, v: 2, yaw: -Math.PI / 2, sc: 0.96, m: 'stonebrick' },
-    { x:  13.5, z: -69.0, v: 0, yaw: -Math.PI / 2, sc: 0.95 },
+    // [클러스터 2: 북부 가나 동쪽 가옥 구간 — 외벽 계단 간 충분한 여유 간격 확보]
+    { x:  13.5, z: -91.2, v: 3, yaw: -Math.PI / 2, sc: 0.98 },
+    { x:  13.5, z: -79.2, v: 2, yaw: -Math.PI / 2, sc: 0.96, m: 'stonebrick' },
+    { x:  13.5, z: -67.2, v: 0, yaw: -Math.PI / 2, sc: 0.95 },
     // [클러스터 3: 갈릴리 서쪽 길가 가옥]
     { x: -15.5, z: -57.5, v: 3, yaw:  Math.PI / 2, sc: 0.96, m: 'stonebrick' },
     { x: -15.5, z: -47.6, v: 0, yaw:  Math.PI / 2, sc: 0.96 },
     // [클러스터 4: 가버나움 중풍병자 집(22, -52) 주변 (넓은 골목 간격 확보)]
     { x:  11.6, z: -52.0, v: 2, yaw:  0.0,         sc: 0.94 },
     { x:  35.5, z: -46.0, v: 1, yaw: -0.25,        sc: 0.98, m: 'stonebrick' },
-    // [클러스터 5: 중북부 순례길 양옆 가옥]
+    // [클러스터 5: 중북부 순례길 양옆 가옥 — 동측 계단끼리 겹치지 않도록 간격 확장]
     { x: -15.0, z: -32.2, v: 1, yaw:  Math.PI / 2, sc: 0.98 },
     { x: -15.0, z: -22.2, v: 4, yaw:  Math.PI / 2, sc: 0.95, m: 'stonebrick' },
-    { x:  15.0, z: -31.2, v: 3, yaw: -Math.PI / 2, sc: 0.98 },
-    { x:  15.0, z: -21.2, v: 0, yaw: -Math.PI / 2, sc: 0.96 },
-    // [클러스터 6: 사마리아 · 여리고 입구 가옥]
-    { x:  16.0, z: -11.2, v: 0, yaw: -Math.PI / 2, sc: 0.96, m: 'stonebrick' },
-    { x:  16.0, z:  -1.4, v: 3, yaw: -Math.PI / 2, sc: 0.98 },
-    { x:  52.5, z:  -9.2, v: 1, yaw: -Math.PI / 2, sc: 0.98 },
-    { x:  52.5, z:   0.6, v: 0, yaw: -Math.PI / 2, sc: 0.96, m: 'stonebrick' },
-    { x:  52.5, z:  10.2, v: 2, yaw: -Math.PI / 2, sc: 0.95 },
-    // [클러스터 7: 유대 광야 ~ 예루살렘 성문 앞 가옥]
-    { x: -15.0, z:  14.2, v: 0, yaw:  Math.PI / 2, sc: 0.96 },
-    { x: -15.0, z:  24.0, v: 3, yaw:  Math.PI / 2, sc: 0.98, m: 'stonebrick' },
-    { x: -15.0, z:  33.8, v: 1, yaw:  Math.PI / 2, sc: 0.96 },
+    { x:  15.0, z: -33.8, v: 3, yaw: -Math.PI / 2, sc: 0.98 },
+    { x:  15.0, z: -20.2, v: 0, yaw: -Math.PI / 2, sc: 0.96 },
+    // [클러스터 6: 사마리아 · 여리고 입구 가옥 — 계단 겹침 해소]
+    { x:  16.0, z:  -9.2, v: 0, yaw: -Math.PI / 2, sc: 0.96, m: 'stonebrick' },
+    { x:  16.0, z:   1.2, v: 3, yaw: -Math.PI / 2, sc: 0.98 },
+    { x:  52.5, z: -11.8, v: 1, yaw: -Math.PI / 2, sc: 0.98 },
+    { x:  52.5, z:   1.6, v: 0, yaw: -Math.PI / 2, sc: 0.96, m: 'stonebrick' },
+    { x:  52.5, z:  11.4, v: 2, yaw: -Math.PI / 2, sc: 0.95 },
+    // [클러스터 7: 유대 광야 ~ 예루살렘 성문 앞 가옥 — 계단 겹침 해소]
+    { x: -15.0, z:  10.6, v: 0, yaw:  Math.PI / 2, sc: 0.96 },
+    { x: -15.0, z:  24.2, v: 3, yaw:  Math.PI / 2, sc: 0.98, m: 'stonebrick' },
+    { x: -15.0, z:  36.6, v: 1, yaw:  Math.PI / 2, sc: 0.96 },
     { x:  15.5, z:  32.0, v: 2, yaw: -Math.PI / 2, sc: 0.95 },
     // [클러스터 8: 예루살렘 성전 외곽 거리 — 성전에서 충분히 뒤로 물러나 배치]
     { x: -24.5, z:  42.5, v: 0, yaw:  Math.PI / 2, sc: 0.96, m: 'stonebrick' },
@@ -656,11 +666,10 @@ function buildMiracleRoadsideVillagesAndForests() {
   createLowPolyDonkey( 9.5,  54, -1.2);
 
   if (typeof addLowPolyCanopyTree === 'function') {
-    addLowPolyCanopyTree( 74, -92, 1.35, true);
-    addLowPolyCanopyTree( 98, -76, 1.35, true);
-    addLowPolyCanopyTree(-48, -32, 1.25, true);
-    addLowPolyCanopyTree( 58, -22, 1.25, true);
-    addLowPolyCanopyTree( 94,  68, 1.30, true);
+    [[74, -92, 1.35], [98, -76, 1.35], [-48, -32, 1.25], [58, -22, 1.25], [94, 68, 1.30]].forEach(([tx, tz, sc]) => {
+      addLowPolyCanopyTree(tx, tz, sc, true);
+      if (typeof recordMiracleWorldTree === 'function') recordMiracleWorldTree(tx, tz, 'canopy', sc);
+    });
   }
 
   const oliveSpots = [
@@ -673,6 +682,8 @@ function buildMiracleRoadsideVillagesAndForests() {
     [-82,  48], [-86,  66], [-38, 60], [32,  98], [  4, 98]
   ];
   oliveSpots.forEach(([tx, tz], i) => {
+    // 예수님 동산 무덤(-22, 91) 반경 13m 이내에는 나무 배치 금지
+    if (Math.hypot(tx + 22, tz - 91) < 13.0) return;
     addLowPolyOliveTree(tx, tz, 1.0 + (i % 3) * 0.18, true);
   });
 
@@ -683,14 +694,16 @@ function buildMiracleRoadsideVillagesAndForests() {
     [ 98,  28], [100,   48], [ 98, 82], [ 58, 98], [ 38, -88], [46, -94]
   ];
   cypressSpots.forEach(([cx, cz], i) => {
+    if (Math.hypot(cx + 22, cz - 91) < 13.0) return;
     addLowPolyCypressPineTree(cx, cz, 0.95 + (i % 3) * 0.22, true);
   });
 
   const palmSpots = [
     [-76, -72], [-72, -82], [-68, -56], [-74, -40], [-76, -14],
-    [ 30,   4], [ 44,   4], [ 62,   2], [ 36,  14], [ -8,  42], [  8,  42]
+    [ 62,   2], [ 36,  14], [ -8,  42], [  8,  42]
   ];
   palmSpots.forEach(([px, pz], i) => {
+    if (Math.hypot(px + 22, pz - 91) < 13.0) return;
     addLowPolyPalmTree(px, pz, 1.05 + (i % 2) * 0.18, true);
   });
 
@@ -1115,18 +1128,51 @@ function buildMiracleRegionalLandmarks() {
   worldGroup.add(wellGrp);
   colliders.push({ minX: -34.4, maxX: -29.6, minZ: -14.4, maxZ: -9.6 });
 
-  // 2) 여리고 거리와 삭개오의 큰 돌무화과나무(뽕나무) (x = 38, z = -4)
-  createLowPolySycamoreTree(38, -4, 1.55);
+  // 2) 여리고 거리와 삭개오의 돌무화과나무 숲(6그루 군락 — 여러 나무 중 랜덤한 나무 위에 삭개오가 숨어 있음!)
+  window.miracleZacchaeusGroveTrees = [];
+  const zacTrees = [
+    { x: 31, z: -11, sc: 1.48 },
+    { x: 39, z: -12, sc: 1.56 },
+    { x: 45, z:  -5, sc: 1.50 },
+    { x: 38, z:  -2, sc: 1.60 },
+    { x: 30, z:   1, sc: 1.45 },
+    { x: 43, z:   4, sc: 1.52 }
+  ];
+  zacTrees.forEach(zt => {
+    createLowPolySycamoreTree(zt.x, zt.z, zt.sc);
+    window.miracleZacchaeusGroveTrees.push({ x: zt.x, z: zt.z, scale: zt.sc });
+  });
 
-  // 3) 선한 사마리아인의 여리고 주막(여관) (x = 24, z = 24)
-  addLowPolyVillageHouse(24, 24, 8.4, 4.0, 6.6, '#f2e3c9', '#ea580c', false, 2, 0);
+  // 3) 선한 사마리아인의 여리고 주막(실내 진입 가능 + 병상과 다친 이웃 배치) (x = 24, z = 24)
+  if (typeof addWalkableJerichoInn === 'function') {
+    window.miracleJerichoInnInfo = addWalkableJerichoInn(24, 24);
+  } else {
+    addLowPolyVillageHouse(24, 24, 8.4, 4.0, 6.6, '#f2e3c9', '#ea580c', false, 2, 0);
+  }
+
+  // 3-B) 반석 위의 집 비유용 넓은 비정형 반석 바위 지반 (x = 61, z = 21)
+  if (typeof createWideBedrockFormation === 'function') {
+    createWideBedrockFormation(61, 21);
+  }
 
   // [C. 남부 예루살렘 · 성전 · 다락방 · 골고다 · 빈 무덤 · 감람산 권역]
   // 1) & 2) 예루살렘 외곽 계단 성문(z = 46) + 예루살렘 성전 복합 단지(z = 72) 통합 빌드
   buildLowPolyJerusalemTempleComplex();
+  if (Array.isArray(window.miracleBuildingBounds)) {
+    window.miracleBuildingBounds.push(
+      { minX: -12.5, maxX: 12.5, minZ: 42.0, maxZ: 48.2, cx: 0, cz: 46 },  // 외곽 성문
+      { minX: -11.5, maxX: 11.5, minZ: 60.5, maxZ: 82.0, cx: 0, cz: 72 },  // 성전 본관
+      { minX: -35.5, maxX: -28.5, minZ: -15.5, maxZ: -8.5, cx: -32, cz: -12 }, // 야곱의 우물
+      { minX: -29.0, maxX: -15.0, minZ: 86.5, maxZ: 98.0, cx: -22, cz: 92 }    // 동산 무덤
+    );
+  }
 
-  // 3) 마가의 다락방 복층 석조 건물 (x = -24, z = 58)
-  addLowPolyVillageHouse(-24, 58, 8.8, 4.3, 7.0, '#f2e3c9', '#c89654', true, 1, 0);
+  // 3) 마가의 다락방 2층 실내 진입 가능 가옥 (x = -24, z = 58)
+  if (typeof addWalkableUpperRoomHouse === 'function') {
+    window.miracleUpperRoomInfo = addWalkableUpperRoomHouse(-24, 58);
+  } else {
+    addLowPolyVillageHouse(-24, 58, 8.8, 4.3, 7.0, '#f2e3c9', '#c89654', true, 1, 0);
+  }
 
   // 4) 넓어진 골고다 언덕(x = -62, z = 78) 위의 세 십자가 — 십자가 스테이지(스테이지 3) 클리어 후에만 등장!
   const isStage3Cleared = Boolean(miracleMainStagesCleared[3] || miracleMainStagesCleared[4] || miracleIsPostResurrection);
@@ -1149,15 +1195,25 @@ function buildMiracleRegionalLandmarks() {
   const tombY = getMiracleOpenWorldGroundHeight(-22, 92);
 
   miracleOpenWorldTombGroup = new THREE.Group();
-  const tombMound = createLowPolyMesh(new THREE.DodecahedronGeometry(5.2, 0), '#94a3b8', -22, tombY + 2.6, 92);
-  tombMound.scale.set(1.38, 0.88, 1.05);
-  const tombDarkEntrance = createLowPolyMesh(new THREE.BoxGeometry(2.2, 2.8, 1.2), '#1e293b', -21.5, tombY + 1.4, 87.4, false);
-  const rolledStone = createLowPolyMesh(new THREE.CylinderGeometry(1.65, 1.65, 0.72, 10), '#cbd5e1', -18.2, tombY + 1.55, 88.2);
+  // 무덤 입구 가운데로 바위가 삐져나오지 않도록 좌·우·후면·상단 아치형 다면체 바위로 깔끔히 감쌈
+  const tombMoundBack = createLowPolyMesh(new THREE.DodecahedronGeometry(4.8, 0), '#94a3b8', -22, tombY + 2.4, 94.0);
+  tombMoundBack.scale.set(1.42, 0.90, 0.85);
+  const tombRockL = createLowPolyMesh(new THREE.DodecahedronGeometry(3.2, 0), '#8492a6', -25.6, tombY + 1.9, 90.4);
+  tombRockL.scale.set(0.95, 0.92, 1.05);
+  const tombRockR = createLowPolyMesh(new THREE.DodecahedronGeometry(3.2, 0), '#8492a6', -18.2, tombY + 1.9, 90.4);
+  tombRockR.scale.set(0.95, 0.92, 1.05);
+  const tombRockTop = createLowPolyMesh(new THREE.DodecahedronGeometry(2.9, 0), '#94a3b8', -21.8, tombY + 4.2, 90.2);
+  tombRockTop.scale.set(1.38, 0.56, 0.95);
+  const jambL = createLowPolyMesh(createOrganicBoxGeo(0.72, 3.0, 1.15, 741, 0.07, 0.95, 1), '#b8a892', -23.1, tombY + 1.5, 88.2, true);
+  const jambR = createLowPolyMesh(createOrganicBoxGeo(0.72, 3.0, 1.15, 742, 0.07, 0.95, 1), '#b8a892', -20.5, tombY + 1.5, 88.2, true);
+  const lintel = createLowPolyMesh(createOrganicBoxGeo(3.6, 0.72, 1.25, 743, 0.07, 0.96, 1), '#c7baa4', -21.8, tombY + 3.15, 88.2, true);
+  const tombDarkEntrance = createLowPolyMesh(new THREE.BoxGeometry(2.15, 2.85, 0.55), '#1e293b', -21.8, tombY + 1.42, 88.55, false);
+  const rolledStone = createLowPolyMesh(new THREE.CylinderGeometry(1.65, 1.65, 0.72, 10), '#cbd5e1', -18.0, tombY + 1.55, 87.6);
   rolledStone.rotation.x = Math.PI / 2;
-  miracleOpenWorldTombGroup.add(tombMound, tombDarkEntrance, rolledStone);
+  miracleOpenWorldTombGroup.add(tombMoundBack, tombRockL, tombRockR, tombRockTop, jambL, jambR, lintel, tombDarkEntrance, rolledStone);
   miracleOpenWorldTombGroup.visible = isStage3Cleared;
   worldGroup.add(miracleOpenWorldTombGroup);
-  wallMeshes.push(tombMound);
+  wallMeshes.push(tombMoundBack, tombRockL, tombRockR);
   colliders.push({ minX: -27.5, maxX: -16.5, minZ: 88.5, maxZ: 96.5 });
 
   // 무덤 위장용 우거진 풀·관목·야생 수풀 (스테이지 3 클리어 전까지 무덤 자리에 배치)
@@ -1201,6 +1257,8 @@ function buildMiracleRegionalLandmarks() {
     const tx = Math.cos(ang) * rad;
     const tz = Math.sin(ang) * rad;
     if (tx < -76) continue;
+    // 예수님 동산 무덤(-22, 91)과 나무가 겹치지 않도록 반경 13m 이내 스킵
+    if (Math.hypot(tx + 22, tz - 91) < 13.0) continue;
     if (i % 3 === 0) addLowPolyCypressPineTree(tx, tz, 1.15, true);
     else if (i % 4 === 0) addLowPolyPalmTree(tx, tz, 1.15, true);
     else addLowPolyOliveTree(tx, tz, 1.2, true);
@@ -1331,28 +1389,38 @@ function getNextActiveMainStageNumber() {
 }
 
 function syncMiracleMainStageSequentialBeams() {
+  const allUnlocked = (typeof isMiracleAllStagesUnlocked === 'function' && isMiracleAllStagesUnlocked());
   const activeStageNum = getNextActiveMainStageNumber();
+  const missionRunning = Boolean(miracleActiveFieldEvent);
 
   miracleStageSpots.forEach(sp => {
     const isCleared = Boolean(miracleMainStagesCleared[sp.stageNum]);
     sp.cleared = isCleared;
 
     const isCurrentTurn = (sp.stageNum === activeStageNum);
+    const isAccessible = allUnlocked || isCurrentTurn || isCleared;
+
     if (sp.beam) {
-      sp.beam.visible = isCurrentTurn;
+      sp.beam.visible = !missionRunning && (isCurrentTurn || (allUnlocked && sp.stageNum === 5));
     }
     if (sp.ring && sp.ring.material) {
-      sp.ring.material.color.setHex(isCleared ? 0x10b981 : (isCurrentTurn ? sp.color : 0x64748b));
-      sp.ring.visible = isCurrentTurn || isCleared;
+      sp.ring.material.color.setHex(isCleared ? 0x10b981 : (isAccessible ? sp.color : 0x64748b));
+      sp.ring.visible = !missionRunning && isAccessible;
     }
     if (sp.label) {
-      sp.label.innerHTML = isCleared
-        ? `✅ ${sp.title}`
-        : (isCurrentTurn ? `✨ ${sp.title}` : `🔒 ${sp.title} (스테이지 ${sp.stageNum - 1} 완료 후 진행)`);
+      if (sp.stageNum === 5 && miracleAscensionSeen) {
+        sp.label.innerHTML = '☁️ [감람산 언덕] 승천하신 주님을 바라보는 제자들 (다가가면 엔딩 세상)';
+      } else if (isCleared) {
+        sp.label.innerHTML = `✅ ${sp.title}${allUnlocked ? ' (자유 입장)' : ''}`;
+      } else if (isAccessible) {
+        sp.label.innerHTML = `✨ ${sp.title}`;
+      } else {
+        sp.label.innerHTML = `🔒 ${sp.title} (스테이지 ${sp.stageNum - 1} 완료 후 진행)`;
+      }
     }
   });
 
-  const isStage3Cleared = Boolean(miracleMainStagesCleared[3] || miracleMainStagesCleared[4] || miracleIsPostResurrection);
+  const isStage3Cleared = Boolean(allUnlocked || miracleMainStagesCleared[3] || miracleMainStagesCleared[4] || miracleIsPostResurrection);
   if (miracleGolgothaCrossesGroup) {
     // 십자가 언덕의 세 십자가는 십자가 스테이지(스테이지 3) 해결 후에만 등장!
     miracleGolgothaCrossesGroup.visible = isStage3Cleared;
@@ -1365,8 +1433,21 @@ function syncMiracleMainStageSequentialBeams() {
   }
 }
 
+// 미션 진행 중에는 다른 모든 미션·스테이지의 발 주변 원형(kneeAura/ring/beam)을 일시 숨기고 종료 시 복원
+function syncMiracleSpotMarkersForActiveMission() {
+  const missionRunning = Boolean(miracleActiveFieldEvent);
+  syncMiracleMainStageSequentialBeams();
+  miracleEventSpots.forEach(ev => {
+    const showMarker = !missionRunning;
+    if (ev.kneeAura) ev.kneeAura.visible = showMarker;
+    if (ev.ring) ev.ring.visible = showMarker;
+    if (ev.beam) ev.beam.visible = showMarker;
+  });
+}
+
 function spawnMiracleMainStageSpots() {
   miracleStageSpots = [];
+  const allUnlocked = (typeof isMiracleAllStagesUnlocked === 'function' && isMiracleAllStagesUnlocked());
 
   const mainConfigs = [
     {
@@ -1433,21 +1514,42 @@ function spawnMiracleMainStageSpots() {
     });
   });
 
-  if (miracleIsPostResurrection) {
+  if (miracleIsPostResurrection || allUnlocked) {
+    const isPostAsc = Boolean(miracleAscensionSeen);
     const ascMarker = createMiracleSpotMarker(
       88, 74, 0xfef08a,
-      '👑 [최종 엔딩] 감람산 : 예수님의 승천과 재림의 약속',
-      'jesus',
+      isPostAsc
+        ? '☁️ [감람산 언덕] 승천하신 주님을 바라보는 제자들 (다가가면 엔딩 세상)'
+        : '👑 [최종 엔딩] 감람산 : 예수님의 승천과 재림의 약속',
+      isPostAsc ? 'disciple' : 'jesus',
       true
     );
+    // 승천 이후 다시 감람산 언덕에 올라오면 예수님은 없고 제자들이 모여 하늘을 바라보는 모습 표현!
+    if (isPostAsc && ascMarker.group) {
+      if (ascMarker.npcMesh && ascMarker.npcMesh.userData && ascMarker.npcMesh.userData.head) {
+        ascMarker.npcMesh.userData.head.rotation.x = -0.38;
+      }
+      [[-1.8, -0.7, 0.3], [1.8, -0.6, -0.35], [-0.9, 1.5, 0.15], [1.1, 1.4, -0.2]].forEach(([dx, dz, ry], di) => {
+        const dMesh = createLowPolyPersonMesh('disciple', 50 + di);
+        dMesh.position.set(dx, 0, dz);
+        dMesh.rotation.y = ry;
+        if (dMesh.userData && dMesh.userData.head) dMesh.userData.head.rotation.x = -0.35;
+        ascMarker.group.add(dMesh);
+      });
+    }
+
     miracleStageSpots.push({
       stageNum: 5,
       subModeKey: 'ascension',
       x: 88, z: 74,
       color: 0xfef08a,
-      title: '👑 [최종 엔딩] 감람산 : 예수님의 승천과 재림의 약속',
-      introSpeaker: '부활하신 예수님',
-      introText: '"하늘과 땅의 모든 권세를 내게 주셨으니, 그러므로 너희는 가서 모든 민족을 제자로 삼으라! 볼지어다 내가 세상 끝날까지 너희와 항상 함께 있으리라!"',
+      title: isPostAsc
+        ? '☁️ [감람산 언덕] 승천하신 주님을 바라보는 제자들'
+        : '👑 [최종 엔딩] 감람산 : 예수님의 승천과 재림의 약속',
+      introSpeaker: isPostAsc ? '감람산의 제자들' : '부활하신 예수님',
+      introText: isPostAsc
+        ? '"예수님께서 구름을 타고 하늘로 승천하셨어요! 천사들이 \'하늘로 가심을 본 그대로 다시 오시리라\'고 약속해 주었답니다. 승천 이후의 감람산 엔딩 세상으로 가보시겠어요?"'
+        : '"하늘과 땅의 모든 권세를 내게 주셨으니, 그러므로 너희는 가서 모든 민족을 제자로 삼으라! 볼지어다 내가 세상 끝날까지 너희와 항상 함께 있으리라!"',
       greetingText: '"볼지어다 내가 세상 끝날까지 너희와 항상 함께 있으리라!"',
       ...ascMarker,
       cleared: false,
@@ -1488,14 +1590,24 @@ function spawnMiracleRumorNpcs() {
     }
   ];
 
+  const getRumorNpcLabelHtml = (cat, speaker, collected) => {
+    if (collected) {
+      if (cat === 'word') return `✅ 수집한 말씀 · ${speaker}`;
+      if (cat === 'eyewitness') return `✅ 수집한 목격담 · ${speaker}`;
+      return `✅ 수집한 소문 · ${speaker}`;
+    }
+    const catBadge = cat === 'eyewitness' ? '🔵목격담' : (cat === 'word' ? '🟣말씀' : '🟡소문');
+    return `${catBadge} · ${speaker}`;
+  };
+
   rumorConfigs.forEach((rc, idx) => {
     const by = getMiracleOpenWorldGroundHeight(rc.x, rc.z);
     const mesh = createLowPolyPersonMesh('villager', idx);
     mesh.position.set(rc.x, by, rc.z);
     worldGroup.add(mesh);
 
-    const catBadge = rc.cat === 'eyewitness' ? '🔵목격담' : (rc.cat === 'word' ? '🟣말씀' : '🟡소문');
-    const lbl = createWorldLabel(`${catBadge} · ${rc.speaker}`);
+    const alreadyCollected = Boolean(rc.nbId && miracleCollectedIds.has(rc.nbId));
+    const lbl = createWorldLabel(getRumorNpcLabelHtml(rc.cat, rc.speaker, alreadyCollected));
     lbl.style.opacity = '0';
 
     miracleRumorNpcs.push({
@@ -1510,7 +1622,9 @@ function spawnMiracleRumorNpcs() {
       heading: Math.random() * Math.PI * 2,
       waitTimer: (idx % 3) * 0.7,
       pos: new THREE.Vector3(rc.x, by + 0.5, rc.z),
-      talked: false,
+      talked: alreadyCollected,
+      _prompted: 0,
+      _requireLeaveZone: false,
       phase: idx * 1.1,
       label: lbl
     });
@@ -1525,19 +1639,21 @@ function getMiracleOptionalEventsCatalog() {
     {
       id: 'ev_cana',
       category: 'story',
-      title: '🏺 ① 가나 혼인잔치: 물항아리 6개 배달',
+      title: '🏺 ① 가나 혼인잔치: 물 채운 항아리 6개 찾기',
       x: -4, z: -69,
       color: 0xe11d48,
       npcPreset: 'woman',
       speaker: '혼인잔치 하인',
-      introText: '"잔치 포도주가 다 떨어졌어요! 예수님께서 저기 있는 돌항아리 6개에 물을 아구까지 채우라고 하셨어요. 주변 우물 물통 6개를 항아리로 옮겨 주세요!"',
-      greetingText: '"샬롬! 아까 돌항아리에 물을 가득 채워 주신 덕분에 잔치에 가장 향기로운 포도주가 넘쳐났답니다. 정말 고마워요!"',
+      introText: '"잔치 포도주가 다 떨어졌어요! 오픈월드 곳곳에 흩어져 있는 [물이 채워진 돌항아리] 6개를 찾아 잔치집으로 가져다주세요!"',
+      greetingText: '"샬롬! 아까 물이 채워진 돌항아리 6개를 모아 주신 덕분에 잔치에 가장 향기로운 포도주가 넘쳐났답니다. 정말 고마워요!"',
       missionType: 'collect_deliver',
+      itemStyle: 'water_amphora',
+      spawnMode: 'openworld_wide',
       itemCount: 6,
       itemColor: '#38bdf8',
-      itemLabel: '💧 맑은 물동이',
+      itemLabel: '🏺 물 채운 돌항아리',
       targetOffset: { x: 0, z: -2.2 },
-      targetLabel: '🏺 가나 잔치집 돌항아리 (물 채우기)',
+      targetLabel: '🏺 가나 잔치집 (물항아리 전달)',
       completeSpeaker: '연회장',
       completeText: '"놀랍도다! 하인들이 떠다 준 물이 가장 향기롭고 좋은 포도주로 변하였도다! 예수님이 첫 표적을 행하시매 제자들이 그를 믿으니라." (요 2:1~11)',
       unlockNotebookIds: ['rumor_cana', 'mir_cana'],
@@ -1560,7 +1676,7 @@ function getMiracleOptionalEventsCatalog() {
       missionType: 'escort_guide',
       escortType: 'stretcher',
       goalPos: { x: 22, y: 4.0, z: -52 },
-      goalLabel: '🏠 가버나움 집 평지붕 위 (들것 내리기)',
+      goalLabel: '🏠 가버나움 집 평지붕 위 (지붕 뚫고 내리기)',
       completeSpeaker: '예수님',
       completeText: '"예수께서 그들의 믿음을 보시고 중풍병자에게 이르시되 작은 자야 네 죄 사함을 받았느니라... 일어나 네 상을 가지고 집으로 가라!" (막 2:1~12)',
       unlockNotebookIds: ['rumor_paralytic', 'mir_paralytic'],
@@ -1573,17 +1689,18 @@ function getMiracleOptionalEventsCatalog() {
     {
       id: 'ev_children',
       category: 'story',
-      title: '👧 ④ 어린이들을 축복하시는 예수님: 길 안내',
+      title: '👧 ④ 어린이들을 축복하시는 예수님: 나무 아래 예수님께 인도',
       x: 34, z: -38,
       color: 0xfacc15,
       npcPreset: 'child',
       speaker: '갈릴리 어린이들',
-      introText: '"예수님을 꼭 만나고 싶은데 어른들이 많아서 길을 모르겠어요! 저기 감람나무 아래 계신 예수님께 우리를 데려다주세요!"',
+      introText: '"예수님을 꼭 만나고 싶은데 길을 모르겠어요! 멀리 있는 나무 아래에서 황금빛 오라와 함께 기다리시는 예수님께 우리를 인도해 주세요!"',
       greetingText: '"안녕! 예수님께서 우리를 품에 안아 주시고 머리 위에 손을 얹어 축복해 주셨어! 정말 따뜻하고 기뻤어!"',
       missionType: 'escort_guide',
       escortType: 'children',
+      randomTreeGoal: true,
       goalPos: { x: 42, y: 0, z: -48 },
-      goalLabel: '✨ 어린이를 반기시는 예수님',
+      goalLabel: '✨ 나무 아래 계신 예수님',
       completeSpeaker: '예수님',
       completeText: '"어린아이들이 내게 오는 것을 용납하고 금하지 말라 하나님의 나라가 이런 자의 것이니라 하시고 그들을 안고 안수하사 축복하시니라." (막 10:13~16)',
       unlockNotebookIds: ['rumor_children', 'wd_mark1014'],
@@ -1596,19 +1713,16 @@ function getMiracleOptionalEventsCatalog() {
     {
       id: 'ev_well',
       category: 'eyewitness',
-      title: '⛲ ③ 수가성 우물가의 여인: 생수의 대화와 소문 전달',
+      title: '⛲ ③ 수가성 우물가의 여인: 기쁜 소식 전파 동행',
       x: -29, z: -12,
       color: 0x0ea5e9,
       npcPreset: 'woman',
       speaker: '수가성 여인',
-      introText: '"우물가에서 만난 분이 제게 영원히 목마르지 않는 생수를 주겠다고 하셨어요! 제가 물동이를 두고 저기 수가성 마을 주민 3명에게 달려가 이 소식을 전할 수 있게 함께 가주세요!"',
+      introText: '"우물가에서 메시아를 만났어요! 제가 마을 사람 3명에게 달려가 기쁜 소식을 전할 때 너무 멀어지지 않게 꼭 따라와 주세요!"',
       greetingText: '"반가워요! 예수님께서 주신 영생하도록 솟아나는 샘물 덕분에 제 마음의 목마름이 완전히 사라졌답니다!"',
-      missionType: 'collect_deliver',
+      missionType: 'follow_messenger',
       itemCount: 3,
-      itemColor: '#38bdf8',
-      itemLabel: '🗣️ 마을 주민에게 전할 기쁜 소식',
-      targetOffset: { x: -8, z: 4 },
-      targetLabel: '🏘️ 수가성 마을 모임터',
+      maxFollowDist: 15.0,
       completeSpeaker: '수가성 마을 주민들',
       completeText: '"이제 우리가 믿는 것은 네 말로 인함이 아니니 이는 우리가 친히 듣고 그가 참으로 세상의 구주신 줄 앎이라!" (요 4:4~42)',
       unlockNotebookIds: ['rumor_well', 'wd_john414'],
@@ -1621,16 +1735,17 @@ function getMiracleOptionalEventsCatalog() {
     {
       id: 'ev_zacchaeus',
       category: 'story',
-      title: '🌳 ⑤ 삭개오를 찾아라: 뽕나무 위 숨은 인물 찾기',
-      x: 34, z: -4,
+      title: '🌳 ⑤ 삭개오를 찾아라: 여리고 나무 숲 속 삭개오 찾기',
+      x: 27, z: -5,
       color: 0x8b5cf6,
       npcPreset: 'zacchaeus',
       speaker: '여리고 주민',
-      introText: '"예수님이 여리고를 지나가신대요! 키가 작은 세리장 삭개오가 군중 너머 커다란 돌무화과나무(뽕나무) 위로 올라갔는데, 나무 주변으로 다가가 삭개오를 찾아보세요!"',
+      introText: '"예수님과 많은 군중이 여리고 나무 숲길로 오셨어요! 키 작은 세리장 삭개오가 여러 나무 중 한 그루 위에 올라가 숨어 있으니 나무들을 살펴 찾아보세요!"',
       greetingText: '"할렐루야! 예수님께서 오늘 삭개오의 집에 머무시며 구원이 이 집에 이르렀다고 선포하셨어요!"',
       missionType: 'find_observe',
-      findTargetPos: { x: 39.6, y: 2.8, z: -3.4 },
-      findTargetLabel: '🌳 뽕나무 가지 위의 삭개오 발견!',
+      zacchaeusGrove: true,
+      findTargetPos: { x: 38, y: 3.0, z: -2 },
+      findTargetLabel: '🌳 나무 위에 올라간 삭개오 발견!',
       completeSpeaker: '예수님과 삭개오',
       completeText: '"삭개오야 속히 내려오라 내가 오늘 네 집에 유하여야 하겠다! ... 주여 보시옵소서 내 소유의 절반을 가난한 자들에게 주겠사오며!" (눅 19:1~10)',
       unlockNotebookIds: ['rumor_zacchaeus', 'wd_luke1910'],
@@ -1643,19 +1758,22 @@ function getMiracleOptionalEventsCatalog() {
     {
       id: 'ev_samaritan',
       category: 'parable',
-      title: '🩹 ⑥ [비유 체험] 도움이 필요한 여행자: 선한 사마리아인',
+      title: '🧰 ⑥ [비유 체험] 선한 사마리아인: 구급상자 찾아 여관에 전달',
       x: 15, z: 20,
       color: 0x10b981,
       npcPreset: 'disciple',
       speaker: '선한 사마리아인 (예수님의 비유 체험)',
-      introText: '"[📖 예수님이 들려주신 비유 이야기] 강도를 만나 다친 여행자가 길가에 쓰러져 있어요! 주변에서 치료용 기름·포도주 붕대 3개를 모아 다친 여행자를 싸매고 주막으로 옮겨 주세요!"',
+      introText: '"[📖 예수님이 들려주신 비유] 다친 이웃을 여관 안 병상에 눕혀 두었어요! 마을 곳곳을 돌아다니며 구급상자 3개를 찾아 여관 안 병상 옆으로 가져다주세요!"',
       greetingText: '"평안하시길! 다친 이웃을 불쌍히 여기고 자비를 베푸는 사람이야말로 예수님이 말씀하신 진정한 이웃이랍니다!"',
       missionType: 'collect_deliver',
+      itemStyle: 'first_aid',
+      spawnMode: 'town_random',
+      deliverToInnBed: true,
       itemCount: 3,
       itemColor: '#f43f5e',
-      itemLabel: '🩹 상처를 싸매는 구호품',
-      targetOffset: { x: 6, z: 3 },
-      targetLabel: '🏠 여리고 주막(여관) 입구',
+      itemLabel: '🧰 구호 구급상자',
+      targetOffset: { x: 10.1, z: 3.6 },
+      targetLabel: '🏥 여관 안 병상 (다친 이웃 치료)',
       completeSpeaker: '예수님',
       completeText: '"네 생각에는 이 세 사람 중에 누가 강도 만난 자의 이웃이 되겠느냐? 이르되 자비를 베푼 자니이다. 예수께서 이르시되 가서 너도 이와 같이 하라!" (눅 10:25~37)',
       unlockNotebookIds: ['rumor_samaritan', 'wd_luke1037'],
@@ -1668,16 +1786,17 @@ function getMiracleOptionalEventsCatalog() {
     {
       id: 'ev_lepers',
       category: 'story',
-      title: '🙏 ⑦ 열 명의 나병환자: 돌아와 감사한 한 사람 찾기',
+      title: '🙏 ⑦ 열 명의 나병환자: 마을 골목에 숨은 감사한 한 사람',
       x: -28, z: 16,
       color: 0xf59e0b,
       npcPreset: 'disciple',
       speaker: '고침 받은 나병환자',
-      introText: '"예수님께서 저희 열 명을 모두 깨끗하게 고쳐 주셨어요! 아홉 명은 그냥 가버렸지만, 예수님 발 앞에 엎드려 감사드린 한 사람을 찾아가 보세요!"',
+      introText: '"예수님께서 저희 열 명을 모두 고쳐 주셨어요! 그중 하나님께 영광을 돌리러 돌아온 사마리아인이 마을 건물 사이 어딘가에 빛나는 오라와 함께 숨어 있대요!"',
       greetingText: '"감사합니다! 예수님께 돌아와 하나님께 영광을 돌릴 때 \'네 믿음이 너를 구원하였다\'는 귀한 말씀을 들었답니다!"',
       missionType: 'find_observe',
-      findTargetPos: { x: -35, y: 0, z: 12 },
-      findTargetLabel: '🙏 돌아와 하나님께 영광을 돌린 사마리아인',
+      alleyRandomAura: true,
+      findTargetPos: { x: -18, y: 0, z: 22 },
+      findTargetLabel: '🙏 돌아와 감사드린 사마리아인',
       completeSpeaker: '예수님',
       completeText: '"열 사람이 다 깨끗함을 받지 아니하였느냐 그 아홉은 어디 있느냐? 이 이방인 외에는 하나님께 영광을 돌리러 돌아온 자가 없느냐 하시고, 네 믿음이 너를 구원하였느니라 하시니라." (눅 17:11~19)',
       unlockNotebookIds: ['rumor_lepers', 'mir_lepers'],
@@ -1690,19 +1809,22 @@ function getMiracleOptionalEventsCatalog() {
     {
       id: 'ev_palm',
       category: 'story',
-      title: '🌿 ⑧ 종려나무 가지를 준비하라: 호산나 입성 행렬',
+      title: '🌿 ⑧ 호산나 입성: 산 쪽 종려나무 가지 주워 성문 앞에 깔기',
       x: 0, z: 39,
       color: 0x22c55e,
       npcPreset: 'disciple',
       speaker: '예루살렘 환영 무리',
-      introText: '"예수님이 겸손하게 나귀를 타시고 예루살렘 성문으로 오십니다! 주변의 종려나무 가지 5개를 모아 성문 앞 행렬 길에 펼쳐 주세요!"',
+      introText: '"예수님이 나귀를 타시고 예루살렘 성문으로 오십니다! 동·서쪽 산기슭에 있는 종려나무 가지 5개를 주워와 예루살렘 성문 앞 길에 펼쳐 깔아주세요!"',
       greetingText: '"호산나 다윗의 자손이여! 주의 이름으로 오시는 평화의 왕을 함께 맞이할 수 있어 참 기뻤습니다!"',
       missionType: 'collect_deliver',
+      itemStyle: 'palm_branch',
+      spawnMode: 'mountain_slopes',
+      multiRandomLaySpots: true,
       itemCount: 5,
       itemColor: '#22c55e',
-      itemLabel: '🌿 푸른 종려나무 가지',
-      targetOffset: { x: 0, z: 5 },
-      targetLabel: '🚪 예루살렘 성전 외곽 성문 앞 길',
+      itemLabel: '🌿 종려나무 가지',
+      targetOffset: { x: 0, z: 3.5 },
+      targetLabel: '🚪 예루살렘 성문 앞 길 (종려가지 깔기)',
       completeSpeaker: '예루살렘 군중',
       completeText: '"호산나 다윗의 자손이여! 찬송하리로다 주의 이름으로 오시는 이여 가장 높은 곳에서 호산나 하더라!" (마 21:1~11)',
       unlockNotebookIds: ['rumor_palm'],
@@ -1715,19 +1837,22 @@ function getMiracleOptionalEventsCatalog() {
     {
       id: 'ev_washfeet',
       category: 'story',
-      title: '🥣 ⑨ 제자들의 발을 씻기시는 예수님: 섬김의 다락방',
+      title: '🧺 ⑨ 섬김의 다락방: 수건 찾아 2층 다락방에 갖다두기',
       x: -24, z: 51,
       color: 0x38bdf8,
       npcPreset: 'disciple',
       speaker: '사도 요한',
-      introText: '"다락방에서 저녁 잡수시던 자리에서 예수님이 일어나셨어요! 주변에 놓인 [물대야, 깨끗한 물, 수건] 3가지를 모아 예수님 앞 섬김 자리로 가져다주세요!"',
+      introText: '"예수님께서 제자들의 발을 씻겨 주시려고 해요! 주변 건물 사이에 흩어진 [깨끗한 아마포 수건] 3개를 찾아 저 건물 외벽 계단으로 올라가 2층 다락방 안에 갖다두어 주세요!"',
       greetingText: '"예수님께서 친히 우리의 발을 씻겨 주시며 보여 주신 겸손과 사랑의 새 계명을 평생 마음에 새기겠습니다!"',
       missionType: 'collect_deliver',
+      itemStyle: 'folded_towel',
+      spawnMode: 'nearby_buildings',
+      deliverToUpperRoom: true,
       itemCount: 3,
-      itemColor: '#67e8f9',
-      itemLabel: '🥣 섬김의 물대야와 수건',
-      targetOffset: { x: 0, z: 3.5 },
-      targetLabel: '✨ 다락방 제자들의 자리',
+      itemColor: '#f8fafc',
+      itemLabel: '🧺 깨끗한 아마포 수건',
+      targetOffset: { x: 0, z: 7.0 },
+      targetLabel: '🏠 2층 다락방 안 물대야 옆 (수건 두기)',
       completeSpeaker: '예수님',
       completeText: '"내가 주와 또는 선생이 되어 너희 발을 씻었으니 너희도 서로 발을 씻어 주는 것이 옳으니라. 내가 너희에게 행한 것 같이 너희도 행하게 하려 하여 본을 보였노라." (요 13:1~15)',
       unlockNotebookIds: ['wd_john1314'],
@@ -1745,11 +1870,12 @@ function getMiracleOptionalEventsCatalog() {
       color: 0xeab308,
       npcPreset: 'woman',
       speaker: '성전 앞 제자',
-      introText: '"예수님께서 성전 헌금함 맞은편에 앉아 사람들이 어떻게 헌금하는지 보고 계세요. 성전 동쪽 측면 황금문 옆에서 조용히 두 렙돈을 드린 과부를 찾아가 보세요!"',
+      introText: '"예수님께서 성전 헌금함 맞은편에 앉아 사람들이 어떻게 헌금하는지 보고 계세요. 성전 동쪽 헌금함 앞에 다가가 가난한 과부가 두 렙돈을 넣는 장면을 지켜보세요!"',
       greetingText: '"하나님은 겉모습이나 금액의 많고 적음이 아니라, 마음을 다해 드리는 중심을 가장 귀하게 보신다는 것을 배웠어요!"',
       missionType: 'find_observe',
+      widowCutscene: true,
       findTargetPos: { x: 11.8, y: 0, z: 69.5 },
-      findTargetLabel: '🪙 정성껏 두 렙돈을 넣은 가난한 과부',
+      findTargetLabel: '🪙 성전 헌금함 앞 가난한 과부 (다가가서 관찰)',
       completeSpeaker: '예수님',
       completeText: '"내가 진실로 너희에게 이르노니 이 가난한 과부는 헌금함에 넣는 모든 사람보다 많이 넣었도다. 그들은 다 풍족한 중에서 넣었거니와 이 과부는 그 가난한 중에서 자기의 모든 소유 곧 생활비 전부를 넣었느니라." (막 12:41~44)',
       unlockNotebookIds: ['rumor_widow', 'wd_mark1243'],
@@ -1770,6 +1896,7 @@ function getMiracleOptionalEventsCatalog() {
       introText: '"[📖 예수님이 들려주신 비유] 씨 뿌리는 사람이 씨를 뿌리러 나갔어요! 길가나 돌밭, 가시떨기가 아닌 부드럽고 좋은 옥토 밭에 말씀의 씨앗 4개를 심어 30배, 60배, 100배의 열매를 맺게 해보세요!"',
       greetingText: '"반가워요! 좋은 땅에 심긴 씨앗처럼 하나님의 말씀을 듣고 깨달아 30배, 60배, 100배의 풍성한 열매를 맺어가길 축복해요!"',
       missionType: 'collect_deliver',
+      spawnMode: 'local_random',
       itemCount: 4,
       itemColor: '#fde047',
       itemLabel: '🌾 말씀의 씨앗',
@@ -1787,16 +1914,15 @@ function getMiracleOptionalEventsCatalog() {
     {
       id: 'par_sheep',
       category: 'parable',
-      title: '🐑 [비유 미니게임 2] 잃어버린 양: 광야 수색',
+      title: '🐑 [비유 미니게임 2] 잃어버린 양: 언덕 아래 어린양 잡기',
       x: -66, z: 12,
       color: 0x38bdf8,
       npcPreset: 'disciple',
       speaker: '선한 목자 비유',
-      introText: '"[📖 예수님이 들려주신 비유] 아흔아홉 마리 양을 두고 광야 바위 언덕에서 길을 잃고 떨고 있는 어린 양 한 마리를 찾아 목자의 품으로 데려오세요!"',
+      introText: '"[📖 예수님이 들려주신 비유] 아흔아홉 마리 양을 두고 언덕 아래 광야에서 길을 잃은 어린양 한 마리를 찾아 잡아 주세요! 가까이 가면 놀라서 빠르게 도망칠 수 있으니 끝까지 쫓아가 보세요!"',
       greetingText: '"고마워요! 잃어버린 양 한 마리까지 끝까지 찾아내어 어깨에 메고 기뻐하시는 선한 목자 예수님의 사랑을 늘 기억해요!"',
-      missionType: 'find_observe',
-      findTargetPos: { x: -73, y: 0, z: 9 },
-      findTargetLabel: '🐑 바위 언덕 위 잃어버린 양 한 마리!',
+      missionType: 'chase_sheep',
+      findTargetLabel: '🐑 놀라 도망치는 잃어버린 어린양!',
       completeSpeaker: '예수님',
       completeText: '"찾아내면 즐거워 어깨에 메고 집에 와서 벗과 이웃을 불러 모으고 말하되 나와 함께 즐기자 나의 잃은 양을 찾아내었노라 하리라!" (눅 15:3~7)',
       unlockNotebookIds: ['par_sheep'],
@@ -1814,14 +1940,15 @@ function getMiracleOptionalEventsCatalog() {
       color: 0x60a5fa,
       npcPreset: 'disciple',
       speaker: '지혜로운 건축자 비유',
-      introText: '"[📖 예수님이 들려주신 비유] 비가 내리고 창수가 나도 무너지지 않도록, 모래땅이 아닌 든든한 바위(반석) 위로 주춧돌 4개를 옮겨 집을 세워 보세요!"',
+      introText: '"[📖 예수님이 들려주신 비유] 비가 내리고 창수가 나도 무너지지 않도록, 주변에 흩어진 주춧돌 4개를 모아 넓은 반석 바위 터 위에 집을 세워 보세요!"',
       greetingText: '"든든한 반석 위에 멋진 집이 세워졌어요! 예수님의 말씀을 듣고 행하는 지혜로운 삶을 살아가요!"',
       missionType: 'collect_deliver',
+      spawnMode: 'builder_random',
       itemCount: 4,
       itemColor: '#94a3b8',
       itemLabel: '🪨 든든한 반석 주춧돌',
       targetOffset: { x: 5, z: -3 },
-      targetLabel: '⛰️ 단단한 반석 터 위',
+      targetLabel: '⛰️ 넓은 반석 바위 터',
       completeSpeaker: '예수님',
       completeText: '"누구든지 나의 이 말을 듣고 행하는 자는 그 집을 반석 위에 지은 지혜로운 사람 같으리니 비가 내리고 창수가 나고 바람이 불어 그 집에 부딪치되 무너지지 아니하나니 이는 주추를 반석 위에 놓은 까닭이요!" (마 7:24~27)',
       unlockNotebookIds: ['par_builder'],
@@ -1888,14 +2015,14 @@ function getMiraclePostResurrectionEventsCatalog() {
       id: 'post_thomas',
       category: 'story',
       title: '🙌 ⑫ [부활 이후] 도마와 제자들: 보지 않고 믿는 복',
-      x: -18, z: 58,
+      x: -14.5, z: 60,
       color: 0x38bdf8,
       npcPreset: 'disciple',
       speaker: '사도 도마',
       introText: '"다른 제자들이 주님을 보았다고 했지만 저는 믿지 못했습니다... 그때 닫힌 문들 가운데 서신 예수님께 다가가 증언을 확인해 보세요!"',
       greetingText: '"나의 주님이시요 나의 하나님이시니이다! 보지 못하고 믿는 자들에게 주시는 예수님의 복이 함께하시길 바랍니다!"',
       missionType: 'find_observe',
-      findTargetPos: { x: -22, y: 0, z: 54 },
+      findTargetPos: { x: -16.0, y: 0, z: 53.0 },
       findTargetLabel: '✨ 평강을 선언하시는 부활의 예수님',
       completeSpeaker: '예수님과 도마',
       completeText: '"도마가 대답하여 이르되 나의 주님이시요 나의 하나님이시니이다! 예수께서 이르시되 너는 나를 본 고로 믿느냐 보지 못하고 믿는 자들은 복되도다 하시니라." (요 20:24~29)',
@@ -1985,8 +2112,185 @@ function spawnMiracleOptionalEventSpots() {
 }
 
 // -------------------------------------------------------------------------
-// 7. 오픈월드 필드 이벤트 실행기 (항아리 배달 · 들것/아이들 동행 · 삭개오/양/과부 관찰 찾기)
+// 7. 오픈월드 안전 야외 랜덤 스폰 헬퍼 & 필드 이벤트 실행기 (전면 고도화)
 // -------------------------------------------------------------------------
+function isPointOutsideAllBuildings(x, z, pad = 1.65) {
+  if (x > 99.5 || z < -99.5 || z > 99.5) return false;
+  const shoreX = (typeof window.getMiracleWestShoreLineX === 'function')
+    ? window.getMiracleWestShoreLineX(z)
+    : -92.0;
+  if (x < shoreX + 4.0) return false;
+
+  const gy = getMiracleOpenWorldGroundHeight(x, z);
+  if (gy < -0.15) return false;
+
+  const bList = Array.isArray(window.miracleBuildingBounds) ? window.miracleBuildingBounds : [];
+  for (let i = 0; i < bList.length; i++) {
+    const b = bList[i];
+    if (x >= b.minX - pad && x <= b.maxX + pad && z >= b.minZ - pad && z <= b.maxZ + pad) return false;
+  }
+
+  const cPad = Math.max(0.85, pad * 0.72);
+  for (let i = 0; i < colliders.length; i++) {
+    const c = colliders[i];
+    if (x >= c.minX - cPad && x <= c.maxX + cPad && z >= c.minZ - cPad && z <= c.maxZ + cPad) return false;
+  }
+
+  for (let i = 0; i < platforms.length; i++) {
+    const p = platforms[i];
+    if (p.topY > gy + 0.85 && x >= p.minX - 0.8 && x <= p.maxX + 0.8 && z >= p.minZ - 0.8 && z <= p.maxZ + 0.8) {
+      return false;
+    }
+  }
+  return true;
+}
+window.isPointOutsideAllBuildings = isPointOutsideAllBuildings;
+
+function findSafeOpenWorldOutdoorPos(opts = {}) {
+  const cx = (opts.cx !== undefined) ? opts.cx : 0;
+  const cz = (opts.cz !== undefined) ? opts.cz : 0;
+  const minDist = opts.minDist || 0;
+  const maxDist = opts.maxDist || 45;
+  const avoidList = opts.avoidList || [];
+  const minSpacing = opts.minSpacing || 6.0;
+  const pad = opts.pad || 1.65;
+  const bList = Array.isArray(window.miracleBuildingBounds) ? window.miracleBuildingBounds : [];
+
+  const isSpaced = (x, z, sp) => {
+    for (let i = 0; i < avoidList.length; i++) {
+      if (Math.hypot(x - avoidList[i].x, z - avoidList[i].z) < (avoidList[i].r || sp)) return false;
+    }
+    return true;
+  };
+
+  for (let attempt = 0; attempt < 180; attempt++) {
+    let tx, tz;
+    if (opts.nearBuildings && bList.length > 0 && attempt < 110) {
+      const b = bList[Math.floor(Math.random() * bList.length)];
+      const side = Math.floor(Math.random() * 4);
+      const off = 2.4 + Math.random() * 3.8;
+      if (side === 0) { tx = b.minX - off; tz = b.minZ + Math.random() * (b.maxZ - b.minZ); }
+      else if (side === 1) { tx = b.maxX + off; tz = b.minZ + Math.random() * (b.maxZ - b.minZ); }
+      else if (side === 2) { tx = b.minX + Math.random() * (b.maxX - b.minX); tz = b.minZ - off; }
+      else { tx = b.minX + Math.random() * (b.maxX - b.minX); tz = b.maxZ + off; }
+      const d = Math.hypot(tx - cx, tz - cz);
+      if (d < minDist || d > maxDist) continue;
+    } else if (opts.mountainSlopes) {
+      // 동쪽·서남쪽·남쪽·동북쪽 산기슭 영역 중에서 무작위 선택
+      const zone = Math.floor(Math.random() * 4);
+      if (zone === 0) { tx = 62 + Math.random() * 34; tz = -88 + Math.random() * 172; }
+      else if (zone === 1) { tx = -86 + Math.random() * 32; tz = 48 + Math.random() * 44; }
+      else if (zone === 2) { tx = -55 + Math.random() * 135; tz = 82 + Math.random() * 16; }
+      else { tx = 58 + Math.random() * 38; tz = -96 + Math.random() * 42; }
+    } else if (opts.xMin !== undefined && opts.xMax !== undefined && opts.zMin !== undefined && opts.zMax !== undefined) {
+      tx = opts.xMin + Math.random() * (opts.xMax - opts.xMin);
+      tz = opts.zMin + Math.random() * (opts.zMax - opts.zMin);
+      if (minDist > 0 && Math.hypot(tx - cx, tz - cz) < minDist) continue;
+    } else {
+      const ang = Math.random() * Math.PI * 2;
+      const rad = minDist + Math.random() * Math.max(2.0, maxDist - minDist);
+      tx = cx + Math.cos(ang) * rad;
+      tz = cz + Math.sin(ang) * rad;
+    }
+
+    if (!isPointOutsideAllBuildings(tx, tz, attempt > 120 ? 1.15 : pad)) continue;
+    const gy = getMiracleOpenWorldGroundHeight(tx, tz);
+    if (opts.minY !== undefined && gy < opts.minY && attempt < 110) continue;
+    if (opts.maxY !== undefined && gy > opts.maxY && attempt < 130) continue;
+    const curSp = attempt > 110 ? minSpacing * 0.55 : minSpacing;
+    if (!isSpaced(tx, tz, curSp)) continue;
+    return { x: tx, y: gy, z: tz };
+  }
+
+  // 안전 야외 폴백 (중앙 순례길 근처 빈 야외 공간 탐색)
+  for (let r = 6; r <= 48; r += 3) {
+    for (let k = 0; k < 16; k++) {
+      const a = (k / 16) * Math.PI * 2;
+      const fx = cx + Math.cos(a) * r;
+      const fz = cz + Math.sin(a) * r;
+      if (isPointOutsideAllBuildings(fx, fz, 1.1) && isSpaced(fx, fz, 3.0)) {
+        return { x: fx, y: getMiracleOpenWorldGroundHeight(fx, fz), z: fz };
+      }
+    }
+  }
+  const rx = getMiracleMainRoadCenterX(cz);
+  return { x: rx, y: getMiracleOpenWorldGroundHeight(rx, cz), z: Math.max(-90, Math.min(90, cz)) };
+}
+window.findSafeOpenWorldOutdoorPos = findSafeOpenWorldOutdoorPos;
+
+function syncMiracleMissionStatusPanel() {
+  if (typeof window.updateMiracleMissionStatusUI !== 'function') return;
+  if (!miracleActiveFieldEvent) {
+    if (typeof window.hideMiracleMissionStatusUI === 'function') window.hideMiracleMissionStatusUI();
+    return;
+  }
+  const fe = miracleActiveFieldEvent;
+  const ev = fe.spot;
+  const shortTitle = (ev.title || '미션 진행중').replace(/^[^\s]+\s*/, '');
+
+  if (fe.type === 'collect_deliver') {
+    const foundTotal = fe.collected + fe.carrying;
+    const goalText = fe.carrying > 0
+      ? (ev.deliverToUpperRoom
+        ? '외벽 계단으로 올라가 2층 다락방 안에 수건을 두세요!'
+        : (ev.deliverToInnBed
+          ? '여관 안으로 들어가 병상 옆 다친 이웃에게 전달하세요!'
+          : (ev.multiRandomLaySpots
+            ? '예루살렘 성문 앞 표시된 자리에 종려가지를 까세요!'
+            : `${ev.targetLabel || '목표 지점'}에 가져다주세요!`)))
+      : `마을·야외 곳곳에서 ${ev.itemLabel || '물품'}을(를) 찾으세요!`;
+    window.updateMiracleMissionStatusUI({
+      title: `✨ ${shortTitle}`,
+      goal: goalText,
+      progressText: `찾음 ${foundTotal}/${fe.required} · 완료 ${fe.collected}/${fe.required}`,
+      extraText: fe.carrying > 0 ? `🎒 들고 있음 ${fe.carrying}개` : `🔍 남은 개수 ${Math.max(0, fe.required - foundTotal)}개`
+    });
+  } else if (fe.type === 'escort_guide') {
+    const td = fe.targetZone ? Math.round(Math.hypot(playerPos.x - fe.targetZone.pos.x, playerPos.z - fe.targetZone.pos.z)) : 0;
+    window.updateMiracleMissionStatusUI({
+      title: `👣 ${shortTitle}`,
+      goal: ev.id === 'ev_paralytic'
+        ? '오른쪽 외벽 계단으로 올라가 지붕 위 목표 지점으로 가세요!'
+        : (ev.randomTreeGoal ? '황금빛 오라가 빛나는 나무 아래 예수님께 아이들을 인도하세요!' : `${ev.goalLabel}까지 동행하세요!`),
+      progressText: `남은 거리 ${td}m`,
+      extraText: fe.cutsceneActive ? '🎬 컷신 진행 중...' : '👣 일행과 동행 중'
+    });
+  } else if (fe.type === 'follow_messenger') {
+    const maxD = ev.maxFollowDist || 15.0;
+    const curD = fe.messenger ? Math.hypot(playerPos.x - fe.messenger.mesh.position.x, playerPos.z - fe.messenger.mesh.position.z) : 0;
+    const ratio = Math.max(0, 1 - curD / maxD);
+    window.updateMiracleMissionStatusUI({
+      title: `⛲ ${shortTitle}`,
+      goal: '수가성 여인이 주민 3명에게 소식을 전할 때 가까이 따라가세요!',
+      progressText: `전달 ${fe.deliveredCount || 0} / ${fe.required}명`,
+      extraText: curD > maxD * 0.7 ? `⚠️ 멀어지면 실패! (${curD.toFixed(1)}m)` : `거리 ${curD.toFixed(1)}m / ${maxD}m`,
+      ratio,
+      warn: curD > maxD * 0.7
+    });
+  } else if (fe.type === 'chase_sheep') {
+    const sd = fe.sheepState ? Math.round(Math.hypot(playerPos.x - fe.sheepState.mesh.position.x, playerPos.z - fe.sheepState.mesh.position.z)) : 0;
+    const isBurst = Boolean(fe.sheepState && fe.sheepState.burstTimer > 0);
+    window.updateMiracleMissionStatusUI({
+      title: `🐑 ${shortTitle}`,
+      goal: '언덕 아래 광야의 잃어버린 어린양을 쫓아가 붙잡으세요!',
+      progressText: `양까지 거리 ${sd}m`,
+      extraText: isBurst ? '⚡ 놀라서 빠르게 도망치는 중!' : '🔍 가까이 접근해 보세요',
+      warn: isBurst
+    });
+  } else if (fe.type === 'find_observe') {
+    window.updateMiracleMissionStatusUI({
+      title: `🔍 ${shortTitle}`,
+      goal: ev.zacchaeusGrove
+        ? '여리고 나무 숲 속 여러 나무 중 삭개오가 올라간 나무를 찾으세요!'
+        : (ev.alleyRandomAura
+          ? '마을 건물 사이 오라가 빛나는 감사한 사마리아인을 찾으세요!'
+          : (ev.widowCutscene ? '성전 헌금함 앞 가난한 과부에게 다가가 관찰하세요!' : `${ev.findTargetLabel}을(를) 찾으세요!`)),
+      progressText: fe.cutsceneActive ? '🎬 컷신 감상 중' : '탐색 중 (0/1)',
+      extraText: ev.zacchaeusGrove ? '🌳 나무 위를 잘 살펴보세요!' : ''
+    });
+  }
+}
+
 function clearMiracleFieldEventObjects() {
   miracleWorldMissionObjects.forEach(obj => {
     if (obj.mesh) worldGroup.remove(obj.mesh);
@@ -1994,6 +2298,38 @@ function clearMiracleFieldEventObjects() {
   });
   miracleWorldMissionObjects = [];
   miracleActiveFieldEvent = null;
+  if (typeof window.hideMiracleMissionStatusUI === 'function') {
+    window.hideMiracleMissionStatusUI();
+  }
+  syncMiracleSpotMarkersForActiveMission();
+}
+
+window.cancelActiveMiracleFieldEvent = function () {
+  if (!miracleActiveFieldEvent) return;
+  const evSpot = miracleActiveFieldEvent.spot;
+  clearMiracleFieldEventObjects();
+  if (evSpot) {
+    evSpot._requireLeaveZone = true;
+    evSpot._prompted = performance.now();
+  }
+  playSfx('step');
+  showToast('✋ 진행 중인 미션을 포기했어요. 다른 미션이나 스테이지를 자유롭게 선택할 수 있어요!');
+};
+
+function createMissionItemMeshByStyle(evSpot) {
+  if (evSpot.itemStyle === 'first_aid' && typeof createFirstAidKitMesh === 'function') {
+    return createFirstAidKitMesh(1.08);
+  }
+  if (evSpot.itemStyle === 'water_amphora' && typeof createWaterFilledAmphoraMesh === 'function') {
+    return createWaterFilledAmphoraMesh(0.95);
+  }
+  if (evSpot.itemStyle === 'folded_towel' && typeof createFoldedTowelMesh === 'function') {
+    return createFoldedTowelMesh(1.12);
+  }
+  if (evSpot.itemStyle === 'palm_branch' && typeof createPalmBranchMesh === 'function') {
+    return createPalmBranchMesh(1.08);
+  }
+  return createLowPolyMesh(new THREE.DodecahedronGeometry(0.44, 0), evSpot.itemColor || '#38bdf8', 0, 0.44, 0);
 }
 
 function startMiracleFieldEvent(evSpot) {
@@ -2011,79 +2347,159 @@ function startMiracleFieldEvent(evSpot) {
     required: evSpot.itemCount || 1,
     carrying: 0,
     items: [],
+    laySpots: [],
     targetZone: null,
     escortGroup: null,
-    cutsceneActive: false // 컷신 상태 초기화
+    crowdGroup: null,
+    auraGroup: null,
+    messenger: null,
+    sheepState: null,
+    deliveredCount: 0,
+    cutsceneActive: false,
+    cutsceneCameraActive: false,
+    cutsceneType: null,
+    cutscenePhase: null,
+    cutsceneTimer: 0,
+    cutsceneProps: null
   };
+
+  // 미션 진행 중 다른 모든 미션·스테이지의 발 주변 원형(kneeAura/ring/beam)을 즉시 끔!
+  syncMiracleSpotMarkersForActiveMission();
 
   const cx = evSpot.x;
   const cz = evSpot.z;
 
   if (evSpot.missionType === 'collect_deliver') {
     const count = evSpot.itemCount || 4;
+    const usedSpots = [{ x: cx, z: cz, r: 5.5 }];
+
     for (let i = 0; i < count; i++) {
-      const ang = (i / count) * Math.PI * 2 + 0.4;
-      const dist = 6.5 + (i % 2) * 2.5;
-      const ix = cx + Math.cos(ang) * dist;
-      const iz = cz + Math.sin(ang) * dist;
-      const iy = getMiracleOpenWorldGroundHeight(ix, iz);
+      let spawnOpts;
+      if (evSpot.spawnMode === 'openworld_wide') {
+        spawnOpts = { cx: 0, cz: -20, xMin: -62, xMax: 68, zMin: -88, zMax: 38, minDist: 10, minSpacing: 15.0, avoidList: usedSpots };
+      } else if (evSpot.spawnMode === 'town_random') {
+        spawnOpts = { cx: 12, cz: 22, minDist: 12, maxDist: 46, minSpacing: 10.5, avoidList: usedSpots };
+      } else if (evSpot.spawnMode === 'nearby_buildings') {
+        spawnOpts = { cx: -20, cz: 48, minDist: 8, maxDist: 34, minSpacing: 7.5, nearBuildings: true, avoidList: usedSpots };
+      } else if (evSpot.spawnMode === 'mountain_slopes') {
+        spawnOpts = { cx: 0, cz: 39, mountainSlopes: true, minDist: 28, minSpacing: 14.0, minY: 0.35, avoidList: usedSpots };
+      } else if (evSpot.spawnMode === 'builder_random') {
+        spawnOpts = { cx: 58, cz: 22, minDist: 9, maxDist: 30, minSpacing: 7.5, avoidList: usedSpots };
+      } else {
+        spawnOpts = { cx, cz, minDist: 6.5, maxDist: 16.0, minSpacing: 5.0, avoidList: usedSpots };
+      }
+
+      const pos = findSafeOpenWorldOutdoorPos(spawnOpts);
+      usedSpots.push({ x: pos.x, z: pos.z, r: spawnOpts.minSpacing || 6.0 });
 
       const itemGrp = new THREE.Group();
-      const itemMesh = createLowPolyMesh(new THREE.DodecahedronGeometry(0.42, 0), evSpot.itemColor || '#38bdf8', 0, 0.42, 0);
+      const itemMesh = createMissionItemMeshByStyle(evSpot);
       const itemRing = new THREE.Mesh(
-        new THREE.RingGeometry(0.65, 0.95, 16),
+        new THREE.RingGeometry(0.70, 1.02, 16),
         new THREE.MeshBasicMaterial({ color: 0xfef08a, side: THREE.DoubleSide })
       );
       itemRing.rotation.x = -Math.PI / 2;
       itemRing.position.y = 0.06;
       itemGrp.add(itemMesh, itemRing);
-      itemGrp.position.set(ix, iy, iz);
+      itemGrp.position.set(pos.x, pos.y, pos.z);
       worldGroup.add(itemGrp);
 
       const lbl = createWorldLabel(evSpot.itemLabel || '✨ 미션 물품');
       lbl.style.opacity = '0';
-      const itemObj = { mesh: itemGrp, pos: new THREE.Vector3(ix, iy + 0.4, iz), done: false, label: lbl };
+      const itemObj = { mesh: itemGrp, pos: new THREE.Vector3(pos.x, pos.y + 0.4, pos.z), done: false, label: lbl };
       miracleWorldMissionObjects.push(itemObj);
       miracleActiveFieldEvent.items.push(itemObj);
     }
 
-    const tx = cx + (evSpot.targetOffset ? evSpot.targetOffset.x : 0);
-    const tz = cz + (evSpot.targetOffset ? evSpot.targetOffset.z : -3);
-    const ty = getMiracleOpenWorldGroundHeight(tx, tz);
-    const tGrp = new THREE.Group();
-    const tRing = new THREE.Mesh(
-      new THREE.RingGeometry(1.4, 2.0, 24),
-      new THREE.MeshBasicMaterial({ color: 0x4ade80, side: THREE.DoubleSide })
-    );
-    tRing.rotation.x = -Math.PI / 2;
-    tRing.position.y = 0.08;
-    tGrp.add(tRing);
-    tGrp.position.set(tx, ty, tz);
-    worldGroup.add(tGrp);
+    // 배달 목표 지점 설정 (여관 안 병상 / 2층 다락방 실내 / 성문 앞 랜덤 5개 깔기 지점 / 일반)
+    if (evSpot.multiRandomLaySpots) {
+      const layAvoid = [];
+      for (let k = 0; k < count; k++) {
+        const lpos = findSafeOpenWorldOutdoorPos({
+          cx: 0, cz: 37.5,
+          xMin: -8.5, xMax: 8.5, zMin: 31.5, zMax: 42.0,
+          minSpacing: 2.5, pad: 1.0, avoidList: layAvoid
+        });
+        layAvoid.push({ x: lpos.x, z: lpos.z, r: 2.5 });
+        const sGrp = new THREE.Group();
+        const sRing = new THREE.Mesh(
+          new THREE.RingGeometry(0.95, 1.38, 20),
+          new THREE.MeshBasicMaterial({ color: 0x4ade80, side: THREE.DoubleSide })
+        );
+        sRing.rotation.x = -Math.PI / 2;
+        sRing.position.y = 0.08;
+        sGrp.add(sRing);
+        sGrp.position.set(lpos.x, lpos.y, lpos.z);
+        worldGroup.add(sGrp);
+        const sLbl = createWorldLabel(`🌿 종려가지 놓는 곳 #${k + 1}`);
+        sLbl.style.opacity = '0';
+        const spotObj = { mesh: sGrp, ring: sRing, pos: new THREE.Vector3(lpos.x, lpos.y + 0.4, lpos.z), label: sLbl, laid: false };
+        miracleWorldMissionObjects.push(spotObj);
+        miracleActiveFieldEvent.laySpots.push(spotObj);
+      }
+      miracleActiveFieldEvent.targetZone = miracleActiveFieldEvent.laySpots[0];
+    } else {
+      let tx, ty, tz, requireYMatch = false;
+      if (evSpot.deliverToInnBed && window.miracleJerichoInnInfo && window.miracleJerichoInnInfo.bedWorldPos) {
+        const bp = window.miracleJerichoInnInfo.bedWorldPos;
+        tx = bp.x; ty = bp.y; tz = bp.z;
+      } else if (evSpot.deliverToUpperRoom && window.miracleUpperRoomInfo && window.miracleUpperRoomInfo.upperRoomCenter) {
+        const up = window.miracleUpperRoomInfo.upperRoomCenter;
+        tx = up.x; ty = up.y; tz = up.z;
+        requireYMatch = true;
+      } else {
+        tx = cx + (evSpot.targetOffset ? evSpot.targetOffset.x : 0);
+        tz = cz + (evSpot.targetOffset ? evSpot.targetOffset.z : -3);
+        ty = getMiracleOpenWorldGroundHeight(tx, tz);
+      }
 
-    const tLbl = createWorldLabel(`${evSpot.targetLabel} (0/${count})`);
-    tLbl.style.opacity = '0';
-    const targetObj = { mesh: tGrp, pos: new THREE.Vector3(tx, ty + 0.5, tz), label: tLbl };
-    miracleWorldMissionObjects.push(targetObj);
-    miracleActiveFieldEvent.targetZone = targetObj;
+      const tGrp = new THREE.Group();
+      const tRing = new THREE.Mesh(
+        new THREE.RingGeometry(1.35, 1.95, 24),
+        new THREE.MeshBasicMaterial({ color: 0x4ade80, side: THREE.DoubleSide })
+      );
+      tRing.rotation.x = -Math.PI / 2;
+      tRing.position.y = 0.08;
+      tGrp.add(tRing);
+      tGrp.position.set(tx, ty, tz);
+      worldGroup.add(tGrp);
 
-    showToast(`🎯 주변에서 [${evSpot.itemLabel}] ${count}개를 모아 지정된 장소로 옮겨 주세요!`);
+      const tLbl = createWorldLabel(`${evSpot.targetLabel} (0/${count})`);
+      tLbl.style.opacity = '0';
+      const targetObj = { mesh: tGrp, pos: new THREE.Vector3(tx, ty + 0.5, tz), label: tLbl, goalY: ty, requireYMatch };
+      miracleWorldMissionObjects.push(targetObj);
+      miracleActiveFieldEvent.targetZone = targetObj;
+    }
+
+    showToast(`🎯 [${evSpot.itemLabel}] ${count}개를 찾아 목표 장소로 옮겨 주세요!`);
   } else if (evSpot.missionType === 'escort_guide') {
     const eGrp = new THREE.Group();
     if (evSpot.escortType === 'stretcher') {
-      eGrp.add(
-        createLowPolyMesh(new THREE.BoxGeometry(1.4, 0.14, 2.4), '#b45309', 0, 0.65, 0), // 들것 본체
-        createLowPolyPersonMesh('disciple', 1), // 앞쪽 친구
-        createLowPolyPersonMesh('disciple', 2)  // 뒤쪽 친구
-      );
-      eGrp.children[1].position.set(-0.75, 0, -0.8);
-      eGrp.children[2].position.set( 0.75, 0,  0.8);
-      
-      // [수정점] 누워있는 중풍병자(환자) 모델링 추가
+      // 들것 손잡이 막대 2개 + 나무 틀 + 베개 + 들것 영역(z ∈ [-1.2, +1.2]) 안에 정확히 누워 있는 중풍병자!
+      const poleL = createLowPolyMesh(new THREE.CylinderGeometry(0.055, 0.055, 3.05, 6), '#78350f', -0.68, 0.66, 0, false);
+      poleL.rotation.x = Math.PI * 0.5;
+      const poleR = createLowPolyMesh(new THREE.CylinderGeometry(0.055, 0.055, 3.05, 6), '#78350f',  0.68, 0.66, 0, false);
+      poleR.rotation.x = Math.PI * 0.5;
+      const bedPad = createLowPolyMesh(new THREE.BoxGeometry(1.32, 0.14, 2.35), '#b45309', 0, 0.66, 0, true);
+      const sheet  = createLowPolyMesh(new THREE.BoxGeometry(1.18, 0.06, 2.15), '#f5ead6', 0, 0.75, 0, false);
+      const pillow = createLowPolyMesh(new THREE.DodecahedronGeometry(0.22, 0), '#fffbeb', 0, 0.82, -0.82, false);
+      pillow.scale.set(1.55, 0.45, 0.85);
+
+      const f1 = createLowPolyPersonMesh('disciple', 1); f1.position.set(-0.78, 0, -1.05);
+      const f2 = createLowPolyPersonMesh('disciple', 2); f2.position.set( 0.78, 0, -1.05);
+      const f3 = createLowPolyPersonMesh('disciple', 3); f3.position.set(-0.78, 0,  1.05);
+      const f4 = createLowPolyPersonMesh('disciple', 4); f4.position.set( 0.78, 0,  1.05);
+
+      // 발바닥 원점(y=0) → rotation.x = -PI/2 시 머리가 -Z(-1.68)로 가므로 z=+0.86으로 중앙 정렬 (z ∈ [-0.82, +0.86] ⊂ [-1.2, +1.2]!)
       const patient = createLowPolyPersonMesh('villager', 5);
-      patient.position.set(0, 0.85, 0);
-      patient.rotation.x = -Math.PI / 2;
-      eGrp.add(patient);
+      patient.scale.set(0.82, 0.82, 0.82);
+      patient.rotation.x = -Math.PI * 0.5;
+      patient.position.set(0, 0.82, 0.86);
+
+      const stretcherOnly = new THREE.Group();
+      stretcherOnly.add(poleL, poleR, bedPad, sheet, pillow, patient);
+      eGrp.add(stretcherOnly, f1, f2, f3, f4);
+      eGrp.userData = { stretcherOnly, friends: [f1, f2, f3, f4], patient };
     } else if (evSpot.escortType === 'children') {
       const c1 = createLowPolyPersonMesh('child', 1); c1.position.set(-0.6, 0, 0);
       const c2 = createLowPolyPersonMesh('child', 2); c2.position.set( 0.6, 0, 0.2);
@@ -2101,20 +2517,58 @@ function startMiracleFieldEvent(evSpot) {
     miracleWorldMissionObjects.push({ mesh: eGrp, label: eLbl });
     miracleActiveFieldEvent.escortGroup = { mesh: eGrp, label: eLbl };
 
-    const gx = evSpot.goalPos.x;
-    const gz = evSpot.goalPos.z;
-    const gy = evSpot.goalPos.y
+    let gx = evSpot.goalPos.x;
+    let gz = evSpot.goalPos.z;
+    let gy = evSpot.goalPos.y
       ? (getMiracleOpenWorldGroundHeight(gx, gz) + evSpot.goalPos.y)
       : getMiracleOpenWorldGroundHeight(gx, gz);
+
+    // [어린이 인도 미션] 매번 멀리 있는 실제 나무 중 랜덤 1그루 아래에 예수님 + 빛나는 오라 배치!
+    if (evSpot.randomTreeGoal && Array.isArray(window.miracleWorldTreePositions) && window.miracleWorldTreePositions.length > 0) {
+      const candidates = window.miracleWorldTreePositions.filter(t => {
+        const dist = Math.hypot(t.x - cx, t.z - cz);
+        if (dist < 28 || dist > 92) return false;
+        const shoreX = (typeof window.getMiracleWestShoreLineX === 'function') ? window.getMiracleWestShoreLineX(t.z) : -92;
+        if (t.x < shoreX + 6 || t.x > 96 || Math.abs(t.z) > 95) return false;
+        return true;
+      });
+      const pool = candidates.length > 0 ? candidates : window.miracleWorldTreePositions;
+      let picked = null;
+      for (let tries = 0; tries < 25; tries++) {
+        const tree = pool[Math.floor(Math.random() * pool.length)];
+        // 나무 줄기 옆 1.75m 그늘 아래 야외 자리 탐색
+        for (let aIdx = 0; aIdx < 8; aIdx++) {
+          const ang = (aIdx / 8) * Math.PI * 2;
+          const ox = tree.x + Math.cos(ang) * 1.85;
+          const oz = tree.z + Math.sin(ang) * 1.85;
+          if (isPointOutsideAllBuildings(ox, oz, 0.9)) {
+            picked = { x: ox, z: oz, y: getMiracleOpenWorldGroundHeight(ox, oz) };
+            break;
+          }
+        }
+        if (picked) break;
+      }
+      if (picked) {
+        gx = picked.x; gz = picked.z; gy = picked.y;
+      }
+    }
+
     const gGrp = new THREE.Group();
-    const gRing = new THREE.Mesh(
-      new THREE.RingGeometry(1.6, 2.3, 24),
-      new THREE.MeshBasicMaterial({ color: 0xfacc15, side: THREE.DoubleSide })
-    );
-    gRing.rotation.x = -Math.PI / 2;
-    gRing.position.y = 0.1;
+    if (evSpot.randomTreeGoal && typeof createGoldenAuraGroup === 'function') {
+      const aura = createGoldenAuraGroup(0xfde047, 2.05);
+      gGrp.add(aura);
+      miracleActiveFieldEvent.auraGroup = aura;
+    } else {
+      const gRing = new THREE.Mesh(
+        new THREE.RingGeometry(1.6, 2.3, 24),
+        new THREE.MeshBasicMaterial({ color: 0xfacc15, side: THREE.DoubleSide })
+      );
+      gRing.rotation.x = -Math.PI / 2;
+      gRing.position.y = 0.1;
+      gGrp.add(gRing);
+    }
     const jesusMesh = createLowPolyPersonMesh('jesus', 0);
-    gGrp.add(gRing, jesusMesh);
+    gGrp.add(jesusMesh);
     gGrp.position.set(gx, gy, gz);
     worldGroup.add(gGrp);
 
@@ -2124,37 +2578,279 @@ function startMiracleFieldEvent(evSpot) {
     miracleWorldMissionObjects.push(targetObj);
     miracleActiveFieldEvent.targetZone = targetObj;
 
-    showToast(`👣 일행과 함께 [${evSpot.goalLabel}] 위치까지 걸어가세요!`);
-  } else if (evSpot.missionType === 'find_observe') {
-    const fx = evSpot.findTargetPos.x;
-    const fz = evSpot.findTargetPos.z;
-    const baseGroundY = getMiracleOpenWorldGroundHeight(fx, fz);
-    const fy = (evSpot.id === 'ev_zacchaeus' && evSpot.findTargetPos.y)
-      ? (baseGroundY + evSpot.findTargetPos.y)
-      : baseGroundY;
+    showToast(evSpot.randomTreeGoal
+      ? '✨ 멀리 있는 나무 아래 황금빛 오라와 함께 계신 예수님께 어린이들을 인도하세요!'
+      : `👣 일행과 함께 [${evSpot.goalLabel}] 위치까지 걸어가세요!`);
+  } else if (evSpot.missionType === 'follow_messenger') {
+    // [우물가의 여인] 마을 캐릭터 3명을 매번 랜덤 선택 → 여인이 3명에게 소식을 전하러 걸어갈 때 따라가기!
+    const allHumanCandidates = [];
+    miracleRumorNpcs.forEach(rn => {
+      const d = Math.hypot(rn.pos.x - cx, rn.pos.z - cz);
+      if (d >= 12 && d <= 72) allHumanCandidates.push({ x: rn.pos.x, z: rn.pos.z, name: rn.speaker || '마을 주민' });
+    });
+    miracleWanderingActors.forEach((wa, wi) => {
+      if (!wa.isAnimal && wa.mesh) {
+        const d = Math.hypot(wa.mesh.position.x - cx, wa.mesh.position.z - cz);
+        if (d >= 12 && d <= 72) allHumanCandidates.push({ x: wa.mesh.position.x, z: wa.mesh.position.z, name: `마을 이웃 ${wi + 1}` });
+      }
+    });
 
-    const fGrp = new THREE.Group();
-    const targetPerson = (evSpot.id === 'par_sheep')
-      ? (typeof createLowPolyAnimalMesh === 'function' ? createLowPolyAnimalMesh('sheep', 1.05) : createSingleAnimal('sheep'))
-      : createLowPolyPersonMesh(evSpot.npcPreset || 'zacchaeus', 5);
-    const fRing = new THREE.Mesh(
-      new THREE.RingGeometry(1.2, 1.75, 24),
-      new THREE.MeshBasicMaterial({ color: 0xfef08a, side: THREE.DoubleSide })
+    // 무작위 셔플 후 서로 10m 이상 떨어진 3명 선정
+    for (let i = allHumanCandidates.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [allHumanCandidates[i], allHumanCandidates[j]] = [allHumanCandidates[j], allHumanCandidates[i]];
+    }
+    const recipients = [];
+    for (let i = 0; i < allHumanCandidates.length && recipients.length < 3; i++) {
+      const cand = allHumanCandidates[i];
+      if (recipients.every(r => Math.hypot(r.x - cand.x, r.z - cand.z) >= 10.0)) {
+        const safePos = findSafeOpenWorldOutdoorPos({ cx: cand.x, cz: cand.z, minDist: 0.5, maxDist: 4.5, pad: 1.0 });
+        recipients.push({ x: safePos.x, y: safePos.y, z: safePos.z, name: cand.name, told: false });
+      }
+    }
+    while (recipients.length < 3) {
+      const p = findSafeOpenWorldOutdoorPos({ cx, cz, minDist: 14, maxDist: 42, minSpacing: 12, avoidList: recipients });
+      recipients.push({ x: p.x, y: p.y, z: p.z, name: `수가성 주민 ${recipients.length + 1}`, told: false });
+    }
+    // 여인의 출발점에서 가장 가까운 순서대로 자연스러운 이동 경로 정렬
+    const ordered = [];
+    let curPt = { x: cx, z: cz };
+    while (recipients.length > 0) {
+      let bestIdx = 0, bestD = Infinity;
+      for (let i = 0; i < recipients.length; i++) {
+        const d = Math.hypot(recipients[i].x - curPt.x, recipients[i].z - curPt.z);
+        if (d < bestD) { bestD = d; bestIdx = i; }
+      }
+      const next = recipients.splice(bestIdx, 1)[0];
+      ordered.push(next);
+      curPt = next;
+    }
+
+    // 3명의 소식 대상 NPC 마커 생성
+    ordered.forEach((rec, idx) => {
+      const rGrp = new THREE.Group();
+      const recNpc = createLowPolyPersonMesh(idx === 1 ? 'woman' : 'villager', 60 + idx);
+      const rRing = new THREE.Mesh(
+        new THREE.RingGeometry(1.1, 1.55, 20),
+        new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide })
+      );
+      rRing.rotation.x = -Math.PI / 2;
+      rRing.position.y = 0.08;
+      rGrp.add(recNpc, rRing);
+      rGrp.position.set(rec.x, rec.y, rec.z);
+      worldGroup.add(rGrp);
+      const rLbl = createWorldLabel(`🗣️ 소식 들을 주민 #${idx + 1}`);
+      rLbl.style.opacity = '0';
+      rec.group = rGrp;
+      rec.ring = rRing;
+      rec.label = rLbl;
+      miracleWorldMissionObjects.push({ mesh: rGrp, label: rLbl });
+    });
+
+    // 수가성 여인 동행 NPC 스폰
+    const wMesh = createLowPolyPersonMesh('woman', 88);
+    const wy = getMiracleOpenWorldGroundHeight(cx + 1.2, cz + 1.2);
+    wMesh.position.set(cx + 1.2, wy, cz + 1.2);
+    const wRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.85, 1.15, 18),
+      new THREE.MeshBasicMaterial({ color: 0x0ea5e9, side: THREE.DoubleSide })
     );
-    fRing.rotation.x = -Math.PI / 2;
-    fRing.position.y = 0.08;
-    fGrp.add(targetPerson, fRing);
-    fGrp.position.set(fx, fy, fz);
-    worldGroup.add(fGrp);
+    wRing.rotation.x = -Math.PI / 2;
+    wRing.position.y = 0.07;
+    wMesh.add(wRing);
+    worldGroup.add(wMesh);
+    const wLbl = createWorldLabel('🏃‍♀️ 수가성 여인 (15m 안에 따라오세요!)');
+    miracleWorldMissionObjects.push({ mesh: wMesh, label: wLbl });
 
-    const fLbl = createWorldLabel(evSpot.findTargetLabel);
-    fLbl.style.opacity = '0';
-    const targetObj = { mesh: fGrp, pos: new THREE.Vector3(fx, fy + 0.5, fz), label: fLbl };
-    miracleWorldMissionObjects.push(targetObj);
-    miracleActiveFieldEvent.targetZone = targetObj;
+    miracleActiveFieldEvent.messenger = {
+      mesh: wMesh,
+      label: wLbl,
+      recipients: ordered,
+      targetIdx: 0,
+      pauseTimer: 0.6,
+      speed: 4.15,
+      phase: 0
+    };
+    miracleActiveFieldEvent.targetZone = { pos: wMesh.position };
+    showToast('🏃‍♀️ 수가성 여인이 주민 3명에게 달려가요! 15m 이상 멀어지지 않게 따라가세요!');
+  } else if (evSpot.missionType === 'chase_sheep') {
+    // [잃어버린 어린양] 언덕 아래(낮은 지형 maxY <= 2.2) 야외 랜덤 위치 스폰!
+    const sPos = findSafeOpenWorldOutdoorPos({
+      cx: -40, cz: 14,
+      xMin: -54, xMax: -18, zMin: -6, zMax: 36,
+      maxY: 2.2, minDist: 6.0, pad: 1.6
+    });
+    const sGrp = new THREE.Group();
+    const sheepMesh = (typeof createLowPolyAnimalMesh === 'function')
+      ? createLowPolyAnimalMesh('sheep', 1.1)
+      : createSingleAnimal('sheep');
+    const sRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.95, 1.35, 18),
+      new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide })
+    );
+    sRing.rotation.x = -Math.PI / 2;
+    sRing.position.y = 0.08;
+    sGrp.add(sheepMesh, sRing);
+    sGrp.position.set(sPos.x, sPos.y, sPos.z);
+    worldGroup.add(sGrp);
 
-    showToast(`🔍 주변을 살펴 [${evSpot.findTargetLabel}] 가까이 다가가 보세요!`);
+    const sLbl = createWorldLabel(evSpot.findTargetLabel || '🐑 언덕 아래 잃어버린 어린양!');
+    sLbl.style.opacity = '0';
+    miracleWorldMissionObjects.push({ mesh: sGrp, label: sLbl });
+    miracleActiveFieldEvent.sheepState = {
+      mesh: sGrp,
+      animal: sheepMesh,
+      label: sLbl,
+      heading: Math.random() * Math.PI * 2,
+      burstTimer: 0,
+      cooldownTimer: 0,
+      wanderTimer: 0,
+      wanderAng: Math.random() * Math.PI * 2
+    };
+    miracleActiveFieldEvent.targetZone = { mesh: sGrp, pos: sGrp.position, label: sLbl };
+    showToast('🐑 언덕 아래 광야에 잃어버린 어린양이 있어요! 가까이 가면 빠르게 도망치니 잘 쫓아가 보세요!');
+  } else if (evSpot.missionType === 'find_observe') {
+    let fx = evSpot.findTargetPos.x;
+    let fz = evSpot.findTargetPos.z;
+    let fy = getMiracleOpenWorldGroundHeight(fx, fz);
+
+    if (evSpot.zacchaeusGrove) {
+      // [삭개오 미션] 6그루 나무 숲 중 랜덤 1그루 위에 삭개오 배치 + 주변에 군중(12명) & 예수님 등장!
+      const grove = Array.isArray(window.miracleZacchaeusGroveTrees) && window.miracleZacchaeusGroveTrees.length > 0
+        ? window.miracleZacchaeusGroveTrees
+        : [{ x: 38, z: -2, scale: 1.55 }];
+      const chosenTree = grove[Math.floor(Math.random() * grove.length)];
+      fx = chosenTree.x + 1.05 * (chosenTree.scale || 1.5) * 0.72;
+      fz = chosenTree.z + 0.38 * (chosenTree.scale || 1.5) * 0.72;
+      const tBaseY = getMiracleOpenWorldGroundHeight(chosenTree.x, chosenTree.z);
+      fy = tBaseY + 2.55 * (chosenTree.scale || 1.5) * 0.86;
+
+      // 군중(12명) + 예수님 스폰
+      const crowdGrp = new THREE.Group();
+      const jesusX = 36.2, jesusZ = -5.8;
+      const jesusY = getMiracleOpenWorldGroundHeight(jesusX, jesusZ);
+      const jesusNpc = createLowPolyPersonMesh('jesus', 0);
+      jesusNpc.position.set(jesusX, jesusY, jesusZ);
+      jesusNpc.lookAt(chosenTree.x, jesusY, chosenTree.z);
+      crowdGrp.add(jesusNpc);
+
+      for (let ci = 0; ci < 12; ci++) {
+        const ang = (ci / 12) * Math.PI * 2 + 0.25;
+        const rad = 2.6 + (ci % 3) * 1.15;
+        const px = jesusX + Math.cos(ang) * rad;
+        const pz = jesusZ + Math.sin(ang) * rad;
+        const py = getMiracleOpenWorldGroundHeight(px, pz);
+        const preset = ci % 3 === 0 ? 'woman' : (ci % 4 === 0 ? 'child' : 'villager');
+        const cNpc = createLowPolyPersonMesh(preset, 70 + ci);
+        cNpc.position.set(px, py, pz);
+        cNpc.lookAt(jesusX, py, jesusZ);
+        crowdGrp.add(cNpc);
+      }
+      worldGroup.add(crowdGrp);
+      miracleWorldMissionObjects.push({ mesh: crowdGrp });
+      miracleActiveFieldEvent.crowdGroup = crowdGrp;
+      miracleActiveFieldEvent.crowdCenter = { x: jesusX, z: jesusZ };
+
+      const fGrp = new THREE.Group();
+      const zacMesh = createLowPolyPersonMesh('zacchaeus', 5);
+      zacMesh.scale.set(0.84, 0.84, 0.84);
+      // 나무 가지 위에 걸터앉은 포즈
+      if (zacMesh.userData && zacMesh.userData.lLeg && zacMesh.userData.rLeg) {
+        zacMesh.userData.lLeg.rotation.x = -1.1;
+        zacMesh.userData.rLeg.rotation.x = -1.1;
+      }
+      fGrp.add(zacMesh);
+      fGrp.position.set(fx, fy, fz);
+      fGrp.lookAt(jesusX, fy, jesusZ);
+      worldGroup.add(fGrp);
+
+      const fLbl = createWorldLabel(evSpot.findTargetLabel);
+      fLbl.style.opacity = '0';
+      const targetObj = { mesh: fGrp, pos: new THREE.Vector3(fx, fy + 0.6, fz), label: fLbl, treePos: { x: chosenTree.x, z: chosenTree.z } };
+      miracleWorldMissionObjects.push(targetObj);
+      miracleActiveFieldEvent.targetZone = targetObj;
+      showToast('🌳 예수님과 군중이 여리고 숲길에 모였어요! 여러 나무 중 삭개오가 숨어있는 나무를 찾아보세요!');
+    } else if (evSpot.alleyRandomAura) {
+      // [10명 중 돌아온 1명] 마을 건물 사이 랜덤 골목 + 빛나는 오라!
+      const aPos = findSafeOpenWorldOutdoorPos({
+        cx: -8, cz: 10, minDist: 16, maxDist: 58, nearBuildings: true, pad: 1.5
+      });
+      fx = aPos.x; fy = aPos.y; fz = aPos.z;
+      const fGrp = new THREE.Group();
+      const samMesh = createLowPolyPersonMesh('disciple', 29);
+      fGrp.add(samMesh);
+      if (typeof createGoldenAuraGroup === 'function') {
+        const aura = createGoldenAuraGroup(0xf59e0b, 1.75);
+        fGrp.add(aura);
+        miracleActiveFieldEvent.auraGroup = aura;
+      }
+      fGrp.position.set(fx, fy, fz);
+      worldGroup.add(fGrp);
+
+      const fLbl = createWorldLabel(evSpot.findTargetLabel);
+      fLbl.style.opacity = '0';
+      const targetObj = { mesh: fGrp, pos: new THREE.Vector3(fx, fy + 0.5, fz), label: fLbl };
+      miracleWorldMissionObjects.push(targetObj);
+      miracleActiveFieldEvent.targetZone = targetObj;
+      showToast('🙏 마을 건물 사이에 숨어 하나님께 감사드리는 사마리아인을 찾아보세요! (주변에 오라가 빛나요)');
+    } else if (evSpot.widowCutscene) {
+      // [두 렙돈 과부] 성전 청동 헌금함 + 가난한 과부 배치 (접근 시 동전 2개 넣는 컷신 실행!)
+      const fGrp = new THREE.Group();
+      const widowMesh = createLowPolyPersonMesh('woman', 44);
+      widowMesh.position.set(-0.95, 0, 0);
+      widowMesh.rotation.y = Math.PI * 0.5;
+
+      // 성전 나팔형 청동 헌금함(Treasury Box)
+      const boxPed = createLowPolyMesh(createOrganicBoxGeo(0.95, 0.95, 0.95, 610, 0.04, 0.96, 1), '#b8a27c', 0.45, 0.48, 0, true);
+      const chest  = createLowPolyMesh(createOrganicBoxGeo(0.76, 0.62, 0.76, 611, 0.04, 0.96, 1), '#92400e', 0.45, 1.24, 0, true);
+      const funnel = createLowPolyMesh(new THREE.CylinderGeometry(0.28, 0.12, 0.42, 8), '#eab308', 0.45, 1.74, 0, true);
+      const slot   = createLowPolyMesh(new THREE.CylinderGeometry(0.16, 0.14, 0.06, 8), '#1c1917', 0.45, 1.94, 0, false);
+
+      const fRing = new THREE.Mesh(
+        new THREE.RingGeometry(1.4, 1.95, 24),
+        new THREE.MeshBasicMaterial({ color: 0xfef08a, side: THREE.DoubleSide })
+      );
+      fRing.rotation.x = -Math.PI / 2;
+      fRing.position.y = 0.08;
+      fGrp.add(widowMesh, boxPed, chest, funnel, slot, fRing);
+      fGrp.position.set(fx, fy, fz);
+      worldGroup.add(fGrp);
+
+      const fLbl = createWorldLabel(evSpot.findTargetLabel);
+      fLbl.style.opacity = '0';
+      const targetObj = {
+        mesh: fGrp,
+        pos: new THREE.Vector3(fx, fy + 0.5, fz),
+        label: fLbl,
+        widowMesh,
+        boxSlotWorldPos: new THREE.Vector3(fx + 0.45, fy + 1.95, fz)
+      };
+      miracleWorldMissionObjects.push(targetObj);
+      miracleActiveFieldEvent.targetZone = targetObj;
+      showToast('🪙 성전 헌금함 앞에 있는 가난한 과부에게 다가가 보세요!');
+    } else {
+      const fGrp = new THREE.Group();
+      const targetPerson = createLowPolyPersonMesh(evSpot.npcPreset || 'disciple', 5);
+      const fRing = new THREE.Mesh(
+        new THREE.RingGeometry(1.2, 1.75, 24),
+        new THREE.MeshBasicMaterial({ color: 0xfef08a, side: THREE.DoubleSide })
+      );
+      fRing.rotation.x = -Math.PI / 2;
+      fRing.position.y = 0.08;
+      fGrp.add(targetPerson, fRing);
+      fGrp.position.set(fx, fy, fz);
+      worldGroup.add(fGrp);
+
+      const fLbl = createWorldLabel(evSpot.findTargetLabel);
+      fLbl.style.opacity = '0';
+      const targetObj = { mesh: fGrp, pos: new THREE.Vector3(fx, fy + 0.5, fz), label: fLbl };
+      miracleWorldMissionObjects.push(targetObj);
+      miracleActiveFieldEvent.targetZone = targetObj;
+      showToast(`🔍 주변을 살펴 [${evSpot.findTargetLabel}] 가까이 다가가 보세요!`);
+    }
   }
+
+  syncMiracleMissionStatusPanel();
 }
 
 function finishMiracleFieldEvent(evSpot) {
@@ -2163,17 +2859,15 @@ function finishMiracleFieldEvent(evSpot) {
   evSpot._requireLeaveZone = true;
   evSpot._prompted = performance.now();
 
-  // [수정점] 반석 위에 집 짓기 미션 후 갇힘 방지를 위한 텔레포트 적용
+  // 반석 위에 집 짓기 미션 후 갇힘 방지 안전 텔레포트 + 집 건축
   if (evSpot.id === 'par_builder' && !evSpot._houseBuilt) {
     evSpot._houseBuilt = true;
-    
-    // 집이 지어지는 위치에서 충분히 떨어진 안전 구역으로 캐릭터 이동
-    const safeX = evSpot.x - 6.0; 
+    const safeX = evSpot.x - 6.0;
     const safeZ = evSpot.z - 2.5;
     playerPos.set(safeX, getMiracleOpenWorldGroundHeight(safeX, safeZ), safeZ);
     if (typeof playerGroup !== 'undefined' && playerGroup) playerGroup.position.copy(playerPos);
     if (typeof snapCameraToPlayer === 'function') snapCameraToPlayer();
-    
+
     if (typeof addJudeanRoadsideBuilding === 'function') {
       addJudeanRoadsideBuilding(evSpot.x + 5, evSpot.z - 3, 1, 0, 0.92, false);
     }
@@ -2211,82 +2905,315 @@ function updateMiracleFieldEventFrame(dt, now) {
   if (!miracleActiveFieldEvent) return;
   const fe = miracleActiveFieldEvent;
   const evSpot = fe.spot;
+  const tSec = now * 0.001;
 
-  // [수정점] 중풍병자 지붕 뚫기 및 하강 컷신 연출
-  if (fe.cutsceneActive) {
-    fe.cutsceneTimer += dt;
-    const eg = fe.escortGroup ? fe.escortGroup.mesh : null;
-    
-    if (fe.cutscenePhase === 'hammer') {
-      cameraYaw = lerpAngle(cameraYaw, Math.PI / 4, dt * 3.0);
-      
-      if (eg) {
-        const targetX = evSpot.goalPos.x - 1.5;
-        const targetZ = evSpot.goalPos.z - 1.5;
-        eg.position.lerp(new THREE.Vector3(targetX, playerPos.y, targetZ), dt * 3.0);
-        eg.rotation.y = lerpAngle(eg.rotation.y, 0, dt * 3.0);
-      }
-      
-      // 플레이어 망치질 애니메이션 (도구 꺼내서 휘두르기)
-      if (typeof playerChopAnimTimer !== 'undefined') playerChopAnimTimer = 0.2;
-      if (playerLimbs && playerLimbs.lArm) {
-        playerLimbs.lArm.rotation.x = -1.2 + Math.sin(now * 0.04) * 0.8;
-      }
-      
-      if (fe.cutsceneTimer % 0.6 < 0.05) playSfx('hammer');
-      
-      if (fe.cutsceneTimer > 3.5) {
-        fe.cutscenePhase = 'break';
-        fe.cutsceneTimer = 0;
-        playSfx('crumble');
-        showToast('🕳️ 지붕이 뚫렸습니다! 밧줄로 중풍병자를 집 안으로 내립니다.');
-        
-        // 지붕에 뚫린 구멍 표현 (검은색 박스)
-        const hole = createLowPolyMesh(new THREE.BoxGeometry(1.8, 0.05, 2.8), '#111111', evSpot.goalPos.x - 1.5, playerPos.y + 0.02, evSpot.goalPos.z - 1.5, false);
-        worldGroup.add(hole);
-      }
-    } else if (fe.cutscenePhase === 'break') {
-      // 들것을 집 안쪽으로 서서히 하강시킴
-      if (eg) {
-        eg.position.y -= dt * 1.5;
-      }
-      
-      if (fe.cutsceneTimer > 3.0) {
-        fe.cutsceneActive = false;
-        finishMiracleFieldEvent(evSpot);
-      }
-    }
-    return; // 컷신 도중에는 하단 이동 로직 건너뜀
+  if (fe.auraGroup && fe.auraGroup.userData && typeof fe.auraGroup.userData.animate === 'function') {
+    fe.auraGroup.userData.animate(tSec);
   }
 
-  // 기본 수집 및 배달 미션 업데이트
+  // =========================================================================
+  // [전용 컷신 1] 중풍병자 옥상 망치질 → 옥상 파편 부서짐 → 4줄 밧줄 하강 컷신
+  // =========================================================================
+  if (fe.cutsceneActive && fe.cutsceneType === 'paralytic_roof') {
+    fe.cutsceneTimer += dt;
+    const eg = fe.escortGroup ? fe.escortGroup.mesh : null;
+    const holeX = evSpot.goalPos.x - 1.2;
+    const holeZ = evSpot.goalPos.z - 0.8;
+    const roofY = fe.cutsceneProps ? fe.cutsceneProps.roofY : playerPos.y;
+
+    if (fe.cutscenePhase === 'hammer') {
+      // 측면 드라마틱 클로즈업 앵글
+      const camX = holeX + 5.8 + Math.sin(fe.cutsceneTimer * 0.5) * 0.8;
+      const camZ = holeZ + 5.6;
+      camera.position.lerp(new THREE.Vector3(camX, roofY + 4.0, camZ), Math.min(1, dt * 4.0));
+      camera.lookAt(holeX, roofY + 0.7, holeZ);
+
+      if (eg) {
+        eg.position.lerp(new THREE.Vector3(holeX, roofY, holeZ), dt * 3.5);
+        eg.rotation.y = lerpAngle(eg.rotation.y, 0, dt * 3.5);
+      }
+
+      if (typeof playerChopAnimTimer !== 'undefined') playerChopAnimTimer = 0.2;
+      if (playerLimbs && playerLimbs.lArm) {
+        playerLimbs.lArm.rotation.x = -1.25 + Math.sin(now * 0.042) * 0.9;
+      }
+
+      // 망치질 타격마다 균열·먼지 조각 튀어오름
+      const hitIdx = Math.floor(fe.cutsceneTimer / 0.52);
+      if (hitIdx > (fe.cutsceneProps.lastHitIdx || -1)) {
+        fe.cutsceneProps.lastHitIdx = hitIdx;
+        playSfx('hammer');
+        for (let k = 0; k < 4; k++) {
+          const dust = createLowPolyMesh(new THREE.DodecahedronGeometry(0.18 + Math.random() * 0.14, 0), k % 2 === 0 ? '#d6bfa0' : '#a88c66', holeX + (Math.random() - 0.5) * 1.4, roofY + 0.15, holeZ + (Math.random() - 0.5) * 1.8, false);
+          worldGroup.add(dust);
+          miracleWorldMissionObjects.push({ mesh: dust });
+          fe.cutsceneProps.debris.push({
+            mesh: dust,
+            vx: (Math.random() - 0.5) * 3.2,
+            vy: 2.2 + Math.random() * 2.4,
+            vz: (Math.random() - 0.5) * 3.2
+          });
+        }
+      }
+
+      if (fe.cutsceneTimer > 2.4) {
+        fe.cutscenePhase = 'shatter';
+        fe.cutsceneTimer = 0;
+        playSfx('crumble');
+        showToast('💥 와장창! 옥상 지붕이 부서지며 아래 예수님이 계신 방이 열렸어요!');
+
+        // 부서진 옥상 구멍(따뜻한 실내 불빛이 올라오는 구멍) + 14개 지붕 파편 폭발!
+        const holeFrame = new THREE.Group();
+        const darkHole = createLowPolyMesh(new THREE.BoxGeometry(2.0, 0.08, 2.9), '#1c1917', 0, 0.04, 0, false);
+        const warmGlow = new THREE.Mesh(
+          new THREE.PlaneGeometry(1.75, 2.65),
+          new THREE.MeshBasicMaterial({ color: 0xfde68a, transparent: true, opacity: 0.42, side: THREE.DoubleSide })
+        );
+        warmGlow.rotation.x = -Math.PI * 0.5;
+        warmGlow.position.y = 0.09;
+        // 깨진 가장자리 돌·흙 조각 테두리
+        for (let e = 0; e < 10; e++) {
+          const ang = (e / 10) * Math.PI * 2;
+          const rim = createLowPolyMesh(new THREE.DodecahedronGeometry(0.24, 0), '#bfa47c', Math.cos(ang) * 1.15, 0.12, Math.sin(ang) * 1.55, false);
+          rim.scale.set(1.2, 0.5, 1.0);
+          holeFrame.add(rim);
+        }
+        holeFrame.add(darkHole, warmGlow);
+        holeFrame.position.set(holeX, roofY + 0.02, holeZ);
+        worldGroup.add(holeFrame);
+        miracleWorldMissionObjects.push({ mesh: holeFrame });
+
+        for (let d = 0; d < 14; d++) {
+          const ang = (d / 14) * Math.PI * 2;
+          const chunk = createLowPolyMesh(
+            new THREE.DodecahedronGeometry(0.26 + (d % 3) * 0.10, 0),
+            d % 2 === 0 ? '#cfa36e' : '#8c5e34',
+            holeX + Math.cos(ang) * 0.5, roofY + 0.25, holeZ + Math.sin(ang) * 0.7, false
+          );
+          worldGroup.add(chunk);
+          miracleWorldMissionObjects.push({ mesh: chunk });
+          fe.cutsceneProps.debris.push({
+            mesh: chunk,
+            vx: Math.cos(ang) * (2.8 + Math.random() * 2.5),
+            vy: 3.4 + Math.random() * 2.8,
+            vz: Math.sin(ang) * (2.8 + Math.random() * 2.5)
+          });
+        }
+      }
+    } else if (fe.cutscenePhase === 'shatter') {
+      camera.position.lerp(new THREE.Vector3(holeX + 4.2, roofY + 6.4, holeZ + 4.4), Math.min(1, dt * 3.2));
+      camera.lookAt(holeX, roofY + 0.1, holeZ);
+
+      if (fe.cutsceneTimer > 1.55) {
+        fe.cutscenePhase = 'lower';
+        fe.cutsceneTimer = 0;
+        showToast('🪢 네 친구가 밧줄 4줄로 중풍병자 들것을 예수님 앞으로 조심스레 내립니다!');
+
+        // 4줄 밧줄(지붕 구멍 네 모서리 ↔ 들것 네 모서리) 생성
+        const ropes = [];
+        [[-0.68, -1.05], [0.68, -1.05], [-0.68, 1.05], [0.68, 1.05]].forEach(([rx, rz]) => {
+          const rMesh = createLowPolyMesh(new THREE.CylinderGeometry(0.032, 0.032, 1.0, 5), '#e5c687', holeX + rx, roofY, holeZ + rz, false);
+          worldGroup.add(rMesh);
+          miracleWorldMissionObjects.push({ mesh: rMesh });
+          ropes.push({ mesh: rMesh, rx, rz });
+        });
+        fe.cutsceneProps.ropes = ropes;
+      }
+    } else if (fe.cutscenePhase === 'lower') {
+      // 하이앵글 하강 전용 시네마틱 카메라 (지붕 구멍 아래를 내려다봄!)
+      const p = Math.min(1, fe.cutsceneTimer / 3.2);
+      const camAng = 0.55 + p * 0.65;
+      camera.position.lerp(new THREE.Vector3(holeX + Math.cos(camAng) * 5.2, roofY + 5.8 - p * 0.8, holeZ + Math.sin(camAng) * 5.2), Math.min(1, dt * 3.5));
+      camera.lookAt(holeX, roofY - p * 1.4, holeZ);
+
+      const dropDepth = p * 3.1;
+      if (eg && eg.userData && eg.userData.stretcherOnly) {
+        eg.userData.stretcherOnly.position.y = -dropDepth;
+        // 네 친구는 옥상 구멍 가장자리에 남아 몸을 앞으로 숙이며 밧줄을 내리는 모션!
+        if (Array.isArray(eg.userData.friends)) {
+          eg.userData.friends.forEach(fr => {
+            if (fr.userData && fr.userData.lArm && fr.userData.rArm) {
+              fr.userData.lArm.rotation.x = -0.85 + Math.sin(tSec * 4) * 0.15;
+              fr.userData.rArm.rotation.x = -0.85 - Math.sin(tSec * 4) * 0.15;
+            }
+          });
+        }
+      } else if (eg) {
+        eg.position.y = roofY - dropDepth;
+      }
+
+      if (fe.cutsceneProps && Array.isArray(fe.cutsceneProps.ropes)) {
+        const len = Math.max(0.15, dropDepth + 0.55);
+        fe.cutsceneProps.ropes.forEach(rp => {
+          rp.mesh.scale.set(1, len, 1);
+          rp.mesh.position.set(holeX + rp.rx, roofY - len * 0.5 + 0.55, holeZ + rp.rz);
+        });
+      }
+
+      if (fe.cutsceneTimer > 3.5) {
+        fe.cutsceneActive = false;
+        fe.cutsceneCameraActive = false;
+        finishMiracleFieldEvent(evSpot);
+        return;
+      }
+    }
+
+    // 날아간 파편 물리 업데이트
+    if (fe.cutsceneProps && Array.isArray(fe.cutsceneProps.debris)) {
+      fe.cutsceneProps.debris.forEach(db => {
+        db.vy -= 9.5 * dt;
+        db.mesh.position.x += db.vx * dt;
+        db.mesh.position.y = Math.max(roofY - 3.6, db.mesh.position.y + db.vy * dt);
+        db.mesh.position.z += db.vz * dt;
+        db.mesh.rotation.x += dt * 4.5;
+        db.mesh.rotation.z += dt * 3.8;
+      });
+    }
+    syncMiracleMissionStatusPanel();
+    return;
+  }
+
+  // =========================================================================
+  // [전용 컷신 2] 두 렙돈 넣은 과부 — 성전 헌금함에 동전 두 개를 차례로 넣는 컷신
+  // =========================================================================
+  if (fe.cutsceneActive && fe.cutsceneType === 'widow_mites') {
+    fe.cutsceneTimer += dt;
+    const tz = fe.targetZone;
+    const cp = fe.cutsceneProps;
+    const fx = tz.mesh.position.x;
+    const fy = tz.mesh.position.y;
+    const fz = tz.mesh.position.z;
+
+    // 따뜻한 클로즈업 시네마틱 카메라 (과부와 청동 헌금함이 한눈에 담기는 앵글)
+    camera.position.lerp(new THREE.Vector3(fx + 0.2, fy + 2.35, fz - 4.1), Math.min(1, dt * 4.2));
+    camera.lookAt(fx + 0.05, fy + 1.45, fz);
+
+    const wMesh = tz.widowMesh;
+    const slotX = fx + 0.45, slotY = fy + 1.94, slotZ = fz;
+    const handX = fx - 0.55, handY = fy + 1.52, handZ = fz;
+
+    const animCoin = (coinObj, localT) => {
+      if (!coinObj) return;
+      if (localT < 0 || localT > 1.35) {
+        coinObj.mesh.visible = false;
+        return;
+      }
+      coinObj.mesh.visible = true;
+      const u = Math.min(1, localT / 1.1);
+      // 포물선 궤적으로 손에서 청동 헌금함 입구로 톡 떨어짐
+      const cx2 = THREE.MathUtils.lerp(handX, slotX, u);
+      const cy2 = THREE.MathUtils.lerp(handY, slotY, u) + Math.sin(u * Math.PI) * 0.65 - (u > 0.85 ? (u - 0.85) * 1.4 : 0);
+      const cz2 = THREE.MathUtils.lerp(handZ, slotZ, u);
+      coinObj.mesh.position.set(cx2, cy2, cz2);
+      coinObj.mesh.rotation.y += dt * 11;
+      coinObj.mesh.rotation.x += dt * 7;
+      if (u >= 0.92 && !coinObj.clinked) {
+        coinObj.clinked = true;
+        playSfx('clock');
+        showToast(coinObj.idx === 1 ? '🪙 첫 번째 렙돈을 정성껏 헌금함에 넣었어요...' : '🪙✨ 두 번째 렙돈까지 자신의 생활비 전부를 드렸어요!');
+      }
+    };
+
+    // 과부 팔을 들어 정성껏 넣는 모션
+    if (wMesh && wMesh.userData && wMesh.userData.rArm) {
+      const lift = (fe.cutsceneTimer < 3.6) ? (-0.95 - Math.sin(fe.cutsceneTimer * 3.1) * 0.35) : -0.25;
+      wMesh.userData.rArm.rotation.x = lift;
+    }
+    animCoin(cp.coin1, fe.cutsceneTimer - 0.45);
+    animCoin(cp.coin2, fe.cutsceneTimer - 2.05);
+
+    // 두 번째 동전이 들어간 후 헌금함 위 황금빛 광채 상승
+    if (cp.glowHalo) {
+      const showGlow = fe.cutsceneTimer > 3.1;
+      cp.glowHalo.visible = showGlow;
+      if (showGlow) {
+        const gProg = Math.min(1, (fe.cutsceneTimer - 3.1) / 1.4);
+        const gs = 0.6 + gProg * 0.8;
+        cp.glowHalo.scale.set(gs, gs, gs);
+        cp.glowHalo.position.y = slotY + 0.25 + gProg * 0.55;
+        cp.glowHalo.rotation.y += dt * 2.5;
+      }
+    }
+
+    if (fe.cutsceneTimer > 4.6) {
+      fe.cutsceneActive = false;
+      fe.cutsceneCameraActive = false;
+      finishMiracleFieldEvent(evSpot);
+      return;
+    }
+    syncMiracleMissionStatusPanel();
+    return;
+  }
+
+  // =========================================================================
+  // 기본 수집 및 배달 미션 업데이트 (가나·선한사마리아인·반석·다락방·호산나·씨뿌리기·겨자씨 등)
+  // =========================================================================
   if (fe.type === 'collect_deliver') {
     fe.items.forEach(it => {
       if (it.done) return;
-      it.mesh.rotation.y += dt * 2.2;
+      it.mesh.rotation.y += dt * 2.1;
       const d = Math.hypot(playerPos.x - it.pos.x, playerPos.z - it.pos.z);
       updateWorldLabelPos(it.label, it.pos, d < MIRACLE_TAG_DIST_ITEM);
 
-      if (d < 2.2) {
+      if (d < 2.3) {
         it.done = true;
         it.mesh.visible = false;
         it.label.style.opacity = '0';
         fe.carrying++;
         playSfx('rescue');
         showToast(`✨ ${evSpot.itemLabel} 획득! (${fe.collected + fe.carrying}/${fe.required}) · 목표 지점으로 가져가세요!`);
+        syncMiracleMissionStatusPanel();
       }
     });
 
-    if (fe.targetZone) {
+    if (evSpot.multiRandomLaySpots && fe.laySpots.length > 0) {
+      // 호산나 입성: 성문 앞 랜덤 5개 자리에 종려나무 가지를 직접 까는 로직
+      let nextOpenSpot = null;
+      for (let i = 0; i < fe.laySpots.length; i++) {
+        const ls = fe.laySpots[i];
+        if (ls.laid) {
+          ls.label.style.opacity = '0';
+          continue;
+        }
+        if (!nextOpenSpot) nextOpenSpot = ls;
+        const td = Math.hypot(playerPos.x - ls.pos.x, playerPos.z - ls.pos.z);
+        updateWorldLabelPos(ls.label, ls.pos, td < MIRACLE_TAG_DIST_SPOT);
+        if (td < 2.6 && fe.carrying > 0) {
+          ls.laid = true;
+          ls.label.style.opacity = '0';
+          if (ls.ring && ls.ring.material) ls.ring.material.color.setHex(0x10b981);
+          // 성문 앞 길에 푸른 종려나무 가지 3D 배치!
+          if (typeof createPalmBranchMesh === 'function') {
+            const laidFrond = createPalmBranchMesh(1.18);
+            laidFrond.position.set(0, 0.04, 0);
+            laidFrond.rotation.y = (i * 0.9) - 0.5;
+            ls.mesh.add(laidFrond);
+          }
+          fe.carrying--;
+          fe.collected++;
+          playSfx('build');
+          syncMiracleMissionStatusPanel();
+          if (fe.collected >= fe.required) {
+            finishMiracleFieldEvent(evSpot);
+            return;
+          } else {
+            showToast(`🌿 성문 앞 길에 종려나무 가지를 깔았어요! (${fe.collected}/${fe.required})`);
+          }
+        }
+      }
+      fe.targetZone = nextOpenSpot || fe.laySpots[0];
+    } else if (fe.targetZone) {
       const tz = fe.targetZone;
       const td = Math.hypot(playerPos.x - tz.pos.x, playerPos.z - tz.pos.z);
+      const dy = tz.requireYMatch ? Math.abs(playerPos.y - (tz.goalY || 0)) : 0;
       updateWorldLabelPos(tz.label, tz.pos, td < MIRACLE_TAG_DIST_SPOT);
 
-      if (td < 3.0 && fe.carrying > 0) {
+      if (td < 3.1 && dy < 2.2 && fe.carrying > 0) {
         fe.collected += fe.carrying;
         fe.carrying = 0;
         playSfx('build');
         tz.label.innerHTML = `${evSpot.targetLabel} (${fe.collected}/${fe.required})`;
+        syncMiracleMissionStatusPanel();
         if (fe.collected >= fe.required) {
           finishMiracleFieldEvent(evSpot);
           return;
@@ -2296,11 +3223,10 @@ function updateMiracleFieldEventFrame(dt, now) {
       }
     }
   } else if (fe.type === 'escort_guide') {
-    // 플레이어가 계단을 등반하면, 들것 일행도 등 뒤를 바짝 쫓아 지붕으로 따라 올라옴!
     if (fe.escortGroup) {
       const eg = fe.escortGroup.mesh;
-      const targetX = playerPos.x - Math.sin(playerFacing) * 1.8;
-      const targetZ = playerPos.z - Math.cos(playerFacing) * 1.8;
+      const targetX = playerPos.x - Math.sin(playerFacing) * 1.9;
+      const targetZ = playerPos.z - Math.cos(playerFacing) * 1.9;
       eg.position.x = THREE.MathUtils.lerp(eg.position.x, targetX, dt * 6.5);
       eg.position.z = THREE.MathUtils.lerp(eg.position.z, targetZ, dt * 6.5);
       eg.position.y = THREE.MathUtils.lerp(eg.position.y, playerPos.y, dt * 8.0);
@@ -2315,28 +3241,218 @@ function updateMiracleFieldEventFrame(dt, now) {
       const expectedY = (tz.goalY !== undefined) ? tz.goalY : (evSpot.goalPos.y || 0);
       const dy = Math.abs(playerPos.y - expectedY);
       updateWorldLabelPos(tz.label, tz.pos, td < MIRACLE_TAG_DIST_SPOT);
-      
-      if (td < 3.2 && dy < 2.4) {
+
+      if (td < 3.3 && dy < 2.4) {
         if (evSpot.id === 'ev_paralytic' && !fe.cutsceneActive) {
           fe.cutsceneActive = true;
+          fe.cutsceneCameraActive = true;
+          fe.cutsceneType = 'paralytic_roof';
           fe.cutscenePhase = 'hammer';
           fe.cutsceneTimer = 0;
-          showToast('🔨 무사히 지붕에 올라왔습니다! 뜯어낼 자리를 찾아 망치질을 시작합니다!');
+          fe.cutsceneProps = { roofY: playerPos.y, debris: [], ropes: [], lastHitIdx: -1 };
+          showToast('🔨 무사히 지붕에 올라왔어요! 망치로 옥상을 뚫기 시작합니다!');
         } else if (!fe.cutsceneActive) {
           finishMiracleFieldEvent(evSpot);
+          return;
         }
       }
+    }
+  } else if (fe.type === 'follow_messenger' && fe.messenger) {
+    // [우물가의 여인] 3명의 랜덤 주민에게 걸어가는 여인을 따라다니기 — 15m 벗어나면 미션 실패!
+    const ms = fe.messenger;
+    const wm = ms.mesh;
+    const maxD = evSpot.maxFollowDist || 15.0;
+    const distToPlayer = Math.hypot(playerPos.x - wm.position.x, playerPos.z - wm.position.z);
+
+    updateWorldLabelPos(ms.label, wm.position, true);
+    ms.recipients.forEach(rec => {
+      const rd = Math.hypot(playerPos.x - rec.x, playerPos.z - rec.z);
+      updateWorldLabelPos(rec.label, new THREE.Vector3(rec.x, rec.y + 0.5, rec.z), !rec.told && rd < 22);
+    });
+
+    if (distToPlayer > maxD) {
+      // 일정 거리(15m) 벗어나면 미션 실패!
+      playSfx('wrong');
+      clearMiracleFieldEventObjects();
+      evSpot._requireLeaveZone = true;
+      evSpot._prompted = performance.now();
+      openMiracleDialog({
+        sourceRef: evSpot,
+        speaker: '수가성 여인',
+        category: 'eyewitness',
+        text: '"앗, 저와 너무 멀어져서 기쁜 소식을 함께 전하지 못했어요! 다시 우물가에서 출발해 가까이 따라와 주실래요?"',
+        btnText: '닫기',
+        replayText: '🔄 다시 따라가기 도전!',
+        onReplay: () => startMiracleFieldEvent(evSpot)
+      });
+      return;
+    }
+
+    const curRec = ms.recipients[ms.targetIdx];
+    if (!curRec) {
+      finishMiracleFieldEvent(evSpot);
+      return;
+    }
+
+    if (ms.pauseTimer > 0) {
+      ms.pauseTimer -= dt;
+      const u = wm.userData || {};
+      if (u.lLeg && u.rLeg) { u.lLeg.rotation.x = 0; u.rLeg.rotation.x = 0; }
+    } else {
+      const dx = curRec.x - wm.position.x;
+      const dz = curRec.z - wm.position.z;
+      const dTarget = Math.hypot(dx, dz);
+      if (dTarget < 2.2) {
+        curRec.told = true;
+        if (curRec.ring && curRec.ring.material) curRec.ring.material.color.setHex(0x10b981);
+        if (curRec.label) curRec.label.style.opacity = '0';
+        fe.deliveredCount = (fe.deliveredCount || 0) + 1;
+        ms.targetIdx++;
+        ms.pauseTimer = 1.45;
+        playSfx('rescue');
+        if (ms.targetIdx >= ms.recipients.length) {
+          showToast('🎉 세 명의 마을 주민 모두에게 메시아의 기쁜 소식을 전했어요!');
+          finishMiracleFieldEvent(evSpot);
+          return;
+        } else {
+          showToast(`🗣️ ${fe.deliveredCount}번째 주민에게 소식 전달 완료! 다음 주민에게 함께 가요!`);
+        }
+      } else {
+        const step = Math.min(dTarget, ms.speed * dt);
+        const nx = wm.position.x + (dx / dTarget) * step;
+        const nz = wm.position.z + (dz / dTarget) * step;
+        const ny = getMiracleOpenWorldGroundHeight(nx, nz);
+        wm.position.set(nx, ny, nz);
+        wm.rotation.y = lerpAngle(wm.rotation.y, Math.atan2(dx, dz), dt * 8.0);
+        const u = wm.userData || {};
+        const sw = Math.sin(now * 0.015) * 0.6;
+        if (u.lLeg && u.rLeg) { u.lLeg.rotation.x = sw; u.rLeg.rotation.x = -sw; }
+        if (u.lArm && u.rArm) { u.lArm.rotation.x = -sw * 0.55; u.rArm.rotation.x = sw * 0.55; }
+      }
+    }
+  } else if (fe.type === 'chase_sheep' && fe.sheepState) {
+    // [잃어버린 어린양] 언덕 아래 어린양 — 가까이(9.5m 이내) 다가가면 놀라 순간 속도 급상승!
+    const ss = fe.sheepState;
+    const sm = ss.mesh;
+    const dxFromPlayer = sm.position.x - playerPos.x;
+    const dzFromPlayer = sm.position.z - playerPos.z;
+    const dist = Math.hypot(dxFromPlayer, dzFromPlayer);
+
+    updateWorldLabelPos(ss.label, sm.position, dist < 18.0);
+
+    if (dist < 2.35) {
+      playSfx('rescue');
+      showToast('🐑✨ 잃어버린 어린양을 무사히 품에 안았어요!');
+      finishMiracleFieldEvent(evSpot);
+      return;
+    }
+
+    if (ss.cooldownTimer > 0) ss.cooldownTimer -= dt;
+    if (ss.burstTimer > 0) ss.burstTimer -= dt;
+
+    let moveAng = ss.wanderAng;
+    let speed = 2.0;
+
+    if (dist < 9.5) {
+      // 플레이어가 가까이 오면 순간 속도가 빨라지며 반대 방향(+살짝 지그재그)으로 도망!
+      if (ss.burstTimer <= 0 && ss.cooldownTimer <= 0) {
+        ss.burstTimer = 1.35;
+        ss.cooldownTimer = 2.35;
+        playSfx('jump');
+        showToast('🐑⚡ 어린양이 놀라서 빠르게 도망쳐요! 끝까지 쫓아가 잡아보세요!');
+      }
+      const fleeBase = Math.atan2(dxFromPlayer, dzFromPlayer);
+      moveAng = fleeBase + Math.sin(tSec * 2.8) * 0.42;
+      speed = (ss.burstTimer > 0) ? 7.35 : 4.15;
+    } else {
+      ss.wanderTimer -= dt;
+      if (ss.wanderTimer <= 0) {
+        ss.wanderTimer = 1.6 + Math.random() * 1.5;
+        ss.wanderAng = Math.random() * Math.PI * 2;
+      }
+    }
+
+    // 언덕 아래 광야 안전 구역(건물·바다·산 제외) 내에서 이동 시도, 막히면 측면 회피
+    let moved = false;
+    const tryAngles = [moveAng, moveAng + 0.75, moveAng - 0.75, moveAng + 1.5, moveAng - 1.5, moveAng + Math.PI];
+    for (let k = 0; k < tryAngles.length; k++) {
+      const a = tryAngles[k];
+      const nx = sm.position.x + Math.sin(a) * speed * dt;
+      const nz = sm.position.z + Math.cos(a) * speed * dt;
+      const ny = getMiracleOpenWorldGroundHeight(nx, nz);
+      if (nx > -64 && nx < 36 && nz > -35 && nz < 52 && ny < 3.6 && isPointOutsideAllBuildings(nx, nz, 1.25)) {
+        const hopY = (ss.burstTimer > 0) ? Math.abs(Math.sin(now * 0.024)) * 0.34 : 0;
+        sm.position.set(nx, ny + hopY, nz);
+        ss.heading = lerpAngle(ss.heading, a, dt * 10.0);
+        sm.rotation.y = ss.heading;
+        moved = true;
+        break;
+      }
+    }
+    if (!moved) ss.wanderAng += 1.4;
+
+    const u = ss.animal && ss.animal.userData ? ss.animal.userData : {};
+    const sw = Math.sin(now * (ss.burstTimer > 0 ? 0.026 : 0.012)) * 0.65;
+    if (u.flLeg && u.frLeg && u.blLeg && u.brLeg) {
+      u.flLeg.rotation.x = sw; u.brLeg.rotation.x = sw;
+      u.frLeg.rotation.x = -sw; u.blLeg.rotation.x = -sw;
     }
   } else if (fe.type === 'find_observe') {
     if (fe.targetZone) {
       const tz = fe.targetZone;
       const horizD = Math.hypot(playerPos.x - tz.pos.x, playerPos.z - tz.pos.z);
-      updateWorldLabelPos(tz.label, tz.pos, horizD < MIRACLE_TAG_DIST_SPOT);
-      if (horizD < 3.5) {
+      updateWorldLabelPos(tz.label, tz.pos, horizD < (evSpot.zacchaeusGrove ? 7.5 : MIRACLE_TAG_DIST_SPOT));
+
+      const triggerDist = evSpot.widowCutscene ? 4.2 : 3.7;
+      if (horizD < triggerDist) {
+        if (evSpot.widowCutscene && !fe.cutsceneActive) {
+          // 두 렙돈 넣은 과부 전용 컷신 시작!
+          fe.cutsceneActive = true;
+          fe.cutsceneCameraActive = true;
+          fe.cutsceneType = 'widow_mites';
+          fe.cutsceneTimer = 0;
+
+          const makeCoin = (idx) => {
+            const cMesh = createLowPolyMesh(new THREE.CylinderGeometry(0.11, 0.11, 0.032, 10), '#d97706', 0, -10, 0, false);
+            cMesh.visible = false;
+            worldGroup.add(cMesh);
+            miracleWorldMissionObjects.push({ mesh: cMesh });
+            return { mesh: cMesh, idx, clinked: false };
+          };
+          const glowHalo = new THREE.Mesh(
+            new THREE.OctahedronGeometry(0.32, 0),
+            new THREE.MeshBasicMaterial({ color: 0xfef08a, transparent: true, opacity: 0.85 })
+          );
+          glowHalo.visible = false;
+          glowHalo.position.copy(tz.boxSlotWorldPos);
+          worldGroup.add(glowHalo);
+          miracleWorldMissionObjects.push({ mesh: glowHalo });
+
+          fe.cutsceneProps = { coin1: makeCoin(1), coin2: makeCoin(2), glowHalo };
+          showToast('👀 가난한 과부가 성전 헌금함 앞에 조용히 다가섰어요...');
+          syncMiracleMissionStatusPanel();
+          return;
+        }
+
+        if (evSpot.zacchaeusGrove) {
+          // [삭개오 발견 시] 카메라를 군중·예수님이 없는 쪽으로 돌리고 군중·예수님·삭개오 즉시 사라지게 처리!
+          const cc = fe.crowdCenter || { x: 36.2, z: -5.8 };
+          const awayAngle = Math.atan2(playerPos.x - cc.x, playerPos.z - cc.z);
+          cameraYaw = awayAngle;
+          cameraTargetYaw = awayAngle;
+          playerFacing = awayAngle;
+          if (fe.crowdGroup) fe.crowdGroup.visible = false;
+          if (tz.mesh) tz.mesh.visible = false;
+          if (typeof snapCameraToPlayer === 'function') snapCameraToPlayer();
+        }
+
         finishMiracleFieldEvent(evSpot);
+        return;
       }
     }
   }
+
+  syncMiracleMissionStatusPanel();
 }
 
 // -------------------------------------------------------------------------
@@ -2454,6 +3570,10 @@ function buildMiracleOpenWorld(restoreSavedPos = false) {
   miracleActiveMinigameId = null;
   miracleActiveFieldEvent = null;
   miracleAmbientProps = [];
+  window.miracleBuildingBounds = [];
+  window.miracleWorldTreePositions = [];
+  window.miracleZacchaeusGroveTrees = [];
+  if (typeof window.hideMiracleMissionStatusUI === 'function') window.hideMiracleMissionStatusUI();
 
   scene.background = new THREE.Color(miracleIsPostResurrection ? 0x60a5fa : 0x7dd3fc);
   scene.fog = new THREE.Fog(miracleIsPostResurrection ? 0xbae6fd : 0xbae6fd, 125, 360);
@@ -2602,12 +3722,16 @@ function updateMiracleOpenWorldFrame(dt, now) {
     updateMiracleFieldEventFrame(dt, now);
   }
 
+  // 대화창을 닫은 직후(1.8초 이내)에는 다른/같은 캐릭터 대화가 곧바로 다시 열리지 않도록 전역 쿨타임 보호
+  const dialogGraceReady = (now - (miracleDialogState.lastClosedAt || 0)) >= 1800;
+
+  const allUnlocked = (typeof isMiracleAllStagesUnlocked === 'function' && isMiracleAllStagesUnlocked());
   const activeStageNum = getNextActiveMainStageNumber();
-  const isStage3Cleared = Boolean(miracleMainStagesCleared[3] || miracleMainStagesCleared[4] || miracleIsPostResurrection);
+  const isStage3Cleared = Boolean(allUnlocked || miracleMainStagesCleared[3] || miracleMainStagesCleared[4] || miracleIsPostResurrection);
   const isFieldMissionActive = Boolean(miracleActiveFieldEvent);
   let currentActiveStageSpot = null;
 
-  // [이전 스테이지 클리어 확인 동기화 보완 + 미션 중 타 스테이지 진입 불가 & 머리 위 태그 일시 해제]
+  // [이전 스테이지 클리어 확인 동기화 보완 + 미션 중 타 스테이지 진입 불가 & 머리 위 태그 일시 해제 + 2회차 전체 해금]
   miracleStageSpots.forEach((sp, idx) => {
     if (sp.beam && sp.beam.visible) {
       const pulse = 1.0 + Math.sin(now * 0.004 + idx) * 0.15;
@@ -2631,7 +3755,7 @@ function updateMiracleOpenWorldFrame(dt, now) {
       return;
     }
 
-    // 스테이지 4 무덤 앞을 지키는 여인(막달라 마리아) 머리 위 태그는 스테이지 3 클리어 시에만 표시
+    // 스테이지 4 무덤 앞을 지키는 여인(막달라 마리아) 머리 위 태그는 스테이지 3 클리어(또는 2회차 전체해금) 시 표시
     if (sp.stageNum === 4 && !isStage3Cleared) {
       if (sp.label) sp.label.style.opacity = '0';
     } else {
@@ -2639,11 +3763,11 @@ function updateMiracleOpenWorldFrame(dt, now) {
     }
 
     if (sp._requireLeaveZone) {
-      if (d > 4.3) sp._requireLeaveZone = false;
+      if (d > 4.4) sp._requireLeaveZone = false;
       return;
     }
 
-    if (d < 3.3 && (!sp._prompted || now - sp._prompted > 5500)) {
+    if (dialogGraceReady && d < 3.3 && (!sp._prompted || now - sp._prompted > 6500)) {
       sp._prompted = now;
       sp._requireLeaveZone = true;
 
@@ -2656,8 +3780,21 @@ function updateMiracleOpenWorldFrame(dt, now) {
         }
       };
 
-      if (sp.cleared) {
+      // 승천 이후 다시 감람산 언덕(제자들)에 다가온 경우 → 승천 이후 상태의 엔딩 세상 열기!
+      if (sp.stageNum === 5 && miracleAscensionSeen) {
         openMiracleDialog({
+          sourceRef: sp,
+          speaker: sp.introSpeaker,
+          category: 'story',
+          text: sp.introText,
+          showCancel: true,
+          cancelText: '오픈월드 계속 둘러보기 ✕',
+          btnText: '☁️ 승천 이후 엔딩 세상 보기 ▶',
+          onConfirm: launchThisStage
+        });
+      } else if (sp.cleared) {
+        openMiracleDialog({
+          sourceRef: sp,
           speaker: sp.introSpeaker,
           category: 'greeting',
           text: sp.greetingText || `"반가워요! 함께 완수했던 메인 스테이지 ${sp.stageNum}의 감동이 아직도 생생하네요!"`,
@@ -2665,8 +3802,9 @@ function updateMiracleOpenWorldFrame(dt, now) {
           replayText: `🔄 스테이지 ${sp.stageNum} 다시하기`,
           onReplay: launchThisStage
         });
-      } else if (sp.stageNum > activeStageNum) {
+      } else if (!allUnlocked && sp.stageNum > activeStageNum) {
         openMiracleDialog({
+          sourceRef: sp,
           speaker: sp.introSpeaker,
           category: 'story',
           text: `"아직 앞선 여정이 남아 있어요! 먼저 빛기둥이 비추고 있는 [메인 스테이지 ${activeStageNum}]을(를) 순서대로 완료하고 오세요!"`,
@@ -2674,6 +3812,7 @@ function updateMiracleOpenWorldFrame(dt, now) {
         });
       } else {
         openMiracleDialog({
+          sourceRef: sp,
           speaker: sp.introSpeaker,
           category: 'story',
           text: sp.introText,
@@ -2707,20 +3846,22 @@ function updateMiracleOpenWorldFrame(dt, now) {
     updateWorldLabelPos(ev.label, ev.pos, !isFieldMissionActive && d < MIRACLE_TAG_DIST_SPOT);
 
     if (ev._requireLeaveZone) {
-      if (d > 4.2) ev._requireLeaveZone = false;
+      if (d > 4.4) ev._requireLeaveZone = false;
       return;
     }
 
     if (
+      dialogGraceReady &&
       !isFieldMissionActive &&
       d < 3.0 &&
-      (!ev._prompted || now - ev._prompted > 5500)
+      (!ev._prompted || now - ev._prompted > 6500)
     ) {
       ev._prompted = now;
       ev._requireLeaveZone = true;
 
       if (ev.completed) {
         openMiracleDialog({
+          sourceRef: ev,
           speaker: ev.speaker,
           category: 'greeting',
           text: ev.greetingText || `"샬롬! 아까 함께 나누었던 은혜로운 이야기를 기억하고 계시군요! 반가워요!"`,
@@ -2732,6 +3873,7 @@ function updateMiracleOpenWorldFrame(dt, now) {
         });
       } else {
         openMiracleDialog({
+          sourceRef: ev,
           speaker: ev.speaker,
           category: ev.category,
           text: ev.introText,
@@ -2755,19 +3897,56 @@ function updateMiracleOpenWorldFrame(dt, now) {
     rn.pos.set(rn.mesh.position.x, rn.mesh.position.y + 0.5, rn.mesh.position.z);
 
     const d = Math.hypot(playerPos.x - rn.pos.x, playerPos.z - rn.pos.z);
+    // 수첩 수집 상태가 다른 이벤트로 갱신된 경우에도 머리 위 라벨을 [수집한 소문/말씀/목격담]으로 즉시 동기화
+    const isAlreadyCollected = Boolean(rn.talked || (rn.nbId && miracleCollectedIds.has(rn.nbId)));
+    if (isAlreadyCollected && !rn._collectedLabelApplied) {
+      rn._collectedLabelApplied = true;
+      rn.talked = true;
+      if (rn.label) {
+        const prefix = rn.cat === 'word' ? '✅ 수집한 말씀' : (rn.cat === 'eyewitness' ? '✅ 수집한 목격담' : '✅ 수집한 소문');
+        rn.label.innerHTML = `${prefix} · ${rn.speaker}`;
+      }
+    }
+
+    // 미션 진행 중에는 소문/말씀 NPC 태그도 일시 해제하여 혼란 방지
+    if (isFieldMissionActive) {
+      if (rn.label) rn.label.style.opacity = '0';
+      return;
+    }
+
     updateWorldLabelPos(rn.label, rn.pos, d < MIRACLE_TAG_DIST_NPC);
 
-    if (d < 2.5 && (!rn._prompted || now - rn._prompted > 6500)) {
+    if (rn._requireLeaveZone) {
+      if (d > 4.2) rn._requireLeaveZone = false;
+      return;
+    }
+
+    // 대화 종료 후 충분한 쿨타임(9초) + 일정 거리 이상 이탈 후 다시 다가왔을 때만 대화 재오픈
+    if (dialogGraceReady && d < 2.5 && (!rn._prompted || now - rn._prompted > 9000)) {
       rn._prompted = now;
+      rn._requireLeaveZone = true;
+      const wasCollected = isAlreadyCollected;
       rn.talked = true;
-      rn.label.innerHTML = `✅ ${rn.speaker}`;
+      rn._collectedLabelApplied = true;
+
+      const collectedBadgeText = rn.cat === 'word'
+        ? '✅ 수집한 말씀 (복음서 수첩에 기록됨)'
+        : (rn.cat === 'eyewitness' ? '✅ 수집한 목격담 (복음서 수첩에 기록됨)' : '✅ 수집한 소문 (복음서 수첩에 기록됨)');
+      if (rn.label) {
+        const prefix = rn.cat === 'word' ? '✅ 수집한 말씀' : (rn.cat === 'eyewitness' ? '✅ 수집한 목격담' : '✅ 수집한 소문');
+        rn.label.innerHTML = `${prefix} · ${rn.speaker}`;
+      }
+
       openMiracleDialog({
+        sourceRef: rn,
         speaker: rn.speaker,
         category: rn.cat,
+        badgeLabel: wasCollected ? collectedBadgeText : undefined,
+        badgeCls: wasCollected ? 'bg-emerald-200 text-emerald-950' : undefined,
         notebookId: rn.nbId,
         text: rn.text,
-        quiz: (currentMode === 'kinder') ? null : rn.quiz,
-        btnText: '📖 수첩에 적어두기'
+        quiz: (wasCollected || currentMode === 'kinder') ? null : rn.quiz,
+        btnText: wasCollected ? '✅ 확인 (수첩에 보관됨) ▶' : '📖 수첩에 적어두기'
       });
     }
   });

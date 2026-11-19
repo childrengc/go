@@ -3,6 +3,11 @@
 // - 오픈월드 각 스테이지 시작 지점의 지형·해안선·마을 전경·외곽 낮은 언덕·태양 그림자를 그대로 이어받아 구성
 // - 스테이지 3(십자가 사건): 넓어진 골고다 언덕 정상 고원과 세 십자가 등장 연출 적용
 // =========================================================================
+window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
+window.__GAME_BUILD_VERSIONS__.ep4_stages = '20261120_v7';
+
+// 스테이지 3: 예수님과 플레이어가 무거운 십자가를 지고 걷는 통일 속도 (아무리 세게 터치해도 이 속도로 제한!)
+const MIRACLE_STAGE3_CROSS_WALK_SPEED = 1.65;
 
 let miracleStageObjects = [];
 let miracleStageCutscene = { active: false, timer: 0, stageNum: 0 };
@@ -32,12 +37,42 @@ window.getMiracleGroundHeight = function (x, z, st) {
     return 0;
   }
   if (miracleSubMode === 'ascension') {
-    // 감람산 승천 언덕 정상부 완만한 구릉 지형
+    // 감람산 승천 언덕 정상부 + 서쪽 예루살렘 골짜기 경사면(x < -28)을 지형 메쉬와 100% 일치시켜 원경 건물 들뜸 완벽 해소!
+    if (x < -28) {
+      return Number(Math.max(-8.0, (x + 28) * 0.18).toFixed(3));
+    }
     const dist = Math.hypot(x / 32, (z + 4) / 32);
     const dome = Math.max(0, 1.0 - dist * dist) * 2.2;
     return Number(dome.toFixed(3));
   }
   return 0;
+};
+
+// 월드맵 에피소드 4 선택 모달에서 2회차/해금 플레이어가 특정 메인 스테이지로 바로 진입하는 헬퍼
+window.startMiracleDirectSubStage = function (subId) {
+  currentEpisode = 'miracle';
+  const stageMap = { main1_boat: 1, main1_galilee: 1, main2_loaves: 2, main3_cross: 3, main4_tomb: 4 };
+  const stNum = stageMap[subId] || 1;
+  currentStage = stNum;
+  enteredFromMapStageSelect = true;
+  currentRunCanIssueCert = false;
+  isPlaying = true;
+  if (typeof loadMiracleNotebookProgress === 'function') loadMiracleNotebookProgress();
+  document.getElementById('hud-top').classList.remove('hidden');
+  document.getElementById('hud-mode-btn').textContent = `${MODE_META[currentMode].badge} · 🗺️맵`;
+  document.getElementById('joystick-zone').style.display = 'block';
+  document.getElementById('cam-bottom-bar').style.display = 'flex';
+  document.getElementById('action-zone').style.display = 'flex';
+  if (typeof stopMiracleOpenWorldOgg === 'function') stopMiracleOpenWorldOgg(false);
+  miracleStageCutscene.active = false;
+  miracleStageObjects = [];
+  if (stNum === 1) buildMiracleMainStage1Galilee();
+  else if (stNum === 2) buildMiracleMainStage2Loaves();
+  else if (stNum === 3) buildMiracleMainStage3Cross();
+  else if (stNum === 4) buildMiracleMainStage4Tomb();
+  updateMiracleNotebookHudBadge();
+  updateStageHUD();
+  startStageBgm(stNum);
 };
 
 // -------------------------------------------------------------------------
@@ -124,6 +159,9 @@ window.isPlayerMovementLocked = function () {
     if (ph === 'cast_net' || ph === 'storm_balance' || ph === 'calm') {
       return true;
     }
+  }
+  if (miracleSubMode === 'ascension' && typeof miracleAscensionState !== 'undefined' && miracleAscensionState.active) {
+    return true;
   }
   return locked;
 };
@@ -622,40 +660,57 @@ function buildMiracleMainStage1Galilee() {
   seaFloor.receiveShadow = true;
   worldGroup.add(seaFloor);
 
-  // 2) 동쪽 해안 원경 (선착장·마을·야자수·언덕)
-  const shoreGeo = new THREE.PlaneGeometry(120, 260, 24, 36);
-  shoreGeo.rotateX(-Math.PI / 2);
-  const sPos = shoreGeo.attributes.position;
-  const sCols = [];
-  const cCoastHerb = new THREE.Color('#86b049');
-  const cMeadow    = new THREE.Color('#9ec164');
-  const cHill      = new THREE.Color('#7ca344');
-  for (let i = 0; i < sPos.count; i++) {
-    const lx = sPos.getX(i), lz = sPos.getZ(i);
+  // 2) 동쪽 해안 원경 (오픈월드와 동일한 크리스프 로우폴리 지형 · 짧은 모래 가장자리 · 비정형 선착장 · 벽돌가옥 · 언덕 돌담)
+  const s1ShoreHeight = (lx, lz) => {
     const distFromWater = Math.max(0, (lx + 60) / 120);
-    const sy = -1.3 + Math.pow(distFromWater, 0.85) * 14.5 + Math.sin(lx * 0.08) * Math.cos(lz * 0.06) * 0.65;
-    sPos.setY(i, sy);
-    const col = distFromWater < 0.25
-      ? cCoastHerb.clone().lerp(cMeadow, distFromWater * 4)
-      : (sy > 6.5 ? cHill.clone() : cMeadow.clone());
-    sCols.push(col.r, col.g, col.b);
-  }
-  shoreGeo.setAttribute('color', new THREE.Float32BufferAttribute(sCols, 3));
-  shoreGeo.computeVertexNormals();
-  const shoreMesh = new THREE.Mesh(shoreGeo, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+    return -1.3 + Math.pow(distFromWater, 0.85) * 14.5 + Math.sin(lx * 0.08) * Math.cos(lz * 0.06) * 0.65;
+  };
+  const cS1Sand   = new THREE.Color('#e6d09c');
+  const cS1Meadow = new THREE.Color('#b6b968');
+  const cS1Ochre  = new THREE.Color('#d8b674');
+  const cS1Slope  = new THREE.Color('#cf9f60');
+  const cS1Hill   = new THREE.Color('#7c9a45');
+  const shoreMesh = (typeof createCrispLowPolyFacetedTerrain === 'function')
+    ? createCrispLowPolyFacetedTerrain(120, 260, 24, 38, s1ShoreHeight, (mx, my, mz, slopeFlat, hash2, outCol) => {
+        const distFromWater = Math.max(0, (mx + 60) / 120);
+        if (distFromWater < 0.09 && my < 1.35) {
+          outCol.copy(cS1Sand);
+        } else if (my > 6.5) {
+          outCol.copy(cS1Hill);
+        } else if (my > 2.2 && slopeFlat < 0.94) {
+          outCol.copy(cS1Slope);
+        } else {
+          const patch = hash2(Math.floor(mx * 0.14), Math.floor(mz * 0.14));
+          outCol.copy(cS1Meadow).lerp(cS1Ochre, 0.28 + patch * 0.52);
+        }
+      }, 0.85)
+    : new THREE.Mesh(new THREE.PlaneGeometry(120, 260, 24, 36), new THREE.MeshLambertMaterial({ color: '#9ec164', flatShading: true }));
   shoreMesh.position.set(78, 0, 0);
-  shoreMesh.receiveShadow = true;
   worldGroup.add(shoreMesh);
 
-  worldGroup.add(
-    createLowPolyMesh(new THREE.BoxGeometry(12.5, 0.35, 3.8), '#92400e', 22, 0.25, 0),
-    createLowPolyMesh(new THREE.CylinderGeometry(0.22, 0.22, 2.4, 6), '#5c2d0c', 17.5, -0.5, -1.4),
-    createLowPolyMesh(new THREE.CylinderGeometry(0.22, 0.22, 2.4, 6), '#5c2d0c', 17.5, -0.5,  1.4)
-  );
-  addJudeanRoadsideBuilding(44, -18, 1, -Math.PI / 2, 0.95, false);
-  addJudeanRoadsideBuilding(48,  14, 0, -Math.PI / 2, 0.95, false);
+  // 비정형 소프트 로우폴리 갈릴리 선착장 다리
+  const s1Pier = (typeof createOrganicGalileePierGroup === 'function')
+    ? createOrganicGalileePierGroup(12.8, 3.8, 73)
+    : createLowPolyMesh(new THREE.BoxGeometry(12.5, 0.35, 3.8), '#92400e', 0, 0.25, 0);
+  s1Pier.position.set(22, 0.0, 0);
+  worldGroup.add(s1Pier);
+
+  addJudeanRoadsideBuilding(44, -18, 1, -Math.PI / 2, 0.95, false, 'stonebrick');
+  addJudeanRoadsideBuilding(48,  14, 0, -Math.PI / 2, 0.95, false, 'plaster');
+  addJudeanRoadsideBuilding(54,  -2, 2, -Math.PI / 2, 0.96, false, 'stonebrick');
   addLowPolyPalmTree(30, -12, 1.1, false);
   addLowPolyPalmTree(32,  10, 1.1, false);
+
+  if (typeof buildStageDryStoneTerraceWalls === 'function') {
+    buildStageDryStoneTerraceWalls(
+      [
+        { pts: [[56, -42], [60, -24], [62, -6], [60, 16], [56, 36]], courses: 3 },
+        { pts: [[68, -32], [72, -10], [72, 14], [68, 34]], courses: 3 }
+      ],
+      (wx, wz) => s1ShoreHeight(wx - 78, wz),
+      710
+    );
+  }
 
   if (typeof createBumpyLowPolyHillMesh === 'function') {
     createBumpyLowPolyHillMesh(88, -55, 26, 13.5, 24, '#7ca344', 11, false);
@@ -964,6 +1019,7 @@ function updateMiracleMainStage1Frame(dt, now) {
       miracleMainStagesCleared[1] = true;
       unlockMiracleNotebookEntry('mir_storm', true);
       unlockMiracleNotebookEntry('mir_fish', true);
+      saveMiracleNotebookProgress();
       openStageClearModal(1);
     }
     return;
@@ -1186,35 +1242,48 @@ function buildMiracleMainStage2Loaves() {
 
   currentMapRectBounds = { minX: -32, maxX: 32, minZ: -38, maxZ: 34 };
 
-  const hillGeo = new THREE.PlaneGeometry(180, 180, 56, 56);
-  hillGeo.rotateX(-Math.PI / 2);
-  const posAttr = hillGeo.attributes.position;
-  const cols = [];
-  const cGrassLow  = new THREE.Color('#9ec164');
-  const cGrassMid  = new THREE.Color('#82a84d');
-  const cGrassHigh = new THREE.Color('#6b9436');
-  const cPath      = new THREE.Color('#c89d6c');
-
-  for (let i = 0; i < posAttr.count; i++) {
-    const vx = posAttr.getX(i);
-    const vz = posAttr.getZ(i);
+  // 오픈월드와 동일한 크리스프 비인덱스 로우폴리 지형 + 언덕 돌담 + 비정형 벽돌 가옥 혼합 배치
+  const s2HeightFn = (vx, vz) => {
     let vy = getMiracleGroundHeight(vx, vz, 2);
-    if (vz > 34) {
-      vy = Math.max(-0.3, 0.4 - (vz - 34) * 0.03);
-    }
-    posAttr.setY(i, vy);
-
-    const onTrail = Math.abs(vx - Math.sin(vz * 0.08) * 4.5) < 3.8 && vz > -24 && vz < 55;
-    const c = onTrail
-      ? cPath.clone()
-      : (vy > 8.5 ? cGrassHigh.clone() : (vy > 3.5 ? cGrassMid.clone() : cGrassLow.clone()));
-    cols.push(c.r, c.g, c.b);
-  }
-  hillGeo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
-  hillGeo.computeVertexNormals();
-  const hillMesh = new THREE.Mesh(hillGeo, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
-  hillMesh.receiveShadow = true;
+    if (vz > 34) vy = Math.max(-0.3, 0.4 - (vz - 34) * 0.03);
+    return vy;
+  };
+  const cS2Meadow = new THREE.Color('#b6b968');
+  const cS2Ochre  = new THREE.Color('#d8b674');
+  const cS2Slope  = new THREE.Color('#cf9f60');
+  const cS2Olive  = new THREE.Color('#8ea854');
+  const cS2Top    = new THREE.Color('#7c9a45');
+  const cS2Path   = new THREE.Color('#dfb984');
+  const hillMesh = (typeof createCrispLowPolyFacetedTerrain === 'function')
+    ? createCrispLowPolyFacetedTerrain(180, 180, 50, 50, s2HeightFn, (mx, my, mz, slopeFlat, hash2, outCol) => {
+        const onTrail = Math.abs(mx - Math.sin(mz * 0.08) * 4.5) < 3.8 && mz > -24 && mz < 55;
+        if (onTrail) {
+          outCol.copy(cS2Path);
+        } else if (my > 9.5) {
+          outCol.copy(cS2Top);
+        } else if (my > 2.5 && slopeFlat < 0.945) {
+          outCol.copy(cS2Slope);
+        } else if (my > 3.2) {
+          outCol.copy(cS2Olive);
+        } else {
+          const patch = hash2(Math.floor(mx * 0.14), Math.floor(mz * 0.14));
+          outCol.copy(cS2Meadow).lerp(cS2Ochre, 0.28 + patch * 0.54);
+        }
+      }, 0.78)
+    : new THREE.Mesh(new THREE.PlaneGeometry(180, 180, 48, 48), new THREE.MeshLambertMaterial({ color: '#9ec164', flatShading: true }));
   worldGroup.add(hillMesh);
+
+  if (typeof buildStageDryStoneTerraceWalls === 'function') {
+    buildStageDryStoneTerraceWalls(
+      [
+        { pts: [[-30, 18], [-22, 8], [-18, -4], [-22, -18]], courses: 3 },
+        { pts: [[ 30, 18], [ 22, 8], [ 18, -4], [ 22, -18]], courses: 3 },
+        { pts: [[-28, -28], [-14, -34], [14, -34], [28, -28]], courses: 2 }
+      ],
+      s2HeightFn,
+      740
+    );
+  }
 
   const distantSea = new THREE.Mesh(
     new THREE.PlaneGeometry(180, 260),
@@ -1224,19 +1293,19 @@ function buildMiracleMainStage2Loaves() {
   distantSea.position.set(-115, -0.35, 30);
   worldGroup.add(distantSea);
 
-  // 경사진 언덕(z < 32) 대신 남쪽 낮은 평지(z = 36~56)에 마을 집을 재배치하여 집 모서리 공중 뜸 현상 완전 해소
+  // 경사진 언덕(z < 32) 대신 남쪽 낮은 평지(z = 36~56)에 마을 집(비정형 벽돌 가옥 혼합) 배치
   const villageVistaHouses = [
-    { x: -24, z: 36, v: 0, yaw:  0.22, sc: 0.96 },
-    { x:  24, z: 36, v: 2, yaw: -0.22, sc: 0.96 },
-    { x: -34, z: 44, v: 1, yaw:  0.18, sc: 0.94 },
-    { x:  34, z: 44, v: 4, yaw: -0.18, sc: 0.94 },
-    { x: -20, z: 48, v: 3, yaw:  0.15, sc: 0.95 },
-    { x:  -5, z: 52, v: 1, yaw: -0.08, sc: 0.98 },
-    { x:  14, z: 48, v: 2, yaw: -0.20, sc: 0.95 },
-    { x: -38, z: 56, v: 0, yaw:  0.28, sc: 0.92 }
+    { x: -24, z: 36, v: 0, yaw:  0.22, sc: 0.96, m: 'stonebrick' },
+    { x:  24, z: 36, v: 2, yaw: -0.22, sc: 0.96, m: 'plaster' },
+    { x: -34, z: 44, v: 1, yaw:  0.18, sc: 0.94, m: 'plaster' },
+    { x:  34, z: 44, v: 4, yaw: -0.18, sc: 0.94, m: 'stonebrick' },
+    { x: -20, z: 48, v: 3, yaw:  0.15, sc: 0.95, m: 'plaster' },
+    { x:  -5, z: 52, v: 1, yaw: -0.08, sc: 0.98, m: 'stonebrick' },
+    { x:  14, z: 48, v: 2, yaw: -0.20, sc: 0.95, m: 'stonebrick' },
+    { x: -38, z: 56, v: 0, yaw:  0.28, sc: 0.92, m: 'plaster' }
   ];
   villageVistaHouses.forEach(vh => {
-    addJudeanRoadsideBuilding(vh.x, vh.z, vh.v, vh.yaw, vh.sc, false);
+    addJudeanRoadsideBuilding(vh.x, vh.z, vh.v, vh.yaw, vh.sc, false, vh.m);
   });
 
   if (typeof createBumpyLowPolyHillMesh === 'function') {
@@ -1317,16 +1386,25 @@ function buildMiracleMainStage2Loaves() {
     }
   });
 
-  // [요청 반영] 많은 인파 가운데 도시락을 가진 꼬마 배치 — 바닥 노란 원 제거, 아주 가까이 가야 머리 위 태그 표시!
-  const boySpotCandidates = [
-    [ 10.6, -13.8],
-    [-11.4, -13.2],
-    [  8.4,  -9.6]
-  ];
-  const [boyX, boyZ] = boySpotCandidates[Math.floor(Math.random() * boySpotCandidates.length)];
+  // [요청 반영] 많은 인파 영역 전체에서 매 플레이마다 도시락 소년 위치를 완전 랜덤 배치!
+  let boyX = 9.5, boyZ = -13.0;
+  for (let tries = 0; tries < 60; tries++) {
+    const rAng = -0.08 * Math.PI + Math.random() * (1.16 * Math.PI);
+    const rDist = 7.4 + Math.random() * 11.4;
+    const cxCand = Math.cos(rAng) * rDist;
+    const czCand = -22 + Math.sin(rAng) * rDist * 0.85;
+    // 중앙 보행 통로(|x| < 2.4), 바위((-12,6), (14,-4)), 맵 외곽 제외
+    if (Math.abs(cxCand) < 2.5 && czCand > -21 && czCand < -4) continue;
+    if (Math.hypot(cxCand + 12, czCand - 6) < 3.4 || Math.hypot(cxCand - 14, czCand + 4) < 3.6) continue;
+    if (Math.abs(cxCand) > 19.5 || czCand < -23.5 || czCand > -4.5) continue;
+    boyX = Number(cxCand.toFixed(2));
+    boyZ = Number(czCand.toFixed(2));
+    break;
+  }
   const boyY = getMiracleGroundHeight(boyX, boyZ, 2);
   const boyGrp = new THREE.Group();
   const boyMesh = createLowPolyPersonMesh('child', 7);
+  const lunchBasketGrp = new THREE.Group();
   const basketMesh = createLowPolyMesh(new THREE.CylinderGeometry(0.32, 0.25, 0.32, 8), '#d97706', 0, 0.80, 0.40);
   const bread1 = createLowPolyMesh(new THREE.IcosahedronGeometry(0.11, 0), '#f59e0b', -0.09, 0.98, 0.42, false);
   const bread2 = createLowPolyMesh(new THREE.IcosahedronGeometry(0.11, 0), '#fbbf24',  0.09, 0.98, 0.38, false);
@@ -1335,7 +1413,9 @@ function buildMiracleMainStage2Loaves() {
     : createLowPolyMesh(new THREE.ConeGeometry(0.08, 0.24, 4), '#38bdf8', 0, 1.02, 0.44, false);
   tinyFish.position.set(0.02, 1.02, 0.44);
   tinyFish.rotation.y = 0.7;
-  boyGrp.add(boyMesh, basketMesh, bread1, bread2, tinyFish);
+  lunchBasketGrp.add(basketMesh, bread1, bread2, tinyFish);
+  lunchBasketGrp.visible = false; // 멀리서 눈에 띄지 않도록 숨김 -> 가까이 다가갈 때 노출!
+  boyGrp.add(boyMesh, lunchBasketGrp);
   boyGrp.position.set(boyX, boyY, boyZ);
   boyGrp.lookAt(0, boyY, -24);
   boyGrp.visible = true;
@@ -1346,12 +1426,13 @@ function buildMiracleMainStage2Loaves() {
   miracleStageObjects.push({
     kind: 'lunch_boy',
     mesh: boyGrp,
+    basketGroup: lunchBasketGrp,
     pos: new THREE.Vector3(boyX, boyY + 0.5, boyZ),
     done: false,
     label: boyLbl
   });
 
-  // [요청 반영] 도시락을 갖고 있지 않은 어린이 함정 모델 7명 (인파 곳곳에 숨어 있음)
+  // [요청 반영] 도시락을 갖고 있지 않은 어린이 함정 모델 7명 (매번 인파 곳곳에 랜덤 배치, 소년과 겹침 방지)
   const decoyLines = [
     '👧 나는 도시락이 없어요!',
     '👦 저도 도시락을 안 가져왔어요!',
@@ -1361,17 +1442,23 @@ function buildMiracleMainStage2Loaves() {
     '👦 저는 빈손으로 왔어요! 도시락이 없어요!',
     '👧 저한테는 도시락이 없어요! 다른 친구를 찾아보세요!'
   ];
-  const decoySpots = [
-    [-9.2, -16.5], [12.8, -17.0], [-6.8, -10.8], [6.2, -15.4],
-    [-14.5, -10.2], [14.2, -8.5], [-4.4, -18.0]
-  ];
-  decoySpots.forEach(([dx, dz], idx) => {
-    // 실제 도시락 꼬마와 너무 겹치지 않게 위치 보정
-    let fx = dx, fz = dz;
-    if (Math.hypot(fx - boyX, fz - boyZ) < 3.6) {
-      fx = -dx;
-      fz = dz - 1.5;
+  const placedKids = [{ x: boyX, z: boyZ }];
+  for (let idx = 0; idx < 7; idx++) {
+    let fx = (idx % 2 === 0 ? -1 : 1) * (6.5 + idx * 1.4);
+    let fz = -9.5 - idx * 1.4;
+    for (let t = 0; t < 40; t++) {
+      const a = -0.08 * Math.PI + Math.random() * (1.16 * Math.PI);
+      const r = 7.0 + Math.random() * 11.8;
+      const cx2 = Math.cos(a) * r;
+      const cz2 = -22 + Math.sin(a) * r * 0.85;
+      if (Math.abs(cx2) < 2.4 && cz2 > -21 && cz2 < -4) continue;
+      if (Math.abs(cx2) > 19.5 || cz2 < -23.5 || cz2 > -4.5) continue;
+      if (placedKids.some(pk => Math.hypot(pk.x - cx2, pk.z - cz2) < 3.6)) continue;
+      fx = Number(cx2.toFixed(2));
+      fz = Number(cz2.toFixed(2));
+      break;
     }
+    placedKids.push({ x: fx, z: fz });
     const dy = getMiracleGroundHeight(fx, fz, 2);
     const dMesh = createLowPolyPersonMesh('child', idx + 12);
     dMesh.position.set(fx, dy, fz);
@@ -1389,7 +1476,7 @@ function buildMiracleMainStage2Loaves() {
       lastToastAt: 0,
       label: dLbl
     });
-  });
+  }
 
   playerPos.set(0, getMiracleGroundHeight(0, 18, 2), 18);
   lastGroundedY = playerPos.y;
@@ -1477,7 +1564,10 @@ function updateMiracleMainStage2Frame(dt, now) {
 
     if (boyObj && !boyObj.done) {
       const d = Math.hypot(playerPos.x - boyObj.pos.x, playerPos.z - boyObj.pos.z);
-      // 아주 가까이(4.2m 이내) 다가갔을 때만 머리 위 태그 노출!
+      // 아주 가까이(4.2m 이내) 다가갔을 때만 도시락 에셋과 머리 위 태그 함께 노출!
+      if (boyObj.basketGroup) {
+        boyObj.basketGroup.visible = (d < 4.2);
+      }
       updateWorldLabelPos(boyObj.label, boyObj.pos, d < 4.2);
 
       if (d < 2.4) {
@@ -1528,6 +1618,7 @@ function updateMiracleMainStage2Frame(dt, now) {
         if (st.basketsGathered >= st.reqBaskets) {
           miracleMainStagesCleared[2] = true;
           unlockMiracleNotebookEntry('mir_loaves', true);
+          saveMiracleNotebookProgress();
           openStageClearModal(2);
           return;
         } else {
@@ -1545,182 +1636,169 @@ function updateMiracleMainStage2Frame(dt, now) {
 }
 
 // -------------------------------------------------------------------------
-// [스테이지 공용] 소프트 로우 폴리곤 예루살렘 성전 & 외곽 계단 성문 단지 빌더
-// - 스테이지 3(십자가의 길), 스테이지 4(빈 무덤 남쪽 원경), 감람산 엔딩(서쪽 원경) 공용
+// [스테이지 공용] 리디자인 소프트 로우 폴리곤 비정형 예루살렘 성전 & 외곽 계단 성문 단지 빌더
+// - 오픈월드 성전과 동일한 비정형 석조 매스 · 아치 성문 · 붉은 휘장 · 야긴/보아스 기둥 · 정점색 병합 적용
 // -------------------------------------------------------------------------
 function buildStageJerusalemTemple(cx = 0, cy = 0, cz = 54, scale = 1.0, rotY = 0, withOuterGate = true, gateDist = 16) {
   const cSandBase   = '#dfc79e';
-  const cCourtWall  = '#ead4ae';
-  const cCourtTrim  = '#cfa972';
-  const cWhiteWall  = '#f8fafc';
-  const cPilaster   = '#e5ddd0';
+  const cSandDark   = '#cfa972';
+  const cCourtWall  = '#ebd6b0';
+  const cWhiteWarm  = '#f7f4ec';
+  const cWhiteShade = '#e8e0d2';
   const cGoldMain   = '#eab308';
   const cGoldBright = '#facc15';
-  const cDarkVoid   = '#291d12';
+  const cBronze     = '#92400e';
+  const cCrimson    = '#991b1b';
+  const cDarkVoid   = '#23170f';
 
   const rootGrp = new THREE.Group();
-
-  const regMesh = (m) => {
-    m.castShadow = true;
-    m.receiveShadow = true;
-    wallMeshes.push(m);
+  const makeOrgBox = (target, w, h, d, col, x, y, z, seed, irr = 0.032, taper = 0.96, seg = 2) => {
+    const geo = (typeof createOrganicBoxGeo === 'function')
+      ? createOrganicBoxGeo(w, h, d, seed, irr, taper, seg)
+      : new THREE.BoxGeometry(w, h, d);
+    const m = createLowPolyMesh(geo, col, x, y, z, true);
+    target.add(m);
     return m;
   };
 
-  // [A] 전면 외곽 사각 망루 & 양측 계단 성문 (withOuterGate === true 일 때 성전 앞쪽에 배치)
+  // [A] 전면 외곽 비정형 망루 & 양측 계단 성문
   if (withOuterGate) {
     const outerGateGrp = new THREE.Group();
-    const innerGateTowerL = regMesh(createLowPolyMesh(new THREE.BoxGeometry(2.4, 5.2, 2.4), cCourtWall, -4.0, 2.6, 0));
-    const innerGateTowerR = regMesh(createLowPolyMesh(new THREE.BoxGeometry(2.4, 5.2, 2.4), cCourtWall,  4.0, 2.6, 0));
-    const innerGateCrownL = createLowPolyMesh(new THREE.BoxGeometry(2.65, 0.45, 2.65), cCourtTrim, -4.0, 5.35, 0);
-    const innerGateCrownR = createLowPolyMesh(new THREE.BoxGeometry(2.65, 0.45, 2.65), cCourtTrim,  4.0, 5.35, 0);
-
-    const gateLintel    = regMesh(createLowPolyMesh(new THREE.BoxGeometry(5.8, 0.95, 1.8), cCourtTrim, 0, 4.5, 0));
-    const gateGoldCrest = createLowPolyMesh(new THREE.BoxGeometry(3.2, 0.38, 1.92), cGoldMain, 0, 4.5, 0);
-
-    const wingWallL       = regMesh(createLowPolyMesh(new THREE.BoxGeometry(4.4, 3.8, 1.6), cSandBase, -7.4, 1.9, 0));
-    const wingWallR       = regMesh(createLowPolyMesh(new THREE.BoxGeometry(4.4, 3.8, 1.6), cSandBase,  7.4, 1.9, 0));
-    const outerGateTowerL = regMesh(createLowPolyMesh(new THREE.BoxGeometry(2.3, 4.8, 2.3), cCourtWall, -10.2, 2.4, 0));
-    const outerGateTowerR = regMesh(createLowPolyMesh(new THREE.BoxGeometry(2.3, 4.8, 2.3), cCourtWall,  10.2, 2.4, 0));
-    const outerGateCrownL = createLowPolyMesh(new THREE.BoxGeometry(2.55, 0.42, 2.55), cCourtTrim, -10.2, 4.95, 0);
-    const outerGateCrownR = createLowPolyMesh(new THREE.BoxGeometry(2.55, 0.42, 2.55), cCourtTrim,  10.2, 4.95, 0);
-
-    outerGateGrp.add(
-      innerGateTowerL, innerGateTowerR, innerGateCrownL, innerGateCrownR,
-      gateLintel, gateGoldCrest,
-      wingWallL, wingWallR, outerGateTowerL, outerGateTowerR, outerGateCrownL, outerGateCrownR
-    );
-
-    [-8.6, -7.4, -6.2, 6.2, 7.4, 8.6].forEach(bx => {
-      outerGateGrp.add(createLowPolyMesh(new THREE.BoxGeometry(0.55, 0.55, 0.65), cCourtTrim, bx, 4.05, -0.45, false));
+    [-4.0, 4.0].forEach((tx, idx) => {
+      makeOrgBox(outerGateGrp, 2.55, 5.2, 2.55, cCourtWall, tx, 2.6, 0, 610 + idx, 0.038, 0.89, 2);
+      makeOrgBox(outerGateGrp, 2.75, 0.44, 2.75, cSandDark, tx, 5.34, 0, 614 + idx, 0.04, 0.96, 1);
+      [[-0.95, -0.95], [0.95, -0.95], [-0.95, 0.95], [0.95, 0.95]].forEach(([mx, mz], mi) => {
+        makeOrgBox(outerGateGrp, 0.46, 0.50, 0.46, cCourtWall, tx + mx, 5.76, mz, 620 + idx * 4 + mi, 0.08, 0.86, 1);
+      });
+      outerGateGrp.add(createLowPolyMesh(new THREE.BoxGeometry(0.42, 1.05, 2.62), cDarkVoid, tx, 3.25, 0, false));
     });
-    [-7.4, 7.4].forEach(sx => {
+    makeOrgBox(outerGateGrp, 6.0, 0.96, 1.90, cSandDark, 0, 4.55, 0, 630, 0.036, 0.96, 2);
+    makeOrgBox(outerGateGrp, 3.3, 0.40, 2.02, cGoldMain, 0, 4.58, 0, 631, 0.04, 0.96, 1);
+    [-2.65, 2.65].forEach((bx, bi) => {
+      makeOrgBox(outerGateGrp, 0.68, 1.05, 0.68, cSandBase, bx, 0.52, -1.55, 634 + bi, 0.05, 0.92, 1);
+      const br = createLowPolyMesh(new THREE.CylinderGeometry(0.32, 0.20, 0.36, 7), cBronze, bx, 1.22, -1.55, false);
+      const fl = createLowPolyMesh(new THREE.DodecahedronGeometry(0.20, 0), '#fb923c', bx, 1.50, -1.55, false);
+      fl.userData._emissiveGlow = true;
+      outerGateGrp.add(br, fl);
+    });
+    [-7.4, 7.4].forEach((wx, idx) => {
+      makeOrgBox(outerGateGrp, 4.5, 3.85, 1.65, cSandBase, wx, 1.92, 0, 640 + idx, 0.034, 0.94, 2);
+    });
+    [-10.2, 10.2].forEach((ox, idx) => {
+      makeOrgBox(outerGateGrp, 2.40, 4.85, 2.40, cCourtWall, ox, 2.42, 0, 645 + idx, 0.038, 0.89, 2);
+      makeOrgBox(outerGateGrp, 2.62, 0.42, 2.62, cSandDark, ox, 4.96, 0, 648 + idx, 0.04, 0.96, 1);
+    });
+    [-8.6, -7.4, -6.2, 6.2, 7.4, 8.6].forEach((bx, bi) => {
+      makeOrgBox(outerGateGrp, 0.56, 0.54, 0.64, cSandDark, bx, 4.08, -0.45, 665 + bi, 0.08, 0.88, 1);
+    });
+    [-7.4, 7.4].forEach((sx, si) => {
       for (let s = 0; s < 4; s++) {
         const sh = 0.45 * (s + 1);
         const sd = 2.8 - s * 0.6;
-        outerGateGrp.add(createLowPolyMesh(new THREE.BoxGeometry(3.6, sh, sd), cCourtTrim, sx, sh * 0.5, -1.8 + s * 0.3));
+        makeOrgBox(outerGateGrp, 3.6, sh, sd, s % 2 === 0 ? cSandDark : cSandBase, sx, sh * 0.5, -1.8 + s * 0.3, 675 + si * 4 + s, 0.035, 0.97, 1);
       }
     });
-
+    if (typeof mergeStaticLowPolyGroupToVertexColor === 'function') {
+      mergeStaticLowPolyGroupToVertexColor(outerGateGrp, { registerWall: true, castShadow: true });
+    }
     outerGateGrp.position.set(0, 0, -gateDist);
     rootGrp.add(outerGateGrp);
   }
 
-  // [B] 사암 기단 & 4모서리 망루 성벽 & 순백색 성소 본관
+  // [B] 비정형 사암 기단 & 4모서리 망루 성벽 & 순백색 성소 본관 (야긴·보아스 청동기둥 + 붉은 휘장)
   const templeGrp = new THREE.Group();
-  const podium      = regMesh(createLowPolyMesh(new THREE.BoxGeometry(17.6, 1.1, 15.6), cSandBase, 0, 0.55, 0));
-  const innerPodium = regMesh(createLowPolyMesh(new THREE.BoxGeometry(15.2, 0.5, 13.2), cCourtTrim, 0, 1.35, 0.2));
-  templeGrp.add(podium, innerPodium);
-
+  makeOrgBox(templeGrp, 18.2, 1.25, 16.2, cSandBase, 0, 0.62, 0, 701, 0.028, 0.95, 2);
+  makeOrgBox(templeGrp, 15.6, 0.56, 13.6, cSandDark, 0, 1.48, 0.1, 702, 0.025, 0.97, 2);
   for (let s = 0; s < 3; s++) {
-    const stepH = 0.36 * (s + 1);
-    const stepD = 2.4 - s * 0.65;
-    templeGrp.add(createLowPolyMesh(new THREE.BoxGeometry(7.6, stepH, stepD), cCourtTrim, 0, stepH * 0.5, -8.4 + s * 0.32));
+    const sh = 0.40 * (s + 1);
+    const sd = 2.6 - s * 0.68;
+    makeOrgBox(templeGrp, 8.0 - s * 0.35, sh, sd, s % 2 === 0 ? cSandDark : cSandBase, 0, sh * 0.5, -8.5 + s * 0.34, 710 + s, 0.035, 0.97, 1);
   }
 
-  const wH = 2.6, wT = 0.75;
-  const frontWallL   = regMesh(createLowPolyMesh(new THREE.BoxGeometry(5.6, wH, wT), cCourtWall, -4.6, 1.1 + wH * 0.5, -6.4));
-  const frontWallR   = regMesh(createLowPolyMesh(new THREE.BoxGeometry(5.6, wH, wT), cCourtWall,  4.6, 1.1 + wH * 0.5, -6.4));
-  const frontWallTop = regMesh(createLowPolyMesh(new THREE.BoxGeometry(4.0, 0.85, wT + 0.1), cCourtWall, 0, 1.1 + wH - 0.42, -6.4));
-  const backWall     = regMesh(createLowPolyMesh(new THREE.BoxGeometry(14.8, wH, wT), cCourtWall, 0, 1.1 + wH * 0.5,  6.4));
-  const leftWall     = regMesh(createLowPolyMesh(new THREE.BoxGeometry(wT, wH, 12.8), cCourtWall, -7.2, 1.1 + wH * 0.5, 0));
-  const rightWall    = regMesh(createLowPolyMesh(new THREE.BoxGeometry(wT, wH, 12.8), cCourtWall,  7.2, 1.1 + wH * 0.5, 0));
-  const outerGoldDoor = createLowPolyMesh(new THREE.BoxGeometry(1.7, 1.75, 0.82), cGoldMain, 0, 1.1 + 0.88, -6.4);
-  templeGrp.add(frontWallL, frontWallR, frontWallTop, backWall, leftWall, rightWall, outerGoldDoor);
+  const wH = 2.75, wT = 0.85;
+  makeOrgBox(templeGrp, 5.5, wH, wT, cCourtWall, -4.7, 1.2 + wH * 0.5, -6.5, 720, 0.032, 0.94, 2);
+  makeOrgBox(templeGrp, 5.5, wH, wT, cCourtWall,  4.7, 1.2 + wH * 0.5, -6.5, 721, 0.032, 0.94, 2);
+  makeOrgBox(templeGrp, 4.4, 0.92, wT + 0.14, cSandDark, 0, 1.2 + wH - 0.35, -6.5, 722, 0.035, 0.95, 2);
+  makeOrgBox(templeGrp, 15.2, wH, wT, cCourtWall, 0, 1.2 + wH * 0.5, 6.5, 723, 0.030, 0.94, 2);
+  makeOrgBox(templeGrp, wT, wH, 13.0, cCourtWall, -7.3, 1.2 + wH * 0.5, 0, 724, 0.030, 0.94, 2);
+  makeOrgBox(templeGrp, wT, wH, 13.0, cCourtWall,  7.3, 1.2 + wH * 0.5, 0, 725, 0.030, 0.94, 2);
 
-  [-1, 1].forEach(side => {
-    [-2.4, 2.4].forEach(dz => {
-      templeGrp.add(
-        createLowPolyMesh(new THREE.BoxGeometry(0.84, 1.35, 0.85), cGoldMain, side * 7.2, 1.1 + 0.68, dz),
-        createLowPolyMesh(new THREE.BoxGeometry(0.95, 0.55, 1.25), cCourtTrim, side * 7.9, 1.1 + 0.28, dz)
-      );
-    });
+  if (typeof createOrganicArchedEntranceGroup === 'function') {
+    const outerArch = createOrganicArchedEntranceGroup(2.15, 2.35, cSandDark, cDarkVoid, cGoldMain, 728);
+    outerArch.position.set(0, 1.22, -6.55);
+    outerArch.rotation.y = Math.PI;
+    templeGrp.add(outerArch);
+  }
+
+  [[-7.3, -6.5], [7.3, -6.5], [-7.3, 6.5], [7.3, 6.5]].forEach(([tx, tz], idx) => {
+    makeOrgBox(templeGrp, 2.35, 4.1, 2.35, cCourtWall, tx, 1.2 + 2.05, tz, 750 + idx, 0.038, 0.88, 2);
+    makeOrgBox(templeGrp, 2.55, 0.44, 2.55, cSandDark, tx, 1.2 + 4.18, tz, 755 + idx, 0.04, 0.96, 1);
   });
 
-  [[-7.2, -6.4], [7.2, -6.4], [-7.2, 6.4], [7.2, 6.4]].forEach(([tx, tz]) => {
-    templeGrp.add(
-      regMesh(createLowPolyMesh(new THREE.BoxGeometry(2.1, 3.8, 2.1), cCourtWall, tx, 1.1 + 1.9, tz)),
-      createLowPolyMesh(new THREE.BoxGeometry(2.35, 0.42, 2.35), cCourtTrim, tx, 1.1 + 3.95, tz),
-      createLowPolyMesh(new THREE.BoxGeometry(1.85, 0.25, 1.85), cSandBase, tx, 1.1 + 4.22, tz, false)
-    );
-  });
+  makeOrgBox(templeGrp, 5.6, 3.6, 1.75, cCourtWall, 0, 1.65 + 1.80, -2.55, 780, 0.032, 0.94, 2);
+  makeOrgBox(templeGrp, 6.1, 0.44, 2.05, cSandDark,  0, 1.65 + 3.72, -2.55, 781, 0.04, 0.96, 1);
+  if (typeof createOrganicArchedEntranceGroup === 'function') {
+    const innerArch = createOrganicArchedEntranceGroup(2.1, 2.55, cGoldMain, cDarkVoid, cBronze, 782);
+    innerArch.position.set(0, 1.65, -3.40);
+    innerArch.rotation.y = Math.PI;
+    templeGrp.add(innerArch);
+  }
 
-  // 내부 성문 현관(Nicanor Porch) & 반원형 계단
+  const sBaseY = 1.68, sH = 8.6;
+  makeOrgBox(templeGrp, 11.0, sH, 3.0, cWhiteWarm, 0, sBaseY + sH * 0.5, 0.15, 800, 0.022, 0.96, 2);
+  makeOrgBox(templeGrp,  9.6, sH, 6.0, cWhiteWarm, 0, sBaseY + sH * 0.5, 2.85, 801, 0.022, 0.96, 2);
+  makeOrgBox(templeGrp,  4.5, 6.2, 0.50, cWhiteShade, 0, sBaseY + 3.1, -1.28, 810, 0.03, 0.97, 2);
+  makeOrgBox(templeGrp,  4.8, 0.42, 0.62, cGoldMain,  0, sBaseY + 6.32, -1.32, 814, 0.04, 0.96, 1);
   templeGrp.add(
-    regMesh(createLowPolyMesh(new THREE.BoxGeometry(5.4, 3.4, 1.6), cCourtWall, 0, 1.6 + 1.7, -2.5)),
-    createLowPolyMesh(new THREE.BoxGeometry(5.8, 0.38, 1.85), cCourtTrim, 0, 1.6 + 3.55, -2.5),
-    createLowPolyMesh(new THREE.BoxGeometry(1.6, 2.1, 1.7), cGoldMain, 0, 1.6 + 1.05, -2.5),
-    createLowPolyMesh(new THREE.CylinderGeometry(1.9, 2.2, 0.35, 8), cPilaster, 0, 1.6 + 0.18, -3.5),
-    createLowPolyMesh(new THREE.CylinderGeometry(1.3, 1.6, 0.35, 8), cWhiteWall, 0, 1.6 + 0.52, -3.3)
+    createLowPolyMesh(new THREE.BoxGeometry(3.2, 5.3, 0.18), cDarkVoid, 0, sBaseY + 2.65, -1.42, false),
+    createLowPolyMesh(createOrganicBoxGeo(1.75, 4.95, 0.18, 813, 0.03, 0.98, 2), cGoldMain, 0, sBaseY + 2.52, -1.52, true),
+    createLowPolyMesh(createOrganicBoxGeo(0.76, 5.15, 0.24, 811, 0.08, 0.92, 2), cCrimson, -1.16, sBaseY + 2.62, -1.60, true),
+    createLowPolyMesh(createOrganicBoxGeo(0.76, 5.15, 0.24, 812, 0.08, 0.92, 2), cCrimson,  1.16, sBaseY + 2.62, -1.60, true),
+    createLowPolyMesh(createOrganicBoxGeo(3.25, 0.56, 0.26, 815, 0.06, 0.96, 2), cCrimson, 0, sBaseY + 5.12, -1.62, true)
   );
-
-  // 순백색 성소 본관 (Tall White Sanctuary) & 황금 성소 문
-  const sBaseY = 1.6, sH = 8.4;
-  templeGrp.add(
-    regMesh(createLowPolyMesh(new THREE.BoxGeometry(10.8, sH, 2.8), cWhiteWall, 0, sBaseY + sH * 0.5, 0.1)),
-    regMesh(createLowPolyMesh(new THREE.BoxGeometry(9.4, sH, 5.8), cWhiteWall, 0, sBaseY + sH * 0.5, 2.8)),
-    createLowPolyMesh(new THREE.BoxGeometry(4.2, 6.0, 0.45), cPilaster, 0, sBaseY + 3.0, -1.25),
-    createLowPolyMesh(new THREE.BoxGeometry(3.0, 5.2, 0.50), cDarkVoid, 0, sBaseY + 2.6, -1.28, false),
-    createLowPolyMesh(new THREE.BoxGeometry(2.5, 4.8, 0.56), cGoldMain, 0, sBaseY + 2.4, -1.30)
-  );
-
-  // 수직 부조 기둥(Pilasters) & 황금 기둥머리
-  const pilH = sH - 1.3;
-  [-4.4, -2.8, 2.8, 4.4].forEach(px => {
+  [-2.45, 2.45].forEach(px => {
     templeGrp.add(
-      createLowPolyMesh(new THREE.BoxGeometry(0.55, pilH, 0.38), cPilaster, px, sBaseY + pilH * 0.5, -1.28),
-      createLowPolyMesh(new THREE.BoxGeometry(0.72, 0.42, 0.48), cGoldMain, px, sBaseY + pilH + 0.15, -1.28)
-    );
-  });
-  [-1, 1].forEach(side => {
-    [0.6, 2.1, 3.6, 5.1].forEach(pz => {
-      const px = side * 4.72;
-      templeGrp.add(
-        createLowPolyMesh(new THREE.BoxGeometry(0.38, pilH, 0.52), cPilaster, px, sBaseY + pilH * 0.5, pz),
-        createLowPolyMesh(new THREE.BoxGeometry(0.48, 0.42, 0.68), cGoldMain, px, sBaseY + pilH + 0.15, pz)
-      );
-    });
-  });
-  [-3.4, -1.1, 1.1, 3.4].forEach(px => {
-    templeGrp.add(
-      createLowPolyMesh(new THREE.BoxGeometry(0.55, pilH, 0.38), cPilaster, px, sBaseY + pilH * 0.5, 5.72),
-      createLowPolyMesh(new THREE.BoxGeometry(0.72, 0.42, 0.48), cGoldMain, px, sBaseY + pilH + 0.15, 5.72)
+      createLowPolyMesh(new THREE.CylinderGeometry(0.46, 0.54, 0.55, 8), cSandDark, px, sBaseY + 0.28, -1.68, true),
+      createLowPolyMesh(new THREE.CylinderGeometry(0.32, 0.38, 5.4, 8), cBronze, px, sBaseY + 3.2, -1.68, true),
+      createLowPolyMesh(new THREE.CylinderGeometry(0.56, 0.34, 0.72, 8), cGoldBright, px, sBaseY + 6.15, -1.68, true)
     );
   });
 
-  // 상단 이중 황금 몰딩 & 지붕 황금 톱니 왕관
+  const pilH = sH - 1.4;
+  [-4.5, -3.2, 3.2, 4.5].forEach((px, i) => {
+    templeGrp.add(createLowPolyMesh(new THREE.CylinderGeometry(0.28, 0.34, pilH, 6), cWhiteShade, px, sBaseY + pilH * 0.5, -1.34, true));
+    makeOrgBox(templeGrp, 0.78, 0.44, 0.52, cGoldMain, px, sBaseY + pilH + 0.16, -1.34, 820 + i, 0.06, 1.08, 1);
+  });
+
   const topY = sBaseY + sH;
-  templeGrp.add(
-    regMesh(createLowPolyMesh(new THREE.BoxGeometry(11.2, 0.55, 3.2), cGoldMain, 0, topY - 0.55, 0.1)),
-    regMesh(createLowPolyMesh(new THREE.BoxGeometry(9.8, 0.55, 6.1), cGoldMain, 0, topY - 0.55, 2.8)),
-    regMesh(createLowPolyMesh(new THREE.BoxGeometry(11.4, 0.45, 3.4), cPilaster, 0, topY + 0.05, 0.1)),
-    regMesh(createLowPolyMesh(new THREE.BoxGeometry(10.0, 0.45, 6.3), cPilaster, 0, topY + 0.05, 2.8)),
-    createLowPolyMesh(new THREE.BoxGeometry(11.5, 0.32, 3.5), cGoldBright, 0, topY + 0.42, 0.1),
-    createLowPolyMesh(new THREE.BoxGeometry(10.1, 0.32, 6.4), cGoldBright, 0, topY + 0.42, 2.8)
-  );
+  makeOrgBox(templeGrp, 11.4, 0.58, 3.35, cGoldMain,   0, topY - 0.55, 0.15, 850, 0.03, 1.02, 2);
+  makeOrgBox(templeGrp, 10.0, 0.58, 6.25, cGoldMain,   0, topY - 0.55, 2.85, 851, 0.03, 1.02, 2);
+  makeOrgBox(templeGrp, 11.6, 0.48, 3.55, cWhiteShade, 0, topY + 0.06, 0.15, 852, 0.03, 1.01, 2);
+  makeOrgBox(templeGrp, 10.2, 0.48, 6.45, cWhiteShade, 0, topY + 0.06, 2.85, 853, 0.03, 1.01, 2);
+  makeOrgBox(templeGrp, 11.7, 0.34, 3.65, cGoldBright, 0, topY + 0.45, 0.15, 854, 0.03, 1.00, 1);
+  makeOrgBox(templeGrp, 10.3, 0.34, 6.55, cGoldBright, 0, topY + 0.45, 2.85, 855, 0.03, 1.00, 1);
 
-  const spikeGeo = new THREE.ConeGeometry(0.26, 0.72, 4);
-  const addSpike = (sx, sz) => {
-    const sp = createLowPolyMesh(spikeGeo, cGoldBright, sx, topY + 0.92, sz, false);
+  const spikeGeo = new THREE.ConeGeometry(0.28, 0.80, 4);
+  for (let i = -5; i <= 5; i++) {
+    const sp = createLowPolyMesh(spikeGeo, cGoldBright, i * 1.02, topY + 0.98, -1.48, false);
     sp.rotation.y = Math.PI / 4;
     templeGrp.add(sp);
-  };
-  for (let i = -5; i <= 5; i++) addSpike(i * 1.02, -1.45);
-  for (let i = -4; i <= 4; i++) addSpike(i * 1.08,  5.75);
-  for (let i = 0; i <= 5; i++) {
-    const sz = -0.8 + i * 1.25;
-    const sx = (i <= 1) ? 5.45 : 4.82;
-    addSpike(-sx, sz);
-    addSpike( sx, sz);
+  }
+  for (let i = -4; i <= 4; i++) {
+    const sp = createLowPolyMesh(spikeGeo, cGoldBright, i * 1.08, topY + 0.98, 5.82, false);
+    sp.rotation.y = Math.PI / 4;
+    templeGrp.add(sp);
   }
 
+  if (typeof mergeStaticLowPolyGroupToVertexColor === 'function') {
+    mergeStaticLowPolyGroupToVertexColor(templeGrp, { registerWall: true, castShadow: true });
+  }
   rootGrp.add(templeGrp);
   rootGrp.position.set(cx, cy, cz);
   rootGrp.rotation.y = rotY;
   rootGrp.scale.set(scale, scale, scale);
   worldGroup.add(rootGrp);
 
-  // 도보 접근 가능 스테이지에서는 성전 본관 가장자리 및 계단 관통 차단 충돌체 등록
   if (Math.abs(rotY) < 0.05 && scale >= 0.9) {
     colliders.push(
       { minX: cx - 9.3 * scale, maxX: cx + 9.3 * scale, minZ: cz - 8.2 * scale, maxZ: cz + 8.3 * scale },
@@ -1789,36 +1867,58 @@ function buildMiracleMainStage3Cross() {
     goalRing: null,
     goalPos: new THREE.Vector3(0, getMiracleGroundHeight(0, -50, 3), -50),
     goalLabel: null,
-    summitCrossesGrp: null
+    summitCrossesGrp: null,
+    stumbleCheckpoints: [-19.5, -31.0, -41.5],
+    stumbleIdx: 0,
+    stumbleTimer: 0,
+    stumbleDuration: 1.95,
+    stumbleDusts: []
   };
 
   currentMapRectBounds = { minX: -26, maxX: 26, minZ: -60, maxZ: 34 };
 
-  const roadGeo = new THREE.PlaneGeometry(130, 140, 44, 56);
-  roadGeo.rotateX(-Math.PI / 2);
-  const posAttr = roadGeo.attributes.position;
-  const cols = [];
-  const cStreet   = new THREE.Color('#d6ccc2');
-  const cRoadMain = new THREE.Color('#c89d6c');
-  const cMeadow   = new THREE.Color('#9ec164');
-  const cGolgotha = new THREE.Color('#8c8275');
-
-  for (let i = 0; i < posAttr.count; i++) {
-    const vx = posAttr.getX(i);
-    const vz = posAttr.getZ(i);
-    const vy = getMiracleGroundHeight(vx, vz, 3);
-    posAttr.setY(i, vy);
-    const onCenterRoad = Math.abs(vx) < 5.2 && vz > -50;
-    const c = onCenterRoad
-      ? cRoadMain
-      : (vz < -8 ? (Math.abs(vx) < 28 ? cGolgotha : cMeadow) : cStreet);
-    cols.push(c.r, c.g, c.b);
-  }
-  roadGeo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
-  roadGeo.computeVertexNormals();
-  const roadMesh = new THREE.Mesh(roadGeo, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
-  roadMesh.receiveShadow = true;
+  // 오픈월드와 동일한 크리스프 비인덱스 로우폴리 지형 + 성전 앞 큰벽돌 도로 + 골고다 언덕 돌담
+  const s3HeightFn = (vx, vz) => getMiracleGroundHeight(vx, vz, 3);
+  const cS3Plaza    = new THREE.Color('#c7baa4');
+  const cS3Road     = new THREE.Color('#dfb984');
+  const cS3Meadow   = new THREE.Color('#b6b968');
+  const cS3Ochre    = new THREE.Color('#d8b674');
+  const cS3Slope    = new THREE.Color('#cf9f60');
+  const cS3Golgotha = new THREE.Color('#9e907c');
+  const roadMesh = (typeof createCrispLowPolyFacetedTerrain === 'function')
+    ? createCrispLowPolyFacetedTerrain(130, 140, 44, 52, s3HeightFn, (mx, my, mz, slopeFlat, hash2, outCol) => {
+        const onCenterRoad = Math.abs(mx) < 5.4 && mz > -50;
+        if (mz >= -6 && mz <= 66 && Math.abs(mx) < 18) {
+          outCol.copy(cS3Plaza);
+        } else if (onCenterRoad) {
+          outCol.copy(cS3Road);
+        } else if (mz < -8 && Math.abs(mx) < 28) {
+          outCol.copy(slopeFlat < 0.94 ? cS3Slope : cS3Golgotha);
+        } else {
+          const patch = hash2(Math.floor(mx * 0.14), Math.floor(mz * 0.14));
+          outCol.copy(cS3Meadow).lerp(cS3Ochre, 0.30 + patch * 0.52);
+        }
+      }, 0.65)
+    : new THREE.Mesh(new THREE.PlaneGeometry(130, 140, 44, 56), new THREE.MeshLambertMaterial({ color: '#d6ccc2', flatShading: true }));
   worldGroup.add(roadMesh);
+
+  if (typeof buildStageIrregularStonePavement === 'function') {
+    buildStageIrregularStonePavement(
+      [{ minX: -7.5, maxX: 7.5, minZ: -6.5, maxZ: 36.5, stepX: 2.0, stepZ: 1.72 }],
+      s3HeightFn,
+      910
+    );
+  }
+  if (typeof buildStageDryStoneTerraceWalls === 'function') {
+    buildStageDryStoneTerraceWalls(
+      [
+        { pts: [[-22, -14], [-15, -26], [-12, -40], [-18, -52]], courses: 3 },
+        { pts: [[ 22, -14], [ 15, -26], [ 12, -40], [ 18, -52]], courses: 3 }
+      ],
+      s3HeightFn,
+      780
+    );
+  }
 
   // 북쪽 골고다 언덕 정상(z = -54)의 세 십자가
   const summitCrossesGrp = new THREE.Group();
@@ -1842,21 +1942,22 @@ function buildMiracleMainStage3Cross() {
   worldGroup.add(summitCrossesGrp);
   miracleActiveMiniState.summitCrossesGrp = summitCrossesGrp;
 
-  // ✅ 출발지 바로 뒤편(z = 38 외곽 성문 ~ z = 54 성전 본관)에 새 소프트 로우폴리 예루살렘 성전 단지 배치!
+  // ✅ 출발지 바로 뒤편(z = 38 외곽 성문 ~ z = 54 성전 본관)에 리디자인 비정형 예루살렘 성전 단지 배치!
   buildStageJerusalemTemple(0, 0, 54, 1.0, 0, true, 16);
 
+  // 계단끼리 겹치지 않도록 넉넉한 간격(11.5m) + 비정형 벽돌 가옥 혼합 배치
   const streetHouses = [
-    { x: -14, z: 26, v: 0, yaw:  Math.PI / 2 },
-    { x:  14, z: 26, v: 1, yaw: -Math.PI / 2 },
-    { x: -14, z: 18, v: 2, yaw:  Math.PI / 2 },
-    { x:  14, z: 18, v: 3, yaw: -Math.PI / 2 },
-    { x: -14, z:  4, v: 1, yaw:  Math.PI / 2 },
-    { x:  14, z:  4, v: 0, yaw: -Math.PI / 2 },
-    { x: -14, z: -4, v: 4, yaw:  Math.PI / 2 },
-    { x:  14, z: -4, v: 2, yaw: -Math.PI / 2 }
+    { x: -15.0, z: 27.5, v: 0, yaw:  Math.PI / 2, m: 'stonebrick' },
+    { x:  15.0, z: 27.5, v: 1, yaw: -Math.PI / 2, m: 'plaster' },
+    { x: -15.0, z: 15.5, v: 2, yaw:  Math.PI / 2, m: 'plaster' },
+    { x:  15.0, z: 15.5, v: 2, yaw: -Math.PI / 2, m: 'stonebrick' },
+    { x: -15.0, z:  4.0, v: 1, yaw:  Math.PI / 2, m: 'stonebrick' },
+    { x:  15.0, z:  4.0, v: 0, yaw: -Math.PI / 2, m: 'plaster' },
+    { x: -15.0, z: -7.5, v: 4, yaw:  Math.PI / 2, m: 'plaster' },
+    { x:  15.0, z: -7.5, v: 4, yaw: -Math.PI / 2, m: 'stonebrick' }
   ];
   streetHouses.forEach(sh => {
-    addJudeanRoadsideBuilding(sh.x, sh.z, sh.v, sh.yaw, 0.98, false);
+    addJudeanRoadsideBuilding(sh.x, sh.z, sh.v, sh.yaw, 0.96, false, sh.m);
   });
 
   if (typeof createBumpyLowPolyHillMesh === 'function') {
@@ -1973,10 +2074,55 @@ function attachCrossToPlayerBack() {
   carriedBlockGroup.add(crossGrp);
 }
 
+// 스테이지 3에서 십자가 무게에 넘어져 일어나는 동안 잠시 이동 잠금 연동
+const _ep4StagesOrigMoveLock = window.isPlayerMovementLocked;
+window.isPlayerMovementLocked = function () {
+  const prev = (typeof _ep4StagesOrigMoveLock === 'function') ? _ep4StagesOrigMoveLock() : false;
+  const stumbling = (
+    miracleSubMode === 'main3_cross' &&
+    miracleActiveMiniState &&
+    miracleActiveMiniState.phase === 'carry' &&
+    miracleActiveMiniState.stumbleTimer > 0
+  );
+  return prev || stumbling;
+};
+
+function openMiracleStage3CrossFailModal() {
+  const st = miracleActiveMiniState;
+  if (st) st.phase = 'failed';
+  isPlaying = false;
+  isTimeAttackActive = false;
+  if (typeof miracleDialogState !== 'undefined' && miracleDialogState.active) {
+    const dlg = document.getElementById('miracle-dialog-modal');
+    if (dlg) dlg.classList.add('hidden');
+    miracleDialogState.active = false;
+  }
+  playSfx('wrong');
+  const iconEl = document.getElementById('retry-modal-icon');
+  const titleEl = document.getElementById('retry-modal-title');
+  const descEl = document.getElementById('retry-modal-desc');
+  if (iconEl) iconEl.textContent = '✝️';
+  if (titleEl) titleEl.textContent = '예수님께서 혼자 십자가를 지고 올라가셨어요...';
+  if (descEl) {
+    descEl.innerHTML = '내가 십자가를 대신 들지 않아 스테이지 3에 실패했어요.<br/>다시 도전해서 예수님께 다가가 <b>[내가 들기]</b>를 눌러 함께 올라가요!';
+  }
+  const rm = document.getElementById('retry-modal');
+  if (rm) {
+    rm.classList.remove('hidden');
+    rm.classList.add('flex');
+  }
+}
+
 function acceptCarryJesusCross() {
   const st = miracleActiveMiniState;
   if (!st || st.phase !== 'find_jesus') return;
   st.phase = 'carry';
+  // 이미 지나친 넘어짐 체크포인트는 건너뛰고 앞으로 남은 오르막에서만 자연스럽게 넘어지도록 조정
+  if (Array.isArray(st.stumbleCheckpoints)) {
+    while (st.stumbleIdx < st.stumbleCheckpoints.length && playerPos.z <= st.stumbleCheckpoints[st.stumbleIdx] + 2.5) {
+      st.stumbleIdx++;
+    }
+  }
   if (st.crossProp) st.crossProp.visible = false;
   if (st.jesusRing) st.jesusRing.visible = false;
   if (st.jesusBodyPivot) {
@@ -1990,7 +2136,7 @@ function acceptCarryJesusCross() {
   playSfx('build');
   if (currentMode === 'timeattack') timeRemaining += 10.0;
   updateStageHUD();
-  showToast('✝️ [2단계] 내가 십자가를 대신 등에 짊어졌어요! 무거워서 걸음이 조금 느려지지만(80% 속도) 끝까지 골고다 정상으로 올라가요!');
+  showToast('✝️ [2단계] 내가 무거운 십자가를 대신 짊어졌어요! 예수님 걸음처럼 천천히, 넘어져도 다시 일어나 끝까지 올라가요!');
 }
 
 function updateMiracleMainStage3Frame(dt, now) {
@@ -1998,9 +2144,28 @@ function updateMiracleMainStage3Frame(dt, now) {
     updateMiracleDynamicSun(dt, now);
   }
   const st = miracleActiveMiniState;
+  if (!st || st.phase === 'failed') return;
   let nextGuidePos = null;
 
   if (st.carryPromptCooldown > 0) st.carryPromptCooldown -= dt;
+
+  // 넘어질 때 튀어 오른 먼지 파티클 업데이트
+  if (Array.isArray(st.stumbleDusts) && st.stumbleDusts.length > 0) {
+    for (let i = st.stumbleDusts.length - 1; i >= 0; i--) {
+      const d = st.stumbleDusts[i];
+      d.life -= dt;
+      d.vy -= 6.5 * dt;
+      d.mesh.position.x += d.vx * dt;
+      d.mesh.position.y += d.vy * dt;
+      d.mesh.position.z += d.vz * dt;
+      const sc = Math.max(0.01, d.life / d.maxLife);
+      d.mesh.scale.set(sc, sc, sc);
+      if (d.life <= 0) {
+        worldGroup.remove(d.mesh);
+        st.stumbleDusts.splice(i, 1);
+      }
+    }
+  }
 
   if (st.phase === 'find_jesus') {
     miracleStageObjects.forEach(obj => {
@@ -2019,7 +2184,7 @@ function updateMiracleMainStage3Frame(dt, now) {
         if (st.cluesFound >= st.reqClues) {
           if (st.jesusMesh) st.jesusMesh.visible = true;
           updateStageHUD();
-          showToast('✝️ 앞쪽 골목에서 십자가를 지고 힘겹게 걸어가시는 예수님을 찾았어요! 다가가서 [내가 들기]를 선택하세요!');
+          showToast('✝️ 앞쪽에서 예수님이 십자가를 지고 골고다로 올라가고 계세요! 정상에 닿기 전에 [내가 들기]를 눌러 도와드리세요!');
         } else {
           updateStageHUD();
           showToast(obj.msg);
@@ -2028,16 +2193,15 @@ function updateMiracleMainStage3Frame(dt, now) {
     });
 
     if (st.cluesFound >= st.reqClues && st.jesusMesh) {
-      // [요청 반영] 예수님이 무거운 십자가를 등에 지고 골고다 쪽으로 힘겹게 걸어가는 모션
+      // [요청 반영] 내가 들기를 하지 않으면 예수님이 십자가를 지고 골고다 정상까지 계속 올라가며, 도착 시 스테이지 3 실패!
       const jPos = st.jesusMesh.position;
       const dialogOpen = (typeof miracleDialogState !== 'undefined' && miracleDialogState.active);
-      if (!dialogOpen && jPos.z > -26.0) {
-        jPos.z -= dt * 0.62;
+      if (!dialogOpen) {
+        jPos.z -= dt * MIRACLE_STAGE3_CROSS_WALK_SPEED;
         jPos.y = getMiracleGroundHeight(jPos.x, jPos.z, 3);
       }
-      const stepPhase = now * 0.0042;
+      const stepPhase = now * 0.0048;
       if (st.jesusBodyPivot) {
-        // 무거운 십자가 무게로 상체를 살짝 숙이고 한 걸음씩 딛는 모션
         st.jesusBodyPivot.rotation.x = 0.16 + Math.abs(Math.sin(stepPhase)) * 0.05;
         st.jesusBodyPivot.position.y = Math.abs(Math.sin(stepPhase)) * 0.06;
       }
@@ -2045,13 +2209,19 @@ function updateMiracleMainStage3Frame(dt, now) {
         const ju = st.jesusPersonMesh.userData;
         const swing = dialogOpen ? 0 : Math.sin(stepPhase) * 0.42;
         if (ju.lLeg && ju.rLeg) { ju.lLeg.rotation.x = swing; ju.rLeg.rotation.x = -swing; }
-        // 양팔을 어깨 뒤 가로들보(y=1.98, z=-0.43)로 올려 십자가를 단단히 붙잡는 자연스러운 모션
         if (ju.lArm && ju.rArm) {
           ju.lArm.rotation.x = 2.42 + Math.sin(stepPhase * 2) * 0.05;
           ju.rArm.rotation.x = 2.42 - Math.sin(stepPhase * 2) * 0.05;
           ju.lArm.rotation.z =  0.22;
           ju.rArm.rotation.z = -0.22;
         }
+      }
+
+      // 내가 들기를 하지 않아 예수님이 먼저 골고다 십자가 정상에 도착하면 실패 판정 + 재시도 모달!
+      if (jPos.z <= -49.2) {
+        if (st.jesusLabel) st.jesusLabel.style.opacity = '0';
+        openMiracleStage3CrossFailModal();
+        return;
       }
 
       nextGuidePos = st.jesusMesh.position;
@@ -2071,7 +2241,7 @@ function updateMiracleMainStage3Frame(dt, now) {
             onConfirm: () => { acceptCarryJesusCross(); },
             onCancel: () => {
               st.carryPromptCooldown = 3.2;
-              showToast('✝️ 준비되면 예수님께 다시 다가가 [내가 들기]를 눌러 주세요!');
+              showToast('⚠️ 어서 도와드리지 않으면 예수님께서 혼자 정상까지 올라가시게 돼요!');
             }
           });
         } else {
@@ -2082,12 +2252,75 @@ function updateMiracleMainStage3Frame(dt, now) {
   } else if (st.phase === 'carry') {
     nextGuidePos = st.goalPos;
 
-    // 플레이어가 십자가를 등에 지고 걸어갈 때 양팔로 등 뒤 가로들보를 붙잡는 모션 유지
-    if (playerLimbs && playerLimbs.lArm && playerLimbs.rArm) {
-      playerLimbs.lArm.rotation.x = 2.40;
-      playerLimbs.rArm.rotation.x = 2.40;
-      playerLimbs.lArm.rotation.z =  0.22;
-      playerLimbs.rArm.rotation.z = -0.22;
+    // [요청 반영] 골고다 오르막 도중 중간중간 무거운 십자가에 무릎을 꿇고 넘어졌다 다시 일어나는 모션!
+    if (
+      st.stumbleTimer <= 0 &&
+      Array.isArray(st.stumbleCheckpoints) &&
+      st.stumbleIdx < st.stumbleCheckpoints.length &&
+      playerPos.z <= st.stumbleCheckpoints[st.stumbleIdx]
+    ) {
+      st.stumbleIdx++;
+      st.stumbleTimer = st.stumbleDuration || 1.95;
+      playSfx('crumble');
+      showToast('😣 무거운 십자가에 발을 헛디뎌 무릎을 꿇었어요... 예수님과 함께 힘내어 다시 일어납니다!');
+      for (let k = 0; k < 7; k++) {
+        const ang = (k / 7) * Math.PI * 2;
+        const dust = createLowPolyMesh(new THREE.DodecahedronGeometry(0.16, 0), '#d6c19c', playerPos.x + Math.cos(ang) * 0.4, playerPos.y + 0.18, playerPos.z + Math.sin(ang) * 0.4, false);
+        worldGroup.add(dust);
+        st.stumbleDusts.push({
+          mesh: dust,
+          vx: Math.cos(ang) * (1.5 + Math.random()),
+          vy: 1.8 + Math.random() * 1.2,
+          vz: Math.sin(ang) * (1.5 + Math.random()),
+          life: 0.75,
+          maxLife: 0.75
+        });
+      }
+    }
+
+    if (st.stumbleTimer > 0) {
+      st.stumbleTimer = Math.max(0, st.stumbleTimer - dt);
+      const dur = st.stumbleDuration || 1.95;
+      const elapsed = dur - st.stumbleTimer;
+      // 0~0.42초: 앞으로 넘어짐 | 0.42~1.30초: 무릎 꿇고 버팀 | 1.30~1.95초: 힘겹게 다시 일어남
+      let fallAmt = 0;
+      if (elapsed < 0.42) fallAmt = elapsed / 0.42;
+      else if (elapsed < 1.30) fallAmt = 1.0 + Math.sin((elapsed - 0.42) * 14) * 0.05;
+      else fallAmt = Math.max(0, 1.0 - (elapsed - 1.30) / (dur - 1.30));
+
+      if (playerGroup) {
+        playerGroup.rotation.x = fallAmt * 0.74;
+        playerGroup.scale.set(1, 1.0 - fallAmt * 0.28, 1);
+      }
+      if (playerLimbs && playerLimbs.lLeg && playerLimbs.rLeg) {
+        playerLimbs.lLeg.rotation.x = fallAmt * 1.1;
+        playerLimbs.rLeg.rotation.x = -fallAmt * 0.65;
+      }
+      if (playerLimbs && playerLimbs.lArm && playerLimbs.rArm) {
+        playerLimbs.lArm.rotation.x = THREE.MathUtils.lerp(2.40, -1.15, fallAmt);
+        playerLimbs.rArm.rotation.x = THREE.MathUtils.lerp(2.40, -1.15, fallAmt);
+        playerLimbs.lArm.rotation.z = 0.28 * (1 - fallAmt);
+        playerLimbs.rArm.rotation.z = -0.28 * (1 - fallAmt);
+      }
+      // 넘어져 있는 동안 예수님이 옆에서 부축하며 손을 내미는 모션
+      if (st.jesusPersonMesh && st.jesusPersonMesh.userData && st.jesusPersonMesh.userData.lArm) {
+        st.jesusPersonMesh.userData.lArm.rotation.x = -1.1;
+      }
+      if (st.stumbleTimer <= 0 && playerGroup) {
+        playerGroup.rotation.x = 0;
+        playerGroup.scale.set(1, 1, 1);
+      }
+    } else {
+      if (playerGroup) {
+        playerGroup.rotation.x = 0.14; // 십자가 무게로 상체가 살짝 숙여진 채 걸어감
+        playerGroup.scale.set(1, 1, 1);
+      }
+      if (playerLimbs && playerLimbs.lArm && playerLimbs.rArm) {
+        playerLimbs.lArm.rotation.x = 2.40;
+        playerLimbs.rArm.rotation.x = 2.40;
+        playerLimbs.lArm.rotation.z =  0.22;
+        playerLimbs.rArm.rotation.z = -0.22;
+      }
     }
 
     if (st.jesusMesh) {
@@ -2102,7 +2335,7 @@ function updateMiracleMainStage3Frame(dt, now) {
 
       // 옆에서 함께 걸어가는 예수님 보행 애니메이션
       const moved = Math.hypot(st.jesusMesh.position.x - prevX, st.jesusMesh.position.z - prevZ);
-      if (st.jesusPersonMesh && st.jesusPersonMesh.userData) {
+      if (st.jesusPersonMesh && st.jesusPersonMesh.userData && st.stumbleTimer <= 0) {
         const ju = st.jesusPersonMesh.userData;
         const jSwing = moved > 0.005 ? Math.sin(now * 0.011) * 0.48 : 0;
         if (ju.lLeg && ju.rLeg) { ju.lLeg.rotation.x = jSwing; ju.rLeg.rotation.x = -jSwing; }
@@ -2119,6 +2352,10 @@ function updateMiracleMainStage3Frame(dt, now) {
 
     if (gd < 3.6) {
       st.phase = 'golgotha_arrived';
+      if (playerGroup) {
+        playerGroup.rotation.x = 0;
+        playerGroup.scale.set(1, 1, 1);
+      }
       if (playerLimbs && playerLimbs.lArm && playerLimbs.rArm) {
         playerLimbs.lArm.rotation.z = 0;
         playerLimbs.rArm.rotation.z = 0;
@@ -2129,6 +2366,7 @@ function updateMiracleMainStage3Frame(dt, now) {
       if (st.goalLabel) st.goalLabel.style.opacity = '0';
       if (st.jesusLabel) st.jesusLabel.style.opacity = '0';
       miracleMainStagesCleared[3] = true;
+      saveMiracleNotebookProgress();
       openStageClearModal(3);
       return;
     }
@@ -2178,39 +2416,55 @@ function buildMiracleMainStage4Tomb() {
   const halfW = 28, halfD = 48;
   currentMapRectBounds = { minX: -halfW + 1.5, maxX: halfW - 1.5, minZ: -halfD + 2.0, maxZ: halfD - 2.0 };
 
-  // 1) 예루살렘 마을 바닥과 북쪽 동산 정원, 서쪽의 넓어진 골고다 언덕이 이어진 연속 지형
-  const terrainGeo = new THREE.PlaneGeometry(150, 140, 44, 40);
-  terrainGeo.rotateX(-Math.PI / 2);
-  const tPos = terrainGeo.attributes.position;
-  const tCols = [];
-  const cVillage  = new THREE.Color('#dfc49a');
-  const cGarden   = new THREE.Color('#82a84d');
-  const cGolgotha = new THREE.Color('#8c8275');
-
-  for (let i = 0; i < tPos.count; i++) {
-    const vx = tPos.getX(i);
-    const vz = tPos.getZ(i);
-    let vy = 0;
-
-    // 서쪽 외곽(vx < -30)에는 스테이지 3에서 올랐던 넓은 골고다 언덕이 솟아 있음
+  // 1) 예루살렘 마을 바닥·북쪽 동산 정원·서쪽 골고다 언덕 (오픈월드와 동일한 크리스프 비인덱스 로우폴리 지형)
+  const s4HeightFn = (vx, vz) => {
     const golDist = Math.hypot((vx - (-50)) / 28, (vz - (-10)) / 28);
     if (golDist < 1.0 && Math.abs(vx) > halfW + 1.0) {
       const clampedD = Math.max(0, (golDist - 0.25) / 0.75);
       const gt = 1.0 - Math.min(1.0, clampedD);
-      vy = gt * gt * (3 - 2 * gt) * 9.0;
+      return gt * gt * (3 - 2 * gt) * 9.0;
     }
-    tPos.setY(i, vy);
-
-    const col = (golDist < 0.95 && vx < -30)
-      ? cGolgotha.clone()
-      : (vz < -22 ? cGarden.clone() : cVillage.clone());
-    tCols.push(col.r, col.g, col.b);
-  }
-  terrainGeo.setAttribute('color', new THREE.Float32BufferAttribute(tCols, 3));
-  terrainGeo.computeVertexNormals();
-  const terrainMesh = new THREE.Mesh(terrainGeo, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
-  terrainMesh.receiveShadow = true;
+    return 0;
+  };
+  const cS4Village  = new THREE.Color('#dfb984');
+  const cS4Ochre    = new THREE.Color('#d8b674');
+  const cS4Garden   = new THREE.Color('#8ea854');
+  const cS4Meadow   = new THREE.Color('#b6b968');
+  const cS4Golgotha = new THREE.Color('#9e907c');
+  const terrainMesh = (typeof createCrispLowPolyFacetedTerrain === 'function')
+    ? createCrispLowPolyFacetedTerrain(150, 140, 44, 42, s4HeightFn, (mx, my, mz, slopeFlat, hash2, outCol) => {
+        const golDist = Math.hypot((mx - (-50)) / 28, (mz - (-10)) / 28);
+        if (golDist < 0.95 && mx < -30) {
+          outCol.copy(cS4Golgotha);
+        } else if (mz < -22) {
+          const patch = hash2(Math.floor(mx * 0.16), Math.floor(mz * 0.16));
+          outCol.copy(cS4Garden).lerp(cS4Meadow, 0.2 + patch * 0.45);
+        } else {
+          const patch = hash2(Math.floor(mx * 0.15), Math.floor(mz * 0.15));
+          outCol.copy(cS4Village).lerp(cS4Ochre, patch * 0.55);
+        }
+      }, 0.65)
+    : new THREE.Mesh(new THREE.PlaneGeometry(150, 140, 44, 40), new THREE.MeshLambertMaterial({ color: '#dfc49a', flatShading: true }));
   worldGroup.add(terrainMesh);
+
+  // 마을 입구~동산 성문까지 비정형 큰벽돌 바닥 + 동산 가장자리 언덕 돌담
+  if (typeof buildStageIrregularStonePavement === 'function') {
+    buildStageIrregularStonePavement(
+      [{ minX: -14, maxX: 14, minZ: -22, maxZ: 42, stepX: 2.35, stepZ: 2.05 }],
+      s4HeightFn,
+      960
+    );
+  }
+  if (typeof buildStageDryStoneTerraceWalls === 'function') {
+    buildStageDryStoneTerraceWalls(
+      [
+        { pts: [[-24, -28], [-18, -38], [-10, -44]], courses: 3 },
+        { pts: [[ 24, -28], [ 18, -38], [ 10, -44]], courses: 3 }
+      ],
+      s4HeightFn,
+      820
+    );
+  }
 
   // 서쪽 골고다 언덕 정상 고원 위의 세 십자가 원경 배치
   [[-50, -10, 1.32], [-55, -8.5, 1.00], [-45, -8.5, 1.00]].forEach(([cx, cz, sc]) => {
@@ -2229,25 +2483,32 @@ function buildMiracleMainStage4Tomb() {
     createBumpyLowPolyHillMesh( 22, -62, 22, 7.5, 16, '#84a955', 21, true);
   }
 
-  // 마을 외곽 양옆에 배치된 고대 유대 석조 가옥들 (인접 건물 점프가 가능한 간격 포함)
+  // 마을 외곽 양옆에 배치된 고대 유대 가옥들 (비정형 벽돌 가옥 혼합 + 계단 간격 충분히 확보)
   [
-    [-23,  34, 0,  Math.PI / 2],
-    [-23,  26, 1,  Math.PI / 2],
-    [ 23,  34, 1, -Math.PI / 2],
-    [ 23,  26, 2, -Math.PI / 2],
-    [-23,  10, 2,  Math.PI / 2],
-    [ 23,  10, 3, -Math.PI / 2],
-    [-23, -12, 1,  Math.PI / 2],
-    [ 23, -12, 0, -Math.PI / 2]
-  ].forEach(([hx, hz, v, yaw]) => {
-    addJudeanRoadsideBuilding(hx, hz, v, yaw, 0.88, false);
+    [-23,  36, 0,  Math.PI / 2, 'stonebrick'],
+    [-23,  24, 1,  Math.PI / 2, 'plaster'],
+    [ 23,  36, 1, -Math.PI / 2, 'plaster'],
+    [ 23,  24, 2, -Math.PI / 2, 'stonebrick'],
+    [-23,  10, 2,  Math.PI / 2, 'stonebrick'],
+    [ 23,  10, 3, -Math.PI / 2, 'plaster'],
+    [-23, -12, 1,  Math.PI / 2, 'plaster'],
+    [ 23, -12, 0, -Math.PI / 2, 'stonebrick']
+  ].forEach(([hx, hz, v, yaw, masonry]) => {
+    addJudeanRoadsideBuilding(hx, hz, v, yaw, 0.88, false, masonry);
   });
 
-  // 소프트 로우 폴리곤 사암 담장 미로 생성 헬퍼
+  // 비정형 소프트 로우 폴리곤 사암 담장 미로 생성 헬퍼
+  let mazeWallSeed = 11;
   const addGardenMazeWall = (x, z, w, d) => {
     const wallH = 3.8;
-    const wMesh = createLowPolyMesh(new THREE.BoxGeometry(w, wallH, d), '#ead7b7', x, wallH * 0.5, z);
-    const topCap = createLowPolyMesh(new THREE.BoxGeometry(w + 0.2, 0.35, d + 0.2), '#c89654', x, wallH + 0.18, z, false);
+    const wGeo = (typeof createOrganicBoxGeo === 'function')
+      ? createOrganicBoxGeo(w, wallH, d, mazeWallSeed++, 0.028, 0.96, 2)
+      : new THREE.BoxGeometry(w, wallH, d);
+    const cGeo = (typeof createOrganicBoxGeo === 'function')
+      ? createOrganicBoxGeo(w + 0.24, 0.36, d + 0.24, mazeWallSeed++, 0.04, 0.96, 1)
+      : new THREE.BoxGeometry(w + 0.24, 0.36, d + 0.24);
+    const wMesh = createLowPolyMesh(wGeo, '#ead7b7', x, wallH * 0.5, z);
+    const topCap = createLowPolyMesh(cGeo, '#c89654', x, wallH + 0.18, z, false);
     worldGroup.add(wMesh, topCap);
     wallMeshes.push(wMesh, topCap);
     colliders.push({ minX: x - w * 0.5 - 0.35, maxX: x + w * 0.5 + 0.35, minZ: z - d * 0.5 - 0.35, maxZ: z + d * 0.5 + 0.35 });
@@ -2311,16 +2572,46 @@ function buildMiracleMainStage4Tomb() {
   }
 
   // 3) 북쪽 끝 동산(z = -44)의 열린 다면체 바위 무덤과 굴러간 돌문, 빛나는 천사
-  const tombHill = createLowPolyMesh(new THREE.DodecahedronGeometry(6.4, 0), '#94a3b8', 0, 3.2, -45.5);
-  tombHill.scale.set(1.55, 0.92, 1.05);
-  const openCave = createLowPolyMesh(new THREE.BoxGeometry(3.2, 3.6, 1.2), '#fef08a', 0, 1.8, -40.2, false);
-  const rolledStone = createLowPolyMesh(new THREE.CylinderGeometry(2.1, 2.1, 0.82, 10), '#cbd5e1', 3.5, 2.0, -39.5);
+  //    - [요청 반영] 열린 무덤문 가운데로 돌이 삐져나오지 않도록 좌·우·후면·상단 아치형 바위 언덕으로 분리 조형하고
+  //      후면 바위는 입구 안쪽(z <= -43.0) 뒤에 배치해 열린 무덤 입구 내부가 완전히 깨끗하게 보이도록 구성!
+  const tombGroup = new THREE.Group();
+  const tombBackRock = createLowPolyMesh(new THREE.DodecahedronGeometry(5.6, 0), '#8f9bb0', 0, 2.8, -49.2);
+  tombBackRock.scale.set(1.65, 0.95, 0.92); // 앞면 최대 z = -49.2 + 5.15 = -44.05 (입구와 3.6m 완전 이격)
+  const tombLeftRock = createLowPolyMesh(new THREE.DodecahedronGeometry(4.1, 0), '#94a3b8', -6.3, 2.3, -44.4);
+  tombLeftRock.scale.set(1.00, 0.92, 1.02); // 안쪽 끝 x = -6.3 + 4.1 = -2.2 (열린 문 x = ±1.6 완전 이격!)
+  const tombRightRock = createLowPolyMesh(new THREE.DodecahedronGeometry(4.1, 0), '#94a3b8',  6.3, 2.3, -44.4);
+  tombRightRock.scale.set(1.00, 0.92, 1.02); // 안쪽 끝 x = +6.3 - 4.1 = +2.2 (열린 문 x = ±1.6 완전 이격!)
+  const tombTopCap = createLowPolyMesh(new THREE.DodecahedronGeometry(3.8, 0), '#9aa8bc', 0, 5.75, -44.2);
+  tombTopCap.scale.set(1.62, 0.56, 1.05); // 하단 최소 y = 5.75 - 2.13 = 3.62 (열린 문 상단 y = 3.53 완전 이격!)
+  const tombFlankL = createLowPolyMesh(new THREE.DodecahedronGeometry(2.6, 0), '#8391a6', -7.8, 1.5, -42.6);
+  tombFlankL.scale.set(1.1, 0.78, 0.95);
+  const tombFlankR = createLowPolyMesh(new THREE.DodecahedronGeometry(2.6, 0), '#8391a6',  7.8, 1.5, -42.6);
+  tombFlankR.scale.set(1.1, 0.78, 0.95);
+
+  // 무덤 입구 석조 문틀 (좌·우 기둥 + 인방보 + 돌 문턱) & 내부 황금빛 개방 공간 (방해 바위 0%)
+  const frameCol = '#b8afa0';
+  const jambL = createLowPolyMesh(createOrganicBoxGeo(0.85, 3.65, 1.85, 861, 0.06, 0.96, 1), frameCol, -2.02, 1.82, -41.1, true);
+  const jambR = createLowPolyMesh(createOrganicBoxGeo(0.85, 3.65, 1.85, 862, 0.06, 0.96, 1), frameCol,  2.02, 1.82, -41.1, true);
+  const lintel = createLowPolyMesh(createOrganicBoxGeo(5.15, 0.85, 2.05, 863, 0.06, 0.96, 1), '#c7beb0', 0, 3.85, -41.0, true);
+  const sill = createLowPolyMesh(createOrganicBoxGeo(4.6, 0.24, 1.85, 864, 0.05, 0.98, 1), '#a89f91', 0, 0.12, -40.8, false);
+  const openCaveGlow = createLowPolyMesh(new THREE.BoxGeometry(3.18, 3.42, 0.35), '#fef08a', 0, 1.82, -41.85, false);
+  openCaveGlow.userData._emissiveGlow = true;
+  const openCaveFloor = createLowPolyMesh(new THREE.BoxGeometry(3.2, 0.14, 2.4), '#fde68a', 0, 0.18, -41.0, false);
+
+  const rolledStone = createLowPolyMesh(new THREE.CylinderGeometry(2.1, 2.1, 0.82, 10), '#cbd5e1', 4.1, 2.0, -39.5);
   rolledStone.rotation.x = Math.PI / 2;
+
+  tombGroup.add(
+    tombBackRock, tombLeftRock, tombRightRock, tombTopCap, tombFlankL, tombFlankR,
+    jambL, jambR, lintel, sill, openCaveGlow, openCaveFloor, rolledStone
+  );
+  worldGroup.add(tombGroup);
+  wallMeshes.push(tombBackRock, tombLeftRock, tombRightRock);
+  colliders.push({ minX: -9.5, maxX: 9.5, minZ: -52.0, maxZ: -40.8 });
 
   const angelMesh = createLowPolyPersonMesh('angel', 0);
   angelMesh.position.set(-1.6, 0.1, -39.2);
-  worldGroup.add(tombHill, openCave, rolledStone, angelMesh);
-  wallMeshes.push(tombHill);
+  worldGroup.add(angelMesh);
 
   const tombRing = new THREE.Mesh(
     new THREE.RingGeometry(1.8, 2.5, 24),
@@ -2435,6 +2726,7 @@ function updateMiracleMainStage4Frame(dt, now) {
       miracleMainStagesCleared[4] = true;
       miracleIsPostResurrection = true;
       unlockMiracleNotebookEntry('mir_resurrect', true);
+      saveMiracleNotebookProgress();
       openStageClearModal(4);
       return;
     }
@@ -2469,6 +2761,8 @@ function buildMiracleEndingWorld() {
   miracleSubMode = 'ascension';
   targetObject = null;
 
+  const isPostAscension = Boolean(typeof miracleAscensionSeen !== 'undefined' && miracleAscensionSeen);
+
   if (typeof setupMiracleDynamicSunAndShadows === 'function') {
     setupMiracleDynamicSunAndShadows();
   }
@@ -2477,48 +2771,63 @@ function buildMiracleEndingWorld() {
   scene.fog = new THREE.Fog(0xe0f2fe, 75, 250);
   currentMapRectBounds = { minX: -28, maxX: 28, minZ: -28, maxZ: 28 };
 
-  const mountGeo = new THREE.PlaneGeometry(160, 160, 44, 44);
-  mountGeo.rotateX(-Math.PI / 2);
-  const mPos = mountGeo.attributes.position;
-  const mCols = [];
-  const cTopGrass = new THREE.Color('#82a84d');
-  const cMidGrass = new THREE.Color('#9ec164');
-  const cValley   = new THREE.Color('#d8be7d');
-
-  for (let i = 0; i < mPos.count; i++) {
-    const vx = mPos.getX(i);
-    const vz = mPos.getZ(i);
-    let vy = getMiracleGroundHeight(vx, vz, 4);
-    if (vx < -28) {
-      vy = Math.max(-8.0, (vx + 28) * 0.18);
-    }
-    mPos.setY(i, vy);
-    const col = vx < -32 ? cValley.clone() : (vy > 1.2 ? cTopGrass.clone() : cMidGrass.clone());
-    mCols.push(col.r, col.g, col.b);
-  }
-  mountGeo.setAttribute('color', new THREE.Float32BufferAttribute(mCols, 3));
-  mountGeo.computeVertexNormals();
-  const mountMesh = new THREE.Mesh(mountGeo, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
-  mountMesh.receiveShadow = true;
+  // 감람산 지형 — getMiracleGroundHeight(vx, vz, 4)와 100% 동일한 함수를 사용해 서쪽 원경 건물과 성전이 땅에 정확히 밀착!
+  const ascHeightFn = (vx, vz) => getMiracleGroundHeight(vx, vz, 4);
+  const cAscTop    = new THREE.Color('#7c9a45');
+  const cAscOlive  = new THREE.Color('#8ea854');
+  const cAscMeadow = new THREE.Color('#b6b968');
+  const cAscOchre  = new THREE.Color('#d8b674');
+  const cAscSlope  = new THREE.Color('#cf9f60');
+  const mountMesh = (typeof createCrispLowPolyFacetedTerrain === 'function')
+    ? createCrispLowPolyFacetedTerrain(160, 160, 44, 44, ascHeightFn, (mx, my, mz, slopeFlat, hash2, outCol) => {
+        if (mx < -30) {
+          outCol.copy(cAscOchre);
+        } else if (my > 1.6) {
+          outCol.copy(cAscTop);
+        } else if (slopeFlat < 0.945) {
+          outCol.copy(cAscSlope);
+        } else {
+          const patch = hash2(Math.floor(mx * 0.16), Math.floor(mz * 0.16));
+          outCol.copy(cAscOlive).lerp(cAscMeadow, 0.25 + patch * 0.45);
+        }
+      }, 0.72)
+    : new THREE.Mesh(new THREE.PlaneGeometry(160, 160, 44, 44), new THREE.MeshLambertMaterial({ color: '#82a84d', flatShading: true }));
   worldGroup.add(mountMesh);
+
+  if (typeof buildStageDryStoneTerraceWalls === 'function') {
+    buildStageDryStoneTerraceWalls(
+      [
+        { pts: [[-22, -16], [-18, -4], [-20, 10], [-14, 20]], courses: 3 },
+        { pts: [[ 22, -16], [ 18, -4], [ 20, 10], [ 14, 20]], courses: 3 },
+        { pts: [[-16, -24], [0, -26], [16, -24]], courses: 2 }
+      ],
+      ascHeightFn,
+      860
+    );
+  }
 
   const summitPadY = getMiracleGroundHeight(0, -8, 4);
   const summitPad = createLowPolyMesh(new THREE.CylinderGeometry(7.5, 8.5, 0.35, 16), '#f5e6c8', 0, summitPadY + 0.12, -8);
   worldGroup.add(summitPad);
 
-  addJudeanRoadsideBuilding(-44, -12, 1,  Math.PI / 2, 0.95, false);
-  addJudeanRoadsideBuilding(-46,   8, 0,  Math.PI / 2, 0.95, false);
-  addJudeanRoadsideBuilding(-56,  -2, 2,  Math.PI / 2, 1.00, false);
-  
-  // ✅ [추가] 감람산 서쪽 골짜기 너머 예루살렘 언덕(x = -62, z = -2)에 새 예루살렘 성전 원경 배치
+  // 서쪽 골짜기 원경 건물 3채: 경사면에 살짝 깊이 묻히도록 Y 오프셋 -0.25 보정하여 절대 뜨지 않게 밀착!
+  const b1 = addJudeanRoadsideBuilding(-44, -12, 1, Math.PI / 2, 0.95, false, 'stonebrick');
+  if (b1) b1.position.y -= 0.25;
+  const b2 = addJudeanRoadsideBuilding(-46,   8, 0, Math.PI / 2, 0.95, false, 'plaster');
+  if (b2) b2.position.y -= 0.25;
+  const b3 = addJudeanRoadsideBuilding(-56,  -2, 2, Math.PI / 2, 1.00, false, 'stonebrick');
+  if (b3) b3.position.y -= 0.25;
+
+  // ✅ 감람산 서쪽 골짜기 너머 예루살렘 성전 원경도 실제 지형 높이(getMiracleGroundHeight(-62, -2, 4))에 밀착 배치!
   if (typeof buildStageJerusalemTemple === 'function') {
-  buildStageJerusalemTemple(-62, -1.5, -2, 0.85, Math.PI / 2, false);
+    const templeGroundY = getMiracleGroundHeight(-62, -2, 4);
+    buildStageJerusalemTemple(-62, templeGroundY - 0.35, -2, 0.85, Math.PI / 2, false);
   }
 
   if (typeof createBumpyLowPolyHillMesh === 'function') {
-    createBumpyLowPolyHillMesh( 46, -24, 20, 6.5, 18, '#7ca344', 31, true);
-    createBumpyLowPolyHillMesh( 48,  16, 20, 6.8, 18, '#84a955', 32, true);
-    createBumpyLowPolyHillMesh(  0, -52, 24, 7.2, 18, '#7ca344', 33, true);
+    createBumpyLowPolyHillMesh( 46, -24, 20, 6.5, 18, '#529336', 31, true);
+    createBumpyLowPolyHillMesh( 48,  16, 20, 6.8, 18, '#6da344', 32, true);
+    createBumpyLowPolyHillMesh(  0, -52, 24, 7.2, 18, '#428329', 33, true);
   }
 
   if (typeof addLowPolyCanopyTree === 'function') {
@@ -2543,20 +2852,71 @@ function buildMiracleEndingWorld() {
     worldGroup.add(cl);
   });
 
-  const jesusCloudGroup = new THREE.Group();
-  const cloudBase = createLowPolyCloudGroup(0.75, false);
-  cloudBase.position.set(0, 0.35, 0);
-  const jesusMesh = createLowPolyPersonMesh('jesus', 0);
-  jesusMesh.position.set(0, 0.95, 0);
-  jesusCloudGroup.add(cloudBase, jesusMesh);
-  jesusCloudGroup.position.set(0, summitPadY + 0.25, -8.5);
-  worldGroup.add(jesusCloudGroup);
+  const jesusBaseY = summitPadY + 0.30;
+  let jesusCloudGroup = null;
+  let jesusMesh = null;
+  let footCloudGroup = null;
+  let footCloudPuffs = [];
+  let angelL = null;
+  let angelR = null;
 
-  const angelL = createLowPolyPersonMesh('angel', 1); angelL.position.set(-3.8, summitPadY + 0.30, -7.2);
-  const angelR = createLowPolyPersonMesh('angel', 2); angelR.position.set( 3.8, summitPadY + 0.30, -7.2);
-  worldGroup.add(angelL, angelR);
+  if (!isPostAscension) {
+    // [최초 승천 전] 감람산 단상 위에 예수님과 양옆 두 천사 배치 (승천 시 천사도 함께 올라감!)
+    jesusCloudGroup = new THREE.Group();
+    jesusMesh = createLowPolyPersonMesh('jesus', 0);
+    jesusMesh.position.set(0, 0, 0);
+    jesusCloudGroup.add(jesusMesh);
 
-  // [수정] 제자들이 언덕 지형과 단상 위에 파묻히지 않도록 정확한 baseY 계산 및 수직 직립 lookAt 적용!
+    footCloudGroup = new THREE.Group();
+    footCloudGroup.position.set(0, -0.05, 0);
+    footCloudGroup.visible = false;
+    const puffSpecs = [
+      { x:  0.00, y: -0.18, z:  0.00, r: 1.05, sx: 1.35, sy: 0.62, sz: 1.25, col: 0xffffff, delay: 1.55 },
+      { x: -0.95, y: -0.22, z:  0.35, r: 0.85, sx: 1.22, sy: 0.58, sz: 1.15, col: 0xf8fafc, delay: 1.85 },
+      { x:  0.98, y: -0.20, z:  0.28, r: 0.88, sx: 1.22, sy: 0.60, sz: 1.15, col: 0xfef9c3, delay: 1.95 },
+      { x: -0.52, y: -0.26, z: -0.85, r: 0.90, sx: 1.25, sy: 0.60, sz: 1.12, col: 0xf1f5f9, delay: 2.15 },
+      { x:  0.60, y: -0.24, z: -0.82, r: 0.86, sx: 1.20, sy: 0.58, sz: 1.15, col: 0xffffff, delay: 2.25 },
+      { x: -1.65, y: -0.35, z: -0.15, r: 0.82, sx: 1.30, sy: 0.55, sz: 1.12, col: 0xf1f5f9, delay: 2.55 },
+      { x:  1.70, y: -0.32, z: -0.10, r: 0.84, sx: 1.30, sy: 0.56, sz: 1.12, col: 0xffffff, delay: 2.65 },
+      { x:  0.05, y: -0.38, z:  1.15, r: 0.92, sx: 1.35, sy: 0.58, sz: 1.10, col: 0xfef3c7, delay: 2.85 },
+      { x: -0.10, y: -0.58, z: -0.20, r: 1.25, sx: 1.45, sy: 0.55, sz: 1.35, col: 0xe0f2fe, delay: 3.10 }
+    ];
+    puffSpecs.forEach((p, idx) => {
+      const pMat = new THREE.MeshLambertMaterial({
+        color: p.col,
+        flatShading: true,
+        transparent: true,
+        opacity: 0.0,
+        depthWrite: false
+      });
+      const puff = new THREE.Mesh(new THREE.IcosahedronGeometry(p.r, 0), pMat);
+      puff.position.set(p.x, p.y, p.z);
+      puff.scale.set(0.01, 0.01, 0.01);
+      puff.rotation.set(idx * 0.4, idx * 0.9, 0);
+      footCloudGroup.add(puff);
+      footCloudPuffs.push({ mesh: puff, mat: pMat, spec: p, phase: idx * 0.85 });
+    });
+    jesusCloudGroup.add(footCloudGroup);
+
+    jesusCloudGroup.position.set(0, jesusBaseY, -8.5);
+    worldGroup.add(jesusCloudGroup);
+
+    angelL = createLowPolyPersonMesh('angel', 1); angelL.position.set(-3.8, summitPadY + 0.30, -7.2);
+    angelR = createLowPolyPersonMesh('angel', 2); angelR.position.set( 3.8, summitPadY + 0.30, -7.2);
+    worldGroup.add(angelL, angelR);
+  } else {
+    // [승천 이후 상태] 예수님은 이미 하늘로 승천하신 뒤 — 단상 위 평온한 하늘빛 기둥과 높은 흰 구름만 남음!
+    const skyBeam = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.5, 2.4, 34, 16, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0xfef08a, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false })
+    );
+    skyBeam.position.set(0, summitPadY + 17.2, -8.5);
+    const highCloud = createLowPolyCloudGroup(1.85, false);
+    highCloud.position.set(0, summitPadY + 21.0, -8.5);
+    worldGroup.add(skyBeam, highCloud);
+  }
+
+  // 제자 11명 배치 (승천 이후 상태에서는 모두 하늘을 우러러보는 고개 각도 적용!)
   for (let i = 0; i < 11; i++) {
     const ang = (i / 10) * Math.PI - Math.PI;
     const dx = Math.cos(ang) * 6.5;
@@ -2568,6 +2928,9 @@ function buildMiracleEndingWorld() {
     const dMesh = createLowPolyPersonMesh('disciple', i);
     dMesh.position.set(dx, baseY, dz);
     dMesh.lookAt(0, baseY, -8.5);
+    if (isPostAscension && dMesh.userData && dMesh.userData.head) {
+      dMesh.userData.head.rotation.x = -0.40;
+    }
     worldGroup.add(dMesh);
     endingCelebrationPeople.push({ mesh: dMesh, baseY, phase: i * 0.6 });
   }
@@ -2603,12 +2966,17 @@ function buildMiracleEndingWorld() {
   ring.position.set(0, ringY + 0.12, -5.0);
   worldGroup.add(ring);
 
-  const ascLbl = createWorldLabel('👑 감람산 승천 언덕 (다가가서 예수님의 승천과 재림 약속 보기!)');
+  const ascLbl = createWorldLabel(
+    isPostAscension
+      ? '☁️ 예수님 승천의 자리 (다가가면 오픈월드 · 월드맵 선택창이 열려요!)'
+      : '👑 감람산 승천 언덕 (예수님께 다가가 승천하는 모습 보기!)'
+  );
   ascLbl.style.opacity = '0';
 
   const spotObj = {
     type: 'mount_olives_ascension',
     pos: new THREE.Vector3(0, ringY + 0.8, -5.0),
+    jesusPos: new THREE.Vector3(0, jesusBaseY + 0.8, -8.5),
     spotRing: ring,
     label: ascLbl,
     triggered: false
@@ -2617,9 +2985,17 @@ function buildMiracleEndingWorld() {
   miracleAscensionState = {
     active: false,
     timer: 0,
+    baseY: jesusBaseY,
+    summitPadY,
     jesusCloudGroup,
+    jesusMesh,
+    angelL,
+    angelR,
+    footCloudGroup,
+    footCloudPuffs,
+    camLookCurrent: new THREE.Vector3(0, jesusBaseY + 1.4, -8.5),
     spotObj,
-    modalShown: false
+    modalShown: isPostAscension
   };
 
   const startY = getMiracleGroundHeight(0, 9.0, 4);
@@ -2630,6 +3006,8 @@ function buildMiracleEndingWorld() {
   cameraTargetYaw = 0;
   rebuildPlayerAppearance();
   snapCameraToPlayer();
+  // 엔딩 세상에서도 좌측 HUD([나의 복음서 수첩] & [오픈월드로 돌아가기])를 즉시 표시!
+  updateMiracleNotebookHudBadge();
 
   setTimeout(() => {
     const certBtn = document.getElementById('cert-open-btn');
@@ -2651,11 +3029,13 @@ function triggerMiracleAscensionSequence() {
 
   miracleAscensionState.active = true;
   miracleAscensionState.timer = 0;
+  miracleAscensionState.camLookCurrent = new THREE.Vector3(0, miracleAscensionState.baseY + 1.3, -8.5);
+  playerFacing = Math.atan2(0 - playerPos.x, -8.5 - playerPos.z);
   if (sp && sp.label) sp.label.style.opacity = '0';
   if (sp && sp.spotRing) sp.spotRing.visible = false;
   unlockMiracleNotebookEntry('wd_matt2820', true);
   playSfx('clear');
-  showToast('☁️ 예수님께서 제자들을 축복하시며 구름을 타고 하늘로 올라가십니다!');
+  showToast('✨ 예수님과 양옆의 두 천사가 함께 하늘로 승천하십니다! 발 아래 구름이 서서히 피어오릅니다!');
 }
 
 function updateMiracleEndingFrame(dt, now) {
@@ -2686,16 +3066,20 @@ function updateMiracleEndingFrame(dt, now) {
 
   if (!st.active) {
     if (sp) {
-      const td = Math.hypot(playerPos.x - sp.pos.x, playerPos.z - sp.pos.z);
-      updateWorldLabelPos(sp.label, sp.pos, td < 12.0);
+      const tdRing = Math.hypot(playerPos.x - sp.pos.x, playerPos.z - sp.pos.z);
+      const tdJesus = sp.jesusPos
+        ? Math.hypot(playerPos.x - sp.jesusPos.x, playerPos.z - sp.jesusPos.z)
+        : 999;
+      const td = Math.min(tdRing, tdJesus);
+      updateWorldLabelPos(sp.label, sp.pos, td < 12.5);
       if (guideArrowGroup && guideArrowGroup.visible) {
         const baseFacing = (window.globalCameraViewMode === 'fps') ? (cameraYaw + Math.PI) : playerFacing;
         guideArrowGroup.rotation.y = Math.atan2(sp.pos.x - playerPos.x, sp.pos.z - playerPos.z) - baseFacing;
       }
-      if (td < 2.8 && !sp.triggered) {
+      if ((tdRing < 3.1 || tdJesus < 4.4) && !sp.triggered) {
         sp.triggered = true;
         triggerMiracleAscensionSequence();
-      } else if (td > 4.5 && st.modalShown) {
+      } else if (td > 5.0 && st.modalShown) {
         sp.triggered = false;
       }
     }
@@ -2703,15 +3087,89 @@ function updateMiracleEndingFrame(dt, now) {
   }
 
   st.timer += dt;
+  const t = st.timer;
 
-  if (st.jesusCloudGroup && st.timer < 4.5) {
-    st.jesusCloudGroup.position.y += dt * 3.2;
-    camera.position.lerp(new THREE.Vector3(0, 6.2, 3.5), 0.08);
-    camera.lookAt(0, Math.min(16, st.jesusCloudGroup.position.y + 1.5), -8.5);
+  // 1) 예수님 승천 + 양옆의 두 천사 동반 승천 연출!
+  if (st.jesusCloudGroup && t < 6.8) {
+    const riseSpeed = t < 1.6 ? THREE.MathUtils.lerp(0.85, 1.95, t / 1.6) : 2.55;
+    st.jesusCloudGroup.position.y += dt * riseSpeed;
+
+    // [요청 반영] 양옆의 두 천사도 예수님과 나란히 하늘로 승천!
+    const riseOffset = st.jesusCloudGroup.position.y - st.baseY;
+    if (st.angelL) {
+      st.angelL.position.y = st.baseY + riseOffset * 0.96 + Math.sin(t * 2.4) * 0.14;
+      st.angelL.position.x = -3.8 + Math.sin(t * 1.1) * 0.25;
+      const au = st.angelL.userData;
+      if (au && au.lArm && au.rArm) {
+        au.lArm.rotation.z = 0.55 + Math.sin(t * 3.0) * 0.15;
+        au.rArm.rotation.z = -0.35;
+      }
+    }
+    if (st.angelR) {
+      st.angelR.position.y = st.baseY + riseOffset * 0.96 + Math.cos(t * 2.4) * 0.14;
+      st.angelR.position.x = 3.8 - Math.sin(t * 1.1) * 0.25;
+      const au = st.angelR.userData;
+      if (au && au.lArm && au.rArm) {
+        au.lArm.rotation.z = 0.35;
+        au.rArm.rotation.z = -0.55 - Math.sin(t * 3.0) * 0.15;
+      }
+    }
+
+    // 예수님 축복하는 두 팔 올림 모션
+    if (st.jesusMesh && st.jesusMesh.userData) {
+      const ju = st.jesusMesh.userData;
+      const armT = Math.min(1, t / 1.4);
+      if (ju.lArm && ju.rArm) {
+        ju.lArm.rotation.x = THREE.MathUtils.lerp(0, -1.35, armT);
+        ju.rArm.rotation.x = THREE.MathUtils.lerp(0, -1.35, armT);
+        ju.lArm.rotation.z = THREE.MathUtils.lerp(0,  0.48, armT);
+        ju.rArm.rotation.z = THREE.MathUtils.lerp(0, -0.48, armT);
+      }
+    }
+
+    // 2) 예수님 몸이 떠오른 뒤(t >= 1.55초) 발쪽에서 구름이 서서히 피어오름
+    if (st.footCloudGroup && Array.isArray(st.footCloudPuffs)) {
+      if (t >= 1.55) {
+        st.footCloudGroup.visible = true;
+        st.footCloudGroup.rotation.y += dt * 0.22;
+        st.footCloudPuffs.forEach(item => {
+          const localT = Math.max(0, Math.min(1, (t - item.spec.delay) / 1.35));
+          const smooth = localT * localT * (3 - 2 * localT);
+          const sc = Math.max(0.01, smooth);
+          item.mesh.scale.set(item.spec.sx * sc, item.spec.sy * sc, item.spec.sz * sc);
+          item.mesh.position.y = item.spec.y + Math.sin(t * 1.8 + item.phase) * 0.08 * smooth;
+          item.mat.opacity = smooth * 0.90;
+        });
+      } else {
+        st.footCloudGroup.visible = false;
+      }
+    }
+
+    // 3) 카메라 로우앵글 전환
+    const lowCamProgress = Math.min(1, t / 5.5);
+    const camLowY = (st.summitPadY || 2.0) + THREE.MathUtils.lerp(1.15, 0.95, lowCamProgress);
+    const camLowZ = THREE.MathUtils.lerp(-0.4, 2.2, lowCamProgress);
+    const camLowX = Math.sin(lowCamProgress * 0.75) * 1.65;
+    camera.position.lerp(new THREE.Vector3(camLowX, camLowY, camLowZ), Math.min(1, dt * 3.4));
+
+    const desiredLook = new THREE.Vector3(0, st.jesusCloudGroup.position.y + 1.35, -8.5);
+    if (!st.camLookCurrent) st.camLookCurrent = desiredLook.clone();
+    st.camLookCurrent.lerp(desiredLook, Math.min(1, dt * 5.0));
+    camera.lookAt(st.camLookCurrent);
   }
 
-  if (st.timer >= 3.8 && !st.modalShown) {
+  if (t >= 5.8 && !st.modalShown) {
     st.modalShown = true;
+    // 승천 완료 상태 기록 & 저장 → 이후 오픈월드 감람산 언덕 & 엔딩 세상 모두 승천 이후 상태 반영!
+    miracleAscensionSeen = true;
+    miracleMainStagesCleared[1] = true;
+    miracleMainStagesCleared[2] = true;
+    miracleMainStagesCleared[3] = true;
+    miracleMainStagesCleared[4] = true;
+    miracleIsPostResurrection = true;
+    if (typeof saveMiracleNotebookProgress === 'function') saveMiracleNotebookProgress();
+    if (typeof recordStageClearProgress === 'function') recordStageClearProgress('miracle', 4);
+
     const bf = document.getElementById('black-fade');
     if (bf) {
       document.getElementById('black-fade-icon').textContent = '☁️';
@@ -2726,10 +3184,14 @@ function updateMiracleEndingFrame(dt, now) {
     setTimeout(() => {
       if (bf) bf.style.opacity = '0';
       st.active = false;
+      // 승천 완료 후 예수님·천사 숨기고 승천 자리 선택창 활성화
+      if (st.jesusCloudGroup) st.jesusCloudGroup.visible = false;
+      if (st.angelL) st.angelL.visible = false;
+      if (st.angelR) st.angelR.visible = false;
       setTimeout(() => {
         if (sp && sp.spotRing) sp.spotRing.visible = true;
         if (sp && sp.label) {
-          sp.label.innerHTML = '👑 감람산 언약의 자리 (다가가면 월드맵 이동 창이 열려요!)';
+          sp.label.innerHTML = '☁️ 예수님 승천의 자리 (다가가면 오픈월드 · 월드맵 선택창이 열려요!)';
         }
       }, 1500);
       if (typeof showEndingCertificate === 'function') {
@@ -2781,7 +3243,10 @@ REGISTER_EPISODE('miracle', {
   },
   scheduleBgmBeat: function (ctx, step, st, mode, playing, timeRem, toFreq) {
     if (miracleSubMode === 'openworld') {
-      if (typeof window.playMiracleOpenWorldOgg === 'function') {
+      const menuActive = (typeof isMenuBgmActive !== 'undefined' && isMenuBgmActive);
+      if (!playing || menuActive) {
+        if (typeof window.stopMiracleOpenWorldOgg === 'function') window.stopMiracleOpenWorldOgg(false);
+      } else if (typeof window.playMiracleOpenWorldOgg === 'function') {
         window.playMiracleOpenWorldOgg();
       }
       return 2500;
@@ -2808,8 +3273,15 @@ REGISTER_EPISODE('miracle', {
     miracleAmbientProps = [];
     miracleStageObjects = [];
     window.miracleSkyBirds = [];
+    window.miracleBuildingBounds = [];
+    window.miracleWorldTreePositions = [];
+    window.miracleZacchaeusGroveTrees = [];
     miracleStageCutscene.active = false;
     _isEnteringMiracleStage = false;
+    if (typeof playerGroup !== 'undefined' && playerGroup) {
+      playerGroup.rotation.x = 0;
+      playerGroup.scale.set(1, 1, 1);
+    }
     if (typeof miracleSunSystem !== 'undefined') {
       miracleSunSystem.sunVisualGroup = null;
       miracleSunSystem.cullEntries = [];
@@ -2817,9 +3289,9 @@ REGISTER_EPISODE('miracle', {
     }
   },
   getPlayerMoveSpeed: function (st, baseSpeed) {
-    // 스테이지 3: 십자가를 대신 짊어진 상태에서는 일반 이동 속도의 80%로 이동
+    // 스테이지 3: 십자가를 대신 짊어진 상태에서는 아무리 세게 터치해도 원래 예수님 걷는 속도(1.65 m/s)와 정확히 동일하게 제한!
     if (miracleSubMode === 'main3_cross' && miracleActiveMiniState && miracleActiveMiniState.phase === 'carry') {
-      return baseSpeed * 0.8;
+      return MIRACLE_STAGE3_CROSS_WALK_SPEED;
     }
     return baseSpeed;
   },
@@ -2881,10 +3353,10 @@ REGISTER_EPISODE('miracle', {
       const ms = miracleActiveMiniState;
       badge.textContent = '십자가의 길 · 스테이지 3';
       countIcon.textContent = '✝️';
-      countText.textContent = ms.phase === 'find_jesus' ? `단서 ${ms.cluesFound}/${ms.reqClues}` : '십자가 등반 (80% 속도)';
+      countText.textContent = ms.phase === 'find_jesus' ? `단서 ${ms.cluesFound}/${ms.reqClues}` : '십자가 동행 등반';
       missionText.textContent = ms.phase === 'find_jesus'
-        ? '예루살렘 거리에서 사람들의 단서를 듣고 십자가를 지고 가시는 예수님을 찾아 [내가 들기]를 선택하세요!'
-        : '예수님 대신 십자가를 등에 지고 세 십자가가 서 있는 넓은 골고다 언덕 정상까지 올라가세요!';
+        ? '단서를 듣고 예수님이 정상에 도착하시기 전에 다가가 [내가 들기]를 선택하세요!'
+        : '예수님 걸음에 맞춰 무거운 십자가를 등에 지고 골고다 언덕 정상까지 올라가세요!';
     } else if (miracleSubMode === 'main4_tomb') {
       const ms = miracleActiveMiniState;
       badge.textContent = '빈 무덤 · 스테이지 4';
