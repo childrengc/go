@@ -77,119 +77,15 @@ const _sunCamDirVec = new THREE.Vector3();
 const _sunProjVec = new THREE.Vector3();
 
 function ensureMiracleSunFlareOverlay() {
-  let layer = document.getElementById('miracle-sun-flare-layer');
-  if (layer && miracleSunSystem.flareEls) return layer;
-
-  if (!layer) {
-    layer = document.createElement('div');
-    layer.id = 'miracle-sun-flare-layer';
-    layer.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:12;overflow:hidden;opacity:0;display:none;transition:opacity 0.08s linear;';
-    layer.innerHTML = `
-      <div id="msf-bloom" style="position:absolute;left:0;top:0;width:320px;height:320px;margin:-160px 0 0 -160px;border-radius:50%;background:radial-gradient(circle, rgba(255,253,230,0.92) 0%, rgba(253,224,71,0.52) 26%, rgba(251,146,60,0.20) 54%, rgba(251,146,60,0) 76%);mix-blend-mode:screen;will-change:transform;"></div>
-      <div id="msf-streak" style="position:absolute;left:0;top:0;width:520px;height:34px;margin:-17px 0 0 -260px;background:radial-gradient(ellipse at center, rgba(255,252,224,0.72) 0%, rgba(253,224,71,0.28) 40%, rgba(253,224,71,0) 78%);mix-blend-mode:screen;will-change:transform;"></div>
-      <div id="msf-halo" style="position:absolute;left:0;top:0;width:210px;height:210px;margin:-105px 0 0 -105px;border-radius:50%;border:4px solid rgba(254,240,138,0.22);box-shadow:0 0 22px rgba(251,191,36,0.20), inset 0 0 18px rgba(125,211,252,0.18);mix-blend-mode:screen;will-change:transform;"></div>
-      <div id="msf-g1" style="position:absolute;left:0;top:0;width:62px;height:62px;margin:-31px 0 0 -31px;clip-path:polygon(25% 6%,75% 6%,100% 50%,75% 94%,25% 94%,0% 50%);background:radial-gradient(circle, rgba(254,240,138,0.58) 0%, rgba(251,191,36,0.24) 70%, rgba(251,191,36,0) 100%);mix-blend-mode:screen;will-change:transform;"></div>
-      <div id="msf-g2" style="position:absolute;left:0;top:0;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:radial-gradient(circle, rgba(186,230,253,0.55) 0%, rgba(56,189,248,0.22) 72%, rgba(56,189,248,0) 100%);mix-blend-mode:screen;will-change:transform;"></div>
-      <div id="msf-g3" style="position:absolute;left:0;top:0;width:96px;height:96px;margin:-48px 0 0 -48px;border-radius:50%;border:2.5px solid rgba(253,224,71,0.38);background:radial-gradient(circle, rgba(251,146,60,0.08) 0%, rgba(253,224,71,0.22) 68%, rgba(125,211,252,0.18) 90%, rgba(0,0,0,0) 100%);mix-blend-mode:screen;will-change:transform;"></div>
-      <div id="msf-g4" style="position:absolute;left:0;top:0;width:56px;height:56px;margin:-28px 0 0 -28px;clip-path:polygon(25% 6%,75% 6%,100% 50%,75% 94%,25% 94%,0% 50%);background:radial-gradient(circle, rgba(253,186,116,0.48) 0%, rgba(251,146,60,0.18) 72%, rgba(251,146,60,0) 100%);mix-blend-mode:screen;will-change:transform;"></div>
-      <div id="msf-g5" style="position:absolute;left:0;top:0;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;background:radial-gradient(circle, rgba(167,243,208,0.50) 0%, rgba(52,211,153,0.18) 72%, rgba(52,211,153,0) 100%);mix-blend-mode:screen;will-change:transform;"></div>
-    `;
-    document.body.appendChild(layer);
-  }
-
-  miracleSunSystem.flareEls = {
-    layer,
-    bloom: layer.querySelector('#msf-bloom'),
-    streak: layer.querySelector('#msf-streak'),
-    halo: layer.querySelector('#msf-halo'),
-    g1: layer.querySelector('#msf-g1'),
-    g2: layer.querySelector('#msf-g2'),
-    g3: layer.querySelector('#msf-g3'),
-    g4: layer.querySelector('#msf-g4'),
-    g5: layer.querySelector('#msf-g5')
-  };
-  return layer;
+  // 화면 렌즈 플레어 삭제 (레퍼런스 이미지 스타일의 3D 다면체 태양 + 동심 다각형 후광만 유지)
+  const stale = document.getElementById('miracle-sun-flare-layer');
+  if (stale && stale.parentNode) stale.parentNode.removeChild(stale);
+  miracleSunSystem.flareEls = null;
+  return null;
 }
 
-function updateMiracleSunScreenFlare(now) {
-  const els = miracleSunSystem.flareEls;
-  if (!els || !els.layer || !camera || !miracleSunSystem.sunVisualGroup) return;
-
-  // 어두운 폭풍우 하늘(스테이지1 풍랑 등)이거나 게임 플레이 중이 아니면 플레어 숨김
-  let skyBright = 1.0;
-  if (scene && scene.background && scene.background.isColor) {
-    const c = scene.background;
-    skyBright = c.r * 0.299 + c.g * 0.587 + c.b * 0.114;
-  }
-  const playingNow = (typeof isPlaying !== 'undefined' && isPlaying);
-  if (skyBright < 0.28 || !playingNow) {
-    if (els.layer.style.display !== 'none') {
-      els.layer.style.opacity = '0';
-      els.layer.style.display = 'none';
-    }
-    return;
-  }
-
-  const sunPos = miracleSunSystem.sunVisualGroup.position;
-  _sunDirVec.subVectors(sunPos, camera.position).normalize();
-  camera.getWorldDirection(_sunCamDirVec);
-  const viewDot = _sunCamDirVec.dot(_sunDirVec);
-
-  if (viewDot <= 0.32) {
-    if (els.layer.style.display !== 'none') {
-      els.layer.style.opacity = '0';
-      els.layer.style.display = 'none';
-    }
-    return;
-  }
-
-  _sunProjVec.copy(sunPos).project(camera);
-  if (_sunProjVec.z >= 1.0 || Math.abs(_sunProjVec.x) > 1.48 || Math.abs(_sunProjVec.y) > 1.48) {
-    if (els.layer.style.display !== 'none') {
-      els.layer.style.opacity = '0';
-      els.layer.style.display = 'none';
-    }
-    return;
-  }
-
-  const w = window.innerWidth || 1;
-  const h = window.innerHeight || 1;
-  const sx = (_sunProjVec.x * 0.5 + 0.5) * w;
-  const sy = (-_sunProjVec.y * 0.5 + 0.5) * h;
-  const cx = w * 0.5;
-  const cy = h * 0.5;
-
-  const angleFactor = Math.min(1, Math.max(0, (viewDot - 0.32) / 0.56));
-  const edgeDist = Math.max(Math.abs(_sunProjVec.x), Math.abs(_sunProjVec.y));
-  const edgeFade = edgeDist <= 0.92 ? 1.0 : Math.max(0, 1.0 - (edgeDist - 0.92) / 0.56);
-  const intensity = Math.min(1, Math.pow(angleFactor, 1.45) * edgeFade * 0.95);
-
-  if (intensity <= 0.02) {
-    els.layer.style.opacity = '0';
-    els.layer.style.display = 'none';
-    return;
-  }
-
-  els.layer.style.display = 'block';
-  els.layer.style.opacity = intensity.toFixed(3);
-
-  const tSec = now * 0.001;
-  const pulse = 1.0 + Math.sin(tSec * 1.8) * 0.04;
-  const place = (el, t, sc = 1, rotDeg = 0) => {
-    if (!el) return;
-    const px = sx + (cx - sx) * t;
-    const py = sy + (cy - sy) * t;
-    el.style.transform = `translate3d(${px.toFixed(1)}px, ${py.toFixed(1)}px, 0) scale(${sc.toFixed(3)}) rotate(${rotDeg.toFixed(1)}deg)`;
-  };
-
-  place(els.bloom,  0.00, (0.88 + intensity * 0.45) * pulse, 0);
-  place(els.streak, 0.00, (0.85 + intensity * 0.55) * pulse, -10 + Math.sin(tSec * 0.6) * 2.5);
-  place(els.halo,   0.00, (0.85 + intensity * 0.32) * pulse, 0);
-  place(els.g1,     0.42, 0.85 + intensity * 0.28, 18);
-  place(els.g2,     0.78, 0.90 + intensity * 0.22, 0);
-  place(els.g3,     1.22, 0.82 + intensity * 0.36, 0);
-  place(els.g4,     1.58, 0.78 + intensity * 0.32, 30);
-  place(els.g5,     1.88, 0.80 + intensity * 0.26, 0);
+function updateMiracleSunScreenFlare() {
+  // 렌즈 플레어 미사용 (호환성 유지를 위한 빈 훅)
 }
 
 function buildMiracleShadowCullCache() {
@@ -200,9 +96,16 @@ function buildMiracleShadowCullCache() {
 
   worldGroup.children.forEach(rootObj => {
     if (!rootObj || rootObj === miracleSunSystem.sunVisualGroup) return;
-    if (rootObj.isMesh && rootObj.geometry && rootObj.geometry.type === 'PlaneGeometry') {
-      rootObj.castShadow = false;
-      rootObj.receiveShadow = true;
+    if (
+      (rootObj.userData && rootObj.userData._isGroundSurface) ||
+      (rootObj.isMesh && rootObj.geometry && rootObj.geometry.type === 'PlaneGeometry')
+    ) {
+      rootObj.traverse(ch => {
+        if (ch.isMesh) {
+          ch.castShadow = false;
+          ch.receiveShadow = true;
+        }
+      });
       return;
     }
 
@@ -323,28 +226,59 @@ function setupMiracleDynamicSunAndShadows() {
 
   if (worldGroup) {
     const sunGrp = new THREE.Group();
-    // 회전하는 코로나 없이 깔끔하고 따뜻한 소프트 로우 폴리곤 다면체 태양 구체 + 잔잔한 3D 빛무리
-    const coreGeo = new THREE.IcosahedronGeometry(7.2, 1).toNonIndexed();
+    // 첨부 레퍼런스 스타일: 면(Facet)이 또렷한 로우 폴리곤 황금 다면체 태양 + 3중 반투명 8각 폴리곤 빛무리
+    const rawCoreGeo = new THREE.IcosahedronGeometry(8.2, 0);
+    const coreGeo = rawCoreGeo.index ? rawCoreGeo.toNonIndexed() : rawCoreGeo;
+    if (coreGeo !== rawCoreGeo && typeof rawCoreGeo.dispose === 'function') rawCoreGeo.dispose();
+    const cPos = coreGeo.attributes.position;
+    const facetPalette = [
+      new THREE.Color('#fffef2'),
+      new THREE.Color('#fef9c3'),
+      new THREE.Color('#fef08a'),
+      new THREE.Color('#fde68a'),
+      new THREE.Color('#fffbeb')
+    ];
+    const fCols = new Float32Array(cPos.count * 3);
+    for (let i = 0; i + 2 < cPos.count; i += 3) {
+      const fc = facetPalette[(Math.floor(i / 3) * 3 + 1) % facetPalette.length];
+      for (let k = 0; k < 3; k++) {
+        fCols[(i + k) * 3]     = fc.r;
+        fCols[(i + k) * 3 + 1] = fc.g;
+        fCols[(i + k) * 3 + 2] = fc.b;
+      }
+    }
+    coreGeo.setAttribute('color', new THREE.Float32BufferAttribute(fCols, 3));
     coreGeo.computeVertexNormals();
-    const coreMat = new THREE.MeshLambertMaterial({
-      color: 0xfef08a,
-      emissive: 0xfde047,
-      emissiveIntensity: 0.82,
-      flatShading: true
+    const coreMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      vertexColors: true,
+      fog: false
     });
     const core = new THREE.Mesh(coreGeo, coreMat);
 
+    // 3겹 동심 8각형 반투명 폴리곤 빛무리 (회전 없이 카메라만 부드럽게 정면 주시)
     const flareGrp = new THREE.Group();
-    flareGrp.add(new THREE.Mesh(
-      new THREE.CircleGeometry(18, 12),
-      new THREE.MeshBasicMaterial({ color: 0xfde047, transparent: true, opacity: 0.18, depthWrite: false })
-    ));
-    flareGrp.add(new THREE.Mesh(
-      new THREE.CircleGeometry(32, 12),
-      new THREE.MeshBasicMaterial({ color: 0xfb923c, transparent: true, opacity: 0.08, depthWrite: false })
-    ));
-    flareGrp.children[0].position.z = 2;
-    flareGrp.children[1].position.z = 4;
+    const haloSpecs = [
+      { r: 12.6, col: 0xfefce8, op: 0.34, z: -1.4 },
+      { r: 18.2, col: 0xfef9c3, op: 0.17, z: -2.8 },
+      { r: 24.5, col: 0xffffff, op: 0.08, z: -4.2 }
+    ];
+    haloSpecs.forEach(hs => {
+      const hMesh = new THREE.Mesh(
+        new THREE.CircleGeometry(hs.r, 8),
+        new THREE.MeshBasicMaterial({
+          color: hs.col,
+          transparent: true,
+          opacity: hs.op,
+          depthWrite: false,
+          fog: false,
+          side: THREE.DoubleSide
+        })
+      );
+      hMesh.rotation.z = Math.PI / 8;
+      hMesh.position.z = hs.z;
+      flareGrp.add(hMesh);
+    });
 
     sunGrp.add(core, flareGrp);
     worldGroup.add(sunGrp);
