@@ -1342,11 +1342,21 @@ function createHeroMesh(isMoses = false) {
 
 function updateCarriedBlocksVisual() {
   if (!carriedBlockGroup) return;
-  while (carriedBlockGroup.children.length > 0) carriedBlockGroup.remove(carriedBlockGroup.children[0]);
-  for (let i = 0; i < Math.min(heldBlocks, 6); i++) {
-    const logItem = createLogBlockMesh(0.58, 0.32, 0.42);
-    logItem.position.set(0, i * 0.36, 0);
-    carriedBlockGroup.add(logItem);
+  const keepMiracleCross = (
+    currentEpisode === 'miracle' &&
+    typeof miracleSubMode !== 'undefined' &&
+    miracleSubMode === 'main3_cross' &&
+    typeof miracleActiveMiniState !== 'undefined' &&
+    miracleActiveMiniState &&
+    miracleActiveMiniState.phase === 'carry'
+  );
+  if (!keepMiracleCross) {
+    while (carriedBlockGroup.children.length > 0) carriedBlockGroup.remove(carriedBlockGroup.children[0]);
+    for (let i = 0; i < Math.min(heldBlocks, 6); i++) {
+      const logItem = createLogBlockMesh(0.58, 0.32, 0.42);
+      logItem.position.set(0, i * 0.36, 0);
+      carriedBlockGroup.add(logItem);
+    }
   }
   const hudBox = document.getElementById('hud-block-box');
   if (currentEpisode === 'exodus' && currentStage === 1) {
@@ -1823,8 +1833,44 @@ function findRandomSafeSpot(bounds, existingSpots, minSpacing, avoidPos, avoidRa
   return [(bounds.minX + bounds.maxX) * 0.5, (bounds.minZ + bounds.maxZ) * 0.5];
 }
 
+function disposeObject3DResources(root) {
+  if (!root) return;
+  const disposedGeos = new Set();
+  const disposedMats = new Set();
+  root.traverse(obj => {
+    if (obj.geometry && !(obj.geometry.userData && obj.geometry.userData._cached) && !disposedGeos.has(obj.geometry)) {
+      disposedGeos.add(obj.geometry);
+      try { obj.geometry.dispose(); } catch (e) {}
+    }
+    if (obj.material) {
+      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+      mats.forEach(mat => {
+        if (!mat || (mat.userData && mat.userData._cached) || disposedMats.has(mat)) return;
+        disposedMats.add(mat);
+        if (mat.map && !(mat.map.userData && mat.map.userData._cached)) {
+          try { mat.map.dispose(); } catch (e) {}
+        }
+        try { mat.dispose(); } catch (e) {}
+      });
+    }
+  });
+}
+
 function clearWorld() {
-  if (worldGroup) scene.remove(worldGroup);
+  if (Array.isArray(fadedMaterials) && fadedMaterials.length > 0) {
+    fadedMaterials.forEach(item => {
+      if (item && item.mesh && item.origMat) {
+        item.mesh.material = item.origMat;
+      } else if (item && item.opacity !== undefined) {
+        item.transparent = false;
+        item.opacity = 1.0;
+      }
+    });
+  }
+  if (worldGroup) {
+    scene.remove(worldGroup);
+    disposeObject3DResources(worldGroup);
+  }
   worldGroup = new THREE.Group();
   scene.add(worldGroup);
   colliders = []; platforms = []; wallMeshes = []; fadedMaterials = [];
@@ -2470,16 +2516,69 @@ function updateStageHUD() {
 }
 
 const raycaster = new THREE.Raycaster();
+const _wallFadeMatCache = {};
+let _wallFadeFrameTick = 0;
+function _getFadedVersionOfMat(origMat) {
+  if (!origMat || !origMat.color) return null;
+  const sideVal = origMat.side !== undefined ? origMat.side : THREE.FrontSide;
+  const key = origMat.color.getHexString() + '_' + (origMat.flatShading ? '1' : '0') + '_' + (origMat.vertexColors ? '1' : '0') + '_' + sideVal;
+  if (!_wallFadeMatCache[key]) {
+    const m = new THREE.MeshLambertMaterial({
+      color: origMat.color.getHex(),
+      flatShading: Boolean(origMat.flatShading),
+      vertexColors: Boolean(origMat.vertexColors),
+      side: sideVal,
+      transparent: true,
+      opacity: 0.24,
+      depthWrite: false
+    });
+    m.userData = { _cached: true };
+    _wallFadeMatCache[key] = m;
+  }
+  return _wallFadeMatCache[key];
+}
+
 function updateWallTransparency() {
-  fadedMaterials.forEach(m => { m.transparent = false; m.opacity = 1.0; });
+  const isMob = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (window.innerWidth <= 900);
+  if (isMob && (++_wallFadeFrameTick % 2 !== 0)) return;
+
+  fadedMaterials.forEach(item => {
+    if (item && item.mesh && item.origMat) {
+      item.mesh.material = item.origMat;
+    } else if (item && item.opacity !== undefined) {
+      item.transparent = false;
+      item.opacity = 1.0;
+    }
+  });
   fadedMaterials = [];
   if (wallMeshes.length === 0 || window.globalCameraViewMode === 'fps') return;
 
-  const fadeMat = (mat) => {
-    if (!mat) return;
-    mat.transparent = true;
-    mat.opacity = 0.22;
-    if (!fadedMaterials.includes(mat)) fadedMaterials.push(mat);
+  // 플레이어 주변 24m 이내 벽면만 레이캐스트 대상에 포함해 모바일 CPU 부하 대폭 절감
+  const nearWalls = [];
+  const px = playerPos.x, pz = playerPos.z;
+  const _tmpWPos = new THREE.Vector3();
+  for (let i = 0; i < wallMeshes.length; i++) {
+    const wm = wallMeshes[i];
+    if (!wm || !wm.visible || !wm.parent) continue;
+    wm.getWorldPosition(_tmpWPos);
+    const dx = _tmpWPos.x - px, dz = _tmpWPos.z - pz;
+    if (dx * dx + dz * dz < 625) nearWalls.push(wm);
+  }
+  if (nearWalls.length === 0) return;
+
+  const fadeMesh = (mesh) => {
+    if (!mesh || !mesh.material) return;
+    if (fadedMaterials.some(x => x.mesh === mesh)) return;
+    const origMat = mesh.material;
+    const fadedMat = _getFadedVersionOfMat(origMat);
+    if (fadedMat) {
+      mesh.material = fadedMat;
+      fadedMaterials.push({ mesh, origMat });
+    } else {
+      origMat.transparent = true;
+      origMat.opacity = 0.24;
+      fadedMaterials.push(origMat);
+    }
   };
 
   const targetPoints = doveCutscene.active
@@ -2494,12 +2593,10 @@ function updateWallTransparency() {
     const dist = dir.length();
     if (dist < 0.05) return;
     raycaster.set(camera.position, dir.normalize());
-    raycaster.intersectObjects(wallMeshes, false).forEach(hit => {
+    raycaster.far = dist;
+    raycaster.intersectObjects(nearWalls, false).forEach(hit => {
       if (hit.distance < dist - 0.12 && hit.object) {
-        fadeMat(hit.object.material);
-        if (hit.object.userData && Array.isArray(hit.object.userData.linkedFadeMats)) {
-          hit.object.userData.linkedFadeMats.forEach(fadeMat);
-        }
+        fadeMesh(hit.object);
       }
     });
   });
@@ -2837,6 +2934,7 @@ function setupControls() {
 
 function playerJump() {
   if (!isPlaying || stage2CountdownActive || doveCutscene.active || pillarCutscene.active || seaPartingCutscene.active || sinaiCutscene.active) return;
+  if (typeof window.isPlayerMovementLocked === 'function' && window.isPlayerMovementLocked()) return;
   if (isGrounded || playerPos.y <= getSupportHeight(playerPos.x, playerPos.z, playerPos.y) + 0.18) {
     playerVelY = (currentEpisode === 'exodus' && currentStage === 3) ? 9.6 : 11.5;
     isGrounded = false; playSfx('jump');
@@ -2851,6 +2949,17 @@ function canMoveTo(nx, nz, curY, isPlayer = false) {
   } else if (currentMapBounds !== null) {
     if (Math.abs(nx) > currentMapBounds || Math.abs(nz) > currentMapBounds) return false;
   }
+  // 에피소드 4 오픈월드: 자연스럽게 확장된 곡선 서쪽 해안선 경계 연동 (선착장 구역은 부두 끝까지 허용)
+  if (
+    isPlayer &&
+    currentEpisode === 'miracle' &&
+    typeof miracleSubMode !== 'undefined' &&
+    miracleSubMode === 'openworld' &&
+    typeof window.getMiracleWestShoreLineX === 'function'
+  ) {
+    const onGalileePier = (nz >= -70.2 && nz <= -65.8 && nx >= -96.2);
+    if (!onGalileePier && nx < window.getMiracleWestShoreLineX(nz) + 1.5) return false;
+  }
   const isSinaiStage = (isPlayer && currentEpisode === 'exodus' && currentStage === 3);
   const stepAllowance = isSinaiStage
     ? ((!isGrounded || playerVelY > 0) ? 0.35 : 0.22)
@@ -2861,6 +2970,7 @@ function canMoveTo(nx, nz, curY, isPlayer = false) {
     if (p.topY < -100) continue;
     if (p.passUnderY !== undefined && curY < p.passUnderY) continue;
     if (nx > p.minX - wallPad && nx < p.maxX + wallPad && nz > p.minZ - wallPad && nz < p.maxZ + wallPad) {
+      if (p.wallOnly) return false;
       if (curY + stepAllowance < p.topY) return false;
       if (isSinaiStage && p.topY - lastGroundedY > 1.35) return false;
       if (isPlayer && p.minClimbY !== undefined && lastGroundedY < p.minClimbY) return false;
@@ -2876,10 +2986,13 @@ function getSupportHeight(x, z, curY) {
   let h = getBaseGroundHeight(x, z);
   const isSinaiStage = (currentEpisode === 'exodus' && currentStage === 3);
   const supportPad = isSinaiStage ? 0.34 : 0.25;
-  const topTolerance = isSinaiStage ? 0.65 : 0.75;
+  const baseTol = isSinaiStage ? 0.65 : 0.75;
+  // 점프 상승 중(playerVelY > 1.5)에는 머리 위·옆 난간/2층 모서리에 걸려 공중에 멈추지 않도록 허용치 축소
+  const topTolerance = (playerVelY > 1.5) ? 0.06 : baseTol;
 
   for (const p of platforms) {
     if (p.topY < -100) continue;
+    if (p.wallOnly) continue; // 옥상 테두리(난간) 차단벽은 착지 발판으로 사용하지 않음 (공중 정지 원천 해결!)
     if (p.passUnderY !== undefined && curY < p.passUnderY) continue;
     if (x >= p.minX - supportPad && x <= p.maxX + supportPad && z >= p.minZ - supportPad && z <= p.maxZ + supportPad && curY + topTolerance >= p.topY && p.topY > h) {
       if (isSinaiStage && p.topY - lastGroundedY > 1.35) continue;
@@ -2900,15 +3013,104 @@ function updateWorldLabelPos(lbl, worldVec, visible = true) {
   lbl.style.opacity = '1';
 }
 
+// 건물·벽·계단 사이에 끼여 갇히는 현상을 원천 방지하는 자동 최소거리 탈출 보정
+function resolvePlayerAntiStuckPushOut() {
+  if (!playerPos) return;
+  const curY = playerPos.y;
+  const stepAllow = (!isGrounded || playerVelY > 0) ? 1.25 : 0.65;
+  const isSinaiStage = (currentEpisode === 'exodus' && currentStage === 3);
+  if (isSinaiStage) return;
+
+  for (let pass = 0; pass < 3; pass++) {
+    let pushed = false;
+    for (let i = 0; i < colliders.length; i++) {
+      const c = colliders[i];
+      if (playerPos.x > c.minX && playerPos.x < c.maxX && playerPos.z > c.minZ && playerPos.z < c.maxZ) {
+        const dL = playerPos.x - c.minX;
+        const dR = c.maxX - playerPos.x;
+        const dB = playerPos.z - c.minZ;
+        const dF = c.maxZ - playerPos.z;
+        const m = Math.min(dL, dR, dB, dF);
+        const eps = 0.06;
+        if (m === dL) playerPos.x = c.minX - eps;
+        else if (m === dR) playerPos.x = c.maxX + eps;
+        else if (m === dB) playerPos.z = c.minZ - eps;
+        else playerPos.z = c.maxZ + eps;
+        pushed = true;
+      }
+    }
+    for (let i = 0; i < platforms.length; i++) {
+      const p = platforms[i];
+      if (p.topY < -100) continue;
+      if (p.passUnderY !== undefined && curY < p.passUnderY) continue;
+      if (curY + stepAllow >= p.topY) continue;
+      if (playerPos.x > p.minX && playerPos.x < p.maxX && playerPos.z > p.minZ && playerPos.z < p.maxZ) {
+        const dL = playerPos.x - p.minX;
+        const dR = p.maxX - playerPos.x;
+        const dB = playerPos.z - p.minZ;
+        const dF = p.maxZ - playerPos.z;
+        const m = Math.min(dL, dR, dB, dF);
+        const eps = 0.08;
+        if (m === dL) playerPos.x = p.minX - eps;
+        else if (m === dR) playerPos.x = p.maxX + eps;
+        else if (m === dB) playerPos.z = p.minZ - eps;
+        else playerPos.z = p.maxZ + eps;
+        pushed = true;
+      }
+    }
+    if (!pushed) break;
+  }
+  if (currentMapRectBounds !== null) {
+    playerPos.x = Math.max(currentMapRectBounds.minX, Math.min(currentMapRectBounds.maxX, playerPos.x));
+    playerPos.z = Math.max(currentMapRectBounds.minZ, Math.min(currentMapRectBounds.maxZ, playerPos.z));
+  }
+}
+
+let webglContextLostFlag = false;
+
 function initEngine(skipInitialPreview = false) {
   const container = document.getElementById('canvas-container');
+  const isMobDevice = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (Math.min(window.innerWidth, window.innerHeight) <= 768);
   scene = new THREE.Scene(); scene.background = new THREE.Color(0x7dd3fc);
   camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 900);
-  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer = new THREE.WebGLRenderer({
+    antialias: !isMobDevice,
+    powerPreference: 'high-performance',
+    alpha: false
+  });
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isMobDevice ? 1.25 : 2));
   renderer.shadowMap.enabled = true;
   container.appendChild(renderer.domElement);
+
+  // 모바일 GPU 메모리 부족 등으로 WebGL 컨텍스트 손실 시 검은/하얀 화면 고착 방지 및 자동 복구
+  renderer.domElement.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();
+    webglContextLostFlag = true;
+    const wf = document.getElementById('white-fade');
+    if (wf) wf.style.opacity = '0';
+    if (typeof showToast === 'function') showToast('🔄 모바일 그래픽 메모리를 정리하고 화면을 복구하는 중이에요...');
+  }, false);
+
+  renderer.domElement.addEventListener('webglcontextrestored', () => {
+    webglContextLostFlag = false;
+    const wf = document.getElementById('white-fade');
+    if (wf) wf.style.opacity = '0';
+    const bf = document.getElementById('black-fade');
+    if (bf) bf.style.opacity = '0';
+    const mobNow = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (Math.min(window.innerWidth, window.innerHeight) <= 768);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, mobNow ? 1.15 : 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    if (currentEpisode === 'miracle' && typeof buildMiracleOpenWorld === 'function') {
+      if (typeof miracleSubMode !== 'undefined' && miracleSubMode === 'main1_galilee' && typeof buildMiracleMainStage1Galilee === 'function') buildMiracleMainStage1Galilee();
+      else if (typeof miracleSubMode !== 'undefined' && miracleSubMode === 'main2_loaves' && typeof buildMiracleMainStage2Loaves === 'function') buildMiracleMainStage2Loaves();
+      else if (typeof miracleSubMode !== 'undefined' && miracleSubMode === 'main3_cross' && typeof buildMiracleMainStage3Cross === 'function') buildMiracleMainStage3Cross();
+      else if (typeof miracleSubMode !== 'undefined' && miracleSubMode === 'main4_tomb' && typeof buildMiracleMainStage4Tomb === 'function') buildMiracleMainStage4Tomb();
+      else if (typeof miracleSubMode !== 'undefined' && miracleSubMode === 'ascension' && typeof buildMiracleEndingWorld === 'function') buildMiracleEndingWorld();
+      else buildMiracleOpenWorld(true);
+    }
+    if (typeof showToast === 'function') showToast('✅ 화면이 정상적으로 복구되었습니다!');
+  }, false);
 
   scene.add(new THREE.AmbientLight(0xffffff, 0.62));
   const dirLight = new THREE.DirectionalLight(0xfffbeb, 0.72);
@@ -2921,15 +3123,20 @@ function initEngine(skipInitialPreview = false) {
   }
   setupControls();
 
-  window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
+  const handleViewportResize = () => {
+    const mobNow = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (Math.min(window.innerWidth, window.innerHeight) <= 768);
+    camera.aspect = window.innerWidth / Math.max(1, window.innerHeight);
     camera.updateProjectionMatrix();
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, mobNow ? 1.25 : 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
-  });
+  };
+  window.addEventListener('resize', handleViewportResize);
+  window.addEventListener('orientationchange', () => setTimeout(handleViewportResize, 120));
 
   let lastTime = performance.now();
   function animate(now) {
     requestAnimationFrame(animate);
+    if (webglContextLostFlag) return;
     const dt = Math.min((now - lastTime) / 1000, 0.05);
     lastTime = now;
 
@@ -2987,7 +3194,8 @@ function initEngine(skipInitialPreview = false) {
     if (endingCelebrationPeople.length > 0) {
       endingCelebrationPeople.forEach(p => {
         const jumpVal = Math.abs(Math.sin(now * 0.0085 + p.phase));
-        p.mesh.position.y = jumpVal * 0.85;
+        const baseY = (p.baseY !== undefined) ? p.baseY : 0;
+        p.mesh.position.y = baseY + jumpVal * 0.85;
         if (p.mesh.userData && p.mesh.userData.lArm && p.mesh.userData.rArm) {
           p.mesh.userData.lArm.rotation.x = -2.4 + Math.sin(now * 0.015 + p.phase) * 0.4;
           p.mesh.userData.rArm.rotation.x = -2.4 - Math.sin(now * 0.015 + p.phase) * 0.4;
@@ -3024,6 +3232,10 @@ function initEngine(skipInitialPreview = false) {
       if (keys['ArrowUp'] || keys['KeyW']) rawZ = -1;
       if (keys['ArrowDown'] || keys['KeyS']) rawZ = 1;
 
+      if (typeof window.isPlayerMovementLocked === 'function' && window.isPlayerMovementLocked()) {
+        rawX = 0; rawZ = 0;
+      }
+
       if (playerSpeedBoostTimer > 0) playerSpeedBoostTimer -= dt;
       if (playerChopAnimTimer > 0) playerChopAnimTimer -= dt;
 
@@ -3049,8 +3261,14 @@ function initEngine(skipInitialPreview = false) {
         const worldDirX = nxInput * cosY + nzInput * sinY, worldDirZ = -nxInput * sinY + nzInput * cosY;
         currentMoveSpeed = baseSpeed * inputMag;
         const vx = worldDirX * currentMoveSpeed * dt, vz = worldDirZ * currentMoveSpeed * dt;
-        if (canMoveTo(playerPos.x + vx, playerPos.z, playerPos.y, true)) playerPos.x += vx;
-        if (canMoveTo(playerPos.x, playerPos.z + vz, playerPos.y, true)) playerPos.z += vz;
+        const canX = canMoveTo(playerPos.x + vx, playerPos.z, playerPos.y, true);
+        if (canX) playerPos.x += vx;
+        const canZ = canMoveTo(playerPos.x, playerPos.z + vz, playerPos.y, true);
+        if (canZ) playerPos.z += vz;
+        // 건물 모서리나 좁은 틈에 끼였을 때 탈출 보정
+        if (!canX && !canZ) {
+          resolvePlayerAntiStuckPushOut();
+        }
         const postMoveFloorY = getSupportHeight(playerPos.x, playerPos.z, playerPos.y);
         if (isGrounded && postMoveFloorY >= playerPos.y - 0.15) {
           playerPos.y = postMoveFloorY;
@@ -3066,6 +3284,7 @@ function initEngine(skipInitialPreview = false) {
         playerLimbs.lLeg.rotation.x = 0; playerLimbs.rLeg.rotation.x = 0;
         playerLimbs.lArm.rotation.x = 0; playerLimbs.rArm.rotation.x = 0;
       }
+      resolvePlayerAntiStuckPushOut();
 
       if (playerLimbs.axeTool) {
         if (playerChopAnimTimer > 0) {
