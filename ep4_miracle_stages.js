@@ -4,7 +4,7 @@
 // - 스테이지 3(십자가 사건): 넓어진 골고다 언덕 정상 고원과 세 십자가 등장 연출 적용
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_stages = '20261120_v7';
+window.__GAME_BUILD_VERSIONS__.ep4_stages = '20261120_v8';
 
 // 스테이지 3: 예수님과 플레이어가 무거운 십자가를 지고 걷는 통일 속도 (아무리 세게 터치해도 이 속도로 제한!)
 const MIRACLE_STAGE3_CROSS_WALK_SPEED = 1.65;
@@ -1870,8 +1870,11 @@ function buildMiracleMainStage3Cross() {
     summitCrossesGrp: null,
     stumbleCheckpoints: [-19.5, -31.0, -41.5],
     stumbleIdx: 0,
+    stumbleState: 'none', // 'none' | 'falling' | 'down'
+    stumbleFallAmt: 0,
+    stumbleHoldTime: 0,
+    standUpEffort: 0,
     stumbleTimer: 0,
-    stumbleDuration: 1.95,
     stumbleDusts: []
   };
 
@@ -2074,7 +2077,7 @@ function attachCrossToPlayerBack() {
   carriedBlockGroup.add(crossGrp);
 }
 
-// 스테이지 3에서 십자가 무게에 넘어져 일어나는 동안 잠시 이동 잠금 연동
+// 스테이지 3에서 십자가 무게에 넘어져 방향키(조이스틱)로 다시 일어날 때까지 이동 잠금 연동
 const _ep4StagesOrigMoveLock = window.isPlayerMovementLocked;
 window.isPlayerMovementLocked = function () {
   const prev = (typeof _ep4StagesOrigMoveLock === 'function') ? _ep4StagesOrigMoveLock() : false;
@@ -2082,7 +2085,7 @@ window.isPlayerMovementLocked = function () {
     miracleSubMode === 'main3_cross' &&
     miracleActiveMiniState &&
     miracleActiveMiniState.phase === 'carry' &&
-    miracleActiveMiniState.stumbleTimer > 0
+    (miracleActiveMiniState.stumbleState !== 'none' || miracleActiveMiniState.stumbleTimer > 0)
   );
   return prev || stumbling;
 };
@@ -2252,17 +2255,23 @@ function updateMiracleMainStage3Frame(dt, now) {
   } else if (st.phase === 'carry') {
     nextGuidePos = st.goalPos;
 
-    // [요청 반영] 골고다 오르막 도중 중간중간 무거운 십자가에 무릎을 꿇고 넘어졌다 다시 일어나는 모션!
+    // [요청 반영] 골고다 오르막 도중 무거운 십자가에 넘어졌을 때:
+    // - 방향키/조이스틱을 조작하지 않으면 무릎을 꿇은 채 가만히 엎드려 있고,
+    // - 방향키(WASD/화살표) 또는 조이스틱을 조작하면 힘내서 다시 일어남!
     if (
-      st.stumbleTimer <= 0 &&
+      st.stumbleState === 'none' &&
       Array.isArray(st.stumbleCheckpoints) &&
       st.stumbleIdx < st.stumbleCheckpoints.length &&
       playerPos.z <= st.stumbleCheckpoints[st.stumbleIdx]
     ) {
       st.stumbleIdx++;
-      st.stumbleTimer = st.stumbleDuration || 1.95;
+      st.stumbleState = 'falling';
+      st.stumbleFallAmt = 0;
+      st.stumbleHoldTime = 0;
+      st.standUpEffort = 0;
+      st.stumbleTimer = 1;
       playSfx('crumble');
-      showToast('😣 무거운 십자가에 발을 헛디뎌 무릎을 꿇었어요... 예수님과 함께 힘내어 다시 일어납니다!');
+      showToast('😣 무거운 십자가에 넘어졌어요! 방향키(조이스틱)를 움직여 다시 일어나세요!');
       for (let k = 0; k < 7; k++) {
         const ang = (k / 7) * Math.PI * 2;
         const dust = createLowPolyMesh(new THREE.DodecahedronGeometry(0.16, 0), '#d6c19c', playerPos.x + Math.cos(ang) * 0.4, playerPos.y + 0.18, playerPos.z + Math.sin(ang) * 0.4, false);
@@ -2278,36 +2287,69 @@ function updateMiracleMainStage3Frame(dt, now) {
       }
     }
 
-    if (st.stumbleTimer > 0) {
-      st.stumbleTimer = Math.max(0, st.stumbleTimer - dt);
-      const dur = st.stumbleDuration || 1.95;
-      const elapsed = dur - st.stumbleTimer;
-      // 0~0.42초: 앞으로 넘어짐 | 0.42~1.30초: 무릎 꿇고 버팀 | 1.30~1.95초: 힘겹게 다시 일어남
-      let fallAmt = 0;
-      if (elapsed < 0.42) fallAmt = elapsed / 0.42;
-      else if (elapsed < 1.30) fallAmt = 1.0 + Math.sin((elapsed - 0.42) * 14) * 0.05;
-      else fallAmt = Math.max(0, 1.0 - (elapsed - 1.30) / (dur - 1.30));
+    if (st.stumbleState !== 'none') {
+      let fallAmt = 1.0;
 
-      if (playerGroup) {
-        playerGroup.rotation.x = fallAmt * 0.74;
-        playerGroup.scale.set(1, 1.0 - fallAmt * 0.28, 1);
+      if (st.stumbleState === 'falling') {
+        st.stumbleFallAmt = Math.min(1.0, (st.stumbleFallAmt || 0) + dt / 0.44);
+        fallAmt = st.stumbleFallAmt;
+        if (st.stumbleFallAmt >= 1.0) {
+          st.stumbleState = 'down';
+          st.stumbleHoldTime = 0;
+        }
+      } else if (st.stumbleState === 'down') {
+        st.stumbleHoldTime = (st.stumbleHoldTime || 0) + dt;
+        const hasDirInput = Boolean(
+          (window.lastRawMoveInput && window.lastRawMoveInput.mag > 0.20) ||
+          (typeof keys !== 'undefined' && keys && (
+            keys['ArrowUp'] || keys['ArrowDown'] || keys['ArrowLeft'] || keys['ArrowRight'] ||
+            keys['KeyW'] || keys['KeyS'] || keys['KeyA'] || keys['KeyD']
+          )) ||
+          (typeof joyMove !== 'undefined' && joyMove && Math.hypot(joyMove.x || 0, joyMove.y || 0) > 0.20)
+        );
+
+        // 넘어진 직후 0.25초 착지 후부터 방향키 입력 시 부드럽게 일어남; 키 입력이 없으면 가만히 넘어진 채 유지!
+        if (hasDirInput && st.stumbleHoldTime >= 0.25) {
+          st.standUpEffort = Math.min(1.0, (st.standUpEffort || 0) + dt * 1.55);
+        } else if (!hasDirInput) {
+          st.standUpEffort = Math.max(0, (st.standUpEffort || 0) - dt * 0.65);
+        }
+
+        fallAmt = Math.max(0, 1.0 - (st.standUpEffort || 0)) + (hasDirInput ? 0 : Math.sin(st.stumbleHoldTime * 2.8) * 0.018);
+
+        if ((st.standUpEffort || 0) >= 1.0) {
+          st.stumbleState = 'none';
+          st.stumbleFallAmt = 0;
+          st.standUpEffort = 0;
+          st.stumbleHoldTime = 0;
+          st.stumbleTimer = 0;
+          fallAmt = 0;
+          playSfx('step');
+          showToast('💪 힘내서 다시 일어났어요! 끝까지 골고다 정상으로 올라가요!');
+        }
       }
-      if (playerLimbs && playerLimbs.lLeg && playerLimbs.rLeg) {
-        playerLimbs.lLeg.rotation.x = fallAmt * 1.1;
-        playerLimbs.rLeg.rotation.x = -fallAmt * 0.65;
-      }
-      if (playerLimbs && playerLimbs.lArm && playerLimbs.rArm) {
-        playerLimbs.lArm.rotation.x = THREE.MathUtils.lerp(2.40, -1.15, fallAmt);
-        playerLimbs.rArm.rotation.x = THREE.MathUtils.lerp(2.40, -1.15, fallAmt);
-        playerLimbs.lArm.rotation.z = 0.28 * (1 - fallAmt);
-        playerLimbs.rArm.rotation.z = -0.28 * (1 - fallAmt);
-      }
-      // 넘어져 있는 동안 예수님이 옆에서 부축하며 손을 내미는 모션
-      if (st.jesusPersonMesh && st.jesusPersonMesh.userData && st.jesusPersonMesh.userData.lArm) {
-        st.jesusPersonMesh.userData.lArm.rotation.x = -1.1;
-      }
-      if (st.stumbleTimer <= 0 && playerGroup) {
-        playerGroup.rotation.x = 0;
+
+      if (st.stumbleState !== 'none') {
+        if (playerGroup) {
+          playerGroup.rotation.x = fallAmt * 0.74;
+          playerGroup.scale.set(1, 1.0 - fallAmt * 0.28, 1);
+        }
+        if (playerLimbs && playerLimbs.lLeg && playerLimbs.rLeg) {
+          playerLimbs.lLeg.rotation.x = fallAmt * 1.1;
+          playerLimbs.rLeg.rotation.x = -fallAmt * 0.65;
+        }
+        if (playerLimbs && playerLimbs.lArm && playerLimbs.rArm) {
+          playerLimbs.lArm.rotation.x = THREE.MathUtils.lerp(2.40, -1.15, Math.min(1, fallAmt));
+          playerLimbs.rArm.rotation.x = THREE.MathUtils.lerp(2.40, -1.15, Math.min(1, fallAmt));
+          playerLimbs.lArm.rotation.z = 0.28 * (1 - Math.min(1, fallAmt));
+          playerLimbs.rArm.rotation.z = -0.28 * (1 - Math.min(1, fallAmt));
+        }
+        // 넘어져 있는 동안 예수님이 옆에서 부축하며 손을 내미는 모션
+        if (st.jesusPersonMesh && st.jesusPersonMesh.userData && st.jesusPersonMesh.userData.lArm) {
+          st.jesusPersonMesh.userData.lArm.rotation.x = -1.1;
+        }
+      } else if (playerGroup) {
+        playerGroup.rotation.x = 0.14;
         playerGroup.scale.set(1, 1, 1);
       }
     } else {
@@ -2335,7 +2377,7 @@ function updateMiracleMainStage3Frame(dt, now) {
 
       // 옆에서 함께 걸어가는 예수님 보행 애니메이션
       const moved = Math.hypot(st.jesusMesh.position.x - prevX, st.jesusMesh.position.z - prevZ);
-      if (st.jesusPersonMesh && st.jesusPersonMesh.userData && st.stumbleTimer <= 0) {
+      if (st.jesusPersonMesh && st.jesusPersonMesh.userData && st.stumbleState === 'none') {
         const ju = st.jesusPersonMesh.userData;
         const jSwing = moved > 0.005 ? Math.sin(now * 0.011) * 0.48 : 0;
         if (ju.lLeg && ju.rLeg) { ju.lLeg.rotation.x = jSwing; ju.rLeg.rotation.x = -jSwing; }
@@ -2352,6 +2394,8 @@ function updateMiracleMainStage3Frame(dt, now) {
 
     if (gd < 3.6) {
       st.phase = 'golgotha_arrived';
+      st.stumbleState = 'none';
+      st.stumbleTimer = 0;
       if (playerGroup) {
         playerGroup.rotation.x = 0;
         playerGroup.scale.set(1, 1, 1);
@@ -3274,6 +3318,8 @@ REGISTER_EPISODE('miracle', {
     miracleStageObjects = [];
     window.miracleSkyBirds = [];
     window.miracleBuildingBounds = [];
+    window.miracleRooftopSpawnSpots = [];
+    window.miracleGrowingFields = [];
     window.miracleWorldTreePositions = [];
     window.miracleZacchaeusGroveTrees = [];
     miracleStageCutscene.active = false;

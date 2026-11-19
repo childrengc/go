@@ -4,7 +4,7 @@
 // - 계단으로 건물 2층 등반 후 인접한 옆 건물 옥상·2층으로 점프 이동할 수 있는 근접 마을 배치
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_world = '20261120_v7';
+window.__GAME_BUILD_VERSIONS__.ep4_world = '20261120_v8';
 
 let miracleWorldMissionObjects = [];
 let miracleActiveFieldEvent = null;
@@ -13,6 +13,8 @@ let miracleGolgothaCrossesGroup = null; // 스테이지 3(예수님 십자가 �
 let miracleOpenWorldTombGroup = null; // 스테이지 3 클리어 후 모습을 드러내는 동산 돌 무덤 그룹
 let miracleTombCoverGroup = null; // 스테이지 3 클리어 전까지 돌 무덤을 가려주는 풀·덤불 위장막
 window.miracleSkyBirds = []; // 하늘을 날아다니는 소프트 로우 폴리곤 새 배열
+window.miracleGrowingFields = []; // 씨 뿌리기 미션 완료 후 시간이 지남에 따라 실시간으로 자라나는 곡식 밭 배열
+window.miracleSowerHistory = window.miracleSowerHistory || []; // 스테이지 이동 후 복귀해도 유지되는 파종 이력
 
 // 머리 위 태그(.world-label) 근접 표시 거리 상수 (가까이 다가갔을 때만 표시)
 const MIRACLE_TAG_DIST_SPOT = 13.0;
@@ -1070,8 +1072,12 @@ function buildMiracleRegionalLandmarks() {
     createLowPolyMesh(new THREE.CylinderGeometry(0.15, 0.16, 3.5, 6), '#6b4226', -0.2, 1.75, -70.4)
   );
 
-  // 2) 가버나움 중풍병자 치유 집 — 지붕으로 올라가는 외벽 돌계단 포함 (x = 22, z = -52)
-  addLowPolyVillageHouse(22, -52, 8.8, 4.0, 7.0, '#ead7b7', '#c89654', true, 0, 0);
+  // 2) 가버나움 중풍병자 치유 집 — 기존 외관 유지 + 열린 정면 문 안으로 예수님과 사람들이 보임 + 옥상 외벽 돌계단 (x = 22, z = -52)
+  if (typeof addCapernaumParalyticHouse === 'function') {
+    window.miracleParalyticHouseInfo = addCapernaumParalyticHouse(22, -52);
+  } else {
+    addLowPolyVillageHouse(22, -52, 8.8, 4.0, 7.0, '#ead7b7', '#c89654', true, 0, 0);
+  }
 
   // 3) 동북쪽 외곽 '오병이어 전망 언덕' (x = 88, z = -82, 높이 약 14.5m — 마을과 바다가 한눈에 내려다보이는 언덕)
   const bethTopY = getMiracleOpenWorldGroundHeight(88, -82);
@@ -1649,6 +1655,7 @@ function getMiracleOptionalEventsCatalog() {
       missionType: 'collect_deliver',
       itemStyle: 'water_amphora',
       spawnMode: 'openworld_wide',
+      allowRooftopSpawn: true,
       itemCount: 6,
       itemColor: '#38bdf8',
       itemLabel: '🏺 물 채운 돌항아리',
@@ -1671,10 +1678,11 @@ function getMiracleOptionalEventsCatalog() {
       color: 0x0284c7,
       npcPreset: 'disciple',
       speaker: '중풍병자의 네 친구',
-      introText: '"사람들이 문 앞을 가득 메워 예수님께 갈 수가 없어요! 저희와 함께 들것을 메고 오른쪽 외벽 돌계단을 따라 집 지붕 위로 올라가 주세요!"',
+      introText: '"열린 문 너머로 예수님이 말씀을 가르치고 계시지만 사람들이 가득해 들어갈 수가 없어요! 저희와 함께 들것을 메고 오른쪽 외벽 돌계단을 따라 집 지붕 위로 올라가 주세요!"',
       greetingText: '"평안하신가요! 함께 지붕 위로 들것을 옮겨 주신 덕분에 우리 친구가 죄 사함을 받고 건강하게 걸어서 집으로 돌아갔어요!"',
       missionType: 'escort_guide',
       escortType: 'stretcher',
+      noRooftopJesus: true,
       goalPos: { x: 22, y: 4.0, z: -52 },
       goalLabel: '🏠 가버나움 집 평지붕 위 (지붕 뚫고 내리기)',
       completeSpeaker: '예수님',
@@ -1758,22 +1766,23 @@ function getMiracleOptionalEventsCatalog() {
     {
       id: 'ev_samaritan',
       category: 'parable',
-      title: '🧰 ⑥ [비유 체험] 선한 사마리아인: 구급상자 찾아 여관에 전달',
+      title: '🏺 ⑥ [비유 체험] 선한 사마리아인: 치료 꾸러미 찾아 여관에 전달',
       x: 15, z: 20,
       color: 0x10b981,
       npcPreset: 'disciple',
       speaker: '선한 사마리아인 (예수님의 비유 체험)',
-      introText: '"[📖 예수님이 들려주신 비유] 다친 이웃을 여관 안 병상에 눕혀 두었어요! 마을 곳곳을 돌아다니며 구급상자 3개를 찾아 여관 안 병상 옆으로 가져다주세요!"',
+      introText: '"[📖 예수님이 들려주신 비유] 다친 이웃을 여관 안 병상에 눕혀 두었어요! 마을 곳곳과 건물 2층을 돌아다니며 기름·포도주·붕대가 담긴 치료 꾸러미 3개를 찾아 여관 안 병상 옆으로 가져다주세요!"',
       greetingText: '"평안하시길! 다친 이웃을 불쌍히 여기고 자비를 베푸는 사람이야말로 예수님이 말씀하신 진정한 이웃이랍니다!"',
       missionType: 'collect_deliver',
       itemStyle: 'first_aid',
       spawnMode: 'town_random',
+      allowRooftopSpawn: true,
       deliverToInnBed: true,
       itemCount: 3,
-      itemColor: '#f43f5e',
-      itemLabel: '🧰 구호 구급상자',
+      itemColor: '#d97706',
+      itemLabel: '🏺 치료용 기름·붕대 꾸러미',
       targetOffset: { x: 10.1, z: 3.6 },
-      targetLabel: '🏥 여관 안 병상 (다친 이웃 치료)',
+      targetLabel: '🛏️ 여관 안 병상 (다친 이웃 치료)',
       completeSpeaker: '예수님',
       completeText: '"네 생각에는 이 세 사람 중에 누가 강도 만난 자의 이웃이 되겠느냐? 이르되 자비를 베푼 자니이다. 예수께서 이르시되 가서 너도 이와 같이 하라!" (눅 10:25~37)',
       unlockNotebookIds: ['rumor_samaritan', 'wd_luke1037'],
@@ -1847,6 +1856,7 @@ function getMiracleOptionalEventsCatalog() {
       missionType: 'collect_deliver',
       itemStyle: 'folded_towel',
       spawnMode: 'nearby_buildings',
+      allowRooftopSpawn: true,
       deliverToUpperRoom: true,
       itemCount: 3,
       itemColor: '#f8fafc',
@@ -1888,20 +1898,20 @@ function getMiracleOptionalEventsCatalog() {
     {
       id: 'par_sower',
       category: 'parable',
-      title: '🌱 [비유 미니게임 1] 씨 뿌리는 사람: 좋은 땅 찾기',
+      title: '🌱 [비유 미니게임 1] 씨 뿌리는 사람: 좋은 땅 만들기',
       x: -46, z: -28,
       color: 0x4ade80,
       npcPreset: 'disciple',
       speaker: '예수님의 비유 이야기',
-      introText: '"[📖 예수님이 들려주신 비유] 씨 뿌리는 사람이 씨를 뿌리러 나갔어요! 길가나 돌밭, 가시떨기가 아닌 부드럽고 좋은 옥토 밭에 말씀의 씨앗 4개를 심어 30배, 60배, 100배의 열매를 맺게 해보세요!"',
-      greetingText: '"반가워요! 좋은 땅에 심긴 씨앗처럼 하나님의 말씀을 듣고 깨달아 30배, 60배, 100배의 풍성한 열매를 맺어가길 축복해요!"',
-      missionType: 'collect_deliver',
-      spawnMode: 'local_random',
-      itemCount: 4,
+      introText: '"[📖 예수님이 들려주신 비유] 산 근처의 거친 밭을 부드러운 좋은 땅(옥토)으로 가꿔 볼까요? 먼저 산기슭 밭 구역을 찾고 → 씨앗 바구니를 모은 뒤 → 돌과 가시덤불·잡초를 제거하고 땅을 고르게 정돈해 씨앗을 뿌려 보세요!"',
+      greetingText: '"반가워요! 정성껏 가꾼 좋은 땅에 뿌린 씨앗이 햇살을 받으며 무럭무럭 자라나 30배, 60배, 100배의 열매를 맺고 있어요!"',
+      missionType: 'sower_farm',
+      itemStyle: 'seed_basket',
+      allowRooftopSpawn: true,
+      itemCount: 3,
       itemColor: '#fde047',
-      itemLabel: '🌾 말씀의 씨앗',
-      targetOffset: { x: -5, z: -4 },
-      targetLabel: '🟫 부드러운 좋은 땅 (옥토)',
+      itemLabel: '🧺 말씀의 씨앗 바구니',
+      targetLabel: '🟫 산기슭 좋은 땅 밭',
       completeSpeaker: '예수님',
       completeText: '"좋은 땅에 뿌려졌다는 것은 말씀을 듣고 깨닫는 자니 결실하여 어떤 것은 백 배, 어떤 것은 육십 배, 어떤 것은 삼십 배가 되느니라!" (마 13:1~9)',
       unlockNotebookIds: ['par_sower'],
@@ -1944,6 +1954,7 @@ function getMiracleOptionalEventsCatalog() {
       greetingText: '"든든한 반석 위에 멋진 집이 세워졌어요! 예수님의 말씀을 듣고 행하는 지혜로운 삶을 살아가요!"',
       missionType: 'collect_deliver',
       spawnMode: 'builder_random',
+      allowRooftopSpawn: true,
       itemCount: 4,
       itemColor: '#94a3b8',
       itemLabel: '🪨 든든한 반석 주춧돌',
@@ -2014,16 +2025,18 @@ function getMiraclePostResurrectionEventsCatalog() {
     {
       id: 'post_thomas',
       category: 'story',
-      title: '🙌 ⑫ [부활 이후] 도마와 제자들: 보지 않고 믿는 복',
+      title: '🙌 ⑫ [부활 이후] 도마와 예수님: 손의 못자국 확인하기',
       x: -14.5, z: 60,
       color: 0x38bdf8,
       npcPreset: 'disciple',
+      targetPreset: 'jesus',
+      thomasCutscene: true,
       speaker: '사도 도마',
-      introText: '"다른 제자들이 주님을 보았다고 했지만 저는 믿지 못했습니다... 그때 닫힌 문들 가운데 서신 예수님께 다가가 증언을 확인해 보세요!"',
+      introText: '"다른 제자들이 주님을 보았다고 했지만, 나는 그 손의 못 자국을 보고 내 손가락을 넣어 보지 않고는 믿지 못하겠소... 저기 닫힌 문들 가운데 서신 예수님께 다가가 손의 못 자국을 직접 확인해 보세요!"',
       greetingText: '"나의 주님이시요 나의 하나님이시니이다! 보지 못하고 믿는 자들에게 주시는 예수님의 복이 함께하시길 바랍니다!"',
       missionType: 'find_observe',
       findTargetPos: { x: -16.0, y: 0, z: 53.0 },
-      findTargetLabel: '✨ 평강을 선언하시는 부활의 예수님',
+      findTargetLabel: '✨ 손의 못자국을 보여주시는 부활의 예수님',
       completeSpeaker: '예수님과 도마',
       completeText: '"도마가 대답하여 이르되 나의 주님이시요 나의 하나님이시니이다! 예수께서 이르시되 너는 나를 본 고로 믿느냐 보지 못하고 믿는 자들은 복되도다 하시니라." (요 20:24~29)',
       unlockNotebookIds: ['test_thomas'],
@@ -2086,7 +2099,11 @@ window.isPlayerMovementLocked = function() {
 function spawnMiracleOptionalEventSpots() {
   miracleEventSpots = [];
   const allCatalog = [...getMiracleOptionalEventsCatalog()];
-  if (miracleIsPostResurrection) {
+  const showPostRes = Boolean(
+    miracleIsPostResurrection ||
+    (typeof isMiracleAllStagesUnlocked === 'function' && isMiracleAllStagesUnlocked())
+  );
+  if (showPostRes) {
     allCatalog.push(...getMiraclePostResurrectionEventsCatalog());
   }
 
@@ -2101,6 +2118,15 @@ function spawnMiracleOptionalEventSpots() {
       ev.npcPreset,
       false
     );
+
+    // 엠마오 두 제자(글로바와 친구)는 나란히 서 있는 2명의 제자로 표시!
+    if (ev.id === 'post_emmaus' && marker && marker.group) {
+      const friendNpc = createLowPolyPersonMesh('disciple', 19);
+      friendNpc.position.set(1.05, 0, -0.25);
+      friendNpc.rotation.y = -0.35;
+      marker.group.add(friendNpc);
+      marker.companionNpc = friendNpc;
+    }
 
     miracleEventSpots.push({
       ...ev,
@@ -2218,6 +2244,221 @@ function findSafeOpenWorldOutdoorPos(opts = {}) {
 }
 window.findSafeOpenWorldOutdoorPos = findSafeOpenWorldOutdoorPos;
 
+// 계단으로 올라갈 수 있는 건물 2층(옥상)의 사물 없는 안전 지점을 랜덤 선택 (중복·겹침 방지)
+function pickSafeRooftopSpawnSpot(opts = {}) {
+  const pool = Array.isArray(window.miracleRooftopSpawnSpots) ? window.miracleRooftopSpawnSpots : [];
+  if (pool.length === 0) return null;
+  const cx = (opts.cx !== undefined) ? opts.cx : 0;
+  const cz = (opts.cz !== undefined) ? opts.cz : 0;
+  const minDist = opts.minDist || 4;
+  const maxDist = opts.maxDist || 72;
+  const avoidList = opts.avoidList || [];
+  const usedHouses = opts.usedHouses || new Set();
+
+  const candidates = pool.filter(sp => {
+    const hKey = `${Math.round(sp.houseCx)}_${Math.round(sp.houseCz)}`;
+    if (usedHouses.has(hKey)) return false;
+    const d = Math.hypot(sp.x - cx, sp.z - cz);
+    if (d < minDist || d > maxDist) return false;
+    if (opts.xMin !== undefined && (sp.x < opts.xMin || sp.x > opts.xMax)) return false;
+    if (opts.zMin !== undefined && (sp.z < opts.zMin || sp.z > opts.zMax)) return false;
+    for (let i = 0; i < avoidList.length; i++) {
+      if (Math.hypot(sp.x - avoidList[i].x, sp.z - avoidList[i].z) < 5.0) return false;
+    }
+    return true;
+  });
+
+  if (candidates.length === 0) return null;
+  const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+  usedHouses.add(`${Math.round(chosen.houseCx)}_${Math.round(chosen.houseCz)}`);
+  return { x: chosen.x, y: chosen.y, z: chosen.z, isRooftop: true };
+}
+window.pickSafeRooftopSpawnSpot = pickSafeRooftopSpawnSpot;
+
+// [씨 뿌리기 미니게임 완료 후] 시간이 지나면서 싹 → 푸른 줄기 → 이삭 → 황금빛 수확 곡식으로 자라나는 영구 밭 생성기
+function spawnPersistentSowerGrowingField(fx, fz, initialAgeSec = 0) {
+  const by = getMiracleOpenWorldGroundHeight(fx, fz);
+  // 동일 좌표 중복 방지
+  if (Array.isArray(window.miracleGrowingFields)) {
+    for (let i = window.miracleGrowingFields.length - 1; i >= 0; i--) {
+      const old = window.miracleGrowingFields[i];
+      if (Math.hypot(old.x - fx, old.z - fz) < 3.5) {
+        if (old.group) worldGroup.remove(old.group);
+        window.miracleGrowingFields.splice(i, 1);
+      }
+    }
+  }
+
+  const grp = new THREE.Group();
+  // 기름진 좋은 땅(옥토) 베이스 + 정돈된 4개 이랑 + 낮은 목재 울타리 말뚝
+  const soilBed = createLowPolyMesh(
+    createOrganicBoxGeo(7.6, 0.24, 6.4, 910, 0.03, 0.99, 1),
+    '#5c3a1e', 0, 0.08, 0, false
+  );
+  grp.add(soilBed);
+
+  const furrowZList = [-2.0, -0.68, 0.68, 2.0];
+  furrowZList.forEach((rz, fi) => {
+    const ridge = createLowPolyMesh(
+      createOrganicBoxGeo(6.4, 0.16, 0.72, 920 + fi, 0.03, 0.96, 1),
+      '#4a2e16', 0, 0.20, rz, false
+    );
+    grp.add(ridge);
+  });
+
+  // 네 모서리 나무 울타리 말뚝
+  [[-3.7, -3.1], [3.7, -3.1], [-3.7, 3.1], [3.7, 3.1]].forEach(([px, pz]) => {
+    grp.add(createLowPolyMesh(new THREE.CylinderGeometry(0.11, 0.14, 0.92, 5), '#78350f', px, 0.44, pz, true));
+  });
+
+  // 24그루 로우폴리 곡식(밀/보리) 줄기 — 4개 이랑 × 6포기
+  const stalks = [];
+  furrowZList.forEach((rz, fi) => {
+    for (let c = 0; c < 6; c++) {
+      const sx = -2.5 + c * 1.0 + ((fi % 2) * 0.14 - 0.07);
+      const sz = rz + ((c % 2) * 0.12 - 0.06);
+      const stalkGrp = new THREE.Group();
+      stalkGrp.position.set(sx, 0.26, sz);
+
+      const stemMat = new THREE.MeshLambertMaterial({ color: 0x84cc16, flatShading: true });
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.052, 1.05, 5), stemMat);
+      stem.position.y = 0.52;
+
+      const leafMat = new THREE.MeshLambertMaterial({ color: 0x4ade80, flatShading: true });
+      const leafL = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.44, 4), leafMat);
+      leafL.position.set(-0.14, 0.46, 0);
+      leafL.rotation.z = 0.72;
+      const leafR = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.44, 4), leafMat);
+      leafR.position.set(0.14, 0.56, 0.06);
+      leafR.rotation.z = -0.68;
+
+      const earMat = new THREE.MeshLambertMaterial({ color: 0xfacc15, flatShading: true });
+      const ear = new THREE.Mesh(new THREE.DodecahedronGeometry(0.16, 0), earMat);
+      ear.position.set(0, 1.08, 0);
+      ear.scale.set(0.75, 1.85, 0.75);
+      ear.visible = false;
+
+      stalkGrp.add(stem, leafL, leafR, ear);
+      stalkGrp.scale.set(0.12, 0.10, 0.12);
+      grp.add(stalkGrp);
+
+      stalks.push({
+        group: stalkGrp,
+        stemMat,
+        leafMat,
+        ear,
+        earMat,
+        phase: fi * 1.1 + c * 0.7,
+        heightVar: 0.88 + ((fi * 7 + c * 3) % 5) * 0.08
+      });
+    }
+  });
+
+  grp.position.set(fx, by, fz);
+  worldGroup.add(grp);
+
+  const fieldObj = {
+    x: fx,
+    y: by,
+    z: fz,
+    group: grp,
+    stalks,
+    age: initialAgeSec,
+    stage: 0,
+    matureAnnounced: initialAgeSec >= 44
+  };
+  if (!Array.isArray(window.miracleGrowingFields)) window.miracleGrowingFields = [];
+  window.miracleGrowingFields.push(fieldObj);
+  updateMiracleGrowingFields(0.016, performance.now());
+  return fieldObj;
+}
+window.spawnPersistentSowerGrowingField = spawnPersistentSowerGrowingField;
+
+function updateMiracleGrowingFields(dt, now) {
+  if (!Array.isArray(window.miracleGrowingFields) || window.miracleGrowingFields.length === 0) return;
+  const tSec = now * 0.001;
+  const colSprout = new THREE.Color('#84cc16');
+  const colGreen  = new THREE.Color('#22c55e');
+  const colGold   = new THREE.Color('#eab308');
+  const colRipe   = new THREE.Color('#facc15');
+
+  window.miracleGrowingFields.forEach(field => {
+    field.age += dt;
+    // 약 45초에 걸쳐 새싹(0~11s) → 푸른 줄기(11~25s) → 이삭 출현(25~38s) → 황금빛 수확(38~45s+)으로 성장!
+    const g = Math.min(1.0, field.age / 45.0);
+    const newStage = g < 0.25 ? 1 : (g < 0.58 ? 2 : (g < 0.86 ? 3 : 4));
+    if (newStage > field.stage) {
+      field.stage = newStage;
+      if (newStage === 4 && !field.matureAnnounced) {
+        field.matureAnnounced = true;
+        if (typeof showToast === 'function' && miracleSubMode === 'openworld') {
+          showToast('🌾✨ 좋은 땅에 뿌린 씨앗이 시간이 지나며 100배의 황금빛 곡식으로 무럭무럭 익었어요!');
+        }
+      }
+    }
+
+    field.stalks.forEach(st => {
+      const sx = 0.22 + g * 0.88;
+      const sy = (0.14 + g * 1.18) * st.heightVar;
+      st.group.scale.set(sx, sy, sx);
+
+      // 바람에 살랑이는 황금 물결
+      const swayAmp = 0.04 + g * 0.10;
+      st.group.rotation.z = Math.sin(tSec * 2.1 + st.phase) * swayAmp;
+      st.group.rotation.x = Math.cos(tSec * 1.7 + st.phase) * swayAmp * 0.6;
+
+      if (g < 0.55) {
+        st.stemMat.color.copy(colSprout).lerp(colGreen, g / 0.55);
+        st.leafMat.color.copy(colSprout).lerp(colGreen, g / 0.55);
+        st.ear.visible = false;
+      } else {
+        const ripen = Math.min(1, (g - 0.55) / 0.45);
+        st.stemMat.color.copy(colGreen).lerp(colGold, ripen);
+        st.leafMat.color.copy(colGreen).lerp(colGold, ripen * 0.75);
+        st.ear.visible = true;
+        const es = 0.25 + ripen * 0.95;
+        st.ear.scale.set(0.75 * es, 1.85 * es, 0.75 * es);
+        st.earMat.color.copy(colGreen).lerp(colRipe, ripen);
+      }
+    });
+  });
+}
+
+window.triggerMiracleSowerPlant = function () {
+  if (!miracleActiveFieldEvent || miracleActiveFieldEvent.type !== 'sower_farm') return;
+  const sf = miracleActiveFieldEvent.sowerState;
+  if (!sf || sf.phase !== 'ready_to_sow') return;
+
+  const btnWrap = document.getElementById('miracle-sower-btn-wrap');
+  if (btnWrap) btnWrap.classList.add('hidden');
+
+  sf.phase = 'sowing';
+  sf.sowTimer = 0;
+  playSfx('clear');
+  showToast('🌱✨ 정성껏 가꾼 좋은 땅에 말씀의 씨앗을 흩뿌렸어요! 시간이 지나면 곡식이 자라나요!');
+
+  // 밭 위로 흩뿌려지는 황금 씨앗 파티클 28개 생성
+  sf.seedParticles = [];
+  for (let i = 0; i < 28; i++) {
+    const sm = createLowPolyMesh(
+      new THREE.OctahedronGeometry(0.11, 0),
+      i % 2 === 0 ? '#fde047' : '#f59e0b',
+      sf.fx + (Math.random() - 0.5) * 5.8,
+      sf.fy + 2.2 + Math.random() * 1.6,
+      sf.fz + (Math.random() - 0.5) * 4.8,
+      false
+    );
+    worldGroup.add(sm);
+    miracleWorldMissionObjects.push({ mesh: sm });
+    sf.seedParticles.push({
+      mesh: sm,
+      vy: -(1.8 + Math.random() * 1.6),
+      targetY: sf.fy + 0.24
+    });
+  }
+  syncMiracleMissionStatusPanel();
+};
+
 function syncMiracleMissionStatusPanel() {
   if (typeof window.updateMiracleMissionStatusUI !== 'function') return;
   if (!miracleActiveFieldEvent) {
@@ -2238,12 +2479,55 @@ function syncMiracleMissionStatusPanel() {
           : (ev.multiRandomLaySpots
             ? '예루살렘 성문 앞 표시된 자리에 종려가지를 까세요!'
             : `${ev.targetLabel || '목표 지점'}에 가져다주세요!`)))
-      : `마을·야외 곳곳에서 ${ev.itemLabel || '물품'}을(를) 찾으세요!`;
+      : (ev.allowRooftopSpawn
+        ? `마을·건물 2층 옥상 곳곳에서 ${ev.itemLabel || '물품'}을(를) 찾으세요!`
+        : `마을·야외 곳곳에서 ${ev.itemLabel || '물품'}을(를) 찾으세요!`);
     window.updateMiracleMissionStatusUI({
       title: `✨ ${shortTitle}`,
       goal: goalText,
       progressText: `찾음 ${foundTotal}/${fe.required} · 완료 ${fe.collected}/${fe.required}`,
       extraText: fe.carrying > 0 ? `🎒 들고 있음 ${fe.carrying}개` : `🔍 남은 개수 ${Math.max(0, fe.required - foundTotal)}개`
+    });
+  } else if (fe.type === 'sower_farm' && fe.sowerState) {
+    const sf = fe.sowerState;
+    let goal = '';
+    let progressText = '';
+    let extraText = '';
+    if (sf.phase === 'find_field') {
+      const fd = Math.round(Math.hypot(playerPos.x - sf.fx, playerPos.z - sf.fz));
+      goal = `⛰️ ${sf.areaName} 근처의 밭 구역을 찾아가세요!`;
+      progressText = '1단계: 산 근처 밭 찾기';
+      extraText = `거리 ${fd}m`;
+    } else if (sf.phase === 'collect_seeds') {
+      goal = `🧺 주변과 건물 2층 옥상에서 씨앗 바구니 ${sf.seedTotal}개를 모으세요!`;
+      progressText = `2단계: 씨앗 바구니 ${sf.seedsCollected}/${sf.seedTotal}`;
+      extraText = `🔍 남은 바구니 ${Math.max(0, sf.seedTotal - sf.seedsCollected)}개`;
+    } else if (sf.phase === 'clear_rocks') {
+      goal = '🪨 밭으로 돌아가 돌멩이를 가까이 걸어가 모두 치우세요!';
+      progressText = `3단계: 돌 제거 ${sf.rocksCleared}/${sf.rocks.length}`;
+      extraText = '밭 안의 바위를 치우는 중';
+    } else if (sf.phase === 'clear_thorns') {
+      goal = '🌿 밭 안의 가시덤불과 잡초를 모두 뽑아 제거하세요!';
+      progressText = `4단계: 가시·잡초 ${sf.thornsCleared}/${sf.thorns.length}`;
+      extraText = '거친 가시덤불을 제거 중';
+    } else if (sf.phase === 'level_soil') {
+      goal = '🪴 울퉁불퉁한 흙덩이를 밟아 부드러운 좋은 땅으로 고르세요!';
+      progressText = `5단계: 땅 고르기 ${sf.moundsLeveled}/${sf.mounds.length}`;
+      extraText = '부드러운 옥토 이랑 만드는 중';
+    } else if (sf.phase === 'ready_to_sow') {
+      goal = '🌱 좋은 땅이 완성되었어요! 아래 [씨앗 뿌리기] 버튼을 누르세요!';
+      progressText = '6단계: 씨앗 뿌리기 준비 완료!';
+      extraText = '👇 하단 초록 버튼을 클릭!';
+    } else {
+      goal = '🌱✨ 좋은 땅에 말씀의 씨앗을 뿌리고 있어요!';
+      progressText = '파종 중...';
+      extraText = '🌾 곧 곡식이 자라납니다!';
+    }
+    window.updateMiracleMissionStatusUI({
+      title: `🌱 ${shortTitle}`,
+      goal,
+      progressText,
+      extraText
     });
   } else if (fe.type === 'escort_guide') {
     const td = fe.targetZone ? Math.round(Math.hypot(playerPos.x - fe.targetZone.pos.x, playerPos.z - fe.targetZone.pos.z)) : 0;
@@ -2284,7 +2568,9 @@ function syncMiracleMissionStatusPanel() {
         ? '여리고 나무 숲 속 여러 나무 중 삭개오가 올라간 나무를 찾으세요!'
         : (ev.alleyRandomAura
           ? '마을 건물 사이 오라가 빛나는 감사한 사마리아인을 찾으세요!'
-          : (ev.widowCutscene ? '성전 헌금함 앞 가난한 과부에게 다가가 관찰하세요!' : `${ev.findTargetLabel}을(를) 찾으세요!`)),
+          : (ev.thomasCutscene
+            ? '부활하신 예수님께 다가가 손의 못자국을 확인하세요!'
+            : (ev.widowCutscene ? '성전 헌금함 앞 가난한 과부에게 다가가 관찰하세요!' : `${ev.findTargetLabel}을(를) 찾으세요!`))),
       progressText: fe.cutsceneActive ? '🎬 컷신 감상 중' : '탐색 중 (0/1)',
       extraText: ev.zacchaeusGrove ? '🌳 나무 위를 잘 살펴보세요!' : ''
     });
@@ -2298,6 +2584,8 @@ function clearMiracleFieldEventObjects() {
   });
   miracleWorldMissionObjects = [];
   miracleActiveFieldEvent = null;
+  const sowerWrap = document.getElementById('miracle-sower-btn-wrap');
+  if (sowerWrap) sowerWrap.classList.add('hidden');
   if (typeof window.hideMiracleMissionStatusUI === 'function') {
     window.hideMiracleMissionStatusUI();
   }
@@ -2319,6 +2607,9 @@ window.cancelActiveMiracleFieldEvent = function () {
 function createMissionItemMeshByStyle(evSpot) {
   if (evSpot.itemStyle === 'first_aid' && typeof createFirstAidKitMesh === 'function') {
     return createFirstAidKitMesh(1.08);
+  }
+  if (evSpot.itemStyle === 'seed_basket' && typeof createSeedBasketMesh === 'function') {
+    return createSeedBasketMesh(1.12);
   }
   if (evSpot.itemStyle === 'water_amphora' && typeof createWaterFilledAmphoraMesh === 'function') {
     return createWaterFilledAmphoraMesh(0.95);
@@ -2372,6 +2663,9 @@ function startMiracleFieldEvent(evSpot) {
   if (evSpot.missionType === 'collect_deliver') {
     const count = evSpot.itemCount || 4;
     const usedSpots = [{ x: cx, z: cz, r: 5.5 }];
+    const usedRoofHouses = new Set();
+    const maxRoofItems = evSpot.allowRooftopSpawn ? Math.max(1, Math.min(2, Math.floor(count / 2))) : 0;
+    let roofItemsPlaced = 0;
 
     for (let i = 0; i < count; i++) {
       let spawnOpts;
@@ -2389,7 +2683,26 @@ function startMiracleFieldEvent(evSpot) {
         spawnOpts = { cx, cz, minDist: 6.5, maxDist: 16.0, minSpacing: 5.0, avoidList: usedSpots };
       }
 
-      const pos = findSafeOpenWorldOutdoorPos(spawnOpts);
+      // 건물 2층(옥상) 사물 없는 구역에도 미션 아이템 스폰 허용 (계단으로 올라가 획득 가능!)
+      let pos = null;
+      if (roofItemsPlaced < maxRoofItems && typeof pickSafeRooftopSpawnSpot === 'function') {
+        pos = pickSafeRooftopSpawnSpot({
+          cx: spawnOpts.cx,
+          cz: spawnOpts.cz,
+          minDist: 5,
+          maxDist: Math.max(46, spawnOpts.maxDist || 56),
+          xMin: spawnOpts.xMin,
+          xMax: spawnOpts.xMax,
+          zMin: spawnOpts.zMin,
+          zMax: spawnOpts.zMax,
+          avoidList: usedSpots,
+          usedHouses: usedRoofHouses
+        });
+        if (pos) roofItemsPlaced++;
+      }
+      if (!pos) {
+        pos = findSafeOpenWorldOutdoorPos(spawnOpts);
+      }
       usedSpots.push({ x: pos.x, z: pos.z, r: spawnOpts.minSpacing || 6.0 });
 
       const itemGrp = new THREE.Group();
@@ -2404,9 +2717,17 @@ function startMiracleFieldEvent(evSpot) {
       itemGrp.position.set(pos.x, pos.y, pos.z);
       worldGroup.add(itemGrp);
 
-      const lbl = createWorldLabel(evSpot.itemLabel || '✨ 미션 물품');
+      const baseLblText = evSpot.itemLabel || '✨ 미션 물품';
+      const lbl = createWorldLabel(pos.isRooftop ? `${baseLblText} (2층 옥상)` : baseLblText);
       lbl.style.opacity = '0';
-      const itemObj = { mesh: itemGrp, pos: new THREE.Vector3(pos.x, pos.y + 0.4, pos.z), done: false, label: lbl };
+      const itemObj = {
+        mesh: itemGrp,
+        pos: new THREE.Vector3(pos.x, pos.y + 0.4, pos.z),
+        baseY: pos.y,
+        isRooftop: Boolean(pos.isRooftop),
+        done: false,
+        label: lbl
+      };
       miracleWorldMissionObjects.push(itemObj);
       miracleActiveFieldEvent.items.push(itemObj);
     }
@@ -2472,6 +2793,194 @@ function startMiracleFieldEvent(evSpot) {
     }
 
     showToast(`🎯 [${evSpot.itemLabel}] ${count}개를 찾아 목표 장소로 옮겨 주세요!`);
+  } else if (evSpot.missionType === 'sower_farm') {
+    // [씨 뿌리기 미니게임: 좋은 땅 만들기]
+    // 1) 산 근처 밭 구역 찾기 → 2) 씨앗 바구니 모으기(레벨별 수량) → 3) 돌 제거 → 4) 가시덤불·잡초 제거 → 5) 땅 고르게 정돈 → 6) 씨앗 뿌리기 버튼!
+    const mountainCandidates = [
+      { x: -42, z: -90, areaName: '북쪽 산기슭' },
+      { x:  42, z: -90, areaName: '북동쪽 산기슭' },
+      { x:  86, z: -26, areaName: '동쪽 산기슭' }
+    ];
+    const pickedPlot = mountainCandidates[Math.floor(Math.random() * mountainCandidates.length)];
+    const fx = pickedPlot.x;
+    const fz = pickedPlot.z;
+    const fy = getMiracleOpenWorldGroundHeight(fx, fz);
+
+    // 반(레벨)별 씨앗 바구니 수량 차별화: 유치부(2) · 유년부(3) · 소년부/타임어택(4)
+    const modeKey = (typeof currentMode !== 'undefined') ? currentMode : 'junior';
+    const seedTotal = (modeKey === 'kinder') ? 2 : (modeKey === 'junior' ? 3 : 4);
+    miracleActiveFieldEvent.required = seedTotal;
+
+    const plotGrp = new THREE.Group();
+    const soilMat = new THREE.MeshLambertMaterial({ color: 0xa68a64, flatShading: true });
+    const soilBed = new THREE.Mesh(createOrganicBoxGeo(7.6, 0.22, 6.4, 881, 0.04, 0.99, 1), soilMat);
+    soilBed.position.set(0, 0.08, 0);
+    soilBed.receiveShadow = true;
+    plotGrp.add(soilBed);
+
+    // 밭 네 모서리 나무 울타리 말뚝 + 탐색용 은은한 빛 링
+    [[-3.7, -3.1], [3.7, -3.1], [-3.7, 3.1], [3.7, 3.1]].forEach(([px, pz]) => {
+      plotGrp.add(createLowPolyMesh(new THREE.CylinderGeometry(0.11, 0.14, 0.92, 5), '#78350f', px, 0.44, pz, true));
+    });
+    const beaconRing = new THREE.Mesh(
+      new THREE.RingGeometry(4.0, 4.75, 28),
+      new THREE.MeshBasicMaterial({ color: 0xfacc15, side: THREE.DoubleSide, transparent: true, opacity: 0.78 })
+    );
+    beaconRing.rotation.x = -Math.PI * 0.5;
+    beaconRing.position.y = 0.12;
+    plotGrp.add(beaconRing);
+
+    // 밭 안의 돌 5개
+    const rocks = [];
+    const rockCoords = [[-2.4, -1.9], [2.1, -2.0], [-0.2, 0.1], [-2.2, 1.8], [2.3, 1.6]];
+    rockCoords.forEach(([rx, rz], i) => {
+      const rMesh = createLowPolyMesh(
+        new THREE.DodecahedronGeometry(0.46 + (i % 2) * 0.10, 0),
+        i % 2 === 0 ? '#94a3b8' : '#78716c',
+        rx, 0.34, rz, true
+      );
+      rMesh.scale.set(1.2, 0.78, 1.05);
+      rMesh.rotation.y = i * 1.1;
+      plotGrp.add(rMesh);
+      rocks.push({ mesh: rMesh, wx: fx + rx, wz: fz + rz, cleared: false });
+    });
+
+    // 밭 안의 가시덤불과 잡초 6개
+    const thorns = [];
+    const thornCoords = [[-1.3, -2.2], [0.9, -1.4], [-2.7, 0.2], [2.7, -0.3], [-1.0, 2.2], [1.4, 2.1]];
+    thornCoords.forEach(([tx, tz], i) => {
+      const tGrp = new THREE.Group();
+      const bush = createLowPolyMesh(new THREE.DodecahedronGeometry(0.42, 0), i % 2 === 0 ? '#3f6212' : '#4d7c0f', 0, 0.32, 0, true);
+      bush.scale.set(1.15, 0.85, 1.15);
+      const spike1 = createLowPolyMesh(new THREE.ConeGeometry(0.10, 0.62, 4), '#713f12', -0.16, 0.52, 0.08, false);
+      spike1.rotation.z = 0.38;
+      const spike2 = createLowPolyMesh(new THREE.ConeGeometry(0.09, 0.56, 4), '#854d0e', 0.18, 0.48, -0.10, false);
+      spike2.rotation.z = -0.42;
+      const weed = createLowPolyMesh(new THREE.ConeGeometry(0.13, 0.55, 4), '#65a30d', 0.02, 0.44, 0.14, false);
+      tGrp.add(bush, spike1, spike2, weed);
+      tGrp.position.set(tx, 0.12, tz);
+      plotGrp.add(tGrp);
+      thorns.push({ mesh: tGrp, wx: fx + tx, wz: fz + tz, cleared: false });
+    });
+
+    // 울퉁불퉁한 흙덩이 4줄(밟아서 정돈하면 고운 옥토 이랑으로 변신!)
+    const mounds = [];
+    const furrowZList = [-2.0, -0.68, 0.68, 2.0];
+    furrowZList.forEach((mz, i) => {
+      const mx = (i % 2 === 0 ? -0.4 : 0.4);
+      const roughGrp = new THREE.Group();
+      for (let b = -2; b <= 2; b++) {
+        const lump = createLowPolyMesh(
+          new THREE.DodecahedronGeometry(0.32 + Math.abs(b % 2) * 0.08, 0),
+          '#8c6d46', b * 1.1, 0.24, (b % 2) * 0.14, false
+        );
+        lump.scale.set(1.2, 0.62, 1.0);
+        roughGrp.add(lump);
+      }
+      roughGrp.position.set(0, 0.08, mz);
+      plotGrp.add(roughGrp);
+
+      // 정돈 완료 후 드러나는 고운 옥토 이랑
+      const neatRidge = createLowPolyMesh(
+        createOrganicBoxGeo(6.4, 0.18, 0.72, 960 + i, 0.03, 0.96, 1),
+        '#4a2e16', 0, 0.20, mz, false
+      );
+      neatRidge.visible = false;
+      plotGrp.add(neatRidge);
+
+      mounds.push({ roughGrp, neatRidge, wx: fx + mx, wz: fz + mz, leveled: false });
+    });
+
+    plotGrp.position.set(fx, fy, fz);
+    worldGroup.add(plotGrp);
+
+    const plotLbl = createWorldLabel(`⛰️ ${pickedPlot.areaName} 밭 구역 (다가가 확인!)`);
+    plotLbl.style.opacity = '0';
+    const plotObj = { mesh: plotGrp, pos: new THREE.Vector3(fx, fy + 0.9, fz), label: plotLbl };
+    miracleWorldMissionObjects.push(plotObj);
+
+    // 2단계에서 표시될 씨앗 바구니들 사전 배치 (건물 2층 옥상 스폰 포함!)
+    const seedBaskets = [];
+    const usedSeedSpots = [{ x: fx, z: fz, r: 9.0 }, { x: cx, z: cz, r: 5.5 }];
+    const usedSeedHouses = new Set();
+    let roofSeedPlaced = 0;
+
+    for (let s = 0; s < seedTotal; s++) {
+      let spos = null;
+      if (roofSeedPlaced < 1 && typeof pickSafeRooftopSpawnSpot === 'function') {
+        spos = pickSafeRooftopSpawnSpot({
+          cx: fx * 0.5,
+          cz: fz * 0.5,
+          minDist: 6,
+          maxDist: 68,
+          avoidList: usedSeedSpots,
+          usedHouses: usedSeedHouses
+        });
+        if (spos) roofSeedPlaced++;
+      }
+      if (!spos) {
+        spos = findSafeOpenWorldOutdoorPos({
+          cx: fx,
+          cz: fz,
+          minDist: 10,
+          maxDist: 44,
+          minSpacing: 8.5,
+          avoidList: usedSeedSpots
+        });
+      }
+      usedSeedSpots.push({ x: spos.x, z: spos.z, r: 8.0 });
+
+      const bGrp = new THREE.Group();
+      const bMesh = (typeof createSeedBasketMesh === 'function')
+        ? createSeedBasketMesh(1.12)
+        : createLowPolyMesh(new THREE.DodecahedronGeometry(0.45, 0), '#fde047', 0, 0.45, 0);
+      const bRing = new THREE.Mesh(
+        new THREE.RingGeometry(0.70, 1.02, 16),
+        new THREE.MeshBasicMaterial({ color: 0xfde047, side: THREE.DoubleSide })
+      );
+      bRing.rotation.x = -Math.PI * 0.5;
+      bRing.position.y = 0.06;
+      bGrp.add(bMesh, bRing);
+      bGrp.position.set(spos.x, spos.y, spos.z);
+      bGrp.visible = false; // 1단계(밭 찾기) 완료 후 활성화!
+      worldGroup.add(bGrp);
+
+      const bLbl = createWorldLabel(spos.isRooftop ? '🧺 씨앗 바구니 (2층 옥상)' : '🧺 씨앗 바구니');
+      bLbl.style.opacity = '0';
+      const bObj = {
+        mesh: bGrp,
+        pos: new THREE.Vector3(spos.x, spos.y + 0.45, spos.z),
+        baseY: spos.y,
+        isRooftop: Boolean(spos.isRooftop),
+        done: false,
+        label: bLbl
+      };
+      miracleWorldMissionObjects.push(bObj);
+      seedBaskets.push(bObj);
+    }
+
+    miracleActiveFieldEvent.sowerState = {
+      phase: 'find_field',
+      areaName: pickedPlot.areaName,
+      fx, fy, fz,
+      plotGrp,
+      soilMat,
+      beaconRing,
+      plotLbl,
+      seedTotal,
+      seedsCollected: 0,
+      seedBaskets,
+      rocks,
+      rocksCleared: 0,
+      thorns,
+      thornsCleared: 0,
+      mounds,
+      moundsLeveled: 0,
+      sowTimer: 0,
+      seedParticles: []
+    };
+    miracleActiveFieldEvent.targetZone = plotObj;
+    showToast(`⛰️ ${pickedPlot.areaName} 근처에 있는 거친 밭 구역을 먼저 찾아가 보세요!`);
   } else if (evSpot.missionType === 'escort_guide') {
     const eGrp = new THREE.Group();
     if (evSpot.escortType === 'stretcher') {
@@ -2567,8 +3076,10 @@ function startMiracleFieldEvent(evSpot) {
       gRing.position.y = 0.1;
       gGrp.add(gRing);
     }
-    const jesusMesh = createLowPolyPersonMesh('jesus', 0);
-    gGrp.add(jesusMesh);
+    if (!evSpot.noRooftopJesus) {
+      const jesusMesh = createLowPolyPersonMesh('jesus', 0);
+      gGrp.add(jesusMesh);
+    }
     gGrp.position.set(gx, gy, gz);
     worldGroup.add(gGrp);
 
@@ -2828,9 +3339,62 @@ function startMiracleFieldEvent(evSpot) {
       miracleWorldMissionObjects.push(targetObj);
       miracleActiveFieldEvent.targetZone = targetObj;
       showToast('🪙 성전 헌금함 앞에 있는 가난한 과부에게 다가가 보세요!');
+    } else if (evSpot.thomasCutscene) {
+      // [부활 이후 도마 미션] 찾는 인물을 '예수님' 캐릭터로 배치 + 무릎 높이 파형·파티클 오라 + 양손 못자국 표시 + 컷신용 도마
+      const fGrp = new THREE.Group();
+      const jesusMesh = createLowPolyPersonMesh('jesus', 0);
+      jesusMesh.position.set(0, 0, 0);
+      jesusMesh.rotation.y = 0;
+
+      // 예수님 양손(lArm, rArm 끝단)에 선명한 십자가 못자국(Wound Mark) + 미세한 빛 고리 추가
+      const woundMarks = [];
+      if (jesusMesh.userData) {
+        [jesusMesh.userData.lArm, jesusMesh.userData.rArm].forEach((armGrp) => {
+          if (!armGrp) return;
+          const wound = createLowPolyMesh(new THREE.OctahedronGeometry(0.055, 0), '#991b1b', 0, -0.56, 0.06, false);
+          const woundHalo = new THREE.Mesh(
+            new THREE.OctahedronGeometry(0.095, 0),
+            new THREE.MeshBasicMaterial({ color: 0xfef08a, transparent: true, opacity: 0.72 })
+          );
+          woundHalo.position.set(0, -0.56, 0.07);
+          woundHalo.visible = false;
+          armGrp.add(wound, woundHalo);
+          woundMarks.push({ wound, woundHalo });
+        });
+      }
+
+      // 컷신 시작 시 걸어 나와 못자국을 확인하고 무릎 꿇을 도마 캐릭터
+      const thomasMesh = createLowPolyPersonMesh('disciple', 23);
+      thomasMesh.position.set(0, 0, 1.95);
+      thomasMesh.rotation.y = Math.PI;
+      thomasMesh.visible = false;
+
+      fGrp.add(jesusMesh, thomasMesh);
+      if (typeof createGoldenAuraGroup === 'function') {
+        const aura = createGoldenAuraGroup(0x38bdf8, 1.75);
+        fGrp.add(aura);
+        miracleActiveFieldEvent.auraGroup = aura;
+      }
+
+      fGrp.position.set(fx, fy, fz);
+      worldGroup.add(fGrp);
+
+      const fLbl = createWorldLabel(evSpot.findTargetLabel);
+      fLbl.style.opacity = '0';
+      const targetObj = {
+        mesh: fGrp,
+        pos: new THREE.Vector3(fx, fy + 0.5, fz),
+        label: fLbl,
+        jesusMesh,
+        thomasMesh,
+        woundMarks
+      };
+      miracleWorldMissionObjects.push(targetObj);
+      miracleActiveFieldEvent.targetZone = targetObj;
+      showToast('✨ 닫힌 문들 가운데 서신 부활의 예수님께 다가가 손의 못자국을 확인해 보세요!');
     } else {
       const fGrp = new THREE.Group();
-      const targetPerson = createLowPolyPersonMesh(evSpot.npcPreset || 'disciple', 5);
+      const targetPerson = createLowPolyPersonMesh(evSpot.targetPreset || evSpot.npcPreset || 'disciple', 5);
       const fRing = new THREE.Mesh(
         new THREE.RingGeometry(1.2, 1.75, 24),
         new THREE.MeshBasicMaterial({ color: 0xfef08a, side: THREE.DoubleSide })
@@ -3146,16 +3710,115 @@ function updateMiracleFieldEventFrame(dt, now) {
   }
 
   // =========================================================================
-  // 기본 수집 및 배달 미션 업데이트 (가나·선한사마리아인·반석·다락방·호산나·씨뿌리기·겨자씨 등)
+  // [전용 컷신 3] 부활하신 예수님과 도마 — 예수님 양손의 못자국 확인 컷신
+  // =========================================================================
+  if (fe.cutsceneActive && fe.cutsceneType === 'thomas_wounds') {
+    fe.cutsceneTimer += dt;
+    const tz = fe.targetZone;
+    const cp = fe.cutsceneProps || {};
+    const fx = tz.mesh.position.x;
+    const fy = tz.mesh.position.y;
+    const fz = tz.mesh.position.z;
+    const jMesh = tz.jesusMesh;
+    const tMesh = tz.thomasMesh;
+
+    if (tMesh) tMesh.visible = true;
+
+    // 예수님이 두 팔을 앞으로 내밀어 양손의 못자국을 보여주심
+    const armProgress = Math.min(1, fe.cutsceneTimer / 1.1);
+    if (jMesh && jMesh.userData) {
+      if (jMesh.userData.lArm) {
+        jMesh.userData.lArm.rotation.x = -1.26 * armProgress;
+        jMesh.userData.lArm.rotation.z = 0.22 * armProgress;
+      }
+      if (jMesh.userData.rArm) {
+        jMesh.userData.rArm.rotation.x = -1.26 * armProgress;
+        jMesh.userData.rArm.rotation.z = -0.22 * armProgress;
+      }
+    }
+    // 양손 못자국 주변 성스러운 반짝임
+    if (Array.isArray(tz.woundMarks)) {
+      tz.woundMarks.forEach((wm, idx) => {
+        if (wm.woundHalo) {
+          wm.woundHalo.visible = fe.cutsceneTimer > 0.55;
+          const sc = 0.85 + Math.sin(tSec * 6.0 + idx) * 0.25;
+          wm.woundHalo.scale.set(sc, sc, sc);
+          wm.woundHalo.rotation.y = tSec * 3.5;
+        }
+      });
+    }
+
+    if (fe.cutsceneTimer < 1.8) {
+      // 클로즈업 1단계: 예수님이 내미신 양손 못자국 클로즈업
+      camera.position.lerp(new THREE.Vector3(fx + 1.55, fy + 1.78, fz + 2.15), Math.min(1, dt * 4.5));
+      camera.lookAt(fx, fy + 1.32, fz + 0.48);
+      if (tMesh) {
+        tMesh.position.set(0, 0, THREE.MathUtils.lerp(2.05, 1.48, fe.cutsceneTimer / 1.8));
+      }
+      if (!cp.step1Shown) {
+        cp.step1Shown = true;
+        showToast('✨ "네 손가락을 이리 내밀어 내 손을 보고, 믿음 없는 자가 되지 말고 믿는 자가 되라!"');
+      }
+    } else if (fe.cutsceneTimer < 3.3) {
+      // 클로즈업 2단계: 도마가 가까이 다가가 손을 뻗어 예수님 손의 못자국을 확인!
+      const u = (fe.cutsceneTimer - 1.8) / 1.5;
+      camera.position.lerp(new THREE.Vector3(fx - 1.55, fy + 1.65, fz + 1.55), Math.min(1, dt * 4.2));
+      camera.lookAt(fx, fy + 1.32, fz + 0.52);
+      if (tMesh) {
+        tMesh.position.set(0, 0, THREE.MathUtils.lerp(1.48, 1.12, Math.min(1, u * 1.4)));
+        if (tMesh.userData && tMesh.userData.rArm) {
+          tMesh.userData.rArm.rotation.x = -1.12 * Math.sin(Math.min(1, u) * Math.PI * 0.72);
+        }
+      }
+      if (!cp.step2Shown) {
+        cp.step2Shown = true;
+        playSfx('rescue');
+        showToast('🙌 도마가 예수님 손의 선명한 못자국을 가까이서 확인했어요!');
+      }
+    } else {
+      // 클로즈업 3단계: 도마가 경외심에 무릎 꿇고 "나의 주님이시요 나의 하나님이시니이다!" 고백
+      const u = Math.min(1, (fe.cutsceneTimer - 3.3) / 1.2);
+      camera.position.lerp(new THREE.Vector3(fx + 2.45, fy + 2.25, fz + 2.85), Math.min(1, dt * 3.8));
+      camera.lookAt(fx, fy + 1.15, fz + 0.55);
+      if (tMesh) {
+        tMesh.position.set(0, -0.38 * u, 1.22);
+        if (tMesh.userData) {
+          if (tMesh.userData.lLeg) tMesh.userData.lLeg.rotation.x = -1.15 * u;
+          if (tMesh.userData.rLeg) tMesh.userData.rLeg.rotation.x = -1.15 * u;
+          if (tMesh.userData.lArm) tMesh.userData.lArm.rotation.x = -0.75 * u;
+          if (tMesh.userData.rArm) tMesh.userData.rArm.rotation.x = -0.75 * u;
+        }
+      }
+      if (!cp.step3Shown) {
+        cp.step3Shown = true;
+        playSfx('clear');
+        showToast('🙏 "나의 주님이시요 나의 하나님이시니이다!"');
+      }
+    }
+
+    if (fe.cutsceneTimer > 4.8) {
+      fe.cutsceneActive = false;
+      fe.cutsceneCameraActive = false;
+      finishMiracleFieldEvent(evSpot);
+      return;
+    }
+    syncMiracleMissionStatusPanel();
+    return;
+  }
+
+  // =========================================================================
+  // 기본 수집 및 배달 미션 업데이트 (가나·선한사마리아인·반석·다락방·호산나·겨자씨 등)
   // =========================================================================
   if (fe.type === 'collect_deliver') {
     fe.items.forEach(it => {
       if (it.done) return;
       it.mesh.rotation.y += dt * 2.1;
       const d = Math.hypot(playerPos.x - it.pos.x, playerPos.z - it.pos.z);
+      const itY = (it.baseY !== undefined) ? it.baseY : (it.pos.y - 0.4);
+      const dy = Math.abs(playerPos.y - itY);
       updateWorldLabelPos(it.label, it.pos, d < MIRACLE_TAG_DIST_ITEM);
 
-      if (d < 2.3) {
+      if (d < 2.35 && dy < 1.85) {
         it.done = true;
         it.mesh.visible = false;
         it.label.style.opacity = '0';
@@ -3220,6 +3883,136 @@ function updateMiracleFieldEventFrame(dt, now) {
         } else {
           showToast(`🙌 전달 완료! (${fe.collected}/${fe.required}) · 남은 물품을 마저 옮겨 주세요!`);
         }
+      }
+    }
+  } else if (fe.type === 'sower_farm' && fe.sowerState) {
+    // [씨 뿌리기 미니게임: 좋은 땅 만들기 6단계 상태 머신]
+    const sf = fe.sowerState;
+    const distField = Math.hypot(playerPos.x - sf.fx, playerPos.z - sf.fz);
+    if (sf.beaconRing) {
+      const bp = 1.0 + Math.sin(tSec * 3.5) * 0.08;
+      sf.beaconRing.scale.set(bp, bp, 1);
+    }
+    updateWorldLabelPos(sf.plotLbl, new THREE.Vector3(sf.fx, sf.fy + 1.1, sf.fz), distField < 32.0);
+
+    if (sf.phase === 'find_field') {
+      if (distField < 5.4) {
+        sf.phase = 'collect_seeds';
+        sf.seedBaskets.forEach(b => { b.mesh.visible = true; });
+        if (sf.beaconRing && sf.beaconRing.material) sf.beaconRing.material.color.setHex(0x38bdf8);
+        sf.plotLbl.innerHTML = `🧺 씨앗 바구니를 모은 뒤 돌아오세요! (0/${sf.seedTotal})`;
+        playSfx('rescue');
+        showToast(`🌾 ${sf.areaName} 밭 구역을 찾았어요! 주변과 건물 2층 옥상에서 씨앗 바구니 ${sf.seedTotal}개를 찾아오세요!`);
+      }
+    } else if (sf.phase === 'collect_seeds') {
+      sf.seedBaskets.forEach(b => {
+        if (b.done) return;
+        b.mesh.rotation.y += dt * 2.2;
+        const bd = Math.hypot(playerPos.x - b.pos.x, playerPos.z - b.pos.z);
+        const byDiff = Math.abs(playerPos.y - b.baseY);
+        updateWorldLabelPos(b.label, b.pos, bd < MIRACLE_TAG_DIST_ITEM + 4.0);
+        if (bd < 2.35 && byDiff < 1.85) {
+          b.done = true;
+          b.mesh.visible = false;
+          b.label.style.opacity = '0';
+          sf.seedsCollected++;
+          playSfx('rescue');
+          sf.plotLbl.innerHTML = `🧺 씨앗 바구니 수집 (${sf.seedsCollected}/${sf.seedTotal})`;
+          showToast(`🧺 씨앗 바구니 획득! (${sf.seedsCollected}/${sf.seedTotal})`);
+        }
+      });
+      if (sf.seedsCollected >= sf.seedTotal) {
+        sf.phase = 'clear_rocks';
+        if (sf.beaconRing && sf.beaconRing.material) sf.beaconRing.material.color.setHex(0xf97316);
+        sf.plotLbl.innerHTML = `🪨 밭의 돌을 모두 치우세요! (0/${sf.rocks.length})`;
+        playSfx('build');
+        showToast(`🪨 씨앗 바구니 ${sf.seedTotal}개를 모두 모았어요! 밭으로 돌아가 돌 ${sf.rocks.length}개를 모두 치워 주세요!`);
+      }
+    } else if (sf.phase === 'clear_rocks') {
+      sf.rocks.forEach(r => {
+        if (r.cleared) return;
+        const rd = Math.hypot(playerPos.x - r.wx, playerPos.z - r.wz);
+        if (rd < 2.05) {
+          r.cleared = true;
+          r.mesh.visible = false;
+          sf.rocksCleared++;
+          playSfx('hammer');
+          sf.plotLbl.innerHTML = `🪨 밭의 돌 제거 중 (${sf.rocksCleared}/${sf.rocks.length})`;
+          showToast(`🪨 돌을 치웠어요! (${sf.rocksCleared}/${sf.rocks.length})`);
+        }
+      });
+      if (sf.rocksCleared >= sf.rocks.length) {
+        sf.phase = 'clear_thorns';
+        if (sf.beaconRing && sf.beaconRing.material) sf.beaconRing.material.color.setHex(0x84cc16);
+        sf.plotLbl.innerHTML = `🌿 가시덤불과 잡초 제거 (0/${sf.thorns.length})`;
+        playSfx('rescue');
+        showToast(`🌿 돌을 모두 치웠어요! 이제 밭 안의 가시덤불과 잡초 ${sf.thorns.length}개를 모두 제거해 주세요!`);
+      }
+    } else if (sf.phase === 'clear_thorns') {
+      sf.thorns.forEach(th => {
+        if (th.cleared) return;
+        const td = Math.hypot(playerPos.x - th.wx, playerPos.z - th.wz);
+        if (td < 2.05) {
+          th.cleared = true;
+          th.mesh.visible = false;
+          sf.thornsCleared++;
+          playSfx('step');
+          sf.plotLbl.innerHTML = `🌿 가시·잡초 제거 중 (${sf.thornsCleared}/${sf.thorns.length})`;
+          showToast(`🌿 가시덤불·잡초 제거! (${sf.thornsCleared}/${sf.thorns.length})`);
+        }
+      });
+      if (sf.thornsCleared >= sf.thorns.length) {
+        sf.phase = 'level_soil';
+        if (sf.beaconRing && sf.beaconRing.material) sf.beaconRing.material.color.setHex(0x4ade80);
+        sf.plotLbl.innerHTML = `🪴 울퉁불퉁한 흙을 고르게 정돈하세요! (0/${sf.mounds.length})`;
+        playSfx('rescue');
+        showToast(`🪴 가시덤불과 잡초를 다 뽑았어요! 이제 밭의 울퉁불퉁한 흙 ${sf.mounds.length}줄을 밟아 고르게 정돈해 주세요!`);
+      }
+    } else if (sf.phase === 'level_soil') {
+      sf.mounds.forEach(m => {
+        if (m.leveled) return;
+        const onStrip = (Math.abs(playerPos.z - m.wz) < 1.10 && Math.abs(playerPos.x - sf.fx) < 3.9)
+          || Math.hypot(playerPos.x - m.wx, playerPos.z - m.wz) < 2.25;
+        if (onStrip) {
+          m.leveled = true;
+          m.roughGrp.visible = false;
+          m.neatRidge.visible = true;
+          sf.moundsLeveled++;
+          playSfx('build');
+          const ratio = sf.moundsLeveled / sf.mounds.length;
+          sf.soilMat.color.copy(new THREE.Color('#a68a64')).lerp(new THREE.Color('#5c3a1e'), ratio);
+          sf.plotLbl.innerHTML = `🪴 땅 고르기 정돈 중 (${sf.moundsLeveled}/${sf.mounds.length})`;
+          showToast(`🪴 좋은 땅 이랑 완성! (${sf.moundsLeveled}/${sf.mounds.length})`);
+        }
+      });
+      if (sf.moundsLeveled >= sf.mounds.length) {
+        sf.phase = 'ready_to_sow';
+        sf.plotLbl.innerHTML = '🌱 좋은 땅 완성! [씨앗 뿌리기] 버튼을 누르세요!';
+        const btnWrap = document.getElementById('miracle-sower-btn-wrap');
+        if (btnWrap) btnWrap.classList.remove('hidden');
+        playSfx('rescue');
+        showToast('🌱✨ 부드러운 좋은 땅(옥토)이 완성되었어요! 아래 [좋은 땅에 씨앗 뿌리기!] 버튼을 눌러 주세요!');
+      }
+    } else if (sf.phase === 'sowing') {
+      sf.sowTimer += dt;
+      sf.seedParticles.forEach(sp => {
+        sp.mesh.position.y = Math.max(sp.targetY, sp.mesh.position.y + sp.vy * dt);
+        sp.mesh.rotation.y += dt * 7;
+      });
+      if (sf.sowTimer >= 1.35) {
+        const plantedX = sf.fx;
+        const plantedZ = sf.fz;
+        // 파종 이력 저장 (스테이지 이동 후 복귀해도 계속 자라나도록 유지!)
+        if (!Array.isArray(window.miracleSowerHistory)) window.miracleSowerHistory = [];
+        const existingIdx = window.miracleSowerHistory.findIndex(h => Math.hypot(h.x - plantedX, h.z - plantedZ) < 3.5);
+        const rec = { x: plantedX, z: plantedZ, plantedAt: Date.now() };
+        if (existingIdx >= 0) window.miracleSowerHistory[existingIdx] = rec;
+        else window.miracleSowerHistory.push(rec);
+
+        finishMiracleFieldEvent(evSpot);
+        // 미션 정리 후 영구 성장 곡식 밭 배치!
+        spawnPersistentSowerGrowingField(plantedX, plantedZ, 0);
+        return;
       }
     }
   } else if (fe.type === 'escort_guide') {
@@ -3434,6 +4227,18 @@ function updateMiracleFieldEventFrame(dt, now) {
           return;
         }
 
+        if (evSpot.thomasCutscene && !fe.cutsceneActive) {
+          // 부활하신 예수님과 도마 — 양손 못자국 확인 컷신 시작!
+          fe.cutsceneActive = true;
+          fe.cutsceneCameraActive = true;
+          fe.cutsceneType = 'thomas_wounds';
+          fe.cutsceneTimer = 0;
+          fe.cutsceneProps = { step1Shown: false, step2Shown: false, step3Shown: false };
+          playSfx('switch');
+          syncMiracleMissionStatusPanel();
+          return;
+        }
+
         if (evSpot.zacchaeusGrove) {
           // [삭개오 발견 시] 카메라를 군중·예수님이 없는 쪽으로 돌리고 군중·예수님·삭개오 즉시 사라지게 처리!
           const cc = fe.crowdCenter || { x: 36.2, z: -5.8 };
@@ -3571,6 +4376,8 @@ function buildMiracleOpenWorld(restoreSavedPos = false) {
   miracleActiveFieldEvent = null;
   miracleAmbientProps = [];
   window.miracleBuildingBounds = [];
+  window.miracleRooftopSpawnSpots = [];
+  window.miracleGrowingFields = [];
   window.miracleWorldTreePositions = [];
   window.miracleZacchaeusGroveTrees = [];
   if (typeof window.hideMiracleMissionStatusUI === 'function') window.hideMiracleMissionStatusUI();
@@ -3584,6 +4391,16 @@ function buildMiracleOpenWorld(restoreSavedPos = false) {
   spawnMiracleMainStageSpots();
   spawnMiracleOptionalEventSpots();
   spawnMiracleRumorNpcs();
+
+  // 씨 뿌리기 미션 완료 후 심은 곡식 밭 복원 (시간 경과에 따라 계속 성장 유지!)
+  if (Array.isArray(window.miracleSowerHistory) && window.miracleSowerHistory.length > 0) {
+    window.miracleSowerHistory.forEach(item => {
+      const elapsedSec = Math.max(0, (Date.now() - (item.plantedAt || Date.now())) / 1000);
+      spawnPersistentSowerGrowingField(item.x, item.z, elapsedSec);
+    });
+  } else if (miracleCollectedIds && miracleCollectedIds.has('par_sower')) {
+    spawnPersistentSowerGrowingField(-42, -90, 12);
+  }
 
   currentMapRectBounds = {
     minX: -120.0,
@@ -3714,6 +4531,9 @@ function updateMiracleOpenWorldFrame(dt, now) {
       }
     }
   }
+
+  // 씨 뿌리기 미션 완료 후 시간이 지나며 점점 자라나는 곡식 실시간 업데이트
+  updateMiracleGrowingFields(dt, now);
 
   // 대화창이 열려있으면 필드 이벤트 진행 중지
   if (miracleDialogState.active) return;

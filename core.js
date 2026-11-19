@@ -5,7 +5,7 @@
 // =========================================================================
 
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.core = '20261120_v7';
+window.__GAME_BUILD_VERSIONS__.core = '20261120_v8';
 
 // 퀴즈 선택지 순서 무작위 셔플 공용 헬퍼 (정답이 항상 1번에 고정되지 않도록 보장)
 function shuffleQuizOptions(opts, ansIdx = 0) {
@@ -2223,9 +2223,26 @@ function getCurrentPlayCount(playerName) {
   return parseInt(localStorage.getItem(key) || '1', 10);
 }
 
+function getKoreanNowTimestamp() {
+  try {
+    const parts = new Intl.DateTimeFormat('ko-KR', {
+      timeZone: 'Asia/Seoul',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false
+    }).formatToParts(new Date());
+    const get = (t) => (parts.find(p => p.type === t) || {}).value || '00';
+    const hh = get('hour') === '24' ? '00' : get('hour');
+    return `${get('year')}-${get('month')}-${get('day')} ${hh}:${get('minute')}:${get('second')}`;
+  } catch (e) {
+    return new Date(Date.now() + 9 * 3600 * 1000).toISOString().replace('T', ' ').slice(0, 19);
+  }
+}
+
 function sendGameLogToSheet(status, stageNum, certCode = '-') {
   if (!GOOGLE_SHEET_WEBAPP_URL || GOOGLE_SHEET_WEBAPP_URL.includes('여기에_')) return;
   const payload = {
+    time: getKoreanNowTimestamp(),
     name: explorerName || '믿음의용사',
     mode: currentMode || 'junior',
     episode: currentEpisode || 'noah',
@@ -3420,6 +3437,8 @@ function initEngine(skipInitialPreview = false) {
       if (keys['ArrowRight'] || keys['KeyD']) rawX = 1;
       if (keys['ArrowUp'] || keys['KeyW']) rawZ = -1;
       if (keys['ArrowDown'] || keys['KeyS']) rawZ = 1;
+      // 잠금 전 원본 방향 입력(조이스틱·키보드)을 보관 → 스테이지 3 넘어짐 후 방향기로 일어나기에 활용
+      window.lastRawMoveInput = { x: rawX, z: rawZ, mag: Math.min(1, Math.hypot(rawX, rawZ)) };
 
       if (typeof window.isPlayerMovementLocked === 'function' && window.isPlayerMovementLocked()) {
         rawX = 0; rawZ = 0;
