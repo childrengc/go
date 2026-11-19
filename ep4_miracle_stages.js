@@ -46,6 +46,10 @@ window.getMiracleGroundHeight = function (x, z, st) {
 let _isEnteringMiracleStage = false;
 
 function enterMiracleMainStage(stageNum) {
+  if (typeof miracleActiveFieldEvent !== 'undefined' && miracleActiveFieldEvent) {
+    if (typeof showToast === 'function') showToast('⚠️ 진행 중인 미션을 먼저 완료한 뒤 스테이지에 입장할 수 있어요!');
+    return;
+  }
   if (_isEnteringMiracleStage) return;
   _isEnteringMiracleStage = true;
 
