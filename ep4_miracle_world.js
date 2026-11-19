@@ -8,6 +8,9 @@ let miracleWorldMissionObjects = [];
 let miracleActiveFieldEvent = null;
 let miracleWanderingActors = []; // 자연스럽게 걸어 다니는 마을 주민 & 초원 동물(사슴·양) 배열
 let miracleGolgothaCrossesGroup = null; // 스테이지 3(예수님 십자가 사건)부터 등장하는 골고다 세 십자가 그룹
+let miracleOpenWorldTombGroup = null; // 스테이지 3 클리어 후 모습을 드러내는 동산 돌 무덤 그룹
+let miracleTombCoverGroup = null; // 스테이지 3 클리어 전까지 돌 무덤을 가려주는 풀·덤불 위장막
+window.miracleSkyBirds = []; // 하늘을 날아다니는 소프트 로우 폴리곤 새 배열
 
 // 머리 위 태그(.world-label) 근접 표시 거리 상수 (가까이 다가갔을 때만 표시)
 const MIRACLE_TAG_DIST_SPOT = 13.0;
@@ -19,36 +22,180 @@ function getMiracleMainRoadCenterX(z) {
 }
 
 // -------------------------------------------------------------------------
-// 1. 소프트 로우 폴리곤 소품 팩토리 (길가 나무 짐수레)
+// 1. 비정형 소프트 로우 폴리곤 길가 소품 팩토리 (디테일 나무 짐수레 · 시장 항아리·곡식자루·나무상자)
 // -------------------------------------------------------------------------
+function createOrganicAmphoraProp(scale = 1.0, hexBody = '#b86232', hexNeck = '#8f471e') {
+  const g = new THREE.Group();
+  const belly = createLowPolyMesh(new THREE.IcosahedronGeometry(0.30 * scale, 0), hexBody, 0, 0.34 * scale, 0, true);
+  belly.scale.set(0.92, 1.32, 0.92);
+  const foot = createLowPolyMesh(new THREE.CylinderGeometry(0.14 * scale, 0.17 * scale, 0.14 * scale, 6), hexNeck, 0, 0.07 * scale, 0, false);
+  const neck = createLowPolyMesh(new THREE.CylinderGeometry(0.13 * scale, 0.10 * scale, 0.24 * scale, 6), hexNeck, 0, 0.68 * scale, 0, false);
+  const rim  = createLowPolyMesh(new THREE.CylinderGeometry(0.18 * scale, 0.14 * scale, 0.08 * scale, 7), hexBody, 0, 0.80 * scale, 0, false);
+  const handleGeo = new THREE.CylinderGeometry(0.032 * scale, 0.032 * scale, 0.24 * scale, 4);
+  const hL = createLowPolyMesh(handleGeo, hexNeck, -0.17 * scale, 0.62 * scale, 0, false);
+  hL.rotation.z = 0.42;
+  const hR = createLowPolyMesh(handleGeo, hexNeck,  0.17 * scale, 0.62 * scale, 0, false);
+  hR.rotation.z = -0.42;
+  g.add(belly, foot, neck, rim, hL, hR);
+  return g;
+}
+
+function createSpokedWoodenWheel(radius = 0.54, woodHex = '#5c2d0c', rimHex = '#3f2210') {
+  const wg = new THREE.Group();
+  // 8각 다면체 바퀴 테두리 (속이 비어 바큇살이 또렷하게 보이는 소프트 로우폴리 수레바퀴)
+  const segs = 8;
+  const segLen = 2 * radius * Math.sin(Math.PI / segs) + 0.04;
+  for (let i = 0; i < segs; i++) {
+    const ang = (i / segs) * Math.PI * 2;
+    const rimSeg = createLowPolyMesh(
+      new THREE.BoxGeometry(0.11, 0.10, segLen),
+      i % 2 === 0 ? rimHex : woodHex,
+      0, Math.cos(ang) * radius, Math.sin(ang) * radius, false
+    );
+    rimSeg.rotation.x = ang;
+    wg.add(rimSeg);
+  }
+  // 중앙 바퀴축 허브 & 6개 바큇살
+  const hub = createLowPolyMesh(new THREE.CylinderGeometry(0.13, 0.14, 0.20, 6), '#451a03', 0, 0, 0, false);
+  hub.rotation.z = Math.PI / 2;
+  wg.add(hub);
+  for (let s = 0; s < 3; s++) {
+    const spoke = createLowPolyMesh(new THREE.CylinderGeometry(0.035, 0.035, radius * 1.92, 4), '#78350f', 0, 0, 0, false);
+    spoke.rotation.x = (s / 3) * Math.PI;
+    wg.add(spoke);
+  }
+  return wg;
+}
+
 function createLowPolyWoodenCart(x, z, rotY = 0) {
   const by = getMiracleOpenWorldGroundHeight(x, z);
+  const seed = Math.abs(Math.round(x * 7 + z * 11)) + 3;
   const grp = new THREE.Group();
+  const makeBox = (w, h, d, s) => (typeof createOrganicBoxGeo === 'function')
+    ? createOrganicBoxGeo(w, h, d, s, 0.06, 0.96, 2)
+    : new THREE.BoxGeometry(w, h, d);
 
-  const bed = createLowPolyMesh(new THREE.BoxGeometry(1.75, 0.22, 2.45), '#854d0e', 0, 0.72, 0);
-  const railL = createLowPolyMesh(new THREE.BoxGeometry(0.14, 0.52, 2.45), '#713f12', -0.82, 1.02, 0);
-  const railR = createLowPolyMesh(new THREE.BoxGeometry(0.14, 0.52, 2.45), '#713f12',  0.82, 1.02, 0);
-  const canopy = createLowPolyMesh(new THREE.CylinderGeometry(0.86, 0.86, 1.65, 7, 1, false, 0, Math.PI), '#f5ead6', 0, 1.15, -0.2, true);
-  canopy.rotation.z = -Math.PI / 2;
-  canopy.rotation.y = Math.PI / 2;
+  // 1) 손으로 깎은 듯한 비정형 나무 짐칸 바닥 + 바깥으로 살짝 벌어진 목재 난간 측면 + 가로 보강목
+  const bed = createLowPolyMesh(makeBox(1.78, 0.20, 2.55, seed), '#8a4f18', 0, 0.68, 0);
+  const axle = createLowPolyMesh(new THREE.CylinderGeometry(0.08, 0.08, 2.18, 6), '#451a03', 0, 0.54, -0.10, false);
+  axle.rotation.z = Math.PI / 2;
 
-  const wheelGeo = new THREE.CylinderGeometry(0.52, 0.52, 0.16, 8);
-  const wheelL = createLowPolyMesh(wheelGeo, '#451a03', -0.95, 0.52, -0.15);
-  wheelL.rotation.z = Math.PI / 2;
-  const wheelR = createLowPolyMesh(wheelGeo, '#451a03',  0.95, 0.52, -0.15);
-  wheelR.rotation.z = Math.PI / 2;
+  const railL = createLowPolyMesh(makeBox(0.13, 0.56, 2.52, seed + 1), '#713f12', -0.84, 1.02, 0);
+  railL.rotation.z = 0.10;
+  const railR = createLowPolyMesh(makeBox(0.13, 0.56, 2.52, seed + 2), '#713f12',  0.84, 1.02, 0);
+  railR.rotation.z = -0.10;
+  const railBack = createLowPolyMesh(makeBox(1.66, 0.52, 0.13, seed + 3), '#78350f', 0, 1.00, -1.22);
+  railBack.rotation.x = -0.08;
+  const railFront = createLowPolyMesh(makeBox(1.62, 0.36, 0.12, seed + 4), '#78350f', 0, 0.92, 1.22);
 
-  const shaftL = createLowPolyMesh(new THREE.CylinderGeometry(0.06, 0.06, 1.5, 5), '#5c2d0c', -0.45, 0.65, 1.75, false);
-  shaftL.rotation.x = Math.PI / 2 + 0.18;
-  const shaftR = createLowPolyMesh(new THREE.CylinderGeometry(0.06, 0.06, 1.5, 5), '#5c2d0c',  0.45, 0.65, 1.75, false);
-  shaftR.rotation.x = Math.PI / 2 + 0.18;
+  // 난간 수직 목재 기둥 4개
+  [[-0.86, -0.85], [-0.86, 0.85], [0.86, -0.85], [0.86, 0.85]].forEach(([px, pz]) => {
+    const post = createLowPolyMesh(new THREE.CylinderGeometry(0.05, 0.06, 0.72, 5), '#5c2d0c', px, 1.05, pz, false);
+    grp.add(post);
+  });
 
-  grp.add(bed, railL, railR, canopy, wheelL, wheelR, shaftL, shaftR);
+  // 2) 비정형 천 주름이 살아있는 아치형 천막 캐노피 & 곡선 목재 활대
+  const canopyGeo = new THREE.CylinderGeometry(0.94, 0.94, 1.88, 8, 4, true, 0, Math.PI);
+  // 로컬 좌표계에서 +Y 위쪽 아치·Z축 전후 길이가 되도록 정점 변환 후 자연스러운 천 처짐 부여
+  canopyGeo.rotateZ(Math.PI / 2);
+  canopyGeo.rotateY(Math.PI / 2);
+  const cPos = canopyGeo.attributes.position;
+  for (let i = 0; i < cPos.count; i++) {
+    let cx = cPos.getX(i), cy = cPos.getY(i), cz = cPos.getZ(i);
+    // 활대(-0.90, +0.90) 사이 중앙부가 살짝 처지고 가장자리가 자연스럽게 물결치는 천 표현
+    const spanT = Math.cos((cz / 0.94) * (Math.PI / 2));
+    const centerSag = Math.max(0, spanT) * 0.095;
+    const ripple = Math.sin(cz * 5.2 + cx * 3.1 + seed) * 0.028;
+    cPos.setXYZ(i, cx + ripple * 0.6, Math.max(0.02, cy - centerSag + ripple), cz);
+  }
+  const canopyNon = canopyGeo.toNonIndexed();
+  canopyNon.computeVertexNormals();
+  const canopy = new THREE.Mesh(
+    canopyNon,
+    (typeof matLowPolyDouble === 'function') ? matLowPolyDouble('#f5e8d0') : matLowPoly('#f5e8d0')
+  );
+  canopy.position.set(0, 1.24, -0.18);
+  canopy.castShadow = true;
+  canopy.receiveShadow = true;
+
+  // 천막 앞·뒤 곡선 목재 활대 & 중앙 장식 띠
+  [-1.08, -0.18, 0.72].forEach((hz, hi) => {
+    const hoop = createLowPolyMesh(
+      new THREE.TorusGeometry(hi === 1 ? 0.90 : 0.92, hi === 1 ? 0.032 : 0.048, 4, 8, Math.PI),
+      hi === 1 ? '#b45309' : '#9a3412',
+      0, 1.24, hz, false
+    );
+    grp.add(hoop);
+  });
+
+  // 3) 바큇살이 보이는 소프트 로우폴리 수레바퀴 좌·우
+  const wheelL = createSpokedWoodenWheel(0.54);
+  wheelL.position.set(-1.02, 0.54, -0.10);
+  const wheelR = createSpokedWoodenWheel(0.54);
+  wheelR.position.set( 1.02, 0.54, -0.10);
+
+  // 4) 짐칸 안에 실린 곡식 자루, 양손잡이 토기 항아리, 과일/빵 바구니
+  const sack1 = createLowPolyMesh(new THREE.IcosahedronGeometry(0.36, 0), '#d6b98c', -0.34, 1.02, -0.42, false);
+  sack1.scale.set(1.05, 0.78, 1.35);
+  sack1.rotation.y = 0.25;
+  const sack2 = createLowPolyMesh(new THREE.IcosahedronGeometry(0.32, 0), '#c8a675',  0.28, 1.00, -0.52, false);
+  sack2.scale.set(1.00, 0.80, 1.25);
+  sack2.rotation.y = -0.30;
+  const cartJar = createOrganicAmphoraProp(0.88, '#c26533', '#8f471e');
+  cartJar.position.set(0.34, 0.78, 0.42);
+  cartJar.rotation.z = 0.08;
+  const basket = createLowPolyMesh(new THREE.CylinderGeometry(0.30, 0.22, 0.30, 7), '#a16207', -0.32, 0.92, 0.48, false);
+  const goods  = createLowPolyMesh(new THREE.DodecahedronGeometry(0.24, 0), '#f59e0b', -0.32, 1.10, 0.48, false);
+  goods.scale.set(1.1, 0.65, 1.1);
+
+  // 5) 앞쪽 손잡이 끌채 & 지지대 다리
+  const shaftL = createLowPolyMesh(new THREE.CylinderGeometry(0.045, 0.065, 1.65, 5), '#5c2d0c', -0.48, 0.64, 1.88, false);
+  shaftL.rotation.x = Math.PI / 2 + 0.16;
+  const shaftR = createLowPolyMesh(new THREE.CylinderGeometry(0.045, 0.065, 1.65, 5), '#5c2d0c',  0.48, 0.64, 1.88, false);
+  shaftR.rotation.x = Math.PI / 2 + 0.16;
+  const yokeBar = createLowPolyMesh(new THREE.CylinderGeometry(0.042, 0.042, 1.06, 5), '#6b4226', 0, 0.50, 2.58, false);
+  yokeBar.rotation.z = Math.PI / 2;
+  const standL = createLowPolyMesh(new THREE.CylinderGeometry(0.04, 0.045, 0.66, 4), '#451a03', -0.52, 0.33, 1.15, false);
+  const standR = createLowPolyMesh(new THREE.CylinderGeometry(0.04, 0.045, 0.66, 4), '#451a03',  0.52, 0.33, 1.15, false);
+
+  grp.add(bed, axle, railL, railR, railBack, railFront, canopy, wheelL, wheelR, sack1, sack2, cartJar, basket, goods, shaftL, shaftR, yokeBar, standL, standR);
   grp.position.set(x, by, z);
   grp.rotation.y = rotY;
   worldGroup.add(grp);
   wallMeshes.push(bed, canopy);
-  colliders.push({ minX: x - 1.15, maxX: x + 1.15, minZ: z - 1.35, maxZ: z + 1.35 });
+  colliders.push({ minX: x - 1.25, maxX: x + 1.25, minZ: z - 1.45, maxZ: z + 1.45 });
+  return grp;
+}
+
+// 건물 앞·골목 어귀를 풍성하게 꾸며주는 비정형 소프트 로우폴리 시장 소품 묶음 (항아리·곡식자루·나무상자·바구니)
+function createOrganicStreetPropCluster(x, z, rotY = 0, seed = 1) {
+  const by = getMiracleOpenWorldGroundHeight(x, z);
+  const grp = new THREE.Group();
+  const makeBox = (w, h, d, s) => (typeof createOrganicBoxGeo === 'function')
+    ? createOrganicBoxGeo(w, h, d, s, 0.07, 0.95, 1)
+    : new THREE.BoxGeometry(w, h, d);
+
+  const crate = createLowPolyMesh(makeBox(1.05, 0.62, 0.82, seed), '#9a5b25', -0.45, 0.31, 0, true);
+  const crateLid = createLowPolyMesh(makeBox(1.12, 0.10, 0.88, seed + 1), '#78350f', -0.45, 0.64, 0, false);
+  const basket = createLowPolyMesh(new THREE.CylinderGeometry(0.32, 0.24, 0.34, 7), '#b45309', -0.45, 0.86, 0.04, false);
+  const fruit = createLowPolyMesh(new THREE.DodecahedronGeometry(0.24, 0), seed % 2 === 0 ? '#eab308' : '#84cc16', -0.45, 1.04, 0.04, false);
+  fruit.scale.set(1.1, 0.68, 1.1);
+
+  const jar1 = createOrganicAmphoraProp(1.05, '#b86232', '#8f471e');
+  jar1.position.set(0.45, 0, -0.18);
+  const jar2 = createOrganicAmphoraProp(0.76, '#c27442', '#9a4f25');
+  jar2.position.set(0.84, 0, 0.22);
+  jar2.rotation.z = -0.12;
+
+  const sack = createLowPolyMesh(new THREE.IcosahedronGeometry(0.36, 0), '#d6c19c', 0.12, 0.28, 0.42, true);
+  sack.scale.set(1.1, 0.78, 0.95);
+  sack.rotation.y = seed * 0.7;
+
+  grp.add(crate, crateLid, basket, fruit, jar1, jar2, sack);
+  grp.position.set(x, by, z);
+  grp.rotation.y = rotY;
+  worldGroup.add(grp);
+  colliders.push({ minX: x - 1.05, maxX: x + 1.05, minZ: z - 0.85, maxZ: z + 0.85 });
   return grp;
 }
 
@@ -79,19 +226,19 @@ function buildLowPolyPerimeterMountainRange() {
     createBumpyLowPolyHillMesh(hx2, hz + 6, 24, 9.6 + (i % 3) * 2.2, 22, hillCols[(i + 1) % hillCols.length], i + 60, true);
   }
 
-  // 3) 남쪽(South) 가장자리 겹침 언덕 (z = +122 ~ +140)
-  for (let i = 0; i < 15; i++) {
-    const hx = -82 + i * 15.0;
+  // 3) 남쪽(South) 가장자리 겹침 언덕 (확장된 서남부 골고다 해변까지 자연스럽게 이어지도록 서쪽 확장)
+  for (let i = 0; i < 18; i++) {
+    const hx = -114 + i * 14.5;
     const hz1 = 122 + (i % 2) * 5;
     const hz2 = 138 + ((i + 1) % 2) * 6;
     createBumpyLowPolyHillMesh(hx, hz1, 19 + (i % 3) * 3, 6.3 + (i % 3) * 1.6, 17, hillCols[(i + 1) % hillCols.length], i + 80, true);
     createBumpyLowPolyHillMesh(hx - 6, hz2, 24 + (i % 2) * 4, 9.5 + (i % 4) * 2.0, 20, hillCols[(i + 3) % hillCols.length], i + 100, true);
   }
 
-  // 4) [언덕 내부 진입 원천 차단] 북·동·남 언덕 기슭 바로 앞(±106.5)에 빈틈없는 연속 충돌벽 등록
+  // 4) [언덕 내부 진입 원천 차단] 북·동·남 언덕 기슭 바로 앞(±106.0)에 빈틈없는 연속 충돌벽 등록
   colliders.push(
-    { minX: -120, maxX:  160, minZ: -170, maxZ: -106.0 }, // 북쪽 언덕 차단벽
-    { minX: -120, maxX:  160, minZ:  106.0, maxZ: 170 },  // 남쪽 언덕 차단벽
+    { minX: -145, maxX:  160, minZ: -170, maxZ: -106.0 }, // 북쪽 언덕 차단벽
+    { minX: -145, maxX:  160, minZ:  106.0, maxZ: 170 },  // 남쪽 언덕 차단벽
     { minX:  106.0, maxX: 170, minZ: -170, maxZ:  170 }   // 동쪽 언덕 차단벽
   );
 }
@@ -141,11 +288,13 @@ function buildSoftLowPolyWorldTerrain() {
     const onGolgothaTrail = (vz > 52 && vz < 82 && Math.abs(vx - (-8 - (vz - 52) * 1.8)) < 4.2);
     const onOliveMountTrail = (vx >= 10 && vx <= 90 && Math.abs(vz - (58 + (vx - 10) * 0.2)) < 3.8);
 
-    const shoreLineX = -92 + Math.sin(vz * 0.03) * 6.0 + Math.cos(vz * 0.07) * 2.5;
+    const shoreLineX = (typeof window.getMiracleWestShoreLineX === 'function')
+      ? window.getMiracleWestShoreLineX(vz)
+      : (-92 + Math.sin(vz * 0.03) * 6.0 + Math.cos(vz * 0.07) * 2.5);
 
     if (vx < shoreLineX - 1.5) {
       vCol.copy(cDeepSeaBed);
-    } else if (vx < shoreLineX + 20.0 && !onGalileePierTrail) {
+    } else if (vx < shoreLineX + 20.0 && !onGalileePierTrail && vy < 1.6) {
       const grassBlend = Math.max(0, Math.min(1, (vx - shoreLineX) / 20.0));
       vCol.copy(cCoastalHerb).lerp(cWarmMeadow, grassBlend);
     } else if (
@@ -191,8 +340,8 @@ function buildSoftLowPolyWorldTerrain() {
 
   buildLowPolyPerimeterMountainRange();
 
-  // 서쪽(West, x < -92) 전체를 가득 채우는 모래사장 없는 드넓은 바다 수면
-  const seaGeo = new THREE.PlaneGeometry(280, 560, 36, 68);
+  // 서쪽 바다 수면 (확장된 해변 곡선과 자연스럽게 맞닿도록 서쪽 영역 충분히 확보)
+  const seaGeo = new THREE.PlaneGeometry(310, 580, 34, 64);
   seaGeo.rotateX(-Math.PI / 2);
   const seaPos = seaGeo.attributes.position;
   for (let i = 0; i < seaPos.count; i++) {
@@ -208,13 +357,13 @@ function buildSoftLowPolyWorldTerrain() {
     flatShading: true
   });
   const wideWestSea = new THREE.Mesh(seaGeo, seaMat);
-  wideWestSea.position.set(-228, -0.40, 0);
+  wideWestSea.position.set(-242, -0.40, 0);
   wideWestSea.receiveShadow = true;
   worldGroup.add(wideWestSea);
 
-  // 가장자리 언덕 안쪽으로 들어갈 수 없도록 안전 경계 설정 (-91.0 ~ +105.5)
+  // 확장된 서쪽 해변(곡선 해안선 판정은 canMoveTo에서 정밀 연동)을 포함한 안전 이동 경계
   currentMapRectBounds = {
-    minX: -91.0,
+    minX: -128.0,
     maxX:  105.5,
     minZ: -105.5,
     maxZ:  105.5
@@ -261,44 +410,44 @@ function buildSoftLowPolyWorldTerrain() {
 function buildMiracleRoadsideVillagesAndForests() {
   miracleWanderingActors = [];
 
-  // 건물들을 2~3채씩 가깝게(중심 간격 7.2~7.8m, 옥상 간 틈새 1.2~1.6m) 군집 배치하여
-  // 한 건물의 외벽 계단으로 2층 테라스에 올라간 뒤 옆 건물 옥상이나 2층으로 점프해 넘어갈 수 있도록 설계!
+  // 건물 간 최소 보행 통로(2.4m 이상)를 확보하여 건물 사이에 끼는 현상을 방지하고,
+  // 예루살렘 성전 주변 건물은 충분히 뒤로 물러나 현실적인 광장 공간을 형성하도록 배치
   const roadsideBuildingSpecs = [
-    // [클러스터 1: 북부 가나 서쪽 루프탑 연속 점프 구간]
-    { x: -16.0, z: -88.0, v: 1, yaw:  Math.PI / 2, sc: 1.00 },
-    { x: -16.0, z: -80.2, v: 0, yaw:  Math.PI / 2, sc: 0.98 },
-    // [클러스터 2: 북부 가나 동쪽 루프탑 연속 점프 구간]
-    { x:  13.0, z: -86.0, v: 3, yaw: -Math.PI / 2, sc: 1.00 },
-    { x:  13.0, z: -78.2, v: 2, yaw: -Math.PI / 2, sc: 0.98 },
-    { x:  13.0, z: -70.6, v: 0, yaw: -Math.PI / 2, sc: 0.96 },
-    // [클러스터 3: 갈릴리 서쪽 길가 2연속 가옥]
-    { x: -15.0, z: -56.0, v: 3, yaw:  Math.PI / 2, sc: 0.98 },
-    { x: -15.0, z: -48.4, v: 0, yaw:  Math.PI / 2, sc: 0.98 },
-    // [클러스터 4: 가버나움 중풍병자 집(22, -52)과 옥상 점프로 이어지는 이웃집(13.5, -52)]
-    { x:  13.5, z: -52.0, v: 2, yaw:  0.0,         sc: 0.96 },
-    { x:  35.0, z: -46.0, v: 1, yaw: -0.25,        sc: 1.00 },
-    // [클러스터 5: 중북부 순례길 양옆 마주보는 2층 가옥 클러스터]
-    { x: -14.5, z: -31.0, v: 1, yaw:  Math.PI / 2, sc: 1.00 },
-    { x: -14.5, z: -23.2, v: 4, yaw:  Math.PI / 2, sc: 0.96 },
-    { x:  14.5, z: -30.0, v: 3, yaw: -Math.PI / 2, sc: 1.00 },
-    { x:  14.5, z: -22.2, v: 0, yaw: -Math.PI / 2, sc: 0.98 },
-    // [클러스터 6: 사마리아 · 여리고 입구 연속 루프탑 가옥]
-    { x:  15.5, z: -10.0, v: 0, yaw: -Math.PI / 2, sc: 0.98 },
-    { x:  15.5, z:  -2.2, v: 3, yaw: -Math.PI / 2, sc: 1.02 },
-    { x:  52.0, z:  -7.5, v: 1, yaw: -Math.PI / 2, sc: 1.00 },
-    { x:  52.0, z:   0.3, v: 0, yaw: -Math.PI / 2, sc: 0.98 },
-    { x:  52.0, z:   7.9, v: 2, yaw: -Math.PI / 2, sc: 0.96 },
-    // [클러스터 7: 유대 광야 ~ 예루살렘 성문 앞 연속 가옥]
-    { x: -14.5, z:  16.0, v: 0, yaw:  Math.PI / 2, sc: 0.98 },
-    { x: -14.5, z:  23.8, v: 3, yaw:  Math.PI / 2, sc: 1.00 },
-    { x: -14.5, z:  31.6, v: 1, yaw:  Math.PI / 2, sc: 0.98 },
-    { x:  14.5, z:  32.0, v: 2, yaw: -Math.PI / 2, sc: 0.96 },
-    // [클러스터 8: 남부 예루살렘 성안 거리 & 마가의 다락방(-24, 58) 이웃 가옥]
-    { x: -15.2, z:  58.0, v: 0, yaw:  0.0,         sc: 0.96 }, // 다락방(-24, 58)에서 점프로 건너갈 수 있는 옆집!
-    { x:  16.0, z:  48.0, v: 1, yaw: -Math.PI / 2, sc: 1.00 },
-    { x:  16.0, z:  55.8, v: 3, yaw: -Math.PI / 2, sc: 1.00 },
-    { x:  24.0, z:  72.0, v: 4, yaw: -Math.PI / 2, sc: 0.96 },
-    { x:  24.0, z:  79.4, v: 1, yaw: -Math.PI / 2, sc: 1.00 }
+    // [클러스터 1: 북부 가나 서쪽 가옥 구간]
+    { x: -16.5, z: -89.0, v: 1, yaw:  Math.PI / 2, sc: 0.98 },
+    { x: -16.5, z: -79.2, v: 0, yaw:  Math.PI / 2, sc: 0.96 },
+    // [클러스터 2: 북부 가나 동쪽 가옥 구간]
+    { x:  13.5, z: -88.5, v: 3, yaw: -Math.PI / 2, sc: 0.98 },
+    { x:  13.5, z: -78.6, v: 2, yaw: -Math.PI / 2, sc: 0.96 },
+    { x:  13.5, z: -69.0, v: 0, yaw: -Math.PI / 2, sc: 0.95 },
+    // [클러스터 3: 갈릴리 서쪽 길가 가옥]
+    { x: -15.5, z: -57.5, v: 3, yaw:  Math.PI / 2, sc: 0.96 },
+    { x: -15.5, z: -47.6, v: 0, yaw:  Math.PI / 2, sc: 0.96 },
+    // [클러스터 4: 가버나움 중풍병자 집(22, -52) 주변 (넓은 골목 간격 확보)]
+    { x:  11.6, z: -52.0, v: 2, yaw:  0.0,         sc: 0.94 },
+    { x:  35.5, z: -46.0, v: 1, yaw: -0.25,        sc: 0.98 },
+    // [클러스터 5: 중북부 순례길 양옆 가옥]
+    { x: -15.0, z: -32.2, v: 1, yaw:  Math.PI / 2, sc: 0.98 },
+    { x: -15.0, z: -22.2, v: 4, yaw:  Math.PI / 2, sc: 0.95 },
+    { x:  15.0, z: -31.2, v: 3, yaw: -Math.PI / 2, sc: 0.98 },
+    { x:  15.0, z: -21.2, v: 0, yaw: -Math.PI / 2, sc: 0.96 },
+    // [클러스터 6: 사마리아 · 여리고 입구 가옥]
+    { x:  16.0, z: -11.2, v: 0, yaw: -Math.PI / 2, sc: 0.96 },
+    { x:  16.0, z:  -1.4, v: 3, yaw: -Math.PI / 2, sc: 0.98 },
+    { x:  52.5, z:  -9.2, v: 1, yaw: -Math.PI / 2, sc: 0.98 },
+    { x:  52.5, z:   0.6, v: 0, yaw: -Math.PI / 2, sc: 0.96 },
+    { x:  52.5, z:  10.2, v: 2, yaw: -Math.PI / 2, sc: 0.95 },
+    // [클러스터 7: 유대 광야 ~ 예루살렘 성문 앞 가옥]
+    { x: -15.0, z:  14.2, v: 0, yaw:  Math.PI / 2, sc: 0.96 },
+    { x: -15.0, z:  24.0, v: 3, yaw:  Math.PI / 2, sc: 0.98 },
+    { x: -15.0, z:  33.8, v: 1, yaw:  Math.PI / 2, sc: 0.96 },
+    { x:  15.5, z:  32.0, v: 2, yaw: -Math.PI / 2, sc: 0.95 },
+    // [클러스터 8: 예루살렘 성전 외곽 거리 — 성전에서 충분히 뒤로 물러나 배치]
+    { x: -24.5, z:  42.5, v: 0, yaw:  Math.PI / 2, sc: 0.96 },
+    { x:  28.0, z:  44.0, v: 1, yaw: -Math.PI / 2, sc: 0.98 },
+    { x:  29.0, z:  55.2, v: 3, yaw: -Math.PI / 2, sc: 0.98 },
+    { x:  35.5, z:  68.5, v: 4, yaw: -Math.PI / 2, sc: 0.96 },
+    { x:  35.5, z:  79.2, v: 1, yaw: -Math.PI / 2, sc: 0.98 }
   ];
 
   roadsideBuildingSpecs.forEach(b => {
@@ -308,6 +457,12 @@ function buildMiracleRoadsideVillagesAndForests() {
   createLowPolyWoodenCart(-9.5, -48, 0.25);
   createLowPolyWoodenCart( 9.8,  -8, -0.35);
   createLowPolyWoodenCart(-9.2,  30, 0.18);
+  createOrganicStreetPropCluster(-10.8, -82.0,  0.4, 11);
+  createOrganicStreetPropCluster(  8.8, -74.0, -0.5, 22);
+  createOrganicStreetPropCluster(-10.4, -26.5,  0.2, 33);
+  createOrganicStreetPropCluster( 10.6, -24.5, -0.3, 44);
+  createOrganicStreetPropCluster(-10.4,  20.0,  0.5, 55);
+  createOrganicStreetPropCluster( 23.0,  49.0, -0.4, 66);
   createLowPolyDonkey(10.5, -24, -0.6);
   createLowPolyDonkey(-9.8,  16,  0.8);
   createLowPolyDonkey( 9.5,  54, -1.2);
@@ -440,207 +595,263 @@ function buildMiracleRoadsideVillagesAndForests() {
 // =========================================================================
 
 // -------------------------------------------------------------------------
-// 4-0. [신규] 소프트 로우 폴리곤 예루살렘 성전 복합 단지 (z = 46 외곽 성문 ~ z = 72 성소 본관 통합)
-//      - 레퍼런스 이미지(Gemini_Generated_Image_p2c68qp2c68qp2c6.png) 컨셉 반영 및 로우폴리 단순화
+// 4-0. [리디자인] 소프트 로우 폴리곤 비정형 예루살렘 성전 복합 단지 (z = 46 외곽 성문 ~ z = 72 성소 본관)
+//      - 비정형 테이퍼드 석조 매스 · 아치형 성문 · 성가퀴 망루 · 야긴/보아스 기둥 · 붉은 성소 휘장
+//      - 정점 색상 병합(Merge)으로 전체 성전 단지 드로우콜을 112+ → ~4개로 최적화!
 // -------------------------------------------------------------------------
 function buildLowPolyJerusalemTempleComplex() {
-  const cSandBase   = '#dfc79e'; // 하단 사암 기단 및 외곽 성벽
-  const cCourtWall  = '#ead4ae'; // 안뜰 성벽 및 사각 망루
-  const cCourtTrim  = '#cfa972'; // 성벽 상단 몰딩 및 돌계단
-  const cWhiteWall  = '#f8fafc'; // 성소 본관 순백색 외벽
-  const cPilaster   = '#e5ddd0'; // 본관 수직 부조 기둥
-  const cGoldMain   = '#eab308'; // 황금 문 & 상단 황금 프리즈
-  const cGoldBright = '#facc15'; // 지붕 테두리 황금 톱니 왕관
-  const cDarkVoid   = '#291d12'; // 문 안쪽 어두운 공간
+  const cSandBase   = '#dfc79e'; // 하단 사암 기단
+  const cSandDark   = '#cfa972'; // 단차 몰딩·계단·어두운 사암
+  const cCourtWall  = '#ebd6b0'; // 안뜰 성벽·망루
+  const cWhiteWarm  = '#f7f4ec'; // 성소 본관 순백색 외벽
+  const cWhiteShade = '#e8e0d2'; // 본관 기둥·부조 음영
+  const cGoldMain   = '#eab308'; // 황금 문·프리즈·기둥머리
+  const cGoldBright = '#facc15'; // 지붕 황금 왕관 뿔·연꽃 주두
+  const cBronze     = '#92400e'; // 야긴/보아스 청동 기둥·화로
+  const cCrimson    = '#991b1b'; // 성소 붉은 휘장
+  const cDarkVoid   = '#23170f'; // 어두운 아치·총안 내부
 
-  const regMesh = (m) => {
-    m.castShadow = true;
-    m.receiveShadow = true;
-    wallMeshes.push(m);
+  const makeOrgBox = (target, w, h, d, col, x, y, z, seed, irr = 0.032, taper = 0.96, seg = 2) => {
+    const geo = (typeof createOrganicBoxGeo === 'function')
+      ? createOrganicBoxGeo(w, h, d, seed, irr, taper, seg)
+      : new THREE.BoxGeometry(w, h, d);
+    const m = createLowPolyMesh(geo, col, x, y, z, true);
+    target.add(m);
     return m;
   };
 
   // =======================================================================
-  // [A] 남부 초입 외곽 성문 & 전면 양측 계단 성벽 (z = 46 라인, 기존 원통형 성문 대체)
-  //     - 이미지 좌측 하단의 사각 망루 + 톱니 성가퀴 성벽 + 양옆 넓은 계단 구조
-  //     - 중앙(x = -2.8 ~ +2.8)은 플레이어가 성전 바깥뜰로 걸어 들어가는 개방형 성문 통로
+  // [A] 남부 초입 외곽 성문 & 전면 양측 계단 성벽 (z = 46 라인)
+  //     - 중앙(x = -2.8 ~ +2.8)은 플레이어가 성전 바깥뜰로 걸어 들어가는 개방형 아치 성문 통로
   // =======================================================================
   const gateY = getMiracleOpenWorldGroundHeight(0, 46);
   const outerGateGrp = new THREE.Group();
 
-  // 좌·우 성문 안쪽 사각 망루 (중앙 통로 양옆)
-  const innerGateTowerL = regMesh(createLowPolyMesh(new THREE.BoxGeometry(2.4, 5.2, 2.4), cCourtWall, -4.0, 2.6, 0));
-  const innerGateTowerR = regMesh(createLowPolyMesh(new THREE.BoxGeometry(2.4, 5.2, 2.4), cCourtWall,  4.0, 2.6, 0));
-  const innerGateCrownL = createLowPolyMesh(new THREE.BoxGeometry(2.65, 0.45, 2.65), cCourtTrim, -4.0, 5.35, 0);
-  const innerGateCrownR = createLowPolyMesh(new THREE.BoxGeometry(2.65, 0.45, 2.65), cCourtTrim,  4.0, 5.35, 0);
-
-  // 중앙 통로 상단 석조 인방보(Lintel) — 시야를 가리지 않도록 높고 깔끔하게 연결
-  const gateLintel = regMesh(createLowPolyMesh(new THREE.BoxGeometry(5.8, 0.95, 1.8), cCourtTrim, 0, 4.5, 0));
-  const gateGoldCrest = createLowPolyMesh(new THREE.BoxGeometry(3.2, 0.38, 1.92), cGoldMain, 0, 4.5, 0);
-
-  // 좌·우 날개 성벽 & 바깥쪽 모서리 망루
-  const wingWallL = regMesh(createLowPolyMesh(new THREE.BoxGeometry(4.4, 3.8, 1.6), cSandBase, -7.4, 1.9, 0));
-  const wingWallR = regMesh(createLowPolyMesh(new THREE.BoxGeometry(4.4, 3.8, 1.6), cSandBase,  7.4, 1.9, 0));
-  const outerGateTowerL = regMesh(createLowPolyMesh(new THREE.BoxGeometry(2.3, 4.8, 2.3), cCourtWall, -10.2, 2.4, 0));
-  const outerGateTowerR = regMesh(createLowPolyMesh(new THREE.BoxGeometry(2.3, 4.8, 2.3), cCourtWall,  10.2, 2.4, 0));
-  const outerGateCrownL = createLowPolyMesh(new THREE.BoxGeometry(2.55, 0.42, 2.55), cCourtTrim, -10.2, 4.95, 0);
-  const outerGateCrownR = createLowPolyMesh(new THREE.BoxGeometry(2.55, 0.42, 2.55), cCourtTrim,  10.2, 4.95, 0);
-
-  outerGateGrp.add(
-    innerGateTowerL, innerGateTowerR, innerGateCrownL, innerGateCrownR,
-    gateLintel, gateGoldCrest,
-    wingWallL, wingWallR, outerGateTowerL, outerGateTowerR, outerGateCrownL, outerGateCrownR
-  );
-
-  // 성벽 위 사각 성가퀴(Battlements) & 전면 양측 장식 계단 (이미지 좌측 하단 계단 디테일)
-  [-8.6, -7.4, -6.2, 6.2, 7.4, 8.6].forEach(bx => {
-    const merlon = createLowPolyMesh(new THREE.BoxGeometry(0.55, 0.55, 0.65), cCourtTrim, bx, 4.05, -0.45, false);
-    outerGateGrp.add(merlon);
+  // 좌·우 성문 안쪽 비정형 테이퍼드 망루 + 꼭대기 4모서리 성가퀴 + 총안 창
+  [-4.0, 4.0].forEach((tx, idx) => {
+    makeOrgBox(outerGateGrp, 2.55, 5.2, 2.55, cCourtWall, tx, 2.6, 0, 610 + idx, 0.038, 0.89, 2);
+    makeOrgBox(outerGateGrp, 2.75, 0.44, 2.75, cSandDark, tx, 5.34, 0, 614 + idx, 0.04, 0.96, 1);
+    [[-0.95, -0.95], [0.95, -0.95], [-0.95, 0.95], [0.95, 0.95]].forEach(([mx, mz], mi) => {
+      makeOrgBox(outerGateGrp, 0.46, 0.50, 0.46, cCourtWall, tx + mx, 5.76, mz, 620 + idx * 4 + mi, 0.08, 0.86, 1);
+    });
+    const slit = createLowPolyMesh(new THREE.BoxGeometry(0.42, 1.05, 2.62), cDarkVoid, tx, 3.25, 0, false);
+    outerGateGrp.add(slit);
   });
-  [-7.4, 7.4].forEach(sx => {
+
+  // 중앙 개방 통로 상단 아치형 석조 인방보 & 황금 쐐기돌 장식 + 양측 청동 화로
+  makeOrgBox(outerGateGrp, 6.0, 0.96, 1.90, cSandDark, 0, 4.55, 0, 630, 0.036, 0.96, 2);
+  makeOrgBox(outerGateGrp, 3.3, 0.40, 2.02, cGoldMain, 0, 4.58, 0, 631, 0.04, 0.96, 1);
+  [-2.65, 2.65].forEach((bx, bi) => {
+    makeOrgBox(outerGateGrp, 0.68, 1.05, 0.68, cSandBase, bx, 0.52, -1.55, 634 + bi, 0.05, 0.92, 1);
+    const br = createLowPolyMesh(new THREE.CylinderGeometry(0.32, 0.20, 0.36, 7), cBronze, bx, 1.22, -1.55, false);
+    const fl = createLowPolyMesh(new THREE.DodecahedronGeometry(0.20, 0), '#fb923c', bx, 1.50, -1.55, false);
+    fl.userData._emissiveGlow = true;
+    outerGateGrp.add(br, fl);
+  });
+
+  // 좌·우 날개 성벽 & 바깥쪽 테이퍼드 망루
+  [-7.4, 7.4].forEach((wx, idx) => {
+    makeOrgBox(outerGateGrp, 4.5, 3.85, 1.65, cSandBase, wx, 1.92, 0, 640 + idx, 0.034, 0.94, 2);
+  });
+  [-10.2, 10.2].forEach((ox, idx) => {
+    makeOrgBox(outerGateGrp, 2.40, 4.85, 2.40, cCourtWall, ox, 2.42, 0, 645 + idx, 0.038, 0.89, 2);
+    makeOrgBox(outerGateGrp, 2.62, 0.42, 2.62, cSandDark, ox, 4.96, 0, 648 + idx, 0.04, 0.96, 1);
+    [[-0.88, -0.88], [0.88, -0.88], [-0.88, 0.88], [0.88, 0.88]].forEach(([mx, mz], mi) => {
+      makeOrgBox(outerGateGrp, 0.44, 0.48, 0.44, cCourtWall, ox + mx, 5.36, mz, 652 + idx * 4 + mi, 0.08, 0.86, 1);
+    });
+  });
+
+  // 성벽 위 비정형 성가퀴(Merlons) & 전면 양측 장식 돌계단
+  [-8.6, -7.4, -6.2, 6.2, 7.4, 8.6].forEach((bx, bi) => {
+    makeOrgBox(outerGateGrp, 0.56, 0.54, 0.64, cSandDark, bx, 4.08, -0.45, 665 + bi, 0.08, 0.88, 1);
+  });
+  [-7.4, 7.4].forEach((sx, si) => {
     for (let s = 0; s < 4; s++) {
       const sh = 0.45 * (s + 1);
       const sd = 2.8 - s * 0.6;
-      const stair = createLowPolyMesh(new THREE.BoxGeometry(3.6, sh, sd), cCourtTrim, sx, sh * 0.5, -1.8 + s * 0.3);
-      outerGateGrp.add(stair);
+      makeOrgBox(outerGateGrp, 3.6, sh, sd, s % 2 === 0 ? cSandDark : cSandBase, sx, sh * 0.5, -1.8 + s * 0.3, 675 + si * 4 + s, 0.035, 0.97, 1);
     }
   });
 
+  if (typeof mergeStaticLowPolyGroupToVertexColor === 'function') {
+    mergeStaticLowPolyGroupToVertexColor(outerGateGrp, { registerWall: true, castShadow: true });
+  }
   outerGateGrp.position.set(0, gateY, 46);
   worldGroup.add(outerGateGrp);
 
-  // 외곽 성문 좌·우 충돌 박스 (중앙 x = -2.8 ~ +2.8 통로는 열려 있음)
+  // 외곽 성문 좌·우 벽체 및 전면 계단 포함 충돌 박스 (중앙 x = -2.6 ~ +2.6 통로만 개방)
   colliders.push(
-    { minX: -11.6, maxX: -2.8, minZ: 44.2, maxZ: 47.6 },
-    { minX:   2.8, maxX: 11.6, minZ: 44.2, maxZ: 47.6 }
+    { minX: -11.8, maxX: -2.6, minZ: 42.4, maxZ: 47.8 },
+    { minX:   2.6, maxX: 11.8, minZ: 42.4, maxZ: 47.8 }
   );
 
   // =======================================================================
   // [B] 중앙 예루살렘 성전 본관 단지 (x = 0, z = 72)
-  //     - 사암 기단 + 4모서리 망루 성벽 + 반원형 계단 현관 + 백색 본관 & 황금 톱니 왕관 지붕
   // =======================================================================
   const cx = 0, cz = 72;
   const by = getMiracleOpenWorldGroundHeight(cx, cz);
   const templeGrp = new THREE.Group();
 
-  // 1) 1단 사암 대지 기단 (Outer Podium) & 북쪽(-z) 전면 3단 광장 계단
-  const podium = regMesh(createLowPolyMesh(new THREE.BoxGeometry(17.6, 1.1, 15.6), cSandBase, 0, 0.55, 0));
-  const innerPodium = regMesh(createLowPolyMesh(new THREE.BoxGeometry(15.2, 0.5, 13.2), cCourtTrim, 0, 1.35, 0.2));
-  templeGrp.add(podium, innerPodium);
-
+  // 1) 비정형 다단 사암 기단 + 3단 손다듬 광장 계단 + 양측 석조 난간 & 청동 화로
+  makeOrgBox(templeGrp, 18.2, 1.25, 16.2, cSandBase, 0, 0.62, 0, 701, 0.028, 0.95, 2);
+  makeOrgBox(templeGrp, 15.6, 0.56, 13.6, cSandDark, 0, 1.48, 0.1, 702, 0.025, 0.97, 2);
   for (let s = 0; s < 3; s++) {
-    const stepH = 0.36 * (s + 1);
-    const stepD = 2.4 - s * 0.65;
-    const fStep = createLowPolyMesh(new THREE.BoxGeometry(7.6, stepH, stepD), cCourtTrim, 0, stepH * 0.5, -8.4 + s * 0.32);
-    templeGrp.add(fStep);
+    const sh = 0.40 * (s + 1);
+    const sd = 2.6 - s * 0.68;
+    makeOrgBox(templeGrp, 8.0 - s * 0.35, sh, sd, s % 2 === 0 ? cSandDark : cSandBase, 0, sh * 0.5, -8.5 + s * 0.34, 710 + s, 0.035, 0.97, 1);
   }
-
-  // 2) 안뜰 사각 성벽 (Courtyard Enclosure Walls)
-  const wH = 2.6, wT = 0.75;
-  const frontWallL   = regMesh(createLowPolyMesh(new THREE.BoxGeometry(5.6, wH, wT), cCourtWall, -4.6, 1.1 + wH * 0.5, -6.4));
-  const frontWallR   = regMesh(createLowPolyMesh(new THREE.BoxGeometry(5.6, wH, wT), cCourtWall,  4.6, 1.1 + wH * 0.5, -6.4));
-  const frontWallTop = regMesh(createLowPolyMesh(new THREE.BoxGeometry(4.0, 0.85, wT + 0.1), cCourtWall, 0, 1.1 + wH - 0.42, -6.4));
-  const backWall     = regMesh(createLowPolyMesh(new THREE.BoxGeometry(14.8, wH, wT), cCourtWall, 0, 1.1 + wH * 0.5,  6.4));
-  const leftWall     = regMesh(createLowPolyMesh(new THREE.BoxGeometry(wT, wH, 12.8), cCourtWall, -7.2, 1.1 + wH * 0.5, 0));
-  const rightWall    = regMesh(createLowPolyMesh(new THREE.BoxGeometry(wT, wH, 12.8), cCourtWall,  7.2, 1.1 + wH * 0.5, 0));
-
-  const outerGoldDoor = createLowPolyMesh(new THREE.BoxGeometry(1.7, 1.75, 0.82), cGoldMain, 0, 1.1 + 0.88, -6.4);
-  templeGrp.add(frontWallL, frontWallR, frontWallTop, backWall, leftWall, rightWall, outerGoldDoor);
-
-  // 좌·우 성벽 측면 작은 황금문과 미니 계단
-  [-1, 1].forEach(side => {
-    for (let dIdx = -1; dIdx <= 1; dIdx += 2) {
-      const dz = dIdx * 2.4;
-      const sideDoor = createLowPolyMesh(new THREE.BoxGeometry(0.84, 1.35, 0.85), cGoldMain, side * 7.2, 1.1 + 0.68, dz);
-      const sideStep = createLowPolyMesh(new THREE.BoxGeometry(0.95, 0.55, 1.25), cCourtTrim, side * 7.9, 1.1 + 0.28, dz);
-      templeGrp.add(sideDoor, sideStep);
-    }
+  [-4.1, 4.1].forEach((sx, idx) => {
+    makeOrgBox(templeGrp, 0.75, 1.35, 2.75, cCourtWall, sx, 0.68, -8.4, 715 + idx, 0.04, 0.92, 1);
+    const brazier = createLowPolyMesh(new THREE.CylinderGeometry(0.36, 0.22, 0.42, 7), cBronze, sx, 1.56, -9.2, false);
+    const flame   = createLowPolyMesh(new THREE.DodecahedronGeometry(0.22, 0), '#fb923c', sx, 1.88, -9.2, false);
+    flame.userData._emissiveGlow = true;
+    templeGrp.add(brazier, flame);
   });
 
-  // 3) 네 모서리 사각 망루 (4 Corner Towers)
-  [[-7.2, -6.4], [7.2, -6.4], [-7.2, 6.4], [7.2, 6.4]].forEach(([tx, tz]) => {
-    const tBody  = regMesh(createLowPolyMesh(new THREE.BoxGeometry(2.1, 3.8, 2.1), cCourtWall, tx, 1.1 + 1.9, tz));
-    const tCrown = createLowPolyMesh(new THREE.BoxGeometry(2.35, 0.42, 2.35), cCourtTrim, tx, 1.1 + 3.95, tz);
-    const tCap   = createLowPolyMesh(new THREE.BoxGeometry(1.85, 0.25, 1.85), cSandBase, tx, 1.1 + 4.22, tz, false);
-    templeGrp.add(tBody, tCrown, tCap);
-  });
+  // 2) 비정형 경사(Battered) 안뜰 성벽 + 아치형 외곽 성문 + 성가퀴 돌장식
+  const wH = 2.75, wT = 0.85;
+  makeOrgBox(templeGrp, 5.5, wH, wT, cCourtWall, -4.7, 1.2 + wH * 0.5, -6.5, 720, 0.032, 0.94, 2);
+  makeOrgBox(templeGrp, 5.5, wH, wT, cCourtWall,  4.7, 1.2 + wH * 0.5, -6.5, 721, 0.032, 0.94, 2);
+  makeOrgBox(templeGrp, 4.4, 0.92, wT + 0.14, cSandDark, 0, 1.2 + wH - 0.35, -6.5, 722, 0.035, 0.95, 2);
+  makeOrgBox(templeGrp, 15.2, wH, wT, cCourtWall, 0, 1.2 + wH * 0.5, 6.5, 723, 0.030, 0.94, 2);
+  makeOrgBox(templeGrp, wT, wH, 13.0, cCourtWall, -7.3, 1.2 + wH * 0.5, 0, 724, 0.030, 0.94, 2);
+  makeOrgBox(templeGrp, wT, wH, 13.0, cCourtWall,  7.3, 1.2 + wH * 0.5, 0, 725, 0.030, 0.94, 2);
 
-  // 4) 본관 앞 내부 성문 현관(Nicanor Porch) & 반원형 계단
-  const porchBody     = regMesh(createLowPolyMesh(new THREE.BoxGeometry(5.4, 3.4, 1.6), cCourtWall, 0, 1.6 + 1.7, -2.5));
-  const porchCrown    = createLowPolyMesh(new THREE.BoxGeometry(5.8, 0.38, 1.85), cCourtTrim, 0, 1.6 + 3.55, -2.5);
-  const porchGoldDoor = createLowPolyMesh(new THREE.BoxGeometry(1.6, 2.1, 1.7), cGoldMain, 0, 1.6 + 1.05, -2.5);
-  const semiStep1     = createLowPolyMesh(new THREE.CylinderGeometry(1.9, 2.2, 0.35, 8), cPilaster, 0, 1.6 + 0.18, -3.5);
-  const semiStep2     = createLowPolyMesh(new THREE.CylinderGeometry(1.3, 1.6, 0.35, 8), cWhiteWall, 0, 1.6 + 0.52, -3.3);
-  templeGrp.add(porchBody, porchCrown, porchGoldDoor, semiStep1, semiStep2);
-
-  // 5) 중앙 순백색 성소 본관 (Tall White Sanctuary)
-  const sBaseY = 1.6;
-  const sH = 8.4;
-  const ulamFront  = regMesh(createLowPolyMesh(new THREE.BoxGeometry(10.8, sH, 2.8), cWhiteWall, 0, sBaseY + sH * 0.5, 0.1));
-  const hekhalBack = regMesh(createLowPolyMesh(new THREE.BoxGeometry(9.4, sH, 5.8), cWhiteWall, 0, sBaseY + sH * 0.5, 2.8));
-  templeGrp.add(ulamFront, hekhalBack);
-
-  // 본관 정면(-z) 대형 황금 성소 문과 단차 문틀
-  const portalFrame = createLowPolyMesh(new THREE.BoxGeometry(4.2, 6.0, 0.45), cPilaster, 0, sBaseY + 3.0, -1.25);
-  const portalVoid  = createLowPolyMesh(new THREE.BoxGeometry(3.0, 5.2, 0.50), cDarkVoid, 0, sBaseY + 2.6, -1.28, false);
-  const portalGold  = createLowPolyMesh(new THREE.BoxGeometry(2.5, 4.8, 0.56), cGoldMain, 0, sBaseY + 2.4, -1.30);
-  templeGrp.add(portalFrame, portalVoid, portalGold);
-
-  // 본관 정면·측면·후면 수직 부조 기둥(Pilasters) & 황금 기둥머리
-  const pilH = sH - 1.3;
-  [-4.4, -2.8, 2.8, 4.4].forEach(px => {
-    const pil = createLowPolyMesh(new THREE.BoxGeometry(0.55, pilH, 0.38), cPilaster, px, sBaseY + pilH * 0.5, -1.28);
-    const cap = createLowPolyMesh(new THREE.BoxGeometry(0.72, 0.42, 0.48), cGoldMain, px, sBaseY + pilH + 0.15, -1.28);
-    templeGrp.add(pil, cap);
+  if (typeof createOrganicArchedEntranceGroup === 'function') {
+    const outerArch = createOrganicArchedEntranceGroup(2.15, 2.35, cSandDark, cDarkVoid, cGoldMain, 728);
+    outerArch.position.set(0, 1.22, -6.55);
+    outerArch.rotation.y = Math.PI;
+    templeGrp.add(outerArch);
+  }
+  [-5.8, -4.4, -3.0, 3.0, 4.4, 5.8].forEach((mx, i) => {
+    makeOrgBox(templeGrp, 0.58, 0.48, 0.58, cSandDark, mx, 1.2 + wH + 0.22, -6.5, 730 + i, 0.08, 0.88, 1);
   });
   [-1, 1].forEach(side => {
-    [0.6, 2.1, 3.6, 5.1].forEach(pz => {
-      const px = side * 4.72;
-      const pil = createLowPolyMesh(new THREE.BoxGeometry(0.38, pilH, 0.52), cPilaster, px, sBaseY + pilH * 0.5, pz);
-      const cap = createLowPolyMesh(new THREE.BoxGeometry(0.48, 0.42, 0.68), cGoldMain, px, sBaseY + pilH + 0.15, pz);
-      templeGrp.add(pil, cap);
+    [-2.4, 2.4].forEach((dz, i) => {
+      makeOrgBox(templeGrp, 0.92, 1.48, 0.95, cGoldMain, side * 7.3, 1.2 + 0.74, dz, 740 + i, 0.03, 0.95, 1);
+      makeOrgBox(templeGrp, 1.10, 0.56, 1.35, cSandDark, side * 8.0, 1.2 + 0.28, dz, 745 + i, 0.05, 0.94, 1);
     });
   });
-  [-3.4, -1.1, 1.1, 3.4].forEach(px => {
-    const pil = createLowPolyMesh(new THREE.BoxGeometry(0.55, pilH, 0.38), cPilaster, px, sBaseY + pilH * 0.5, 5.72);
-    const cap = createLowPolyMesh(new THREE.BoxGeometry(0.72, 0.42, 0.48), cGoldMain, px, sBaseY + pilH + 0.15, 5.72);
-    templeGrp.add(pil, cap);
+
+  // 3) 4모서리 비정형 테이퍼드 석조 망루 + 성가퀴 뿔 + 총안 창
+  [[-7.3, -6.5], [7.3, -6.5], [-7.3, 6.5], [7.3, 6.5]].forEach(([tx, tz], idx) => {
+    makeOrgBox(templeGrp, 2.35, 4.1, 2.35, cCourtWall, tx, 1.2 + 2.05, tz, 750 + idx, 0.038, 0.88, 2);
+    makeOrgBox(templeGrp, 2.55, 0.44, 2.55, cSandDark, tx, 1.2 + 4.18, tz, 755 + idx, 0.04, 0.96, 1);
+    [[-0.9, -0.9], [0.9, -0.9], [-0.9, 0.9], [0.9, 0.9]].forEach(([mx, mz], ci) => {
+      makeOrgBox(templeGrp, 0.46, 0.52, 0.46, cCourtWall, tx + mx, 1.2 + 4.62, tz + mz, 760 + idx * 4 + ci, 0.08, 0.85, 1);
+    });
+    const sl = createLowPolyMesh(new THREE.BoxGeometry(0.42, 0.92, 2.48), cDarkVoid, tx, 1.2 + 2.75, tz, false);
+    templeGrp.add(sl);
   });
 
-  // 6) 본관 상단 이중 황금 프리즈(Golden Frieze) & 지붕 황금 톱니 왕관(Golden Spikes)
-  const topY = sBaseY + sH;
-  const goldBand1  = regMesh(createLowPolyMesh(new THREE.BoxGeometry(11.2, 0.55, 3.2), cGoldMain, 0, topY - 0.55, 0.1));
-  const goldBand2  = regMesh(createLowPolyMesh(new THREE.BoxGeometry(9.8, 0.55, 6.1), cGoldMain, 0, topY - 0.55, 2.8));
-  const roofCrownF = regMesh(createLowPolyMesh(new THREE.BoxGeometry(11.4, 0.45, 3.4), cPilaster, 0, topY + 0.05, 0.1));
-  const roofCrownB = regMesh(createLowPolyMesh(new THREE.BoxGeometry(10.0, 0.45, 6.3), cPilaster, 0, topY + 0.05, 2.8));
-  const goldRimF   = createLowPolyMesh(new THREE.BoxGeometry(11.5, 0.32, 3.5), cGoldBright, 0, topY + 0.42, 0.1);
-  const goldRimB   = createLowPolyMesh(new THREE.BoxGeometry(10.1, 0.32, 6.4), cGoldBright, 0, topY + 0.42, 2.8);
-  templeGrp.add(goldBand1, goldBand2, roofCrownF, roofCrownB, goldRimF, goldRimB);
+  // 4) 내부 성문 현관(Nicanor Porch) — 황금 쐐기돌 아치 문 & 반원형 다면체 계단
+  makeOrgBox(templeGrp, 5.6, 3.6, 1.75, cCourtWall, 0, 1.65 + 1.80, -2.55, 780, 0.032, 0.94, 2);
+  makeOrgBox(templeGrp, 6.1, 0.44, 2.05, cSandDark,  0, 1.65 + 3.72, -2.55, 781, 0.04, 0.96, 1);
+  if (typeof createOrganicArchedEntranceGroup === 'function') {
+    const innerArch = createOrganicArchedEntranceGroup(2.1, 2.55, cGoldMain, cDarkVoid, cBronze, 782);
+    innerArch.position.set(0, 1.65, -3.40);
+    innerArch.rotation.y = Math.PI;
+    templeGrp.add(innerArch);
+  }
+  const semi1 = createLowPolyMesh(new THREE.CylinderGeometry(2.05, 2.38, 0.36, 9), cWhiteShade, 0, 1.65 + 0.18, -3.75, true);
+  const semi2 = createLowPolyMesh(new THREE.CylinderGeometry(1.42, 1.72, 0.36, 9), cWhiteWarm,  0, 1.65 + 0.52, -3.55, true);
+  templeGrp.add(semi1, semi2);
 
-  const spikeGeo = new THREE.ConeGeometry(0.26, 0.72, 4);
+  // 5) 중앙 순백색 성소 본관 (비정형 테이퍼드 석조 매스 + 황금 성소문 + 붉은 성소 휘장 + 야긴·보아스 청동 기둥)
+  const sBaseY = 1.68, sH = 8.6;
+  makeOrgBox(templeGrp, 11.0, sH, 3.0, cWhiteWarm, 0, sBaseY + sH * 0.5, 0.15, 800, 0.022, 0.96, 2);
+  makeOrgBox(templeGrp,  9.6, sH, 6.0, cWhiteWarm, 0, sBaseY + sH * 0.5, 2.85, 801, 0.022, 0.96, 2);
+
+  if (typeof addScatteredIrregularBricksToWall === 'function') {
+    addScatteredIrregularBricksToWall(templeGrp, 10.6, sH * 0.85, 2.8, sBaseY + 0.4, '#ebe4d8', '#dfd6c5', 805, 0, 0.15);
+  }
+
+  // 정면 대형 성소 포털 + 황금 문 + 붉은 성소 휘장
+  makeOrgBox(templeGrp, 4.5, 6.2, 0.50, cWhiteShade, 0, sBaseY + 3.1, -1.28, 810, 0.03, 0.97, 2);
+  makeOrgBox(templeGrp, 4.8, 0.42, 0.62, cGoldMain,  0, sBaseY + 6.32, -1.32, 814, 0.04, 0.96, 1);
+  const voidBox    = createLowPolyMesh(new THREE.BoxGeometry(3.2, 5.3, 0.18), cDarkVoid, 0, sBaseY + 2.65, -1.42, false);
+  const goldDoor   = createLowPolyMesh(createOrganicBoxGeo(1.75, 4.95, 0.18, 813, 0.03, 0.98, 2), cGoldMain, 0, sBaseY + 2.52, -1.52, true);
+  const curtainL   = createLowPolyMesh(createOrganicBoxGeo(0.76, 5.15, 0.24, 811, 0.08, 0.92, 2), cCrimson, -1.16, sBaseY + 2.62, -1.60, true);
+  const curtainR   = createLowPolyMesh(createOrganicBoxGeo(0.76, 5.15, 0.24, 812, 0.08, 0.92, 2), cCrimson,  1.16, sBaseY + 2.62, -1.60, true);
+  const curtainTop = createLowPolyMesh(createOrganicBoxGeo(3.25, 0.56, 0.26, 815, 0.06, 0.96, 2), cCrimson, 0, sBaseY + 5.12, -1.62, true);
+  templeGrp.add(voidBox, goldDoor, curtainL, curtainR, curtainTop);
+
+  // 야긴과 보아스 (성소 문 양옆 독립 8각 청동 원기둥 & 황금 연꽃 기둥머리)
+  [-2.45, 2.45].forEach(px => {
+    const colBase  = createLowPolyMesh(new THREE.CylinderGeometry(0.46, 0.54, 0.55, 8), cSandDark, px, sBaseY + 0.28, -1.68, true);
+    const colShaft = createLowPolyMesh(new THREE.CylinderGeometry(0.32, 0.38, 5.4, 8), cBronze, px, sBaseY + 3.2, -1.68, true);
+    const colCap   = createLowPolyMesh(new THREE.CylinderGeometry(0.56, 0.34, 0.72, 8), cGoldBright, px, sBaseY + 6.15, -1.68, true);
+    templeGrp.add(colBase, colShaft, colCap);
+  });
+
+  // 정면·측면·후면 6각 다면체 조각 기둥(Pilasters) & 황금 기둥머리
+  const pilH = sH - 1.4;
+  [-4.5, -3.2, 3.2, 4.5].forEach((px, i) => {
+    const pil = createLowPolyMesh(new THREE.CylinderGeometry(0.28, 0.34, pilH, 6), cWhiteShade, px, sBaseY + pilH * 0.5, -1.34, true);
+    makeOrgBox(templeGrp, 0.78, 0.44, 0.52, cGoldMain, px, sBaseY + pilH + 0.16, -1.34, 820 + i, 0.06, 1.08, 1);
+    templeGrp.add(pil);
+  });
+  [-1, 1].forEach(side => {
+    [0.6, 2.1, 3.6, 5.1].forEach((pz, i) => {
+      const px = side * 4.80;
+      const pil = createLowPolyMesh(new THREE.CylinderGeometry(0.26, 0.32, pilH, 6), cWhiteShade, px, sBaseY + pilH * 0.5, pz, true);
+      makeOrgBox(templeGrp, 0.52, 0.44, 0.72, cGoldMain, px, sBaseY + pilH + 0.16, pz, 830 + i, 0.06, 1.08, 1);
+      templeGrp.add(pil);
+    });
+  });
+  [-3.4, -1.1, 1.1, 3.4].forEach((px, i) => {
+    const pil = createLowPolyMesh(new THREE.CylinderGeometry(0.26, 0.32, pilH, 6), cWhiteShade, px, sBaseY + pilH * 0.5, 5.82, true);
+    makeOrgBox(templeGrp, 0.72, 0.44, 0.50, cGoldMain, px, sBaseY + pilH + 0.16, 5.82, 840 + i, 0.06, 1.08, 1);
+    templeGrp.add(pil);
+  });
+
+  // 6) 상단 비정형 이중 황금 프리즈 & 다면체 황금 왕관 뿔
+  const topY = sBaseY + sH;
+  makeOrgBox(templeGrp, 11.4, 0.58, 3.35, cGoldMain,   0, topY - 0.55, 0.15, 850, 0.03, 1.02, 2);
+  makeOrgBox(templeGrp, 10.0, 0.58, 6.25, cGoldMain,   0, topY - 0.55, 2.85, 851, 0.03, 1.02, 2);
+  makeOrgBox(templeGrp, 11.6, 0.48, 3.55, cWhiteShade, 0, topY + 0.06, 0.15, 852, 0.03, 1.01, 2);
+  makeOrgBox(templeGrp, 10.2, 0.48, 6.45, cWhiteShade, 0, topY + 0.06, 2.85, 853, 0.03, 1.01, 2);
+  makeOrgBox(templeGrp, 11.7, 0.34, 3.65, cGoldBright, 0, topY + 0.45, 0.15, 854, 0.03, 1.00, 1);
+  makeOrgBox(templeGrp, 10.3, 0.34, 6.55, cGoldBright, 0, topY + 0.45, 2.85, 855, 0.03, 1.00, 1);
+
+  const spikeGeo = new THREE.ConeGeometry(0.28, 0.80, 4);
   const addSpike = (sx, sz) => {
-    const sp = createLowPolyMesh(spikeGeo, cGoldBright, sx, topY + 0.92, sz, false);
+    const sp = createLowPolyMesh(spikeGeo, cGoldBright, sx, topY + 0.98, sz, false);
     sp.rotation.y = Math.PI / 4;
     templeGrp.add(sp);
   };
-  for (let i = -5; i <= 5; i++) addSpike(i * 1.02, -1.45);
-  for (let i = -4; i <= 4; i++) addSpike(i * 1.08,  5.75);
+  for (let i = -5; i <= 5; i++) addSpike(i * 1.02, -1.48);
+  for (let i = -4; i <= 4; i++) addSpike(i * 1.08,  5.82);
   for (let i = 0; i <= 5; i++) {
-    const sz = -0.8 + i * 1.25;
-    const sx = (i <= 1) ? 5.45 : 4.82;
+    const sz = -0.8 + i * 1.26;
+    const sx = (i <= 1) ? 5.52 : 4.90;
     addSpike(-sx, sz);
     addSpike( sx, sz);
+  }
+
+  // 성전 본관 전체를 2개 드로우콜(불투명 석조/황금 1 + 화로 발광 1)로 정점 색상 병합!
+  if (typeof mergeStaticLowPolyGroupToVertexColor === 'function') {
+    mergeStaticLowPolyGroupToVertexColor(templeGrp, { registerWall: true, castShadow: true });
   }
 
   templeGrp.position.set(cx, by, cz);
   worldGroup.add(templeGrp);
 
-  colliders.push({
-    minX: cx - 8.8,
-    maxX: cx + 8.8,
-    minZ: cz - 7.8,
-    maxZ: cz + 7.8
-  });
+  // 성전 기단 가장자리(좌·우 측면 계단 포함) 및 전면 3단 돌계단 관통 완전 차단
+  colliders.push(
+    {
+      minX: cx - 9.3,
+      maxX: cx + 9.3,
+      minZ: cz - 8.2,
+      maxZ: cz + 8.3
+    },
+    {
+      minX: cx - 4.2,
+      maxX: cx + 4.2,
+      minZ: cz - 10.0,
+      maxZ: cz - 7.9
+    }
+  );
 
   return templeGrp;
 }
@@ -677,16 +888,41 @@ function buildMiracleRegionalLandmarks() {
   }
 
   // [B. 중부 사마리아 · 여리고 · 광야 권역]
-  // 1) 수가성 야곱의 우물 (x = -32, z = -12)
+  // 1) 수가성 야곱의 우물 (x = -32, z = -12) — 비정형 석조 테두리·나무 지붕·물레·두레박·토기 항아리 디테일
   const wellY = getMiracleOpenWorldGroundHeight(-32, -12);
   const wellGrp = new THREE.Group();
-  wellGrp.add(
-    createLowPolyMesh(new THREE.CylinderGeometry(2.1, 2.3, 1.1, 9), '#94a3b8', 0, 0.55, 0),
-    createLowPolyMesh(new THREE.CylinderGeometry(1.5, 1.5, 0.15, 9), '#0284c7', 0, 1.05, 0, false),
-    createLowPolyMesh(new THREE.CylinderGeometry(0.14, 0.14, 2.5, 6), '#5c2d0c', -1.6, 1.8, 0),
-    createLowPolyMesh(new THREE.CylinderGeometry(0.14, 0.14, 2.5, 6), '#5c2d0c',  1.6, 1.8, 0),
-    createLowPolyMesh(new THREE.BoxGeometry(3.6, 0.22, 0.26), '#5c2d0c', 0, 3.05, 0)
-  );
+  const wellBody = createLowPolyMesh(new THREE.CylinderGeometry(2.05, 2.30, 0.94, 9), '#94a3b8', 0, 0.47, 0);
+  const wellRim = createLowPolyMesh(new THREE.TorusGeometry(1.78, 0.24, 5, 9), '#78716c', 0, 0.94, 0, false);
+  wellRim.rotation.x = Math.PI / 2;
+  // 우물 상단 비정형 석조 갓돌(8개 엇갈린 다면체 돌블록)
+  for (let s = 0; s < 8; s++) {
+    const a = (s / 8) * Math.PI * 2;
+    const stone = createLowPolyMesh(
+      new THREE.DodecahedronGeometry(0.46 + (s % 2) * 0.05, 0),
+      s % 2 === 0 ? '#cbd5e1' : '#a8a29e',
+      Math.cos(a) * 1.92, 1.08, Math.sin(a) * 1.92, false
+    );
+    stone.scale.set(1.25, 0.55, 1.10);
+    stone.rotation.y = a;
+    wellGrp.add(stone);
+  }
+  const wellWater = createLowPolyMesh(new THREE.CylinderGeometry(1.58, 1.58, 0.08, 9), '#0284c7', 0, 0.98, 0, false);
+  const postL = createLowPolyMesh(new THREE.CylinderGeometry(0.12, 0.15, 2.65, 6), '#5c2d0c', -1.65, 1.85, 0);
+  const postR = createLowPolyMesh(new THREE.CylinderGeometry(0.12, 0.15, 2.65, 6), '#5c2d0c',  1.65, 1.85, 0);
+  const roller = createLowPolyMesh(new THREE.CylinderGeometry(0.11, 0.11, 3.45, 6), '#854d0e', 0, 2.62, 0, false);
+  roller.rotation.z = Math.PI / 2;
+  const rope = createLowPolyMesh(new THREE.CylinderGeometry(0.03, 0.03, 1.15, 4), '#d6b685', 0, 2.05, 0, false);
+  const bucket = createLowPolyMesh(new THREE.CylinderGeometry(0.24, 0.19, 0.34, 7), '#92400e', 0, 1.48, 0, false);
+  // 경사진 소프트 로우폴리 나무 지붕
+  const roofL = createLowPolyMesh(new THREE.BoxGeometry(3.95, 0.14, 1.45), '#9a4f25', 0, 3.32, -0.58);
+  roofL.rotation.x = -0.46;
+  const roofR = createLowPolyMesh(new THREE.BoxGeometry(3.95, 0.14, 1.45), '#8c441e', 0, 3.32,  0.58);
+  roofR.rotation.x =  0.46;
+  const ridge = createLowPolyMesh(new THREE.CylinderGeometry(0.10, 0.10, 4.05, 5), '#5c2d0c', 0, 3.64, 0, false);
+  ridge.rotation.z = Math.PI / 2;
+  const wellJar = createOrganicAmphoraProp(0.95, '#b86232', '#8f471e');
+  wellJar.position.set(1.95, 0, 1.45);
+  wellGrp.add(wellBody, wellRim, wellWater, postL, postR, roller, rope, bucket, roofL, roofR, ridge, wellJar);
   wellGrp.position.set(-32, wellY, -12);
   worldGroup.add(wellGrp);
   colliders.push({ minX: -34.4, maxX: -29.6, minZ: -14.4, maxZ: -9.6 });
@@ -704,34 +940,73 @@ function buildMiracleRegionalLandmarks() {
   // 3) 마가의 다락방 복층 석조 건물 (x = -24, z = 58)
   addLowPolyVillageHouse(-24, 58, 8.8, 4.3, 7.0, '#f2e3c9', '#c89654', true, 1, 0);
 
-  // 4) 넓어진 골고다 언덕(x = -62, z = 78) 위의 세 십자가
+  // 4) 넓어진 골고다 언덕(x = -62, z = 78) 위의 세 십자가 — 십자가 스테이지(스테이지 3) 클리어 후에만 등장!
+  const isStage3Cleared = Boolean(miracleMainStagesCleared[3] || miracleMainStagesCleared[4] || miracleIsPostResurrection);
   miracleGolgothaCrossesGroup = new THREE.Group();
   [[-62, 78, 1.38], [-68.5, 79.5, 1.05], [-55.5, 79.5, 1.05]].forEach(([cx, cz, sc]) => {
     const cy = getMiracleOpenWorldGroundHeight(cx, cz);
-    const mound = createLowPolyMesh(new THREE.DodecahedronGeometry(0.95 * sc, 0), '#78716c', cx, cy + 0.3 * sc, cz);
-    mound.scale.set(1.2, 0.55, 1.2);
-    const vBeam = createLowPolyMesh(new THREE.CylinderGeometry(0.20 * sc, 0.24 * sc, 5.4 * sc, 6), '#5c2d0c', cx, cy + 2.7 * sc, cz);
-    const hBeam = createLowPolyMesh(new THREE.CylinderGeometry(0.16 * sc, 0.16 * sc, 3.2 * sc, 6), '#5c2d0c', cx, cy + 3.9 * sc, cz);
+    // 바위 받침과 기둥 하단을 지면 아래로 살짝 깊게 심어 경사면에서도 절대 뜨지 않게 밀착!
+    const mound = createLowPolyMesh(new THREE.DodecahedronGeometry(1.05 * sc, 0), '#78716c', cx, cy + 0.14 * sc, cz);
+    mound.scale.set(1.30, 0.58, 1.30);
+    const vBeam = createLowPolyMesh(new THREE.CylinderGeometry(0.20 * sc, 0.24 * sc, 5.7 * sc, 6), '#5c2d0c', cx, cy + 2.55 * sc, cz);
+    const hBeam = createLowPolyMesh(new THREE.CylinderGeometry(0.16 * sc, 0.16 * sc, 3.2 * sc, 6), '#5c2d0c', cx, cy + 3.85 * sc, cz);
     hBeam.rotation.z = Math.PI / 2;
     miracleGolgothaCrossesGroup.add(mound, vBeam, hBeam);
   });
-  miracleGolgothaCrossesGroup.visible = Boolean(
-    miracleMainStagesCleared[2] || miracleMainStagesCleared[3] || miracleIsPostResurrection
-  );
+  miracleGolgothaCrossesGroup.visible = isStage3Cleared;
   worldGroup.add(miracleGolgothaCrossesGroup);
 
   // 5) 동산의 빈 무덤 다면체 바위 굴 외관 (x = -22, z = 92)
+  //    - 스테이지 3 클리어 전까지는 풀·덤불 위장막으로 가려지고, 클리어 시 돌 무덤이 공개됨!
   const tombY = getMiracleOpenWorldGroundHeight(-22, 92);
+
+  miracleOpenWorldTombGroup = new THREE.Group();
   const tombMound = createLowPolyMesh(new THREE.DodecahedronGeometry(5.2, 0), '#94a3b8', -22, tombY + 2.6, 92);
   tombMound.scale.set(1.38, 0.88, 1.05);
   const tombDarkEntrance = createLowPolyMesh(new THREE.BoxGeometry(2.2, 2.8, 1.2), '#1e293b', -21.5, tombY + 1.4, 87.4, false);
   const rolledStone = createLowPolyMesh(new THREE.CylinderGeometry(1.65, 1.65, 0.72, 10), '#cbd5e1', -18.2, tombY + 1.55, 88.2);
   rolledStone.rotation.x = Math.PI / 2;
-  worldGroup.add(tombMound, tombDarkEntrance, rolledStone);
+  miracleOpenWorldTombGroup.add(tombMound, tombDarkEntrance, rolledStone);
+  miracleOpenWorldTombGroup.visible = isStage3Cleared;
+  worldGroup.add(miracleOpenWorldTombGroup);
   wallMeshes.push(tombMound);
   colliders.push({ minX: -27.5, maxX: -16.5, minZ: 88.5, maxZ: 96.5 });
 
-  // 6) 외곽 숲 및 하늘 구름 22개 배치
+  // 무덤 위장용 우거진 풀·관목·야생 수풀 (스테이지 3 클리어 전까지 무덤 자리에 배치)
+  miracleTombCoverGroup = new THREE.Group();
+  const coverBushes = [
+    { x: -22.0, z: 91.5, r: 4.1, sx: 1.50, sy: 0.92, sz: 1.25, c: '#4d7c0f' },
+    { x: -25.4, z: 90.2, r: 3.1, sx: 1.15, sy: 0.95, sz: 1.15, c: '#5c8d36' },
+    { x: -18.6, z: 90.0, r: 3.2, sx: 1.20, sy: 0.95, sz: 1.15, c: '#3f6212' },
+    { x: -21.8, z: 87.8, r: 2.6, sx: 1.35, sy: 0.88, sz: 1.05, c: '#65a30d' },
+    { x: -18.5, z: 87.9, r: 2.1, sx: 1.15, sy: 0.85, sz: 1.05, c: '#527324' },
+    { x: -24.5, z: 88.2, r: 2.2, sx: 1.10, sy: 0.85, sz: 1.00, c: '#4d7c0f' },
+    { x: -22.0, z: 94.8, r: 3.3, sx: 1.30, sy: 0.92, sz: 1.10, c: '#3f6212' }
+  ];
+  coverBushes.forEach((b, idx) => {
+    const gy = getMiracleOpenWorldGroundHeight(b.x, b.z);
+    const bush = createLowPolyMesh(new THREE.IcosahedronGeometry(b.r, 1), b.c, b.x, gy + b.r * b.sy * 0.52, b.z, true);
+    bush.scale.set(b.sx, b.sy, b.sz);
+    bush.rotation.set(idx * 0.3, idx * 0.9, 0);
+    miracleTombCoverGroup.add(bush);
+  });
+  // 앞쪽을 자연스럽게 가리는 소프트 로우폴리 큰 풀포기 다발
+  for (let g = 0; g < 16; g++) {
+    const gx = -26.8 + (g % 8) * 1.45 + Math.sin(g * 2.3) * 0.35;
+    const gz = 86.6 + Math.floor(g / 8) * 1.7 + Math.cos(g * 1.9) * 0.35;
+    const gy = getMiracleOpenWorldGroundHeight(gx, gz);
+    const grassBlade = createLowPolyMesh(
+      new THREE.ConeGeometry(0.45 + (g % 3) * 0.12, 1.35 + (g % 2) * 0.45, 4),
+      g % 2 === 0 ? '#65a30d' : '#4d7c0f',
+      gx, gy + 0.65, gz, false
+    );
+    grassBlade.rotation.set((g % 3 - 1) * 0.18, g * 0.7, ((g + 1) % 3 - 1) * 0.20);
+    miracleTombCoverGroup.add(grassBlade);
+  }
+  miracleTombCoverGroup.visible = !isStage3Cleared;
+  worldGroup.add(miracleTombCoverGroup);
+
+  // 6) 외곽 숲, 하늘 구름 22개, 그리고 하늘을 자유롭게 날아다니는 소프트 로우폴리 새 16마리 배치
   for (let i = 0; i < 48; i++) {
     const ang = (i / 48) * Math.PI * 2;
     const rad = 100 - (i % 3) * 4.0;
@@ -750,6 +1025,45 @@ function buildMiracleRegionalLandmarks() {
     cl.position.set(cx, 28 + (c % 4) * 2.5, cz);
     worldGroup.add(cl);
     miracleAmbientProps.push({ kind: 'cloud', mesh: cl, baseX: cx, speed: 0.35 + (c % 3) * 0.12 });
+  }
+
+  window.miracleSkyBirds = [];
+  if (typeof window.createFlyingBirdMesh === 'function') {
+    const birdPalettes = [
+      ['#f8fafc', '#cbd5e1'], // 흰 갈매기/비둘기
+      ['#f1f5f9', '#94a3b8'], // 회백색 바닷새
+      ['#e2e8f0', '#64748b'], // 연회색 산새
+      ['#f8fafc', '#475569']  // 제비/갈매기
+    ];
+    for (let b = 0; b < 16; b++) {
+      const pal = birdPalettes[b % birdPalettes.length];
+      const sc = 0.85 + (b % 4) * 0.18;
+      const mesh = window.createFlyingBirdMesh(pal[0], pal[1], sc);
+      // 갈릴리 바다, 마을 상공, 예루살렘 성전, 감람산 등 전역에 고르게 비행 궤도 분배
+      const cx = -65 + ((b * 43) % 140);
+      const cz = -78 + ((b * 59) % 156);
+      const radX = 18 + (b % 5) * 7.5;
+      const radZ = 15 + ((b + 2) % 4) * 8.0;
+      const baseY = 15.5 + (b % 5) * 3.2;
+      const dir = (b % 2 === 0) ? 1 : -1;
+      const speed = (0.20 + (b % 4) * 0.055) * dir;
+      const angle = (b / 16) * Math.PI * 2;
+      mesh.position.set(cx + Math.cos(angle) * radX, baseY, cz + Math.sin(angle) * radZ);
+      worldGroup.add(mesh);
+      window.miracleSkyBirds.push({
+        mesh,
+        cx,
+        cz,
+        radX,
+        radZ,
+        baseY,
+        angle,
+        speed,
+        bobAmp: 0.8 + (b % 3) * 0.45,
+        flapSpeed: 8.5 + (b % 4) * 1.4,
+        phase: b * 1.17
+      });
+    }
   }
 }
 
@@ -850,8 +1164,16 @@ function syncMiracleMainStageSequentialBeams() {
     }
   });
 
+  const isStage3Cleared = Boolean(miracleMainStagesCleared[3] || miracleMainStagesCleared[4] || miracleIsPostResurrection);
   if (miracleGolgothaCrossesGroup) {
-    miracleGolgothaCrossesGroup.visible = (activeStageNum >= 3 || miracleIsPostResurrection);
+    // 십자가 언덕의 세 십자가는 십자가 스테이지(스테이지 3) 해결 후에만 등장!
+    miracleGolgothaCrossesGroup.visible = isStage3Cleared;
+  }
+  if (miracleOpenWorldTombGroup) {
+    miracleOpenWorldTombGroup.visible = isStage3Cleared;
+  }
+  if (miracleTombCoverGroup) {
+    miracleTombCoverGroup.visible = !isStage3Cleared;
   }
 }
 
@@ -1231,14 +1553,14 @@ function getMiracleOptionalEventsCatalog() {
       id: 'ev_widow',
       category: 'story',
       title: '🪙 ⑩ 두 렙돈을 드린 과부: 성전 헌금함 관찰',
-      x: 9.5, z: 61.5,
+      x: 10.4, z: 61.0,
       color: 0xeab308,
       npcPreset: 'woman',
       speaker: '성전 앞 제자',
       introText: '"예수님께서 성전 헌금함 맞은편에 앉아 사람들이 어떻게 헌금하는지 보고 계세요. 성전 동쪽 측면 황금문 옆에서 조용히 두 렙돈을 드린 과부를 찾아가 보세요!"',
       greetingText: '"하나님은 겉모습이나 금액의 많고 적음이 아니라, 마음을 다해 드리는 중심을 가장 귀하게 보신다는 것을 배웠어요!"',
       missionType: 'find_observe',
-      findTargetPos: { x: 11.5, y: 0, z: 69.5 },
+      findTargetPos: { x: 11.8, y: 0, z: 69.5 },
       findTargetLabel: '🪙 정성껏 두 렙돈을 넣은 가난한 과부',
       completeSpeaker: '예수님',
       completeText: '"내가 진실로 너희에게 이르노니 이 가난한 과부는 헌금함에 넣는 모든 사람보다 많이 넣었도다. 그들은 다 풍족한 중에서 넣었거니와 이 과부는 그 가난한 중에서 자기의 모든 소유 곧 생활비 전부를 넣었느니라." (막 12:41~44)',
@@ -1919,7 +2241,7 @@ function saveSafeOpenWorldReturnPosition(spotX, spotZ) {
     dz /= len;
   }
   const safeDist = 5.2;
-  const rx = THREE.MathUtils.clamp(spotX + dx * safeDist, -89.0, 103.0);
+  const rx = THREE.MathUtils.clamp(spotX + dx * safeDist, -124.0, 103.0);
   const rz = THREE.MathUtils.clamp(spotZ + dz * safeDist, -103.0, 103.0);
   const ry = getMiracleOpenWorldGroundHeight(rx, rz);
   miracleSavedOpenWorldPos.set(rx, ry, rz);
@@ -1929,6 +2251,12 @@ function saveSafeOpenWorldReturnPosition(spotX, spotZ) {
 function buildMiracleOpenWorld(restoreSavedPos = false) {
   clearWorld();
   ensureMiracleCustomUI();
+  const wf = document.getElementById('white-fade');
+  const bf = document.getElementById('black-fade');
+  const s1Ui = document.getElementById('miracle-s1-ui');
+  if (wf) wf.style.opacity = '0';
+  if (bf) bf.style.opacity = '0';
+  if (s1Ui) s1Ui.classList.add('hidden');
   loadMiracleNotebookProgress();
   miracleSubMode = 'openworld';
   miracleActiveMinigameId = null;
@@ -1946,7 +2274,7 @@ function buildMiracleOpenWorld(restoreSavedPos = false) {
   spawnMiracleRumorNpcs();
 
   currentMapRectBounds = {
-    minX: -91.0,
+    minX: -128.0,
     maxX:  105.5,
     minZ: -105.5,
     maxZ:  105.5
@@ -2002,7 +2330,14 @@ function buildMiracleOpenWorld(restoreSavedPos = false) {
 
 window.returnToMiracleOpenWorld = function () {
   isTimeAttackActive = false;
-  document.getElementById('hud-timer-box').classList.add('hidden');
+  const timerBox = document.getElementById('hud-timer-box');
+  if (timerBox) timerBox.classList.add('hidden');
+  const wf = document.getElementById('white-fade');
+  const bf = document.getElementById('black-fade');
+  const s1Ui = document.getElementById('miracle-s1-ui');
+  if (wf) wf.style.opacity = '0';
+  if (bf) bf.style.opacity = '0';
+  if (s1Ui) s1Ui.classList.add('hidden');
   buildMiracleOpenWorld(true);
   startStageBgm(currentStage);
   if (typeof playMiracleOpenWorldOgg === 'function') playMiracleOpenWorldOgg();
@@ -2040,21 +2375,32 @@ function updateMiracleOpenWorldFrame(dt, now) {
     });
   }
 
-  // [수정점] 하늘에 날아다니는 작은 새 궤적 시뮬레이션
-  if (typeof miracleSkyBirds !== 'undefined') {
-    miracleSkyBirds.forEach(b => {
-      b.angle += dt * b.speed * 0.05;
-      const nx = b.cx + Math.cos(b.angle) * b.rad;
-      const nz = b.cz + Math.sin(b.angle) * b.rad;
-      b.mesh.position.x = nx;
-      b.mesh.position.z = nz;
-      b.mesh.rotation.y = -b.angle;
-      const flap = Math.sin(now * 0.015) * 0.5;
-      if(b.mesh.userData.wingL) { 
-        b.mesh.userData.wingL.rotation.z = flap; 
-        b.mesh.userData.wingR.rotation.z = -flap; 
+  // 하늘을 날아다니는 소프트 로우 폴리곤 새 비행 & 날갯짓 시뮬레이션
+  if (Array.isArray(window.miracleSkyBirds) && window.miracleSkyBirds.length > 0) {
+    const tSec = now * 0.001;
+    for (let i = 0; i < window.miracleSkyBirds.length; i++) {
+      const b = window.miracleSkyBirds[i];
+      if (!b || !b.mesh) continue;
+      b.angle += dt * b.speed;
+      const nx = b.cx + Math.cos(b.angle) * b.radX;
+      const nz = b.cz + Math.sin(b.angle) * b.radZ;
+      const ny = b.baseY + Math.sin(b.angle * 2.0 + b.phase) * b.bobAmp;
+      // 진행 접선 벡터로 정확한 기수(머리) 방향 계산
+      const vx = -Math.sin(b.angle) * b.radX * b.speed;
+      const vz =  Math.cos(b.angle) * b.radZ * b.speed;
+      b.mesh.position.set(nx, ny, nz);
+      b.mesh.rotation.y = Math.atan2(vx, vz);
+      // 선회 방향에 맞춘 자연스러운 날개 기울기(Bank)
+      b.mesh.rotation.z = (b.speed > 0 ? -0.16 : 0.16) + Math.sin(tSec * 1.4 + b.phase) * 0.06;
+
+      // 몇 번 퍼덕인 뒤 잠시 활공하는 자연스러운 날갯짓 사이클
+      const glideMod = Math.sin(tSec * 1.1 + b.phase) > -0.35 ? 1.0 : 0.18;
+      const flap = Math.sin(tSec * b.flapSpeed + b.phase) * 0.58 * glideMod;
+      if (b.mesh.userData && b.mesh.userData.wingL && b.mesh.userData.wingR) {
+        b.mesh.userData.wingL.rotation.z = flap;
+        b.mesh.userData.wingR.rotation.z = -flap;
       }
-    });
+    }
   }
 
   // 대화창이 열려있으면 필드 이벤트 진행 중지
@@ -2065,6 +2411,7 @@ function updateMiracleOpenWorldFrame(dt, now) {
   }
 
   const activeStageNum = getNextActiveMainStageNumber();
+  const isStage3Cleared = Boolean(miracleMainStagesCleared[3] || miracleMainStagesCleared[4] || miracleIsPostResurrection);
   let currentActiveStageSpot = null;
 
   // [이전 스테이지 클리어 확인 동기화 보완]
@@ -2076,7 +2423,12 @@ function updateMiracleOpenWorldFrame(dt, now) {
     }
 
     const d = Math.hypot(playerPos.x - sp.pos.x, playerPos.z - sp.pos.z);
-    updateWorldLabelPos(sp.label, sp.pos, d < MIRACLE_TAG_DIST_SPOT);
+    // 스테이지 4 무덤 앞을 지키는 여인(막달라 마리아) 머리 위 태그는 스테이지 3 클리어 시에만 표시
+    if (sp.stageNum === 4 && !isStage3Cleared) {
+      if (sp.label) sp.label.style.opacity = '0';
+    } else {
+      updateWorldLabelPos(sp.label, sp.pos, d < MIRACLE_TAG_DIST_SPOT);
+    }
 
     if (sp.npcMesh && d < 9.0) {
       const targetAng = Math.atan2(playerPos.x - sp.pos.x, playerPos.z - sp.pos.z);
