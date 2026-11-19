@@ -2970,7 +2970,11 @@ function canMoveTo(nx, nz, curY, isPlayer = false) {
     if (p.topY < -100) continue;
     if (p.passUnderY !== undefined && curY < p.passUnderY) continue;
     if (nx > p.minX - wallPad && nx < p.maxX + wallPad && nz > p.minZ - wallPad && nz < p.maxZ + wallPad) {
-      if (p.wallOnly) return false;
+      if (p.wallOnly) {
+        // 옥상 난간은 걸어서는 통과할 수 없지만, 난간 상단(p.topY)보다 높게 점프하면 바깥으로 뛰어넘어 나갈 수 있음
+        if (curY < p.topY) return false;
+        continue;
+      }
       if (curY + stepAllowance < p.topY) return false;
       if (isSinaiStage && p.topY - lastGroundedY > 1.35) return false;
       if (isPlayer && p.minClimbY !== undefined && lastGroundedY < p.minClimbY) return false;
@@ -3074,7 +3078,7 @@ function initEngine(skipInitialPreview = false) {
   scene = new THREE.Scene(); scene.background = new THREE.Color(0x7dd3fc);
   camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 900);
   renderer = new THREE.WebGLRenderer({
-    antialias: !isMobDevice,
+    antialias: true, // 모바일 안티앨리어싱 테스트 가동
     powerPreference: 'high-performance',
     alpha: false
   });
