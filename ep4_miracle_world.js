@@ -1425,7 +1425,26 @@ function getMiraclePostResurrectionEventsCatalog() {
 }
 // =========================================================================
 // [ep4_miracle_world.js - 파트 3/3] 필드 이벤트 실행기 · 무릎 빛의 원 반짝임 · 완료 미션 인사/다시하기 · 오픈월드 루프
+// - 반석 위에 지은 집 갇힘 방지 안전 텔레포트 적용
+// - 중풍병자 들것 환자 모델링 및 지붕 뚫기 컷신(망치질, 하강 연출) 적용
+// - 이전 스테이지 클리어 시 다음 스테이지 해금 동기화 확인
+// - 대화창 활성화 시 캐릭터 이동 잠금 처리 적용 확인
 // =========================================================================
+
+// -------------------------------------------------------------------------
+// [대화 중 이동 잠금 처리]
+// NPC 대화창이 활성화되면 플레이어의 입력을 원천 차단하여 조작할 수 없게 만듭니다.
+// -------------------------------------------------------------------------
+const _origIsPlayerMovementLocked = window.isPlayerMovementLocked;
+window.isPlayerMovementLocked = function() {
+  let locked = false;
+  if (typeof _origIsPlayerMovementLocked === 'function') {
+    locked = _origIsPlayerMovementLocked();
+  }
+  return locked || 
+         (miracleActiveFieldEvent && miracleActiveFieldEvent.cutsceneActive) || 
+         (miracleDialogState && miracleDialogState.active);
+};
 
 function spawnMiracleOptionalEventSpots() {
   miracleEventSpots = [];
@@ -1436,7 +1455,7 @@ function spawnMiracleOptionalEventSpots() {
 
   allCatalog.forEach(ev => {
     const isCompleted = ev.unlockNotebookIds && ev.unlockNotebookIds.every(id => miracleCollectedIds.has(id));
-    // useTallBeam = false 로 설정하여 긴 빛기둥 대신 무릎 높이의 불규칙 빛의 원(kneeAura) 적용!
+    // useTallBeam = false 로 설정하여 긴 빛기둥 대신 무릎 높이의 불규칙 빛의 원(kneeAura) 적용
     const marker = createMiracleSpotMarker(
       ev.x,
       ev.z,
@@ -1479,7 +1498,8 @@ function startMiracleFieldEvent(evSpot) {
     carrying: 0,
     items: [],
     targetZone: null,
-    escortGroup: null
+    escortGroup: null,
+    cutsceneActive: false // 컷신 상태 초기화
   };
 
   const cx = evSpot.x;
@@ -1538,12 +1558,18 @@ function startMiracleFieldEvent(evSpot) {
     const eGrp = new THREE.Group();
     if (evSpot.escortType === 'stretcher') {
       eGrp.add(
-        createLowPolyMesh(new THREE.BoxGeometry(1.4, 0.14, 2.4), '#b45309', 0, 0.65, 0),
-        createLowPolyPersonMesh('disciple', 1),
-        createLowPolyPersonMesh('disciple', 2)
+        createLowPolyMesh(new THREE.BoxGeometry(1.4, 0.14, 2.4), '#b45309', 0, 0.65, 0), // 들것 본체
+        createLowPolyPersonMesh('disciple', 1), // 앞쪽 친구
+        createLowPolyPersonMesh('disciple', 2)  // 뒤쪽 친구
       );
       eGrp.children[1].position.set(-0.75, 0, -0.8);
       eGrp.children[2].position.set( 0.75, 0,  0.8);
+      
+      // [수정점] 누워있는 중풍병자(환자) 모델링 추가
+      const patient = createLowPolyPersonMesh('villager', 5);
+      patient.position.set(0, 0.85, 0);
+      patient.rotation.x = -Math.PI / 2;
+      eGrp.add(patient);
     } else if (evSpot.escortType === 'children') {
       const c1 = createLowPolyPersonMesh('child', 1); c1.position.set(-0.6, 0, 0);
       const c2 = createLowPolyPersonMesh('child', 2); c2.position.set( 0.6, 0, 0.2);
@@ -1588,7 +1614,6 @@ function startMiracleFieldEvent(evSpot) {
   } else if (evSpot.missionType === 'find_observe') {
     const fx = evSpot.findTargetPos.x;
     const fz = evSpot.findTargetPos.z;
-    // 잃어버린 양(par_sheep) 등 지면 위 목표물은 정확히 지면 고도에 착지하도록 보정
     const baseGroundY = getMiracleOpenWorldGroundHeight(fx, fz);
     const fy = (evSpot.id === 'ev_zacchaeus' && evSpot.findTargetPos.y)
       ? (baseGroundY + evSpot.findTargetPos.y)
@@ -1624,6 +1649,22 @@ function finishMiracleFieldEvent(evSpot) {
   evSpot._requireLeaveZone = true;
   evSpot._prompted = performance.now();
 
+  // [수정점] 반석 위에 집 짓기 미션 후 갇힘 방지를 위한 텔레포트 적용
+  if (evSpot.id === 'par_builder' && !evSpot._houseBuilt) {
+    evSpot._houseBuilt = true;
+    
+    // 집이 지어지는 위치에서 충분히 떨어진 안전 구역으로 캐릭터 이동
+    const safeX = evSpot.x - 6.0; 
+    const safeZ = evSpot.z - 2.5;
+    playerPos.set(safeX, getMiracleOpenWorldGroundHeight(safeX, safeZ), safeZ);
+    if (typeof playerGroup !== 'undefined' && playerGroup) playerGroup.position.copy(playerPos);
+    if (typeof snapCameraToPlayer === 'function') snapCameraToPlayer();
+    
+    if (typeof addJudeanRoadsideBuilding === 'function') {
+      addJudeanRoadsideBuilding(evSpot.x + 5, evSpot.z - 3, 1, 0, 0.92, false);
+    }
+  }
+
   if (evSpot.ring && evSpot.ring.material) evSpot.ring.material.color.setHex(0x10b981);
   if (evSpot.kneeAura && evSpot.kneeAura.userData) {
     const ku = evSpot.kneeAura.userData;
@@ -1641,10 +1682,6 @@ function finishMiracleFieldEvent(evSpot) {
     if (typeof addLowPolyCanopyTree === 'function') addLowPolyCanopyTree(evSpot.x + 4, evSpot.z, 1.45, true);
     else createLowPolySycamoreTree(evSpot.x + 4, evSpot.z, 1.65);
   }
-  if (evSpot.id === 'par_builder' && !evSpot._houseBuilt) {
-    evSpot._houseBuilt = true;
-    addJudeanRoadsideBuilding(evSpot.x + 5, evSpot.z - 3, 1, 0, 0.92, false);
-  }
 
   playSfx('clear');
   openMiracleDialog({
@@ -1661,6 +1698,54 @@ function updateMiracleFieldEventFrame(dt, now) {
   const fe = miracleActiveFieldEvent;
   const evSpot = fe.spot;
 
+  // [수정점] 중풍병자 지붕 뚫기 및 하강 컷신 연출
+  if (fe.cutsceneActive) {
+    fe.cutsceneTimer += dt;
+    const eg = fe.escortGroup ? fe.escortGroup.mesh : null;
+    
+    if (fe.cutscenePhase === 'hammer') {
+      cameraYaw = lerpAngle(cameraYaw, Math.PI / 4, dt * 3.0);
+      
+      if (eg) {
+        const targetX = evSpot.goalPos.x - 1.5;
+        const targetZ = evSpot.goalPos.z - 1.5;
+        eg.position.lerp(new THREE.Vector3(targetX, playerPos.y, targetZ), dt * 3.0);
+        eg.rotation.y = lerpAngle(eg.rotation.y, 0, dt * 3.0);
+      }
+      
+      // 플레이어 망치질 애니메이션 (도구 꺼내서 휘두르기)
+      if (typeof playerChopAnimTimer !== 'undefined') playerChopAnimTimer = 0.2;
+      if (playerLimbs && playerLimbs.lArm) {
+        playerLimbs.lArm.rotation.x = -1.2 + Math.sin(now * 0.04) * 0.8;
+      }
+      
+      if (fe.cutsceneTimer % 0.6 < 0.05) playSfx('hammer');
+      
+      if (fe.cutsceneTimer > 3.5) {
+        fe.cutscenePhase = 'break';
+        fe.cutsceneTimer = 0;
+        playSfx('crumble');
+        showToast('🕳️ 지붕이 뚫렸습니다! 밧줄로 중풍병자를 집 안으로 내립니다.');
+        
+        // 지붕에 뚫린 구멍 표현 (검은색 박스)
+        const hole = createLowPolyMesh(new THREE.BoxGeometry(1.8, 0.05, 2.8), '#111111', evSpot.goalPos.x - 1.5, playerPos.y + 0.02, evSpot.goalPos.z - 1.5, false);
+        worldGroup.add(hole);
+      }
+    } else if (fe.cutscenePhase === 'break') {
+      // 들것을 집 안쪽으로 서서히 하강시킴
+      if (eg) {
+        eg.position.y -= dt * 1.5;
+      }
+      
+      if (fe.cutsceneTimer > 3.0) {
+        fe.cutsceneActive = false;
+        finishMiracleFieldEvent(evSpot);
+      }
+    }
+    return; // 컷신 도중에는 하단 이동 로직 건너뜀
+  }
+
+  // 기본 수집 및 배달 미션 업데이트
   if (fe.type === 'collect_deliver') {
     fe.items.forEach(it => {
       if (it.done) return;
@@ -1697,6 +1782,7 @@ function updateMiracleFieldEventFrame(dt, now) {
       }
     }
   } else if (fe.type === 'escort_guide') {
+    // 플레이어가 계단을 등반하면, 들것 일행도 등 뒤를 바짝 쫓아 지붕으로 따라 올라옴!
     if (fe.escortGroup) {
       const eg = fe.escortGroup.mesh;
       const targetX = playerPos.x - Math.sin(playerFacing) * 1.8;
@@ -1715,8 +1801,16 @@ function updateMiracleFieldEventFrame(dt, now) {
       const expectedY = (tz.goalY !== undefined) ? tz.goalY : (evSpot.goalPos.y || 0);
       const dy = Math.abs(playerPos.y - expectedY);
       updateWorldLabelPos(tz.label, tz.pos, td < MIRACLE_TAG_DIST_SPOT);
+      
       if (td < 3.2 && dy < 2.4) {
-        finishMiracleFieldEvent(evSpot);
+        if (evSpot.id === 'ev_paralytic' && !fe.cutsceneActive) {
+          fe.cutsceneActive = true;
+          fe.cutscenePhase = 'hammer';
+          fe.cutsceneTimer = 0;
+          showToast('🔨 무사히 지붕에 올라왔습니다! 뜯어낼 자리를 찾아 망치질을 시작합니다!');
+        } else if (!fe.cutsceneActive) {
+          finishMiracleFieldEvent(evSpot);
+        }
       }
     }
   } else if (fe.type === 'find_observe') {
@@ -1813,7 +1907,6 @@ function updateMiracleActorWalkAI(actor, dt, now, stopNearPlayerDist = 3.2) {
 // -------------------------------------------------------------------------
 // 9. 오픈월드 메인 진입 & 프레임 업데이트 루프
 // -------------------------------------------------------------------------
-// 스테이지 진입 전 오픈월드 복귀 좌표를 스팟 반경 바깥(5.2m 거리)으로 안전하게 저장하는 헬퍼
 function saveSafeOpenWorldReturnPosition(spotX, spotZ) {
   let dx = playerPos.x - spotX;
   let dz = playerPos.z - spotZ;
@@ -1852,7 +1945,6 @@ function buildMiracleOpenWorld(restoreSavedPos = false) {
   spawnMiracleOptionalEventSpots();
   spawnMiracleRumorNpcs();
 
-  // 가장자리 언덕 안쪽 진입 차단 경계 유지
   currentMapRectBounds = {
     minX: -91.0,
     maxX:  105.5,
@@ -1872,8 +1964,6 @@ function buildMiracleOpenWorld(restoreSavedPos = false) {
     cameraTargetYaw = 0;
   }
 
-  // [핵심 수정] 오픈월드로 복귀한 직후 플레이어 주변(4.8m 이내)에 있는 모든 스팟은
-  // 플레이어가 한 번 구역을 벗어났다가 다시 다가올 때까지 대화창이 자동으로 뜨지 않도록 잠금!
   const nowTs = performance.now();
   miracleStageSpots.forEach(sp => {
     const d = Math.hypot(playerPos.x - sp.pos.x, playerPos.z - sp.pos.z);
@@ -1899,13 +1989,12 @@ function buildMiracleOpenWorld(restoreSavedPos = false) {
   updateMiracleNotebookHudBadge();
   updateStageHUD();
 
- showToast(
+  showToast(
     miracleIsPostResurrection
       ? '✨ 부활 이후의 갈릴리와 예루살렘 오픈월드입니다! 엠마오·도마·바닷가 아침식사를 체험하고 감람산으로 오르세요!'
       : '🗺️ 성경 오픈월드에 오신 것을 환영합니다! 빛기둥이 켜진 순서(1→2→3→4)대로 메인 스테이지를 진행해 보세요!'
   );
 
-  // ✅ 오픈월드 진입 및 스테이지 클리어 후 복귀 시 즉시 ogg 배경음 재생 시작
   if (typeof playMiracleOpenWorldOgg === 'function') {
     playMiracleOpenWorldOgg();
   }
@@ -1943,7 +2032,6 @@ function updateMiracleOpenWorldFrame(dt, now) {
     updateMiracleActorWalkAI(actor, dt, now, 2.8);
   });
 
-  // 비유·사건 체험 NPC 주변의 무릎 높이 불규칙 빛의 원(kneeAura) 실시간 반짝임 애니메이션
   if (typeof updateIrregularKneeLightAura === 'function') {
     miracleEventSpots.forEach((ev, idx) => {
       if (ev.kneeAura) {
@@ -1952,6 +2040,24 @@ function updateMiracleOpenWorldFrame(dt, now) {
     });
   }
 
+  // [수정점] 하늘에 날아다니는 작은 새 궤적 시뮬레이션
+  if (typeof miracleSkyBirds !== 'undefined') {
+    miracleSkyBirds.forEach(b => {
+      b.angle += dt * b.speed * 0.05;
+      const nx = b.cx + Math.cos(b.angle) * b.rad;
+      const nz = b.cz + Math.sin(b.angle) * b.rad;
+      b.mesh.position.x = nx;
+      b.mesh.position.z = nz;
+      b.mesh.rotation.y = -b.angle;
+      const flap = Math.sin(now * 0.015) * 0.5;
+      if(b.mesh.userData.wingL) { 
+        b.mesh.userData.wingL.rotation.z = flap; 
+        b.mesh.userData.wingR.rotation.z = -flap; 
+      }
+    });
+  }
+
+  // 대화창이 열려있으면 필드 이벤트 진행 중지
   if (miracleDialogState.active) return;
 
   if (miracleActiveFieldEvent) {
@@ -1961,7 +2067,8 @@ function updateMiracleOpenWorldFrame(dt, now) {
   const activeStageNum = getNextActiveMainStageNumber();
   let currentActiveStageSpot = null;
 
-  // 1) 메인 스테이지 스팟 업데이트 (빛기둥은 현재 순서인 스테이지 캐릭터에게만 표시!)
+  // [이전 스테이지 클리어 확인 동기화 보완]
+  // 이전 스테이지 클리어가 완료되어야만 현재 차례의 빛기둥이 켜짐!
   miracleStageSpots.forEach((sp, idx) => {
     if (sp.beam && sp.beam.visible) {
       const pulse = 1.0 + Math.sin(now * 0.004 + idx) * 0.15;
@@ -1980,7 +2087,6 @@ function updateMiracleOpenWorldFrame(dt, now) {
       currentActiveStageSpot = sp;
     }
 
-    // 스팟 구역을 한 번 벗어나야(_requireLeaveZone 해제) 다시 대화창이 열림
     if (sp._requireLeaveZone) {
       if (d > 4.3) sp._requireLeaveZone = false;
       return;
@@ -2000,7 +2106,6 @@ function updateMiracleOpenWorldFrame(dt, now) {
       };
 
       if (sp.cleared) {
-        // ✅ [완료한 스테이지]: 시작 창 대신 반가운 인사말 + 하단 [🔄 미션 다시하기] 버튼 출력!
         openMiracleDialog({
           speaker: sp.introSpeaker,
           category: 'greeting',
@@ -2010,7 +2115,6 @@ function updateMiracleOpenWorldFrame(dt, now) {
           onReplay: launchThisStage
         });
       } else if (sp.stageNum > activeStageNum) {
-        // 아직 앞선 순서의 스테이지를 클리어하지 않은 경우 순서 안내
         openMiracleDialog({
           speaker: sp.introSpeaker,
           category: 'story',
@@ -2018,7 +2122,6 @@ function updateMiracleOpenWorldFrame(dt, now) {
           btnText: '네, 순서대로 다녀올게요! ▶'
         });
       } else {
-        // 현재 차례인 메인 스테이지 시작 창
         openMiracleDialog({
           speaker: sp.introSpeaker,
           category: 'story',
@@ -2036,7 +2139,6 @@ function updateMiracleOpenWorldFrame(dt, now) {
     }
   });
 
-  // 2) 선택형 오픈월드 이벤트 & 비유 미니게임 스팟 (무릎 높이 빛의 원 + 완료 시 인사 및 다시하기 버튼)
   miracleEventSpots.forEach((ev) => {
     const d = Math.hypot(playerPos.x - ev.pos.x, playerPos.z - ev.pos.z);
     updateWorldLabelPos(ev.label, ev.pos, d < MIRACLE_TAG_DIST_SPOT);
@@ -2060,7 +2162,6 @@ function updateMiracleOpenWorldFrame(dt, now) {
       ev._requireLeaveZone = true;
 
       if (ev.completed) {
-        // ✅ [완료한 비유·사건 미션]: 시작 창 대신 반가운 인사말 + 하단 [🔄 미션 다시하기] 버튼 출력!
         openMiracleDialog({
           speaker: ev.speaker,
           category: 'greeting',
@@ -2091,7 +2192,6 @@ function updateMiracleOpenWorldFrame(dt, now) {
     }
   });
 
-  // 3) 길을 걷다 만나는 소문 · 목격담 · 말씀 NPC
   miracleRumorNpcs.forEach((rn) => {
     updateMiracleActorWalkAI(rn, dt, now, 3.4);
     rn.pos.set(rn.mesh.position.x, rn.mesh.position.y + 0.5, rn.mesh.position.z);
