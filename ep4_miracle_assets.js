@@ -1,7 +1,8 @@
 // =========================================================================
-// [ep4_miracle_assets.js - 파트 1/2] 에피소드 4 전용 소프트 로우 폴리곤 에셋 & 태양 그림자 엔진
-// 1. 실시간 태양 궤도 이동(Dynamic Sun) 및 전 객체(사람·동물·나무·건물 장식) 그림자 시스템
-// 2. 전면 개방형(Open-Front Arch) 다면체 후드·장발 구조 적용 — 예수님 및 남녀 3종 캐릭터 팩토리
+// [ep4_miracle_assets.js - 파트 1/3] 에피소드 4 전용 소프트 로우 폴리곤 에셋 & 태양 그림자 엔진
+// 1. 실시간 태양 궤도 이동(Dynamic Sun), 태양 플레어 효과 및 그림자 시스템
+// 2. 하늘을 나는 작은 새 모델링 추가
+// 3. 인체 비례 의복 & 전면 개방형(Open-Front Arch) 다면체 후드·장발 구조
 // =========================================================================
 
 const _miracleDoubleSideMatCache = {};
@@ -185,13 +186,23 @@ function setupMiracleDynamicSunAndShadows() {
 
   if (worldGroup) {
     const sunGrp = new THREE.Group();
+    // 둥근 다면체 코어와 빛무리(코로나)
     const coreMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
     const coronaMat = new THREE.MeshBasicMaterial({ color: 0xfde047, transparent: true, opacity: 0.40 });
     const core = new THREE.Mesh(new THREE.IcosahedronGeometry(7.0, 1), coreMat);
     const corona = new THREE.Mesh(new THREE.IcosahedronGeometry(10.0, 1), coronaMat);
-    sunGrp.add(core, corona);
+    
+    // [반영] 카메라를 향해 은은하게 빛나는 태양 렌즈 플레어 효과 적용
+    const flareGrp = new THREE.Group();
+    flareGrp.add(new THREE.Mesh(new THREE.CircleGeometry(24, 12), new THREE.MeshBasicMaterial({ color: 0xfde047, transparent: true, opacity: 0.15, depthWrite: false })));
+    flareGrp.add(new THREE.Mesh(new THREE.CircleGeometry(42, 12), new THREE.MeshBasicMaterial({ color: 0xfb923c, transparent: true, opacity: 0.08, depthWrite: false })));
+    flareGrp.children[0].position.z = 2; 
+    flareGrp.children[1].position.z = 4;
+
+    sunGrp.add(core, corona, flareGrp);
     worldGroup.add(sunGrp);
     miracleSunSystem.sunVisualGroup = sunGrp;
+    miracleSunSystem.flareGroup = flareGrp;
   }
 
   // 월드 건물과 나무가 모두 배치된 직후 그림자 컬링 캐시 자동 생성
@@ -237,6 +248,10 @@ function updateMiracleDynamicSun(dt, now) {
       focusY + offsetY * 2.2,
       focusZ + offsetZ * 2.2
     );
+    // 태양 플레어가 항상 카메라(플레이어 화면)를 향하도록 회전
+    if (miracleSunSystem.flareGroup && camera) {
+      miracleSunSystem.flareGroup.lookAt(camera.position);
+    }
   }
 
   // 3) 0.2초마다 플레이어 시야(34m) 안의 객체만 그림자를 활성화하여 60fps 유지
@@ -250,6 +265,18 @@ function updateMiracleDynamicSun(dt, now) {
 // -------------------------------------------------------------------------
 // 2. 인체 비례 의복 & 전면 개방형(Open-Front) 헤드/후드 빌더
 // -------------------------------------------------------------------------
+
+// [반영] 하늘을 나는 작은 새 모델링 추가 (소프트 로우 폴리곤)
+window.createFlyingBirdMesh = function () {
+  const g = new THREE.Group();
+  const mat = matLowPoly('#334155');
+  const body = createLowPolyMesh(new THREE.BoxGeometry(0.12, 0.12, 0.35), '#334155', 0, 0, 0, false);
+  const wingL = createLowPolyMesh(new THREE.BoxGeometry(0.4, 0.05, 0.15), '#334155', -0.25, 0, 0.05, false);
+  const wingR = createLowPolyMesh(new THREE.BoxGeometry(0.4, 0.05, 0.15), '#334155',  0.25, 0, 0.05, false);
+  g.add(body, wingL, wingR);
+  g.userData = { wingL, wingR, phase: Math.random() * Math.PI * 2 };
+  return g;
+};
 
 // 2-1) 12각 아코디언 주름(Pleated) A라인 롱 스커트 지오메트리
 let _pleatedAlineSkirtGeo = null;
@@ -558,6 +585,12 @@ function createJesusBellSleeveArm(isLeft, robeHex = '#e8e6e2', cuffHex = '#d8d5d
   armGrp.add(pivot);
   return armGrp;
 }
+// =========================================================================
+// [ep4_miracle_assets.js - 파트 2/3]
+// 4. 일반 캐릭터용 숄, 술 패널, 소매, 허리띠 빌더
+// 5. 남성 3종 · 여성 3종 변형 팔레트 및 LOD 적용 캐릭터 팩토리 (남자 머리카락 노출)
+// 6. 확장된 오픈월드 지형 고도 계산기 및 무릎 높이 빛의 원(Knee-High Aura)
+// =========================================================================
 
 // -------------------------------------------------------------------------
 // 4. 일반 캐릭터용 숄, 술 패널, 소매, 허리띠 빌더
@@ -753,8 +786,9 @@ function createEllipticalDoubleRopeBelt(beltHex, knotHex, withFrontTassels = tru
 }
 
 // -------------------------------------------------------------------------
-// 5. 남성 3종 · 여성 3종 변형 팔레트 및 메인 캐릭터 생성 함수
+// 5. 남성 3종 · 여성 3종 변형 팔레트 및 LOD 적용 메인 캐릭터 생성 함수
 // -------------------------------------------------------------------------
+// [요청사항 반영] 남성 캐릭터 1번, 2번 프리셋의 headwear를 'none'으로 변경하여 두건 없이 머리카락을 노출!
 const ISRAELITE_MALE_VARIANTS = [
   {
     robe: '#8d6649', sleeve: '#8d6649', shawl: '#ece6d8',
@@ -762,23 +796,23 @@ const ISRAELITE_MALE_VARIANTS = [
     headcloth: '#ece6d8', agal1: '#d1c3aa', agal2: '#b8a689',
     belt: '#a68e71', beltSub: '#8c7355',
     hair: '#221a15', skin: '#eccab0', sandal: '#3b2416',
-    beardStyle: 'full', headwear: 'sudra_double'
+    beardStyle: 'full', headwear: 'sudra_double' // 0번 주인공은 기본 두건 유지
   },
   {
     robe: '#5c6446', sleeve: '#5c6446', shawl: '#f0e8d5',
     stripe1: '#b45309', stripe2: '#7f1d1d',
-    headcloth: '#e6dec8', agal1: '#854d0e', agal2: '#5c3418',
+    headcloth: null, agal1: null, agal2: null,
     belt: '#926c44', beltSub: '#785230',
     hair: '#2b1d12', skin: '#e8c3a5', sandal: '#3b2212',
-    beardStyle: 'trimmed', headwear: 'sudra_double'
+    beardStyle: 'short', headwear: 'none' // 두건 제거, 머리카락 노출
   },
   {
     robe: '#3f5166', sleeve: '#3f5166', shawl: '#f4efe6',
     stripe1: '#d97706', stripe2: '#4c1d95',
-    headcloth: '#f4efe6', agal1: '#a16207', agal2: '#713f12',
+    headcloth: null, agal1: null, agal2: null,
     belt: '#b48a58', beltSub: '#8c663b',
     hair: '#1e1b18', skin: '#f0cfb4', sandal: '#29180e',
-    beardStyle: 'short', headwear: 'sudra_single'
+    beardStyle: 'trimmed', headwear: 'none' // 두건 제거, 머리카락 노출
   }
 ];
 
@@ -806,10 +840,77 @@ const ISRAELITE_FEMALE_VARIANTS = [
   }
 ];
 
+// [요청사항 반영] LOD(Level of Detail) 기능 적용하여 원거리 캐릭터의 폴리곤 수 대폭 감소
 window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
-  const g = new THREE.Group();
+  const lodGroup = new THREE.LOD();
+  let isFemale = false;
+  let cfg = null;
+  let sc = 1.0;
 
-  // [A] 예수님 전용 모델링 (5:5 장발 + 밝은 주름 로브 + 대각선 붉은 숄)
+  if (preset === 'jesus') {
+    cfg = ISRAELITE_MALE_VARIANTS[0];
+  } else if (preset === 'woman' || preset.startsWith('female_')) {
+    isFemale = true;
+    const fIdx = preset.startsWith('female_') ? parseInt(preset.split('_')[1], 10) : (idx % 3);
+    cfg = { ...ISRAELITE_FEMALE_VARIANTS[fIdx % 3] };
+    sc = 0.96;
+  } else if (preset === 'villager') {
+    if (idx % 2 === 1) {
+      isFemale = true;
+      cfg = { ...ISRAELITE_FEMALE_VARIANTS[Math.floor(idx / 2) % 3] };
+      sc = 0.96;
+    } else {
+      isFemale = false;
+      cfg = { ...ISRAELITE_MALE_VARIANTS[Math.floor(idx / 2) % 3] };
+    }
+  } else if (preset === 'hero') {
+    isFemale = false;
+    cfg = { ...ISRAELITE_MALE_VARIANTS[0] };
+    sc = 1.0;
+  } else if (preset === 'zacchaeus') {
+    isFemale = false;
+    cfg = {
+      ...ISRAELITE_MALE_VARIANTS[2],
+      robe: '#581c87', sleeve: '#581c87', shawl: '#f5efe6',
+      stripe1: '#eab308', stripe2: '#7e22ce',
+      beardStyle: 'trimmed', headwear: 'none' // 삭개오도 두건 없이 노출
+    };
+    sc = 0.82;
+  } else if (preset === 'child') {
+    isFemale = (idx % 2 === 1);
+    cfg = isFemale
+      ? { ...ISRAELITE_FEMALE_VARIANTS[idx % 3] }
+      : { ...ISRAELITE_MALE_VARIANTS[idx % 3], beardStyle: 'none' };
+    sc = 0.72;
+  } else if (preset === 'soldier') {
+    isFemale = false;
+    cfg = {
+      ...ISRAELITE_MALE_VARIANTS[0],
+      robe: '#991b1b', sleeve: '#991b1b', shawl: '#64748b',
+      stripe1: '#eab308', stripe2: '#451a03',
+      beardStyle: 'none', headwear: 'helmet'
+    };
+    sc = 1.04;
+  } else if (preset === 'angel') {
+    isFemale = false;
+    cfg = {
+      ...ISRAELITE_MALE_VARIANTS[0],
+      robe: '#ffffff', sleeve: '#ffffff', shawl: '#fef9c3',
+      stripe1: '#facc15', stripe2: '#eab308',
+      headcloth: '#ffffff', agal1: '#fde047', agal2: '#facc15',
+      beardStyle: 'none', headwear: 'sudra_single', hasHalo: true, hasWings: true
+    };
+    sc = 1.05;
+  } else {
+    isFemale = false;
+    cfg = { ...ISRAELITE_MALE_VARIANTS[idx % 3] };
+  }
+
+  // -------------------------
+  // 고해상도 (근거리용) 그룹
+  // -------------------------
+  const gHigh = new THREE.Group();
+
   if (preset === 'jesus') {
     const robeCol   = '#e8e6e2';
     const skinCol   = '#f2cfb4';
@@ -836,8 +937,7 @@ window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
 
     const skirtMesh  = createLowPolyMesh(getPleatedAlineSkirtGeo(), robeCol, 0, 0.58, 0);
     const bodiceMesh = createLowPolyMesh(getAnatomicalUpperTorsoGeo(), robeCol, 0, 1.24, 0);
-    const collarYoke = createLowPolyMesh(new THREE.CylinderGeometry(0.17, 0.27, 0.10, 8), robeCol, 0, 1.49, 0);
-    collarYoke.scale.set(1.04, 1.0, 0.68);
+    const collarYoke = createLowPolyMesh(new THREE.CylinderGeometry(0.17, 0.27, 0.10, 8).scale(1.04, 1.0, 0.68).toNonIndexed(), robeCol, 0, 1.49, 0);
     const neck = createLowPolyMesh(new THREE.CylinderGeometry(0.09, 0.105, 0.18, 6), skinCol, 0, 1.56, 0, false);
 
     const beltGrp = createEllipticalDoubleRopeBelt(beltCol, '#826b54', false);
@@ -885,256 +985,190 @@ window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
       hairGroup
     );
 
-    g.add(lLeg, rLeg, skirtMesh, bodiceMesh, collarYoke, neck, beltGrp, redSashGrp, lArm, rArm, head);
-    g.scale.set(1.05, 1.05, 1.05);
-    g.traverse(ch => {
-      if (ch.isMesh && ch.material && !ch.material.transparent) {
-        ch.castShadow = true;
-        ch.receiveShadow = true;
-      }
-    });
-    g.userData = { lLeg, rLeg, lArm, rArm, head, walkPhase: 0 };
-    return g;
-  }
-
-  // [B] 일반 인물 (남성 3종 · 여성 3종 · 주인공 · 삭개오 · 아이 · 병사 · 천사)
-  let isFemale = false;
-  let cfg = null;
-  let sc = 1.0;
-
-  if (preset === 'woman' || preset === 'female_0' || preset === 'female_1' || preset === 'female_2') {
-    isFemale = true;
-    const fIdx = preset.startsWith('female_') ? parseInt(preset.split('_')[1], 10) : (idx % 3);
-    cfg = { ...ISRAELITE_FEMALE_VARIANTS[fIdx % 3] };
-    sc = 0.96;
-  } else if (preset === 'villager') {
-    if (idx % 2 === 1) {
-      isFemale = true;
-      cfg = { ...ISRAELITE_FEMALE_VARIANTS[Math.floor(idx / 2) % 3] };
-      sc = 0.96;
-    } else {
-      isFemale = false;
-      cfg = { ...ISRAELITE_MALE_VARIANTS[Math.floor(idx / 2) % 3] };
-    }
-  } else if (preset === 'hero') {
-    isFemale = false;
-    cfg = { ...ISRAELITE_MALE_VARIANTS[0] };
-    sc = 1.0;
-  } else if (preset === 'zacchaeus') {
-    isFemale = false;
-    cfg = {
-      ...ISRAELITE_MALE_VARIANTS[2],
-      robe: '#581c87', sleeve: '#581c87', shawl: '#f5efe6',
-      stripe1: '#eab308', stripe2: '#7e22ce',
-      beardStyle: 'trimmed', headwear: 'sudra_double'
-    };
-    sc = 0.82;
-  } else if (preset === 'child') {
-    isFemale = (idx % 2 === 1);
-    cfg = isFemale
-      ? { ...ISRAELITE_FEMALE_VARIANTS[idx % 3] }
-      : { ...ISRAELITE_MALE_VARIANTS[idx % 3], beardStyle: 'none' };
-    sc = 0.72;
-  } else if (preset === 'soldier') {
-    isFemale = false;
-    cfg = {
-      ...ISRAELITE_MALE_VARIANTS[0],
-      robe: '#991b1b', sleeve: '#991b1b', shawl: '#64748b',
-      stripe1: '#eab308', stripe2: '#451a03',
-      beardStyle: 'none', headwear: 'helmet'
-    };
-    sc = 1.04;
-  } else if (preset === 'angel') {
-    isFemale = false;
-    cfg = {
-      ...ISRAELITE_MALE_VARIANTS[0],
-      robe: '#ffffff', sleeve: '#ffffff', shawl: '#fef9c3',
-      stripe1: '#facc15', stripe2: '#eab308',
-      headcloth: '#ffffff', agal1: '#fde047', agal2: '#facc15',
-      beardStyle: 'none', headwear: 'sudra_single', hasHalo: true, hasWings: true
-    };
-    sc = 1.05;
+    gHigh.add(lLeg, rLeg, skirtMesh, bodiceMesh, collarYoke, neck, beltGrp, redSashGrp, lArm, rArm, head);
   } else {
-    isFemale = false;
-    cfg = { ...ISRAELITE_MALE_VARIANTS[idx % 3] };
-  }
+    const buildLeg = (isLeft) => {
+      const legGrp = new THREE.Group();
+      legGrp.position.set(isLeft ? -0.15 : 0.15, 0.52, 0);
+      const ankle = createLowPolyMesh(new THREE.CylinderGeometry(0.085, 0.075, 0.34, 6), cfg.skin, 0, -0.18, 0);
+      legGrp.add(ankle);
 
-  const buildLeg = (isLeft) => {
-    const legGrp = new THREE.Group();
-    legGrp.position.set(isLeft ? -0.15 : 0.15, 0.52, 0);
-    const ankle = createLowPolyMesh(new THREE.CylinderGeometry(0.085, 0.075, 0.34, 6), cfg.skin, 0, -0.18, 0);
-    legGrp.add(ankle);
+      if (isFemale) {
+        const shoe = createLowPolyMesh(new THREE.BoxGeometry(0.20, 0.12, 0.34), cfg.shoe, 0, -0.40, 0.04);
+        const shoeFront = createLowPolyMesh(new THREE.BoxGeometry(0.18, 0.10, 0.15), cfg.shoe, 0, -0.41, 0.17);
+        legGrp.add(shoe, shoeFront);
+      } else {
+        const sole = createLowPolyMesh(new THREE.BoxGeometry(0.21, 0.065, 0.36), cfg.sandal, 0, -0.43, 0.05);
+        const foot = createLowPolyMesh(new THREE.BoxGeometry(0.17, 0.085, 0.26), cfg.skin, 0, -0.37, 0.05);
+        const strapFront = createLowPolyMesh(new THREE.BoxGeometry(0.22, 0.075, 0.11), cfg.sandal, 0, -0.37, 0.11, false);
+        const strapHeel  = createLowPolyMesh(new THREE.BoxGeometry(0.21, 0.095, 0.075), cfg.sandal, 0, -0.36, -0.08, false);
+        legGrp.add(sole, foot, strapFront, strapHeel);
+      }
+      return legGrp;
+    };
+    const lLeg = buildLeg(true);
+    const rLeg = buildLeg(false);
+
+    const skirtCol  = isFemale ? cfg.skirt : cfg.robe;
+    const bodiceCol = isFemale ? cfg.bodice : cfg.robe;
+
+    const skirtMesh  = createLowPolyMesh(getPleatedAlineSkirtGeo(), skirtCol, 0, 0.58, 0);
+    const bodiceMesh = createLowPolyMesh(getAnatomicalUpperTorsoGeo(), bodiceCol, 0, 1.24, 0);
+    const neck       = createLowPolyMesh(new THREE.CylinderGeometry(0.09, 0.105, 0.18, 6), cfg.skin, 0, 1.56, 0, false);
+
+    const mantleGroup = createCleanIsraeliteMantleGroup(cfg.shawl, cfg.stripe1, cfg.stripe2, isFemale);
+    const beltGroup   = createEllipticalDoubleRopeBelt(cfg.belt, cfg.beltSub, true);
+
+    const lArm = createSeamlessPonchoArm(true, cfg.shawl, cfg.stripe1, cfg.stripe2, cfg.sleeve, cfg.skin);
+    const rArm = createSeamlessPonchoArm(false, cfg.shawl, cfg.stripe1, cfg.stripe2, cfg.sleeve, cfg.skin);
+
+    const head = new THREE.Group();
+    head.position.set(0, 2.02, 0);
+
+    const faceMesh = createLowPolyMesh(getChamferedFaceGeo(), cfg.skin, 0, 0, 0);
+    const eyeCol = '#1e1815';
+    const eyeL = createLowPolyMesh(new THREE.BoxGeometry(0.068, 0.13, 0.025), eyeCol, -0.115, 0.03, 0.238, false);
+    const eyeR = createLowPolyMesh(new THREE.BoxGeometry(0.068, 0.13, 0.025), eyeCol,  0.115, 0.03, 0.238, false);
+
+    const browL = createLowPolyMesh(new THREE.BoxGeometry(0.115, 0.034, 0.025), cfg.hair, -0.115, 0.135, 0.240, false);
+    browL.rotation.z = 0.06;
+    const browR = createLowPolyMesh(new THREE.BoxGeometry(0.115, 0.034, 0.025), cfg.hair,  0.115, 0.135, 0.240, false);
+    browR.rotation.z = -0.06;
+
+    const nose = createLowPolyMesh(new THREE.ConeGeometry(0.042, 0.115, 3), cfg.skin, 0, -0.01, 0.255, false);
+    nose.rotation.y = Math.PI;
+    const smileMouth = createLowPolyMesh(new THREE.BoxGeometry(0.095, 0.030, 0.025), '#b57c68', 0, -0.145, 0.242, false);
+
+    head.add(faceMesh, eyeL, eyeR, browL, browR, nose, smileMouth);
+
+    if (cfg.headwear === 'helmet') {
+      const helm = createLowPolyMesh(new THREE.DodecahedronGeometry(0.42, 0), '#64748b', 0, 0.18, -0.02);
+      helm.scale.set(1.06, 0.85, 1.06);
+      const crest = createLowPolyMesh(new THREE.BoxGeometry(0.13, 0.26, 0.56), '#dc2626', 0, 0.44, -0.02);
+      head.add(helm, crest);
+    } else if (cfg.headwear !== 'none') {
+      // 두건 착용 상태
+      const openHood = createOpenFrontHoodGroup(
+        isFemale ? cfg.veil : cfg.headcloth,
+        isFemale,
+        cfg.agal1,
+        cfg.headwear === 'sudra_double' ? cfg.agal2 : null,
+        cfg.veilBand
+      );
+      head.add(openHood);
+    }
 
     if (isFemale) {
-      const shoe = createLowPolyMesh(new THREE.BoxGeometry(0.20, 0.12, 0.34), cfg.shoe, 0, -0.40, 0.04);
-      const shoeFront = createLowPolyMesh(new THREE.BoxGeometry(0.18, 0.10, 0.15), cfg.shoe, 0, -0.41, 0.17);
-      legGrp.add(shoe, shoeFront);
+      const partedHairL = createLowPolyMesh(new THREE.BoxGeometry(0.20, 0.08, 0.04), cfg.hair, -0.11, 0.185, 0.242, false);
+      partedHairL.rotation.z = 0.28;
+      const partedHairR = createLowPolyMesh(new THREE.BoxGeometry(0.20, 0.08, 0.04), cfg.hair,  0.11, 0.185, 0.242, false);
+      partedHairR.rotation.z = -0.28;
+      const sideHairL   = createLowPolyMesh(new THREE.BoxGeometry(0.045, 0.34, 0.06), cfg.hair, -0.23, 0.01, 0.238, false);
+      const sideHairR   = createLowPolyMesh(new THREE.BoxGeometry(0.045, 0.34, 0.06), cfg.hair,  0.23, 0.01, 0.238, false);
+      head.add(partedHairL, partedHairR, sideHairL, sideHairR);
     } else {
-      const sole = createLowPolyMesh(new THREE.BoxGeometry(0.21, 0.065, 0.36), cfg.sandal, 0, -0.43, 0.05);
-      const foot = createLowPolyMesh(new THREE.BoxGeometry(0.17, 0.085, 0.26), cfg.skin, 0, -0.37, 0.05);
-      const strapFront = createLowPolyMesh(new THREE.BoxGeometry(0.22, 0.075, 0.11), cfg.sandal, 0, -0.37, 0.11, false);
-      const strapHeel  = createLowPolyMesh(new THREE.BoxGeometry(0.21, 0.095, 0.075), cfg.sandal, 0, -0.36, -0.08, false);
-      legGrp.add(sole, foot, strapFront, strapHeel);
+      if (cfg.headwear === 'none') {
+        // [반영] 남자 머리카락 노출 (정수리, 앞머리, 좌우 옆머리)
+        head.add(
+          createLowPolyMesh(new THREE.BoxGeometry(0.56, 0.35, 0.52), cfg.hair, 0, 0.18, -0.05),
+          createLowPolyMesh(new THREE.BoxGeometry(0.58, 0.15, 0.22), cfg.hair, 0, 0.22,  0.15),
+          createLowPolyMesh(new THREE.BoxGeometry(0.12, 0.35, 0.45), cfg.hair, -0.25, 0.05, -0.05),
+          createLowPolyMesh(new THREE.BoxGeometry(0.12, 0.35, 0.45), cfg.hair,  0.25, 0.05, -0.05)
+        );
+      } else {
+        const bang1 = createLowPolyMesh(new THREE.BoxGeometry(0.11, 0.045, 0.03), cfg.hair, -0.09, 0.18, 0.242, false);
+        bang1.rotation.z = 0.25;
+        const bang2 = createLowPolyMesh(new THREE.BoxGeometry(0.08, 0.040, 0.03), cfg.hair, -0.01, 0.185, 0.242, false);
+        bang2.rotation.z = 0.18;
+        head.add(bang1, bang2);
+      }
+
+      if (cfg.beardStyle && cfg.beardStyle !== 'none') {
+        const bHeight = (cfg.beardStyle === 'full') ? 0.15 : 0.12;
+        const chinBeard  = createLowPolyMesh(new THREE.BoxGeometry(0.50, bHeight, 0.24), cfg.hair, 0, -0.24, 0.14);
+        const sideBeardL = createLowPolyMesh(new THREE.BoxGeometry(0.06, 0.30, 0.10), cfg.hair, -0.23, -0.04, 0.20);
+        const sideBeardR = createLowPolyMesh(new THREE.BoxGeometry(0.06, 0.30, 0.10), cfg.hair,  0.23, -0.04, 0.20);
+        const stacheTop  = createLowPolyMesh(new THREE.BoxGeometry(0.21, 0.038, 0.03), cfg.hair, 0, -0.095, 0.245, false);
+        const stacheL    = createLowPolyMesh(new THREE.BoxGeometry(0.042, 0.10, 0.03), cfg.hair, -0.095, -0.145, 0.245, false);
+        stacheL.rotation.z = 0.15;
+        const stacheR    = createLowPolyMesh(new THREE.BoxGeometry(0.042, 0.10, 0.03), cfg.hair,  0.095, -0.145, 0.245, false);
+        stacheR.rotation.z = -0.15;
+        head.add(chinBeard, sideBeardL, sideBeardR, stacheTop, stacheL, stacheR);
+      }
     }
-    return legGrp;
+
+    if (cfg.hasHalo) {
+      const haloRing = new THREE.Mesh(
+        new THREE.RingGeometry(0.50, 0.65, 16),
+        new THREE.MeshBasicMaterial({ color: 0xfef08a, side: THREE.DoubleSide, transparent: true, opacity: 0.80 })
+      );
+      haloRing.position.set(0, 0.14, -0.34);
+      head.add(haloRing);
+    }
+    if (cfg.hasWings) {
+      const wingL = createLowPolyMesh(new THREE.ConeGeometry(0.36, 1.25, 4), '#fef9c3', -0.44, 1.38, -0.32, false);
+      wingL.rotation.z =  0.68;
+      wingL.scale.set(0.45, 1.0, 1.0);
+      const wingR = createLowPolyMesh(new THREE.ConeGeometry(0.36, 1.25, 4), '#fef9c3',  0.44, 1.38, -0.32, false);
+      wingR.rotation.z = -0.68;
+      wingR.scale.set(0.45, 1.0, 1.0);
+      gHigh.add(wingL, wingR);
+    }
+
+    gHigh.add(lLeg, rLeg, skirtMesh, bodiceMesh, neck, mantleGroup, beltGroup, lArm, rArm, head);
+  }
+
+  // -------------------------
+  // 저해상도 (원거리용) 모델 조립
+  // -------------------------
+  const gLow = new THREE.Group();
+  gLow.add(createLowPolyMesh(new THREE.BoxGeometry(0.5, 1.2, 0.5), isFemale ? cfg.skirt : cfg.robe, 0, 0.6, 0, false));
+  gLow.add(createLowPolyMesh(new THREE.BoxGeometry(0.45, 0.45, 0.45), cfg.skin, 0, 1.45, 0, false));
+  
+  // [반영] LOD 거리에 따라 교체되도록 세팅
+  lodGroup.addLevel(gHigh, 0);
+  lodGroup.addLevel(gLow, 35); // 거리가 35 이상 멀어지면 심플 박스로 교체
+
+  lodGroup.scale.set(sc, sc, sc);
+  
+  // High Mesh 기준으로 관절 제어 포인터 맵핑 (업데이트 함수용)
+  lodGroup.userData = { 
+    lLeg: preset === 'jesus' ? gHigh.children[0] : gHigh.children[0], 
+    rLeg: preset === 'jesus' ? gHigh.children[1] : gHigh.children[1], 
+    lArm: preset === 'jesus' ? gHigh.children[8] : gHigh.children[7], 
+    rArm: preset === 'jesus' ? gHigh.children[9] : gHigh.children[8], 
+    head: preset === 'jesus' ? gHigh.children[10] : gHigh.children[9], 
+    walkPhase: idx * 0.9 
   };
-  const lLeg = buildLeg(true);
-  const rLeg = buildLeg(false);
-
-  const skirtCol  = isFemale ? cfg.skirt : cfg.robe;
-  const bodiceCol = isFemale ? cfg.bodice : cfg.robe;
-
-  const skirtMesh  = createLowPolyMesh(getPleatedAlineSkirtGeo(), skirtCol, 0, 0.58, 0);
-  const bodiceMesh = createLowPolyMesh(getAnatomicalUpperTorsoGeo(), bodiceCol, 0, 1.24, 0);
-  const neck       = createLowPolyMesh(new THREE.CylinderGeometry(0.09, 0.105, 0.18, 6), cfg.skin, 0, 1.56, 0, false);
-
-  g.add(lLeg, rLeg, skirtMesh, bodiceMesh, neck);
-
-  const mantleGroup = createCleanIsraeliteMantleGroup(cfg.shawl, cfg.stripe1, cfg.stripe2, isFemale);
-  const beltGroup   = createEllipticalDoubleRopeBelt(cfg.belt, cfg.beltSub, true);
-  g.add(mantleGroup, beltGroup);
-
-  const lArm = createSeamlessPonchoArm(true, cfg.shawl, cfg.stripe1, cfg.stripe2, cfg.sleeve, cfg.skin);
-  const rArm = createSeamlessPonchoArm(false, cfg.shawl, cfg.stripe1, cfg.stripe2, cfg.sleeve, cfg.skin);
-  g.add(lArm, rArm);
-
-  const head = new THREE.Group();
-  head.position.set(0, 2.02, 0);
-
-  const faceMesh = createLowPolyMesh(getChamferedFaceGeo(), cfg.skin, 0, 0, 0);
-  const eyeCol = '#1e1815';
-  const eyeL = createLowPolyMesh(new THREE.BoxGeometry(0.068, 0.13, 0.025), eyeCol, -0.115, 0.03, 0.238, false);
-  const eyeR = createLowPolyMesh(new THREE.BoxGeometry(0.068, 0.13, 0.025), eyeCol,  0.115, 0.03, 0.238, false);
-
-  const browL = createLowPolyMesh(new THREE.BoxGeometry(0.115, 0.034, 0.025), cfg.hair, -0.115, 0.135, 0.240, false);
-  browL.rotation.z = 0.06;
-  const browR = createLowPolyMesh(new THREE.BoxGeometry(0.115, 0.034, 0.025), cfg.hair,  0.115, 0.135, 0.240, false);
-  browR.rotation.z = -0.06;
-
-  const nose = createLowPolyMesh(new THREE.ConeGeometry(0.042, 0.115, 3), cfg.skin, 0, -0.01, 0.255, false);
-  nose.rotation.y = Math.PI;
-  const smileMouth = createLowPolyMesh(new THREE.BoxGeometry(0.095, 0.030, 0.025), '#b57c68', 0, -0.145, 0.242, false);
-
-  head.add(faceMesh, eyeL, eyeR, browL, browR, nose, smileMouth);
-
-  const hoodColor = isFemale ? cfg.veil : cfg.headcloth;
-  if (cfg.headwear === 'helmet') {
-    const helm = createLowPolyMesh(new THREE.DodecahedronGeometry(0.42, 0), '#64748b', 0, 0.18, -0.02);
-    helm.scale.set(1.06, 0.85, 1.06);
-    const crest = createLowPolyMesh(new THREE.BoxGeometry(0.13, 0.26, 0.56), '#dc2626', 0, 0.44, -0.02);
-    head.add(helm, crest);
-  } else {
-    const openHood = createOpenFrontHoodGroup(
-      hoodColor,
-      isFemale,
-      cfg.agal1,
-      cfg.headwear === 'sudra_double' ? cfg.agal2 : null,
-      cfg.veilBand
-    );
-    head.add(openHood);
-  }
-
-  if (isFemale) {
-    const partedHairL = createLowPolyMesh(new THREE.BoxGeometry(0.20, 0.08, 0.04), cfg.hair, -0.11, 0.185, 0.242, false);
-    partedHairL.rotation.z = 0.28;
-    const partedHairR = createLowPolyMesh(new THREE.BoxGeometry(0.20, 0.08, 0.04), cfg.hair,  0.11, 0.185, 0.242, false);
-    partedHairR.rotation.z = -0.28;
-    const sideHairL   = createLowPolyMesh(new THREE.BoxGeometry(0.045, 0.34, 0.06), cfg.hair, -0.23, 0.01, 0.238, false);
-    const sideHairR   = createLowPolyMesh(new THREE.BoxGeometry(0.045, 0.34, 0.06), cfg.hair,  0.23, 0.01, 0.238, false);
-    head.add(partedHairL, partedHairR, sideHairL, sideHairR);
-  } else {
-    const bang1 = createLowPolyMesh(new THREE.BoxGeometry(0.11, 0.045, 0.03), cfg.hair, -0.09, 0.18, 0.242, false);
-    bang1.rotation.z = 0.25;
-    const bang2 = createLowPolyMesh(new THREE.BoxGeometry(0.08, 0.040, 0.03), cfg.hair, -0.01, 0.185, 0.242, false);
-    bang2.rotation.z = 0.18;
-    head.add(bang1, bang2);
-
-    if (cfg.beardStyle && cfg.beardStyle !== 'none') {
-      const bHeight = (cfg.beardStyle === 'full') ? 0.15 : 0.12;
-      const chinBeard  = createLowPolyMesh(new THREE.BoxGeometry(0.50, bHeight, 0.24), cfg.hair, 0, -0.24, 0.14);
-      const sideBeardL = createLowPolyMesh(new THREE.BoxGeometry(0.06, 0.30, 0.10), cfg.hair, -0.23, -0.04, 0.20);
-      const sideBeardR = createLowPolyMesh(new THREE.BoxGeometry(0.06, 0.30, 0.10), cfg.hair,  0.23, -0.04, 0.20);
-      const stacheTop  = createLowPolyMesh(new THREE.BoxGeometry(0.21, 0.038, 0.03), cfg.hair, 0, -0.095, 0.245, false);
-      const stacheL    = createLowPolyMesh(new THREE.BoxGeometry(0.042, 0.10, 0.03), cfg.hair, -0.095, -0.145, 0.245, false);
-      stacheL.rotation.z = 0.15;
-      const stacheR    = createLowPolyMesh(new THREE.BoxGeometry(0.042, 0.10, 0.03), cfg.hair,  0.095, -0.145, 0.245, false);
-      stacheR.rotation.z = -0.15;
-      head.add(chinBeard, sideBeardL, sideBeardR, stacheTop, stacheL, stacheR);
-    }
-  }
-
-  if (cfg.hasHalo) {
-    const haloRing = new THREE.Mesh(
-      new THREE.RingGeometry(0.50, 0.65, 16),
-      new THREE.MeshBasicMaterial({ color: 0xfef08a, side: THREE.DoubleSide, transparent: true, opacity: 0.80 })
-    );
-    haloRing.position.set(0, 0.14, -0.34);
-    head.add(haloRing);
-  }
-  if (cfg.hasWings) {
-    const wingL = createLowPolyMesh(new THREE.ConeGeometry(0.36, 1.25, 4), '#fef9c3', -0.44, 1.38, -0.32, false);
-    wingL.rotation.z =  0.68;
-    wingL.scale.set(0.45, 1.0, 1.0);
-    const wingR = createLowPolyMesh(new THREE.ConeGeometry(0.36, 1.25, 4), '#fef9c3',  0.44, 1.38, -0.32, false);
-    wingR.rotation.z = -0.68;
-    wingR.scale.set(0.45, 1.0, 1.0);
-    g.add(wingL, wingR);
-  }
-
-  g.add(head);
-  g.scale.set(sc, sc, sc);
-
-  g.traverse(ch => {
-    if (ch.isMesh && ch.material && !ch.material.transparent) {
-      ch.castShadow = true;
-      ch.receiveShadow = true;
-    }
-  });
-
-  g.userData = { lLeg, rLeg, lArm, rArm, head, walkPhase: idx * 0.9 };
-  return g;
+  return lodGroup;
 };
 
-// 플레이어 캐릭터 생성기 (남성 디자인 + 오른손 지팡이 제거)
+// 플레이어 캐릭터 생성기 (항상 고해상도(LOD 0) 강제 추출 유지)
 window.createMiracleHeroMesh = function () {
   const g = window.createLowPolyPersonMesh('hero', 0);
-  const u = g.userData;
-
+  const heroGrp = g.levels[0].object.clone(); 
+  heroGrp.scale.copy(g.scale);
+  const u = {
+    lLeg: heroGrp.children[0], rLeg: heroGrp.children[1], 
+    lArm: heroGrp.children[7], rArm: heroGrp.children[8], head: heroGrp.children[9]
+  };
   const toolGrp = new THREE.Group();
-  const bucketGeo = new THREE.CylinderGeometry(0.20, 0.15, 0.24, 7);
-  toolGrp.add(createLowPolyMesh(bucketGeo, '#d97706', 0, -0.66, 0.22, false));
+  toolGrp.add(createLowPolyMesh(new THREE.CylinderGeometry(0.20, 0.15, 0.24, 7), '#d97706', 0, -0.66, 0.22, false));
   toolGrp.visible = false;
   u.lArm.add(toolGrp);
-
   carriedBlockGroup = new THREE.Group();
   carriedBlockGroup.position.set(0, 1.22, -0.36);
-  g.add(carriedBlockGroup);
-
-  playerLimbs = {
-    lLeg: u.lLeg,
-    rLeg: u.rLeg,
-    lArm: u.lArm,
-    rArm: u.rArm,
-    axeTool: toolGrp
-  };
-  return g;
+  heroGrp.add(carriedBlockGroup);
+  playerLimbs = { lLeg: u.lLeg, rLeg: u.rLeg, lArm: u.lArm, rArm: u.rArm, axeTool: toolGrp };
+  heroGrp.userData = u;
+  return heroGrp;
 };
-// =========================================================================
-// [ep4_miracle_assets.js - 파트 2/2]
-// 6. 확장된 오픈월드 지형 고도 계산기 (넓어진 골고다 언덕 + 오병이어 전망 언덕 + 침수 해결)
-// 7. 깨짐 없는 닫힌 다면체 외곽 언덕(Closed Bumpy Mound) & 무릎 높이 불규칙 빛의 원(Knee-High Aura)
-// 8. 소프트 로우폴리 동물(사슴·양·나귀·물고기) & 다중 가지 수관 나무·야생화
-// =========================================================================
 
 window.MIRACLE_EXP_LIMIT = 152;
 
-// -------------------------------------------------------------------------
-// 6. 확장된 오픈월드 지형 고도 계산기 오버라이드
-// -------------------------------------------------------------------------
 window.getMiracleOpenWorldGroundHeight = function (x, z) {
   let h = 0.25;
 
-  // 1) 서쪽(West, x < -70): 모래사장 없이 초원에서 넓은 바다(x < -92)까지 완만하게 내려가는 해안 경사
   const shoreLineX = -92 + Math.sin(z * 0.03) * 6.0 + Math.cos(z * 0.07) * 2.5;
   if (x < shoreLineX + 22) {
     const t = Math.max(0, (shoreLineX + 22 - x) / 22);
@@ -1146,7 +1180,6 @@ window.getMiracleOpenWorldGroundHeight = function (x, z) {
     return Number(h.toFixed(3));
   }
 
-  // 2) 동북쪽 외곽 '오병이어 전망 언덕' (x = 88, z = -82, 정상 높이 +14.5)
   const bethDist = Math.hypot((x - 88) / 46, (z - (-82)) / 42);
   if (bethDist < 1.0) {
     const t = 1.0 - bethDist;
@@ -1154,7 +1187,6 @@ window.getMiracleOpenWorldGroundHeight = function (x, z) {
     h += t * t * (3 - 2 * t) * 14.2 + t * bump;
   }
 
-  // 3) 잃어버린 양의 유대 광야 바위 언덕 (서중부 내륙: x = -66, z = 12)
   const wildDist = Math.hypot((x - (-66)) / 25, (z - 12) / 25);
   if (wildDist < 1.0) {
     const t = 1.0 - wildDist;
@@ -1162,7 +1194,6 @@ window.getMiracleOpenWorldGroundHeight = function (x, z) {
     h += t * t * (3 - 2 * t) * 5.4 + t * bump;
   }
 
-  // 4) 넓고 완만해진 골고다 십자가 언덕 (남서쪽 내륙: x = -62, z = 78, 반경 38x35, 정상 평탄부 확보)
   const golgothaDist = Math.hypot((x - (-62)) / 38, (z - 78) / 35);
   if (golgothaDist < 1.0) {
     const clampedD = Math.max(0, (golgothaDist - 0.22) / 0.78);
@@ -1171,7 +1202,6 @@ window.getMiracleOpenWorldGroundHeight = function (x, z) {
     h += t * t * (3 - 2 * t) * 9.2 + t * bump;
   }
 
-  // 5) 감람산 승천 언덕 (남동쪽 외곽: x = 88, z = 74)
   const oliveDist = Math.hypot((x - 88) / 34, (z - 74) / 32);
   if (oliveDist < 1.0) {
     const t = 1.0 - oliveDist;
@@ -1179,7 +1209,6 @@ window.getMiracleOpenWorldGroundHeight = function (x, z) {
     h += t * t * (3 - 2 * t) * 9.6 + t * bump;
   }
 
-  // 6) 북·동·남 3면 가장자리 낮은 구릉 융기
   const eastEdge = Math.max(0, (x - 108) / 28);
   const northEdge = Math.max(0, (-108 - z) / 28);
   const southEdge = Math.max(0, (z - 108) / 28);
@@ -1189,7 +1218,6 @@ window.getMiracleOpenWorldGroundHeight = function (x, z) {
     h += edgeFactor * edgeFactor * 4.5 + edgeFactor * edgeBump;
   }
 
-  // 7) 마을 도로 주변 평탄화 및 초원 잔물결
   const centerRoadClearance = Math.min(1.0, Math.abs(x - Math.sin(z * 0.03) * 6.0) / 15.0);
   const gentleWave = (Math.sin(x * 0.045) * Math.cos(z * 0.045) * 0.40) * centerRoadClearance;
   h += gentleWave;
@@ -1220,11 +1248,6 @@ window.getMiracleGroundHeight = function (x, z, st) {
   return 0;
 };
 
-// -------------------------------------------------------------------------
-// 7-1. [핵심 해결책] 정점 교차나 깨짐이 전혀 없는 방사형 다단 돔 언덕(Closed Manifold Bumpy Hill)
-//      - 구형 정점을 억지로 찌그러뜨리지 않고, 중심 꼭짓점에서 바깥 고리(Ring 1~4)와 지하 스커트(y = -6.0)까지
-//        순서대로 삼각망을 이어 만들어 안쪽이 절대 보이지 않으며, 강력한 충돌 박스로 내부 진입을 완벽 차단!
-// -------------------------------------------------------------------------
 function createBumpyLowPolyHillMesh(
   x,
   z,
@@ -1239,12 +1262,11 @@ function createBumpyLowPolyHillMesh(
   const segs = 12;
   const v = [];
 
-  // 4개의 동심원 고리(정상부 -> 중상부 -> 중하부 -> 지면 아래 스커트)
   const ringSpecs = [
     { rFrac: 0.28, yFrac: 0.90, bumpAmp: 0.08 },
     { rFrac: 0.58, yFrac: 0.66, bumpAmp: 0.12 },
     { rFrac: 0.88, yFrac: 0.30, bumpAmp: 0.10 },
-    { rFrac: 1.12, yFrac: -0.65, bumpAmp: 0.04 } // 지면 아래 깊숙이 내려가 틈새 노출 원천 차단
+    { rFrac: 1.12, yFrac: -0.65, bumpAmp: 0.04 } 
   ];
 
   const apex = [
@@ -1257,7 +1279,6 @@ function createBumpyLowPolyHillMesh(
     const pts = [];
     for (let i = 0; i < segs; i++) {
       const ang = (i / segs) * Math.PI * 2;
-      // 반지름이 역전되지 않는 안전한 범위(0.86 ~ 1.14) 내에서만 울퉁불퉁한 다면체 요철 부여
       const wave1 = Math.sin(ang * 3 + seed * 1.9 + rIdx * 1.3);
       const wave2 = Math.cos(ang * 5 - seed * 2.3 + rIdx * 0.7);
       const radialMod = 1.0 + (wave1 * 0.65 + wave2 * 0.35) * spec.bumpAmp;
@@ -1271,13 +1292,10 @@ function createBumpyLowPolyHillMesh(
     return pts;
   });
 
-  // 정상 꼭짓점(apex)과 첫 번째 고리 연결 (시계 반대 방향 정점 순서 준수)
   for (let i = 0; i < segs; i++) {
     const ni = (i + 1) % segs;
     pushTriangle(v, apex, rings[0][ni], rings[0][i]);
   }
-
-  // 고리와 고리 사이 측면 다면체 연결
   for (let r = 0; r < rings.length - 1; r++) {
     const cur = rings[r];
     const nxt = rings[r + 1];
@@ -1288,7 +1306,6 @@ function createBumpyLowPolyHillMesh(
   }
 
   const finalGeo = buildBufferGeoFromTriangles(v);
-  // 양면 렌더링(DoubleSide)을 적용하여 혹시라도 카메라가 스치듯 지나가도 절대 투명하게 뚫려 보이지 않음
   const mesh = createDoubleSideLowPolyMesh(finalGeo, colorHex, x, by, z, true);
   worldGroup.add(mesh);
 
@@ -1303,10 +1320,7 @@ function createBumpyLowPolyHillMesh(
   return mesh;
 }
 
-// -------------------------------------------------------------------------
-// 7-2. [신규 요청사항] 비유 체험 · 사건 체험 NPC 전용 '무릎 높이 불규칙 빛의 원(오라)' 생성 및 반짝임 애니메이터
-//      - 긴 빛기둥 대신 사람 주변 무릎 높이(y = 0.35 ~ 0.62m)까지 불규칙한 파형으로 일렁이며 반짝이는 빛의 원!
-// -------------------------------------------------------------------------
+// [반영] 무릎 높이의 일렁이는 불규칙한 빛의 원(오라) 생성
 function createIrregularKneeLightAura(colorHex = 0x38bdf8, seed = 0) {
   const auraGrp = new THREE.Group();
   const segs = 20;
@@ -1323,7 +1337,6 @@ function createIrregularKneeLightAura(colorHex = 0x38bdf8, seed = 0) {
       const w3 = Math.sin(ang * 7 + seed * 3.1);
 
       const r = baseR + (w1 * 0.55 + w2 * 0.45) * waveAmpR;
-      // 무릎 높이(약 0.32m ~ 0.62m) 사이에서 불규칙한 왕관 파형으로 솟아오름
       const h = Math.max(0.24, baseH + (w1 * 0.45 + w2 * 0.35 + w3 * 0.20) * waveAmpH);
 
       botPts.push([Math.cos(ang) * r, 0.02, Math.sin(ang) * r]);
@@ -1337,7 +1350,6 @@ function createIrregularKneeLightAura(colorHex = 0x38bdf8, seed = 0) {
     return buildBufferGeoFromTriangles(v);
   };
 
-  // 외곽 불규칙 무릎 빛 장막 + 내부 밝은 코어 빛 장막
   const outerMat = new THREE.MeshBasicMaterial({
     color: colorHex,
     transparent: true,
@@ -1357,7 +1369,6 @@ function createIrregularKneeLightAura(colorHex = 0x38bdf8, seed = 0) {
   const innerCrown = new THREE.Mesh(buildWavyCrownGeo(0.92, 0.38, 0.12, 0.14, 1.5), innerMat);
   auraGrp.add(outerCrown, innerCrown);
 
-  // 바닥 불규칙 다각형 빛 고리
   const ringPts = [];
   for (let i = 0; i < segs; i++) {
     const ang = (i / segs) * Math.PI * 2;
@@ -1383,7 +1394,6 @@ function createIrregularKneeLightAura(colorHex = 0x38bdf8, seed = 0) {
   );
   auraGrp.add(groundRing);
 
-  // 무릎 높이 주변에서 반짝이는 작은 빛 결정(Sparkles) 8개
   const sparkles = [];
   const sparkGeo = new THREE.OctahedronGeometry(0.085, 0);
   for (let s = 0; s < 8; s++) {
@@ -1395,20 +1405,13 @@ function createIrregularKneeLightAura(colorHex = 0x38bdf8, seed = 0) {
     const sp = new THREE.Mesh(sparkGeo, sMat);
     const ang = (s / 8) * Math.PI * 2 + (seed % 1.5);
     const rad = 1.05 + (s % 3) * 0.14;
-    const baseY = 0.18 + (s % 4) * 0.11; // 0.18m ~ 0.51m (무릎 이하 높이)
+    const baseY = 0.18 + (s % 4) * 0.11; 
     sp.position.set(Math.cos(ang) * rad, baseY, Math.sin(ang) * rad);
     auraGrp.add(sp);
     sparkles.push({ mesh: sp, ang, rad, baseY, phase: s * 0.85 });
   }
 
-  auraGrp.userData = {
-    outerCrown,
-    innerCrown,
-    groundRing,
-    sparkles,
-    outerMat,
-    innerMat
-  };
+  auraGrp.userData = { outerCrown, innerCrown, groundRing, sparkles, outerMat, innerMat };
   return auraGrp;
 }
 
@@ -1416,7 +1419,6 @@ function updateIrregularKneeLightAura(auraGrp, now, idx = 0) {
   if (!auraGrp || !auraGrp.userData) return;
   const u = auraGrp.userData;
 
-  // 불규칙한 파형이 서로 반대 방향으로 천천히 회전하며 무릎 높이에서 일렁임
   if (u.outerCrown) {
     u.outerCrown.rotation.y = now * 0.0008 + idx;
     const sY = 0.88 + Math.sin(now * 0.005 + idx) * 0.18;
@@ -1439,6 +1441,11 @@ function updateIrregularKneeLightAura(auraGrp, now, idx = 0) {
     });
   }
 }
+// =========================================================================
+// [ep4_miracle_assets.js - 파트 3/3] 에피소드 4 전용 소프트 로우 폴리곤 에셋
+// 8. 소프트 로우폴리 동물(사슴·양·나귀·물고기) & 다중 가지 수관 나무·야생화
+// - 선인장 끝부분 둥근 마감 및 몸통 전체 비정형(Organic) 로우 폴리곤 왜곡 적용
+// =========================================================================
 
 // -------------------------------------------------------------------------
 // 8. 소프트 로우폴리 동물(사슴·양·나귀·물고기) & 다중 가지 나무·야생화
@@ -1605,7 +1612,7 @@ function createLowPolyAnimalMesh(kind = 'sheep', scale = 1.0) {
 }
 
 window.createLowPolyDonkey = function (x, z, rotY = 0) {
-  const by = window.getMiracleOpenWorldGroundHeight(x, z);
+  const by = typeof getMiracleOpenWorldGroundHeight === 'function' ? getMiracleOpenWorldGroundHeight(x, z) : 0;
   const donkey = createLowPolyAnimalMesh('donkey', 1.0);
   donkey.position.set(x, by, z);
   donkey.rotation.y = rotY;
@@ -1638,7 +1645,7 @@ function createBranchSegmentMesh(p1, p2, rBottom, rTop, colorHex) {
 }
 
 function addLowPolyCanopyTree(x, z, scale = 1.0, addCol = true) {
-  const by = getBaseGroundHeight(x, z);
+  const by = typeof getMiracleOpenWorldGroundHeight === 'function' ? getMiracleOpenWorldGroundHeight(x, z) : 0;
   const grp = new THREE.Group();
   const barkCol = '#6b442a', leafDark = '#527324', leafMid = '#6d9432', leafLite = '#8ab340';
 
@@ -1683,7 +1690,7 @@ window.addLowPolyOliveTree = function (x, z, scale = 1.0, addCol = true) {
     return addLowPolyCanopyTree(x, z, scale * 0.88, addCol);
   }
 
-  const by = getBaseGroundHeight(x, z);
+  const by = typeof getMiracleOpenWorldGroundHeight === 'function' ? getMiracleOpenWorldGroundHeight(x, z) : 0;
   const grp = new THREE.Group();
   const barkCol = '#7c4d2b';
 
@@ -1714,7 +1721,7 @@ window.addLowPolyOliveTree = function (x, z, scale = 1.0, addCol = true) {
 };
 
 window.addLowPolyCypressPineTree = function (x, z, scale = 1.0, addCol = true) {
-  const by = getBaseGroundHeight(x, z);
+  const by = typeof getMiracleOpenWorldGroundHeight === 'function' ? getMiracleOpenWorldGroundHeight(x, z) : 0;
   const grp = new THREE.Group();
 
   const p0 = new THREE.Vector3(0, 0, 0);
@@ -1742,7 +1749,7 @@ window.addLowPolyCypressPineTree = function (x, z, scale = 1.0, addCol = true) {
 };
 
 function addLowPolyWildflowerCluster(x, z, scale = 1.0) {
-  const by = getBaseGroundHeight(x, z);
+  const by = typeof getMiracleOpenWorldGroundHeight === 'function' ? getMiracleOpenWorldGroundHeight(x, z) : 0;
   if (by < -0.1) return null;
   const grp = new THREE.Group();
   const flowerCols = ['#ef4444', '#facc15', '#ffffff', '#14b8a6', '#fb7185'];
@@ -1783,3 +1790,101 @@ function addLowPolyWildflowerCluster(x, z, scale = 1.0) {
   worldGroup.add(grp);
   return grp;
 }
+
+// -------------------------------------------------------------------------
+// [신규] 선인장의 몸통을 직선 원통이 아닌 울퉁불퉁하고 휘어진 비정형 형태로 만드는 함수
+// -------------------------------------------------------------------------
+function createOrganicCactusPartGeo(topR, botR, height, sides = 6, seed = 1) {
+  const geo = new THREE.CylinderGeometry(topR, botR, height, sides, 4, false);
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    let vx = pos.getX(i);
+    let vy = pos.getY(i);
+    let vz = pos.getZ(i);
+
+    const normY = vy / height; // -0.5 ~ 0.5
+    // 살짝 휘어짐 부여
+    const bend = Math.sin(normY * Math.PI) * 0.12 * height;
+    
+    // 표면 요철(Bumpiness) 부여
+    const angle = Math.atan2(vz, vx);
+    const bump = 1.0 + Math.sin(angle * 3 + seed * 2.3 + vy * 4.0) * 0.15;
+    
+    vx = vx * bump + Math.sin(vy * 5.0 + seed) * 0.05;
+    vz = vz * bump + Math.cos(vy * 4.0 + seed * 1.3) * 0.05 + bend;
+    
+    pos.setXYZ(i, vx, vy, vz);
+  }
+  const finalGeo = geo.toNonIndexed();
+  finalGeo.computeVertexNormals();
+  return finalGeo;
+}
+
+// -------------------------------------------------------------------------
+// [수정점] 선인장 끝부분 둥근 마감 + 몸통 전체를 비정형(Organic) 로우 폴리곤으로 변경
+// -------------------------------------------------------------------------
+window.addLowPolyCactusAndScrub = function (x, z, scale = 1.0) {
+  const by = typeof getMiracleOpenWorldGroundHeight === 'function' ? getMiracleOpenWorldGroundHeight(x, z) : 0;
+  const grp = new THREE.Group();
+  const cCol = '#4d7c0f';
+  const seed = Math.abs(x * 3.1 + z * 5.2);
+
+  // 중심 줄기
+  const stemGeo = createOrganicCactusPartGeo(0.22 * scale, 0.26 * scale, 1.9 * scale, 6, seed);
+  const stem = createLowPolyMesh(stemGeo, cCol, 0, 0.95 * scale, 0, true);
+  const stemTip = createLowPolyMesh(
+    new THREE.DodecahedronGeometry(0.23 * scale, 0), 
+    cCol, 
+    Math.sin(0.95 * 5.0 + seed) * 0.05, 
+    1.9 * scale, 
+    Math.cos(0.95 * 4.0 + seed * 1.3) * 0.05, 
+    true
+  );
+  
+  // 왼쪽 가지
+  const armLGeo = createOrganicCactusPartGeo(0.15 * scale, 0.17 * scale, 0.75 * scale, 6, seed + 1);
+  const armL = createLowPolyMesh(armLGeo, cCol, -0.38 * scale, 1.15 * scale, 0, true);
+  const armLTip = createLowPolyMesh(
+    new THREE.DodecahedronGeometry(0.16 * scale, 0), 
+    cCol, 
+    -0.38 * scale + Math.sin(0.375 * 5.0 + seed + 1) * 0.05, 
+    1.525 * scale, 
+    Math.cos(0.375 * 4.0 + (seed + 1) * 1.3) * 0.05, 
+    true
+  );
+  
+  // 오른쪽 가지
+  const armRGeo = createOrganicCactusPartGeo(0.15 * scale, 0.17 * scale, 0.65 * scale, 6, seed + 2);
+  const armR = createLowPolyMesh(armRGeo, cCol,  0.38 * scale, 0.95 * scale, 0, true);
+  const armRTip = createLowPolyMesh(
+    new THREE.DodecahedronGeometry(0.16 * scale, 0), 
+    cCol, 
+    0.38 * scale + Math.sin(0.325 * 5.0 + seed + 2) * 0.05, 
+    1.275 * scale, 
+    Math.cos(0.325 * 4.0 + (seed + 2) * 1.3) * 0.05, 
+    true
+  );
+  
+  // 가지 연결부
+  const jointL = createLowPolyMesh(new THREE.CylinderGeometry(0.14 * scale, 0.14 * scale, 0.42 * scale, 5), cCol, -0.22 * scale, 0.85 * scale, 0, true);
+  jointL.rotation.z = Math.PI / 2;
+  const jointR = createLowPolyMesh(new THREE.CylinderGeometry(0.14 * scale, 0.14 * scale, 0.42 * scale, 5), cCol,  0.22 * scale, 0.70 * scale, 0, true);
+  jointR.rotation.z = Math.PI / 2;
+
+  // 장식용 꽃과 바위
+  const flower = createLowPolyMesh(
+    new THREE.DodecahedronGeometry(0.14 * scale, 0), 
+    '#f43f5e', 
+    Math.sin(0.95 * 5.0 + seed) * 0.05, 
+    1.96 * scale, 
+    Math.cos(0.95 * 4.0 + seed * 1.3) * 0.05, 
+    false
+  );
+  const rockSub = createLowPolyMesh(new THREE.DodecahedronGeometry(0.45 * scale, 0), '#d97706', 0.55 * scale, 0.22 * scale, 0.35 * scale, true);
+
+  grp.add(stem, stemTip, armL, armLTip, armR, armRTip, jointL, jointR, flower, rockSub);
+  grp.position.set(x, by, z);
+  worldGroup.add(grp);
+  colliders.push({ minX: x - 0.45 * scale, maxX: x + 0.45 * scale, minZ: z - 0.45 * scale, maxZ: z + 0.45 * scale });
+  return grp;
+};
