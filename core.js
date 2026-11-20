@@ -5,7 +5,7 @@
 // =========================================================================
 
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.core = '20261120_v13';
+window.__GAME_BUILD_VERSIONS__.core = '20261120_v14';
 
 // 퀴즈 선택지 순서 무작위 셔플 공용 헬퍼 (정답이 항상 1번에 고정되지 않도록 보장)
 function shuffleQuizOptions(opts, ansIdx = 0) {
@@ -2547,6 +2547,89 @@ function applyCoreCameraByMode() {
     return;
   }
 
+  // [에피소드 4 오픈월드 시작 시네마틱 탑뷰 조망 → 마을 상공 통과 → 캐릭터 시선 하강 연출]
+  const isMiracleOwFlyover = (
+    currentEpisode === 'miracle' &&
+    typeof miracleSubMode !== 'undefined' &&
+    miracleSubMode === 'openworld' &&
+    window.miracleOpenWorldIntroFlyover &&
+    window.miracleOpenWorldIntroFlyover.active
+  );
+  if (isMiracleOwFlyover) {
+    setPlayerMeshVisibilityForCamera(false);
+    const fl = window.miracleOpenWorldIntroFlyover;
+    const dur = Math.max(0.1, fl.duration || 5.4);
+    const u = Math.max(0, Math.min(1, (fl.timer || 0) / dur));
+    const ease = (x) => x * x * (3 - 2 * x);
+
+    // 최종 도착할 캐릭터 시점 목표 좌표 (기본 / 1인칭 / 올려다보기 어느 모드든 자연스럽게 연결!)
+    let endCamX, endCamY, endCamZ, endLookX, endLookY, endLookZ;
+    if (window.globalCameraViewMode === 'fps') {
+      endCamX = playerPos.x - sinY * 0.15;
+      endCamY = playerPos.y + 2.15;
+      endCamZ = playerPos.z - cosY * 0.15;
+      endLookX = endCamX - sinY * 18.0;
+      endLookY = playerPos.y + 2.12;
+      endLookZ = endCamZ - cosY * 18.0;
+    } else if (window.globalCameraViewMode === 'lookup') {
+      const lowDist = 5.4;
+      endCamX = playerPos.x + sinY * lowDist;
+      endCamZ = playerPos.z + cosY * lowDist;
+      const gH = Math.max(playerPos.y, getBaseGroundHeight(endCamX, endCamZ));
+      endCamY = Math.max(playerPos.y + 1.45, gH + 1.15);
+      endLookX = playerPos.x - sinY * 8.0;
+      endLookY = playerPos.y + 5.2;
+      endLookZ = playerPos.z - cosY * 8.0;
+    } else {
+      endCamX = playerPos.x + sinY * 11.5;
+      endCamY = playerPos.y + 8.5;
+      endCamZ = playerPos.z + cosY * 11.5;
+      endLookX = playerPos.x;
+      endLookY = playerPos.y + 1.5;
+      endLookZ = playerPos.z;
+    }
+
+    if (u < 0.28) {
+      // 1구간: 높은 탑뷰에서 예루살렘 성전~갈릴리 전체 오픈월드를 한눈에 조망!
+      const s = ease(u / 0.28);
+      const px = 6.0 + (-4.0 - 6.0) * s;
+      const py = 64.0 + (48.0 - 64.0) * s;
+      const pz = 68.0 + (28.0 - 68.0) * s;
+      const lx = 0.0;
+      const ly = 2.0 - s * 0.5;
+      const lz = 36.0 + (2.0 - 36.0) * s;
+      camera.position.set(px, py, pz);
+      camera.lookAt(lx, ly, lz);
+    } else if (u < 0.72) {
+      // 2구간: 탑뷰 고도를 유지하며 유대 마을 지붕 위와 광장·우물 상공을 쭉 가로질러 비행!
+      const s = ease((u - 0.28) / 0.44);
+      const px = -4.0 + (3.0 - (-4.0)) * s + Math.sin(s * Math.PI) * 9.5;
+      const py = 48.0 + (29.0 - 48.0) * s;
+      const pz = 28.0 + (-24.0 - 28.0) * s;
+      const lx = Math.sin(s * Math.PI) * 3.5;
+      const ly = 1.5;
+      const lz = 2.0 + (playerPos.z + 8.0 - 2.0) * s;
+      camera.position.set(px, py, pz);
+      camera.lookAt(lx, ly, lz);
+    } else {
+      // 3구간: 마을 상공에서 플레이어 캐릭터의 시선 위치로 매끄럽게 하강 착륙!
+      const d = ease((u - 0.72) / 0.28);
+      const startX = 3.0, startY = 29.0, startZ = -24.0;
+      const startLookX = 0.0, startLookY = 1.5, startLookZ = playerPos.z + 8.0;
+      camera.position.set(
+        startX + (endCamX - startX) * d,
+        startY + (endCamY - startY) * d,
+        startZ + (endCamZ - startZ) * d
+      );
+      camera.lookAt(
+        startLookX + (endLookX - startLookX) * d,
+        startLookY + (endLookY - startLookY) * d,
+        startLookZ + (endLookZ - startLookZ) * d
+      );
+    }
+    return;
+  }
+
   if (window.globalCameraViewMode === 'fps') {
     setPlayerMeshVisibilityForCamera(true);
     const eyeX = playerPos.x - sinY * 0.15;
@@ -2655,6 +2738,17 @@ function startVoxelGame(mode, targetStage = 1, fromMapSelect = false) {
   guideArrowGroup.visible = (mode !== 'senior');
   document.getElementById('hud-compass-hint').classList.toggle('hidden', mode === 'senior');
 
+  const runEp4Opening = (
+    currentEpisode === 'miracle' &&
+    targetStage === 1 &&
+    !window.isMiracleMultiplayerMode &&
+    typeof window.runEp4OpeningSequence === 'function'
+  );
+  if (runEp4Opening && window.MiracleGuideUI) {
+    window.MiracleGuideUI.suppressedDuringIntro = true;
+    window.MiracleGuideUI.lastAutoKey = '';
+  }
+
   // ✅ [수정된 안전 폴백 분기] 에피소드 3(david)과 에피소드 4(miracle)가 에피소드 1로 빠지지 않도록 보완
   if (targetStage === 4) {
     if (currentEpisode === 'david' && typeof buildDavidEndingWorld === 'function' && (!epPlugin || !epPlugin.buildEndingWorld)) {
@@ -2686,7 +2780,11 @@ function startVoxelGame(mode, targetStage = 1, fromMapSelect = false) {
     else if (targetStage === 3 && typeof buildNoahArkInteriorMaze === 'function') buildNoahArkInteriorMaze(3);
   }
 
-  startStageBgm(targetStage);
+  if (runEp4Opening) {
+    window.runEp4OpeningSequence();
+  } else {
+    startStageBgm(targetStage);
+  }
   getAndIncrementPlayCount(explorerName);
   sendGameLogToSheet(targetStage === 1 ? '▶ 게임시작' : `🚀 스테이지${targetStage} 바로진입`, targetStage, '-');
 }
@@ -2778,12 +2876,23 @@ function updateStageHUD() {
   const countIcon = document.getElementById('hud-counter-icon');
   const countText = document.getElementById('hud-counter-text');
   const missionText = document.getElementById('hud-mission-text');
-  document.getElementById('hud-mission-box').classList.remove('hidden');
+  const missionBox = document.getElementById('hud-mission-box');
+  if (missionBox) {
+    // 에피소드 4에서는 상단 상시 안내창 대신 중앙 타이핑 말풍선 + 우측 상단 발광 안내 버튼을 사용!
+    missionBox.classList.toggle('hidden', currentEpisode === 'miracle');
+  }
   updateCarriedBlocksVisual();
 
   const epPlugin = getActiveEpisodePlugin();
   if (epPlugin && typeof epPlugin.updateHUD === 'function') {
     epPlugin.updateHUD(currentStage, badge, countIcon, countText, missionText);
+    if (currentEpisode === 'miracle' && typeof window.syncMiracleStageGuideFromHUD === 'function') {
+      window.syncMiracleStageGuideFromHUD(
+        badge ? badge.textContent : '',
+        missionText ? missionText.textContent : '',
+        countText ? countText.textContent : ''
+      );
+    }
   } else if (currentEpisode === 'noah') {
     countIcon.textContent = '🐾';
     if (currentStage === 1) {

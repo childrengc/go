@@ -230,22 +230,27 @@
     }
 
     /* ================================================================
-       [에피소드 4 인터페이스] 가죽 책 모양 복음서 수첩 버튼 (디바이스별 가변 크기)
+       [에피소드 4 인터페이스] 정사각 가죽 책 모양 탐험수첩 버튼 (2줄 배치, 숫자 제외)
        ================================================================ */
     .miracle-book-btn {
       position: relative;
       display: inline-flex;
+      flex-direction: column;
       align-items: center;
-      gap: clamp(5px, 1.1vw, 9px);
-      padding: clamp(5px, 1.0vh, 8px) clamp(9px, 1.6vw, 13px) clamp(6px, 1.1vh, 9px) clamp(15px, 2.4vw, 20px);
-      background: linear-gradient(140deg, #9a4718 0%, #78350f 65%, #5c2808 100%);
+      justify-content: center;
+      width: clamp(54px, 12vw, 66px);
+      height: clamp(54px, 12vw, 66px);
+      aspect-ratio: 1 / 1;
+      gap: 2px;
+      padding: 4px 5px 5px 11px;
+      background: linear-gradient(145deg, #9a4718 0%, #78350f 65%, #5c2808 100%);
       border: 2px solid #f59e0b;
       border-left: none;
-      border-radius: 4px 10px 10px 4px;
+      border-radius: 4px 11px 11px 4px;
       color: #fef3c7;
       box-shadow:
-        inset 10px 0 0 #451a03,
-        inset 12px 0 0 rgba(251, 191, 36, 0.42),
+        inset 9px 0 0 #451a03,
+        inset 11px 0 0 rgba(251, 191, 36, 0.44),
         3px 0 0 #fef3c7,
         4px 2px 0 #d6b98c,
         0 5px 12px rgba(15, 23, 42, 0.45);
@@ -263,57 +268,144 @@
     .miracle-book-btn::after {
       content: '';
       position: absolute;
-      right: 12px;
+      right: 9px;
       bottom: -8px;
-      width: 9px;
+      width: 8px;
       height: 10px;
       background: #dc2626;
       clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 68%, 0 100%);
       pointer-events: none;
     }
     .miracle-book-btn .book-emblem {
-      width: clamp(15px, 2.4vw, 20px);
-      height: clamp(15px, 2.4vw, 20px);
+      width: clamp(14px, 2.4vw, 18px);
+      height: clamp(14px, 2.4vw, 18px);
       flex-shrink: 0;
     }
-    .miracle-book-btn .book-title {
-      font-size: clamp(11px, 1.6vw, 13.5px);
-      line-height: 1.1;
-      letter-spacing: -0.01em;
+    .miracle-book-btn .book-title-lines {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: clamp(11px, 1.8vw, 13px);
+      line-height: 1.05;
+      letter-spacing: 0.02em;
       white-space: nowrap;
-    }
-    .miracle-book-btn .book-count {
-      padding: 1px clamp(5px, 0.8vw, 7px);
-      border-radius: 9999px;
-      background: #fbbf24;
-      color: #451a03;
-      font-size: clamp(10px, 1.4vw, 12px);
-      line-height: 1.25;
-      font-weight: 800;
     }
     @media (max-width: 640px) and (orientation: portrait) {
       .miracle-book-btn {
-        padding: 5px 8px 6px 14px;
-        gap: 5px;
+        width: 54px;
+        height: 54px;
+        padding: 4px 4px 5px 10px;
       }
-      .miracle-book-btn .book-title { font-size: 11px; }
-      .miracle-book-btn .book-count { font-size: 10px; padding: 1px 5px; }
+      .miracle-book-btn .book-title-lines { font-size: 11px; }
     }
     @media (orientation: landscape) and (max-height: 500px) {
       .miracle-book-btn {
-        padding: 4px 7px 4px 13px;
-        gap: 4px;
+        width: 48px;
+        height: 48px;
+        padding: 3px 4px 4px 9px;
         box-shadow:
-          inset 8px 0 0 #451a03,
-          inset 10px 0 0 rgba(251, 191, 36, 0.42),
+          inset 7px 0 0 #451a03,
+          inset 9px 0 0 rgba(251, 191, 36, 0.42),
           2px 0 0 #fef3c7,
           3px 1px 0 #d6b98c,
           0 3px 8px rgba(15, 23, 42, 0.42);
       }
-      .miracle-book-btn::after { height: 7px; bottom: -6px; width: 7px; }
-      .miracle-book-btn .book-emblem { width: 14px; height: 14px; }
-      .miracle-book-btn .book-title { font-size: 10.5px; }
-      .miracle-book-btn .book-count { font-size: 9.5px; padding: 0px 4px; }
+      .miracle-book-btn::after { height: 7px; bottom: -6px; width: 7px; right: 7px; }
+      .miracle-book-btn .book-emblem { width: 12px; height: 12px; }
+      .miracle-book-btn .book-title-lines { font-size: 10px; }
+    }
+
+    /* [에피소드 4 인터페이스] 우측 상단 발광 안내 버튼 & 중앙 타이핑 말풍선(버튼 흡수 애니메이션) */
+    @keyframes miracleGuideSlowGlow {
+      0%, 100% {
+        box-shadow: 0 0 8px rgba(251, 191, 36, 0.45), 0 0 18px rgba(245, 158, 11, 0.25), 0 4px 10px rgba(15, 23, 42, 0.42);
+        filter: brightness(1.0);
+      }
+      50% {
+        box-shadow: 0 0 16px rgba(253, 224, 71, 0.95), 0 0 32px rgba(251, 191, 36, 0.62), 0 4px 12px rgba(15, 23, 42, 0.48);
+        filter: brightness(1.16);
+      }
+    }
+    @keyframes miracleGuideAbsorbPop {
+      0%   { transform: scale(1); }
+      45%  { transform: scale(1.24); }
+      100% { transform: scale(1); }
+    }
+    @keyframes miracleCursorBlink {
+      0%, 49% { opacity: 1; }
+      50%, 100% { opacity: 0; }
+    }
+    .miracle-guide-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 6px 11px;
+      border-radius: 9999px;
+      background: linear-gradient(135deg, #fef08a 0%, #f59e0b 60%, #d97706 100%);
+      border: 2px solid #fffbeb;
+      color: #451a03;
+      cursor: pointer;
+      animation: miracleGuideSlowGlow 2.8s ease-in-out infinite;
+      transition: transform 0.14s ease;
+    }
+    .miracle-guide-btn:hover { transform: scale(1.06); }
+    .miracle-guide-btn:active { transform: scale(0.96); }
+    .miracle-guide-btn.absorb-pop {
+      animation: miracleGuideAbsorbPop 0.36s cubic-bezier(0.22, 1.25, 0.36, 1), miracleGuideSlowGlow 2.8s ease-in-out infinite;
+    }
+    .miracle-guide-btn.hidden { display: none !important; }
+
+    .miracle-guide-bubble {
+      position: fixed;
+      left: 50%;
+      top: 46%;
+      transform: translate(-50%, -50%) scale(1);
+      transform-origin: center center;
+      width: min(90vw, 410px);
+      background: linear-gradient(180deg, #fffdf5 0%, #fef3c7 100%);
+      border: 3.5px solid #d97706;
+      border-radius: 26px;
+      padding: 15px 18px 14px;
+      color: #1e293b;
+      box-shadow: 0 18px 42px rgba(15, 23, 42, 0.45), 0 0 0 3px rgba(255, 251, 235, 0.72);
+      z-index: 38;
+      opacity: 1;
+      transition: transform 0.52s cubic-bezier(0.45, -0.15, 0.85, 0.35), opacity 0.46s ease-in;
+    }
+    .miracle-guide-bubble::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      bottom: -14px;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 12px solid transparent;
+      border-right: 12px solid transparent;
+      border-top: 14px solid #d97706;
+    }
+    .miracle-guide-bubble::before {
+      content: '';
+      position: absolute;
+      left: 50%;
+      bottom: -9px;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 9px solid transparent;
+      border-right: 9px solid transparent;
+      border-top: 11px solid #fef3c7;
+      z-index: 1;
+    }
+    .miracle-guide-bubble.hidden { display: none !important; }
+    .miracle-guide-cursor {
+      display: inline-block;
+      margin-left: 2px;
+      color: #d97706;
+      font-weight: 900;
+      animation: miracleCursorBlink 0.7s steps(2, start) infinite;
     }
 
     /* [에피소드 4 소년반 전용] 초슬림 미니 나침반/거리 내비게이터 (모바일 세로형·가로형 화면 가림 최소화) */
@@ -769,22 +861,22 @@
     </div>
   </div>
 
-<!-- 게임 스크립트 로드 (전체 스크립트 캐시 강제 갱신 ?v=13 및 버전 일관성 자동 검증 적용) -->
-  <script src="core.js?v=13"></script>
-  <script src="ep1_noah.js?v=13"></script>
-  <script src="ep2_exodus.js?v=13"></script>
-  <script src="ep3_david_base.js?v=13"></script>
-  <script src="ep3_david_st1_2.js?v=13"></script>
-  <script src="ep3_david_st3_end.js?v=13"></script>
-  <script src="ep4_miracle_base.js?v=13"></script>
-  <script src="ep4_miracle_assets.js?v=13"></script>
-  <script src="ep4_miracle_world.js?v=13"></script>
-  <script src="ep4_miracle_stages.js?v=13"></script>
-  <script src="ep4_multiplayer.js?v=13"></script>
+<!-- 게임 스크립트 로드 (전체 스크립트 캐시 강제 갱신 ?v=14 및 버전 일관성 자동 검증 적용) -->
+  <script src="core.js?v=14"></script>
+  <script src="ep1_noah.js?v=14"></script>
+  <script src="ep2_exodus.js?v=14"></script>
+  <script src="ep3_david_base.js?v=14"></script>
+  <script src="ep3_david_st1_2.js?v=14"></script>
+  <script src="ep3_david_st3_end.js?v=14"></script>
+  <script src="ep4_miracle_base.js?v=14"></script>
+  <script src="ep4_miracle_assets.js?v=14"></script>
+  <script src="ep4_miracle_world.js?v=14"></script>
+  <script src="ep4_miracle_stages.js?v=14"></script>
+  <script src="ep4_multiplayer.js?v=14"></script>
   <script>
     // GitHub Pages CDN·브라우저 부분 캐시로 신·구버전 스크립트가 뒤섞여 로드되는 현상을 자동 감지해 1회 강제 새로고침
     (function verifyScriptBuildConsistency() {
-      const EXPECTED = '20261120_v13';
+      const EXPECTED = '20261120_v14';
       const vers = window.__GAME_BUILD_VERSIONS__ || {};
       const keys = ['core', 'ep4_base', 'ep4_assets', 'ep4_world', 'ep4_stages', 'ep4_mp'];
       const mismatch = keys.some(k => vers[k] !== EXPECTED);

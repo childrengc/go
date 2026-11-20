@@ -4,7 +4,24 @@
 // - 계단으로 건물 2층 등반 후 인접한 옆 건물 옥상·2층으로 점프 이동할 수 있는 근접 마을 배치
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_world = '20261120_v13';
+window.__GAME_BUILD_VERSIONS__.ep4_world = '20261120_v14';
+
+window.miracleOpenWorldIntroFlyover = {
+  active: false,
+  timer: 0,
+  duration: 5.4,
+  doneCallback: null
+};
+
+window.startMiracleOpenWorldTopViewFlyover = function (onFinish) {
+  window.miracleOpenWorldIntroFlyover = {
+    active: true,
+    timer: 0,
+    duration: 5.4,
+    doneCallback: (typeof onFinish === 'function') ? onFinish : null
+  };
+  if (typeof applyCoreCameraByMode === 'function') applyCoreCameraByMode();
+};
 
 let miracleWorldMissionObjects = [];
 let miracleActiveFieldEvent = null;
@@ -2308,7 +2325,9 @@ window.isPlayerMovementLocked = function() {
   }
   return locked || 
          (miracleActiveFieldEvent && (miracleActiveFieldEvent.cutsceneActive || miracleActiveFieldEvent.type === 'breakfast_fish_cook')) || 
-         (miracleDialogState && miracleDialogState.active);
+         (miracleDialogState && miracleDialogState.active) ||
+         Boolean(window.__ep4OpeningVideoActive) ||
+         Boolean(window.miracleOpenWorldIntroFlyover && window.miracleOpenWorldIntroFlyover.active);
 };
 
 function spawnMiracleOptionalEventSpots() {
@@ -3154,8 +3173,9 @@ function syncMiracleMissionStatusPanel() {
 }
 
 // -------------------------------------------------------------------------
-// [공용 무떨림(Zero-Jitter) 건물 우회 NPC 보행 AI & 미션 종료 후 제자리 귀가 시스템]
-// - 건물 벽면을 절대 관통하지 않으면서 코너에서 좌우로 떨리며 멈추는 현상을 완전히 차단!
+// [공용 2D 격자 A* 길찾기 + 직선 스무딩 NPC 보행 AI & 제자리 귀가 시스템]
+// - 건물·우물·성전 충돌 구역을 사전에 완벽히 우회하는 최단 경로를 1회 계산해
+//   수가성 여인 등이 특정 구간에서 앞뒤로 반복 정체하는 오류를 원천 차단!
 // -------------------------------------------------------------------------
 function isMiracleNpcPointClear(tx, tz, pad = 0.62) {
   if (tx > 100.0 || tz < -100.0 || tz > 100.0) return false;
@@ -3180,115 +3200,290 @@ function isMiracleNpcPointClear(tx, tz, pad = 0.62) {
   return true;
 }
 
+function isMiracleNpcLineClear(x1, z1, x2, z2, pad = 0.66) {
+  const dist = Math.hypot(x2 - x1, z2 - z1);
+  if (dist < 0.05) return true;
+  const steps = Math.max(2, Math.ceil(dist / 0.72));
+  for (let s = 1; s < steps; s++) {
+    const t = s / steps;
+    if (!isMiracleNpcPointClear(x1 + (x2 - x1) * t, z1 + (z2 - z1) * t, pad)) return false;
+  }
+  return true;
+}
+
+function computeMiracleNpcAStarPath(startX, startZ, goalX, goalZ, pad = 0.66) {
+  // 직선 경로가 완전히 열려 있으면 즉시 단일 목표 반환 (0.01ms)
+  if (isMiracleNpcLineClear(startX, startZ, goalX, goalZ, pad)) {
+    return [{ x: goalX, z: goalZ }];
+  }
+
+  const CELL = 2.0;
+  const margin = 26.0;
+  const minX = Math.max(-96.0, Math.floor((Math.min(startX, goalX) - margin) / CELL) * CELL);
+  const maxX = Math.min( 98.0, Math.ceil((Math.max(startX, goalX) + margin) / CELL) * CELL);
+  const minZ = Math.max(-98.0, Math.floor((Math.min(startZ, goalZ) - margin) / CELL) * CELL);
+  const maxZ = Math.min( 98.0, Math.ceil((Math.max(startZ, goalZ) + margin) / CELL) * CELL);
+  const cols = Math.max(4, Math.floor((maxX - minX) / CELL) + 1);
+  const rows = Math.max(4, Math.floor((maxZ - minZ) / CELL) + 1);
+  const total = cols * rows;
+
+  const toGX = (wx) => Math.max(0, Math.min(cols - 1, Math.round((wx - minX) / CELL)));
+  const toGZ = (wz) => Math.max(0, Math.min(rows - 1, Math.round((wz - minZ) / CELL)));
+  const toWX = (gx) => minX + gx * CELL;
+  const toWZ = (gz) => minZ + gz * CELL;
+
+  const blocked = new Uint8Array(total);
+  for (let gz = 0; gz < rows; gz++) {
+    const wz = toWZ(gz);
+    for (let gx = 0; gx < cols; gx++) {
+      if (!isMiracleNpcPointClear(toWX(gx), wz, pad)) {
+        blocked[gz * cols + gx] = 1;
+      }
+    }
+  }
+
+  const snapWalkable = (gx0, gz0) => {
+    if (!blocked[gz0 * cols + gx0]) return [gx0, gz0];
+    for (let r = 1; r <= 5; r++) {
+      for (let dz = -r; dz <= r; dz++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.abs(dx) !== r && Math.abs(dz) !== r) continue;
+          const nx = gx0 + dx, nz = gz0 + dz;
+          if (nx >= 0 && nx < cols && nz >= 0 && nz < rows && !blocked[nz * cols + nx]) {
+            return [nx, nz];
+          }
+        }
+      }
+    }
+    return [gx0, gz0];
+  };
+
+  const [sx, sz] = snapWalkable(toGX(startX), toGZ(startZ));
+  const [ex, ez] = snapWalkable(toGX(goalX), toGZ(goalZ));
+  const sIdx = sz * cols + sx;
+  const eIdx = ez * cols + ex;
+  blocked[sIdx] = 0;
+  blocked[eIdx] = 0;
+
+  const gScore = new Float32Array(total);
+  const fScore = new Float32Array(total);
+  const parent = new Int32Array(total);
+  const stateArr = new Uint8Array(total); // 0=unvisited, 1=open, 2=closed
+  for (let i = 0; i < total; i++) { gScore[i] = 1e9; fScore[i] = 1e9; parent[i] = -1; }
+
+  const octile = (ax, az, bx, bz) => {
+    const dx = Math.abs(ax - bx), dz = Math.abs(az - bz);
+    return (dx + dz) + (1.4142 - 2.0) * Math.min(dx, dz);
+  };
+
+  // 경량 바이너리 힙 (Open Set)
+  const heap = [sIdx];
+  const heapPush = (idx) => {
+    heap.push(idx);
+    let pos = heap.length - 1;
+    while (pos > 0) {
+      const p = (pos - 1) >> 1;
+      if (fScore[heap[pos]] < fScore[heap[p]]) {
+        const tmp = heap[pos]; heap[pos] = heap[p]; heap[p] = tmp; pos = p;
+      } else break;
+    }
+  };
+  const heapPop = () => {
+    const top = heap[0];
+    const last = heap.pop();
+    if (heap.length > 0) {
+      heap[0] = last;
+      let pos = 0;
+      const n = heap.length;
+      while (true) {
+        const l = pos * 2 + 1, r = l + 1;
+        let sm = pos;
+        if (l < n && fScore[heap[l]] < fScore[heap[sm]]) sm = l;
+        if (r < n && fScore[heap[r]] < fScore[heap[sm]]) sm = r;
+        if (sm !== pos) {
+          const tmp = heap[pos]; heap[pos] = heap[sm]; heap[sm] = tmp; pos = sm;
+        } else break;
+      }
+    }
+    return top;
+  };
+
+  gScore[sIdx] = 0;
+  fScore[sIdx] = octile(sx, sz, ex, ez);
+  stateArr[sIdx] = 1;
+
+  const dirs = [
+    [1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1],
+    [1, 1, 1.4142], [1, -1, 1.4142], [-1, 1, 1.4142], [-1, -1, 1.4142]
+  ];
+
+  let found = false;
+  let bestFallbackIdx = sIdx;
+  let bestFallbackH = octile(sx, sz, ex, ez);
+  let iter = 0;
+  const maxIter = 2600;
+
+  while (heap.length > 0 && iter < maxIter) {
+    iter++;
+    const cur = heapPop();
+    if (stateArr[cur] === 2) continue;
+    stateArr[cur] = 2;
+
+    if (cur === eIdx) { found = true; break; }
+    const cx = cur % cols, cz = (cur - cx) / cols;
+    const hCur = octile(cx, cz, ex, ez);
+    if (hCur < bestFallbackH) { bestFallbackH = hCur; bestFallbackIdx = cur; }
+
+    for (let d = 0; d < 8; d++) {
+      const dx = dirs[d][0], dz = dirs[d][1], cost = dirs[d][2];
+      const nx = cx + dx, nz = cz + dz;
+      if (nx < 0 || nx >= cols || nz < 0 || nz >= rows) continue;
+      const nIdx = nz * cols + nx;
+      if (blocked[nIdx] || stateArr[nIdx] === 2) continue;
+      // 대각선 코너 뚫기 방지: 양쪽 직교 인접 칸도 모두 통과 가능해야 허용!
+      if (dx !== 0 && dz !== 0) {
+        if (blocked[cz * cols + nx] || blocked[nz * cols + cx]) continue;
+      }
+      const tentG = gScore[cur] + cost;
+      if (tentG < gScore[nIdx]) {
+        parent[nIdx] = cur;
+        gScore[nIdx] = tentG;
+        fScore[nIdx] = tentG + octile(nx, nz, ex, ez);
+        stateArr[nIdx] = 1;
+        heapPush(nIdx);
+      }
+    }
+  }
+
+  const endNode = found ? eIdx : bestFallbackIdx;
+  const rawPts = [];
+  let trace = endNode;
+  let guard = 0;
+  while (trace >= 0 && trace !== sIdx && guard < 400) {
+    guard++;
+    const tx = trace % cols, tz = (trace - tx) / cols;
+    rawPts.push({ x: toWX(tx), z: toWZ(tz) });
+    trace = parent[trace];
+  }
+  rawPts.reverse();
+  const goalSafe = isMiracleNpcPointClear(goalX, goalZ, pad * 0.85);
+  const finalX = goalSafe ? goalX : toWX(ex);
+  const finalZ = goalSafe ? goalZ : toWZ(ez);
+  if (rawPts.length === 0 || Math.hypot(rawPts[rawPts.length - 1].x - finalX, rawPts[rawPts.length - 1].z - finalZ) > 0.8) {
+    rawPts.push({ x: finalX, z: finalZ });
+  }
+
+  // 직선 시야 스무딩(String-Pulling): 불필요한 지그재그 경유지를 제거해 자연스럽고 매끄러운 곡선 길 생성!
+  const smoothed = [];
+  let anchorX = startX, anchorZ = startZ;
+  let idx = 0;
+  while (idx < rawPts.length) {
+    let farthest = idx;
+    for (let j = rawPts.length - 1; j > idx; j--) {
+      if (isMiracleNpcLineClear(anchorX, anchorZ, rawPts[j].x, rawPts[j].z, pad)) {
+        farthest = j;
+        break;
+      }
+    }
+    const chosen = rawPts[farthest];
+    smoothed.push(chosen);
+    anchorX = chosen.x;
+    anchorZ = chosen.z;
+    idx = farthest + 1;
+  }
+  return smoothed.length > 0 ? smoothed : [{ x: finalX, z: finalZ }];
+}
+window.computeMiracleNpcAStarPath = computeMiracleNpcAStarPath;
+
 function stepMiracleNpcTowardTarget(state, targetX, targetZ, dt, now) {
   const m = state.mesh;
   if (!m) return 999;
-  const dx = targetX - m.position.x;
-  const dz = targetZ - m.position.z;
-  const dTarget = Math.hypot(dx, dz);
+  const dxGoal = targetX - m.position.x;
+  const dzGoal = targetZ - m.position.z;
+  const dTarget = Math.hypot(dxGoal, dzGoal);
   if (dTarget < 0.05) return dTarget;
 
-  const baseAng = Math.atan2(dx, dz);
   const spd = state.speed || 4.0;
   const step = Math.min(dTarget, spd * dt);
-  if (state.curHeading === undefined) state.curHeading = baseAng;
-  if (state.avoidHoldTimer > 0) state.avoidHoldTimer -= dt;
+  if (state.curHeading === undefined) state.curHeading = Math.atan2(dxGoal, dzGoal);
 
-  // 순이동 진척도 추적 (1.25초 동안 0.9m 미만 이동 시 코너 정체로 판정해 즉시 우회 탈출!)
-  if (!state.progressAnchor) {
-    state.progressAnchor = { x: m.position.x, z: m.position.z, timer: 0 };
-  }
-  state.progressAnchor.timer += dt;
-  if (state.progressAnchor.timer >= 1.25) {
-    const moved = Math.hypot(m.position.x - state.progressAnchor.x, m.position.z - state.progressAnchor.z);
-    if (moved < 0.90) {
-      // 코너 정체 시 반대쪽 우회 방향 전환 또는 인접 개방 지점으로 부드럽게 슬라이드
-      state.avoidSide = state.avoidSide ? -state.avoidSide : 1;
-      state.avoidHoldTimer = 1.6;
-      state.stallCount = (state.stallCount || 0) + 1;
-      if (state.stallCount >= 2) {
-        const perpAng = baseAng + state.avoidSide * (Math.PI * 0.5);
-        for (let r = 1.4; r <= 4.5; r += 0.9) {
-          const ex = m.position.x + Math.sin(perpAng) * r;
-          const ez = m.position.z + Math.cos(perpAng) * r;
-          if (isMiracleNpcPointClear(ex, ez, 0.72)) {
-            m.position.set(ex, getMiracleOpenWorldGroundHeight(ex, ez), ez);
-            break;
-          }
-        }
-        state.stallCount = 0;
-      }
-    } else {
-      state.stallCount = 0;
-    }
-    state.progressAnchor = { x: m.position.x, z: m.position.z, timer: 0 };
+  // 1) 목표별 A* 우회 경로를 1회 계산해 캐시 (일정 구간 앞뒤 반복 루프 원천 차단!)
+  const pathKey = `${Math.round(targetX * 2)},${Math.round(targetZ * 2)}`;
+  if (!Array.isArray(state.navPath) || state.navPath.length === 0 || state.navPathKey !== pathKey) {
+    state.navPath = computeMiracleNpcAStarPath(m.position.x, m.position.z, targetX, targetZ, 0.66);
+    state.navPathKey = pathKey;
+    state.navPathIdx = 0;
+    state.bestTargetDist = dTarget;
+    state.noProgressTimer = 0;
+    state.recomputeCount = 0;
   }
 
-  const probeFar = Math.min(dTarget, Math.max(1.5, step + 1.0));
-  const probeMid = Math.min(dTarget, Math.max(0.75, step + 0.35));
-  const directClear = isMiracleNpcPointClear(m.position.x + Math.sin(baseAng) * step, m.position.z + Math.cos(baseAng) * step)
-    && isMiracleNpcPointClear(m.position.x + Math.sin(baseAng) * probeMid, m.position.z + Math.cos(baseAng) * probeMid)
-    && isMiracleNpcPointClear(m.position.x + Math.sin(baseAng) * probeFar, m.position.z + Math.cos(baseAng) * probeFar);
-
-  let chosenAng = null;
-  // 직선 경로가 완전히 열려있고, 우회 유지 타이머가 끝났을 때만 직진 복귀 (경계선 떨림 원천 차단!)
-  if (directClear && (state.avoidHoldTimer || 0) <= 0) {
-    chosenAng = baseAng;
-    state.avoidSide = 0;
+  // 2) 목표까지 실제 순거리 진척 감시 (반복 정체 발생 시 즉시 여유폭을 넓혀 재탐색!)
+  if (typeof state.bestTargetDist !== 'number') state.bestTargetDist = dTarget;
+  if (dTarget < state.bestTargetDist - 0.45) {
+    state.bestTargetDist = dTarget;
+    state.noProgressTimer = 0;
   } else {
-    // 최초 우회 방향을 결정론적으로 선택 (좌/우 4m 전방 여유 공간 비교 → 랜덤 플립 제거!)
-    if (!state.avoidSide) {
-      let scoreL = 0, scoreR = 0;
-      [1.4, 2.8, 4.2].forEach((d) => {
-        if (isMiracleNpcPointClear(m.position.x + Math.sin(baseAng + 0.95) * d, m.position.z + Math.cos(baseAng + 0.95) * d)) scoreL++;
-        if (isMiracleNpcPointClear(m.position.x + Math.sin(baseAng - 0.95) * d, m.position.z + Math.cos(baseAng - 0.95) * d)) scoreR++;
-      });
-      state.avoidSide = (scoreL >= scoreR) ? 1 : -1;
-      state.avoidHoldTimer = 1.15;
-    }
-    const s = state.avoidSide;
-    // 선택된 우회 방향(s)을 우선 탐색하되, 현재 진행각(curHeading)과 연속성 높은 각도에 가산점 부여!
-    const candOffsets = [
-      0, s * 0.35, s * 0.70, s * 1.05, s * 1.38, s * 1.70,
-      -s * 0.45, -s * 0.90, -s * 1.35, s * 2.05, -s * 2.05
-    ];
-    let bestScore = -1e9;
-    for (let i = 0; i < candOffsets.length; i++) {
-      const off = candOffsets[i];
-      const ang = baseAng + off;
-      const cx = m.position.x + Math.sin(ang) * step;
-      const cz = m.position.z + Math.cos(ang) * step;
-      const px = m.position.x + Math.sin(ang) * probeMid;
-      const pz = m.position.z + Math.cos(ang) * probeMid;
-      if (!isMiracleNpcPointClear(cx, cz) || !isMiracleNpcPointClear(px, pz)) continue;
-      const farOk = isMiracleNpcPointClear(m.position.x + Math.sin(ang) * probeFar, m.position.z + Math.cos(ang) * probeFar) ? 1.2 : 0;
-      const goalAlign = Math.cos(off);
-      const headingDelta = Math.atan2(Math.sin(ang - state.curHeading), Math.cos(ang - state.curHeading));
-      const smoothAlign = Math.cos(headingDelta);
-      const sideBias = (off * s >= 0) ? 0.55 : -0.35;
-      const sc = goalAlign * 1.15 + smoothAlign * 1.10 + farOk + sideBias;
-      if (sc > bestScore) {
-        bestScore = sc;
-        chosenAng = ang;
+    state.noProgressTimer = (state.noProgressTimer || 0) + dt;
+    if (state.noProgressTimer >= 2.2) {
+      state.noProgressTimer = 0;
+      state.recomputeCount = (state.recomputeCount || 0) + 1;
+      if (state.recomputeCount <= 2) {
+        state.navPath = computeMiracleNpcAStarPath(m.position.x, m.position.z, targetX, targetZ, 0.80);
+        state.navPathIdx = 0;
+      } else if (state.navPath && state.navPathIdx < state.navPath.length - 1) {
+        state.navPathIdx++;
       }
-    }
-    // 전방 probe가 좁은 틈에 걸렸을 때는 즉시 step 통과 가능한 최선 각도 선택
-    if (chosenAng === null) {
-      for (let i = 0; i < candOffsets.length; i++) {
-        const ang = baseAng + candOffsets[i];
-        const cx = m.position.x + Math.sin(ang) * step;
-        const cz = m.position.z + Math.cos(ang) * step;
-        if (isMiracleNpcPointClear(cx, cz, 0.50)) {
-          chosenAng = ang;
-          break;
-        }
-      }
+      state.bestTargetDist = dTarget;
     }
   }
 
-  if (chosenAng !== null) {
-    const nx = m.position.x + Math.sin(chosenAng) * step;
-    const nz = m.position.z + Math.cos(chosenAng) * step;
+  // 3) 현재 경유지 도달 시 다음 경유지로 즉시 전진 (뒤로 돌아가지 않음!)
+  while (state.navPathIdx < state.navPath.length - 1) {
+    const wp = state.navPath[state.navPathIdx];
+    const dWp = Math.hypot(wp.x - m.position.x, wp.z - m.position.z);
+    const nextWp = state.navPath[state.navPathIdx + 1];
+    if (dWp < 1.35 || (dWp < 3.2 && isMiracleNpcLineClear(m.position.x, m.position.z, nextWp.x, nextWp.z, 0.68))) {
+      state.navPathIdx++;
+    } else {
+      break;
+    }
+  }
+
+  const activeWp = state.navPath[Math.min(state.navPathIdx, state.navPath.length - 1)] || { x: targetX, z: targetZ };
+  const wpDx = activeWp.x - m.position.x;
+  const wpDz = activeWp.z - m.position.z;
+  const dWp = Math.hypot(wpDx, wpDz);
+  const wpAng = Math.atan2(wpDx, wpDz);
+  const moveStep = Math.min(dWp, step);
+
+  let chosenAng = wpAng;
+  const candX = m.position.x + Math.sin(wpAng) * moveStep;
+  const candZ = m.position.z + Math.cos(wpAng) * moveStep;
+  if (!isMiracleNpcPointClear(candX, candZ, 0.56)) {
+    // 경유지 직선 중 미세 소품/모서리 접촉 시만 가장 가까운 전방 통과 각도로 살짝 미끄러짐
+    let foundSlip = null;
+    const slipOffsets = [0.28, -0.28, 0.58, -0.58, 0.92, -0.92, 1.30, -1.30];
+    for (let i = 0; i < slipOffsets.length; i++) {
+      const a = wpAng + slipOffsets[i];
+      if (isMiracleNpcPointClear(m.position.x + Math.sin(a) * moveStep, m.position.z + Math.cos(a) * moveStep, 0.52)) {
+        foundSlip = a;
+        break;
+      }
+    }
+    if (foundSlip !== null) {
+      chosenAng = foundSlip;
+    } else {
+      // 코너에 딱 걸렸으면 즉시 A* 경로 재계산
+      state.navPath = computeMiracleNpcAStarPath(m.position.x, m.position.z, targetX, targetZ, 0.78);
+      state.navPathIdx = 0;
+      chosenAng = null;
+    }
+  }
+
+  if (chosenAng !== null && moveStep > 0.001) {
+    const nx = m.position.x + Math.sin(chosenAng) * moveStep;
+    const nz = m.position.z + Math.cos(chosenAng) * moveStep;
     const ny = getMiracleOpenWorldGroundHeight(nx, nz);
     m.position.set(nx, ny, nz);
     state.curHeading = lerpAngle(state.curHeading, chosenAng, Math.min(1, dt * 10.0));
@@ -4025,13 +4220,19 @@ function startMiracleFieldEvent(evSpot) {
     for (let i = 0; i < allHumanCandidates.length && recipients.length < 3; i++) {
       const cand = allHumanCandidates[i];
       if (recipients.every(r => Math.hypot(r.x - cand.x, r.z - cand.z) >= 10.0)) {
-        const safePos = findSafeOpenWorldOutdoorPos({ cx: cand.x, cz: cand.z, minDist: 0.5, maxDist: 4.5, pad: 1.0 });
-        recipients.push({ x: safePos.x, y: safePos.y, z: safePos.z, name: cand.name, told: false });
+        const safePos = findSafeOpenWorldOutdoorPos({ cx: cand.x, cz: cand.z, minDist: 0.5, maxDist: 5.5, pad: 1.15 });
+        if (isMiracleNpcPointClear(safePos.x, safePos.z, 0.85)) {
+          recipients.push({ x: safePos.x, y: safePos.y, z: safePos.z, name: cand.name, told: false });
+        }
       }
     }
-    while (recipients.length < 3) {
-      const p = findSafeOpenWorldOutdoorPos({ cx, cz, minDist: 14, maxDist: 42, minSpacing: 12, avoidList: recipients });
-      recipients.push({ x: p.x, y: p.y, z: p.z, name: `수가성 주민 ${recipients.length + 1}`, told: false });
+    let fallbackTries = 0;
+    while (recipients.length < 3 && fallbackTries < 24) {
+      fallbackTries++;
+      const p = findSafeOpenWorldOutdoorPos({ cx, cz, minDist: 14, maxDist: 42, minSpacing: 12, pad: 1.15, avoidList: recipients });
+      if (isMiracleNpcPointClear(p.x, p.z, 0.85) || fallbackTries >= 18) {
+        recipients.push({ x: p.x, y: p.y, z: p.z, name: `수가성 주민 ${recipients.length + 1}`, told: false });
+      }
     }
     // 여인의 출발점에서 가장 가까운 순서대로 자연스러운 이동 경로 정렬
     const ordered = [];
@@ -4613,7 +4814,7 @@ function finishMiracleFieldEvent(evSpot) {
     category: evSpot.category || 'story',
     text: evSpot.completeText,
     quiz: (currentMode === 'kinder') ? null : evSpot.quiz,
-    btnText: '📖 복음서 수첩에 기록 완료!'
+    btnText: '📖 탐험수첩에 기록 완료!'
   });
 }
 
@@ -5296,9 +5497,12 @@ function updateMiracleFieldEventFrame(dt, now) {
         fe.deliveredCount = (fe.deliveredCount || 0) + 1;
         ms.targetIdx++;
         ms.pauseTimer = 1.45;
-        ms.avoidSide = 0;
-        ms.avoidHoldTimer = 0;
-        ms.progressAnchor = null;
+        ms.navPath = null;
+        ms.navPathKey = '';
+        ms.navPathIdx = 0;
+        ms.bestTargetDist = Infinity;
+        ms.noProgressTimer = 0;
+        ms.recomputeCount = 0;
         playSfx('rescue');
         if (ms.targetIdx >= ms.recipients.length) {
           showToast('🎉 세 명의 마을 주민 모두에게 메시아의 기쁜 소식을 전했어요! 수가성 여인이 우물가로 돌아갑니다!');
@@ -5872,6 +6076,11 @@ function buildMiracleOpenWorld(restoreSavedPos = false) {
   window.miracleZacchaeusGroveTrees = [];
   window.miracleReturningNpcs = [];
   window.miracleHarvestNodes = [];
+  if (window.miracleOpenWorldIntroFlyover) {
+    window.miracleOpenWorldIntroFlyover.active = false;
+    window.miracleOpenWorldIntroFlyover.timer = 0;
+    window.miracleOpenWorldIntroFlyover.doneCallback = null;
+  }
   if (typeof window.hideMiracleMissionStatusUI === 'function') window.hideMiracleMissionStatusUI();
 
   scene.background = new THREE.Color(miracleIsPostResurrection ? 0x60a5fa : 0x7dd3fc);
@@ -5979,6 +6188,19 @@ window.returnToMiracleOpenWorld = function () {
 
 function updateMiracleOpenWorldFrame(dt, now) {
   positionMiracleLeftHudBelowTopBar();
+
+  // [오프닝 영상 직후] 탑뷰 전체 조망 → 마을 상공 비행 → 캐릭터 시선 하강 플라이오버 진행
+  if (window.miracleOpenWorldIntroFlyover && window.miracleOpenWorldIntroFlyover.active) {
+    window.miracleOpenWorldIntroFlyover.timer += dt;
+    if (typeof applyCoreCameraByMode === 'function') applyCoreCameraByMode();
+    if (window.miracleOpenWorldIntroFlyover.timer >= (window.miracleOpenWorldIntroFlyover.duration || 5.4)) {
+      const doneCb = window.miracleOpenWorldIntroFlyover.doneCallback;
+      window.miracleOpenWorldIntroFlyover.active = false;
+      window.miracleOpenWorldIntroFlyover.doneCallback = null;
+      if (typeof snapCameraToPlayer === 'function') snapCameraToPlayer();
+      if (typeof doneCb === 'function') doneCb();
+    }
+  }
 
   if (typeof updateMiracleDynamicSun === 'function') {
     updateMiracleDynamicSun(dt, now);
@@ -6270,8 +6492,8 @@ function updateMiracleOpenWorldFrame(dt, now) {
       rn._collectedLabelApplied = true;
 
       const collectedBadgeText = rn.cat === 'word'
-        ? '✅ 수집한 말씀 (복음서 수첩에 기록됨)'
-        : (rn.cat === 'eyewitness' ? '✅ 수집한 목격담 (복음서 수첩에 기록됨)' : '✅ 수집한 소문 (복음서 수첩에 기록됨)');
+        ? '✅ 수집한 말씀 (탐험수첩에 기록됨)'
+        : (rn.cat === 'eyewitness' ? '✅ 수집한 목격담 (탐험수첩에 기록됨)' : '✅ 수집한 소문 (탐험수첩에 기록됨)');
       if (rn.label) {
         const prefix = rn.cat === 'word' ? '✅ 수집한 말씀' : (rn.cat === 'eyewitness' ? '✅ 수집한 목격담' : '✅ 수집한 소문');
         rn.label.innerHTML = `${prefix} · ${rn.speaker}`;

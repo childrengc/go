@@ -4,7 +4,7 @@
 // - 스테이지 3(십자가 사건): 넓어진 골고다 언덕 정상 고원과 세 십자가 등장 연출 적용
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_stages = '20261120_v13';
+window.__GAME_BUILD_VERSIONS__.ep4_stages = '20261120_v14';
 
 // 스테이지 3: 예수님과 플레이어가 무거운 십자가를 지고 걷는 통일 속도 (아무리 세게 터치해도 이 속도로 제한!)
 const MIRACLE_STAGE3_CROSS_WALK_SPEED = 1.65;
@@ -1691,6 +1691,11 @@ function updateMiracleMainStage2Frame(dt, now) {
     if (st.introFlyover.timer >= (st.introFlyover.duration || 3.4)) {
       st.introFlyover.active = false;
       if (typeof snapCameraToPlayer === 'function') snapCameraToPlayer();
+      if (typeof window.syncMiracleStageGuideFromHUD === 'function' && window.MiracleGuideUI && window.MiracleGuideUI.activeStageInfo) {
+        const s = window.MiracleGuideUI.activeStageInfo;
+        window.MiracleGuideUI.lastAutoKey = '';
+        window.syncMiracleStageGuideFromHUD(s.title, s.text, s.badge);
+      }
       showToast('🍱 이제 언덕 위 많은 인파 속에서 도시락을 가진 어린아이를 직접 찾아보세요!');
     }
   }
@@ -2650,8 +2655,8 @@ function buildMiracleMainStage4Tomb() {
 
   // 1) 예루살렘 마을 바닥·북쪽 동산 정원·서쪽 골고다 언덕 (오픈월드와 동일한 크리스프 비인덱스 로우폴리 지형)
   const s4HeightFn = (vx, vz) => {
-    const golDist = Math.hypot((vx - (-50)) / 28, (vz - (-10)) / 28);
-    if (golDist < 1.0 && Math.abs(vx) > halfW + 1.0) {
+    const golDist = Math.hypot((vx - (-50)) / 24, (vz - (-10)) / 26);
+    if (golDist < 1.0 && vx < -33.5) {
       const clampedD = Math.max(0, (golDist - 0.25) / 0.75);
       const gt = 1.0 - Math.min(1.0, clampedD);
       return gt * gt * (3 - 2 * gt) * 9.0;
@@ -2753,6 +2758,33 @@ function buildMiracleMainStage4Tomb() {
       const hw = 3.2 * sc, hd = 2.8 * sc;
       miracleActiveMiniState.houseRects.push({ minX: hx - hw, maxX: hx + hw, minZ: hz - hd, maxZ: hz + hd });
     }
+  });
+
+  // [스테이지 4 맵 가장자리 외곽 봉쇄] 남쪽 예루살렘 성전 + 동·서·남 가장자리 집·상가 밀집 배치!
+  buildStageJerusalemTemple(0, 0, 63, 0.96, 0, true, 15);
+  const stage4PerimeterBuildings = [
+    // 남쪽 광장 좌·우 상가(v=2,3 천막 상점) & 코너 가옥 (성전 외곽 성문 좌우를 빈틈없이 연결!)
+    [-18.5,  45.5, 2,  Math.PI,       0.88, 'stonebrick'],
+    [ 18.5,  45.5, 3,  Math.PI,       0.88, 'plaster'],
+    [-27.5,  44.0, 1,  Math.PI * 0.7, 0.88, 'plaster'],
+    [ 27.5,  44.0, 0, -Math.PI * 0.7, 0.88, 'stonebrick'],
+    [-23.5,  36.5, 3,  Math.PI / 2,   0.86, 'plaster'],
+    [ 23.5,  36.5, 2, -Math.PI / 2,   0.86, 'stonebrick'],
+    // 서쪽 마을 외곽 경계 (x = -29.8 연속 집·상가 열)
+    [-29.8,  30.5, 2,  Math.PI / 2,   0.88, 'stonebrick'],
+    [-29.8,  19.0, 3,  Math.PI / 2,   0.88, 'plaster'],
+    [-29.8,   7.5, 1,  Math.PI / 2,   0.88, 'stonebrick'],
+    [-29.8,  -4.0, 2,  Math.PI / 2,   0.88, 'plaster'],
+    [-29.8, -15.5, 4,  Math.PI / 2,   0.88, 'stonebrick'],
+    // 동쪽 마을 외곽 경계 (x = +29.8 연속 집·상가 열)
+    [ 29.8,  30.5, 3, -Math.PI / 2,   0.88, 'plaster'],
+    [ 29.8,  19.0, 2, -Math.PI / 2,   0.88, 'stonebrick'],
+    [ 29.8,   7.5, 0, -Math.PI / 2,   0.88, 'plaster'],
+    [ 29.8,  -4.0, 3, -Math.PI / 2,   0.88, 'stonebrick'],
+    [ 29.8, -15.5, 4, -Math.PI / 2,   0.88, 'plaster']
+  ];
+  stage4PerimeterBuildings.forEach(([hx, hz, v, yaw, sc, masonry]) => {
+    addJudeanRoadsideBuilding(hx, hz, v, yaw, sc, false, masonry);
   });
 
   // 동산 입구 북쪽 성벽(좌·우) & 단서 수집 전까지 동산 입구를 막고 있는 나무 성문
@@ -2943,14 +2975,40 @@ function buildMiracleMainStage4Tomb() {
   miracleActiveMiniState.tombLabel = createWorldLabel('🔒 동산의 빈 무덤 (단서를 모두 모으면 열려요!)');
   miracleActiveMiniState.tombLabel.style.opacity = '0';
 
-  if (typeof addLowPolyCanopyTree === 'function') {
-    addLowPolyCanopyTree(-18, -36, 1.2, true);
-    addLowPolyCanopyTree( 18, -36, 1.2, true);
-  }
-  [[-14, -30], [14, -30], [-12, -42], [12, -42]].forEach(([tx, tz], i) => {
-    if (i % 2 === 0) addLowPolyOliveTree(tx, tz, 1.2, true);
-    else addLowPolyCypressPineTree(tx, tz, 1.2, true);
+  // [무덤 주변 동산 가장자리 수목 경계] 북·서·동 외곽을 울창한 나무 숲으로 빈틈없이 막아 고요한 동산 연출!
+  let tombPerimeterTreeCount = 0;
+  const plantTombBorderTree = (tx, tz, kindIdx, sc, withCol = true) => {
+    if (kindIdx % 3 === 0 && typeof addLowPolyCanopyTree === 'function') {
+      addLowPolyCanopyTree(tx, tz, sc, withCol);
+    } else if (kindIdx % 3 === 1) {
+      addLowPolyOliveTree(tx, tz, sc, withCol);
+    } else {
+      addLowPolyCypressPineTree(tx, tz, sc, withCol);
+    }
+    tombPerimeterTreeCount++;
+  };
+
+  // 서쪽·동쪽 동산 가장자리 이중 나무 벽 (z = -25 ~ -52)
+  [-26.0, -30.5, -35.0, -39.5, -44.0, -48.5, -52.5].forEach((tz, i) => {
+    plantTombBorderTree(-26.2 - (i % 2) * 1.4, tz, i,     1.22 + (i % 3) * 0.12, true);
+    plantTombBorderTree(-30.6 - (i % 2) * 1.2, tz - 1.5, i + 1, 1.34 + (i % 2) * 0.14, false);
+    plantTombBorderTree( 26.2 + (i % 2) * 1.4, tz, i + 2, 1.22 + (i % 3) * 0.12, true);
+    plantTombBorderTree( 30.6 + (i % 2) * 1.2, tz - 1.5, i,     1.34 + (i % 2) * 0.14, false);
   });
+  // 북쪽 무덤 뒤편 가장자리 숲 경계 (z = -48.5 ~ -54)
+  [-22.5, -17.5, -12.5, -7.5, -2.5, 2.5, 7.5, 12.5, 17.5, 22.5].forEach((tx, i) => {
+    const zBack = (Math.abs(tx) < 11) ? -52.5 : -48.8;
+    plantTombBorderTree(tx, zBack - (i % 2) * 1.8, i + 1, 1.28 + (i % 3) * 0.12, true);
+  });
+  // 동산 내부 정원 감싸는 조경 나무
+  [[-19, -29], [19, -29], [-18, -37], [18, -37], [-14, -44], [14, -44], [-13, -31], [13, -31]].forEach(([tx, tz], i) => {
+    plantTombBorderTree(tx, tz, i, 1.15, true);
+  });
+  miracleActiveMiniState.perimeterStats = {
+    templeBuilt: true,
+    perimeterBuildings: stage4PerimeterBuildings.length,
+    tombPerimeterTrees: tombPerimeterTreeCount
+  };
 
   if (typeof addLowPolyWildflowerCluster === 'function') {
     [[-8, -32], [8, -32], [-6, -38], [6, -38]].forEach(([fx, fz]) => {
@@ -3747,7 +3805,7 @@ REGISTER_EPISODE('miracle', {
       const nextSt = (typeof getNextActiveMainStageNumber === 'function') ? getNextActiveMainStageNumber() : 1;
       badge.textContent = miracleIsPostResurrection ? '복음서 오픈월드 (부활 후)' : '복음서 오픈월드';
       countIcon.textContent = '📖';
-      countText.textContent = `주요사건 ${clearedCnt}/4 · 수첩 ${miracleCollectedIds.size}/36`;
+      countText.textContent = `주요사건 ${clearedCnt}/4 · 탐험수첩 ${miracleCollectedIds.size}/36`;
       missionText.textContent = miracleIsPostResurrection
         ? '부활하신 예수님의 증언(엠마오·도마·바닷가 아침식사)을 체험하고 빛기둥이 비추는 감람산 정상으로 오르세요!'
         : `빛기둥이 비추는 [메인 스테이지 ${nextSt}]을(를) 순서대로 진행하고, 반짝이는 빛의 원이 있는 비유·사건을 체험하세요!`;
