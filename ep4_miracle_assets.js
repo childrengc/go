@@ -6,7 +6,7 @@
 // =========================================================================
 
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_assets = '20261120_v8';
+window.__GAME_BUILD_VERSIONS__.ep4_assets = '20261120_v11';
 
 const _miracleDoubleSideMatCache = {};
 function matLowPolyDouble(hexColor) {
@@ -229,25 +229,37 @@ function setupMiracleDynamicSunAndShadows() {
 
   if (worldGroup) {
     const sunGrp = new THREE.Group();
-    // 첨부 레퍼런스 스타일: 면(Facet)이 또렷한 로우 폴리곤 황금 다면체 태양 + 3중 반투명 8각 폴리곤 빛무리
-    const rawCoreGeo = new THREE.IcosahedronGeometry(8.2, 0);
+    // 첨부 태양 이미지 스타일:
+    // - 다각형 폴리곤(Icosahedron detail=1, 80면) 태양 본체
+    // - 카메라를 바라보는 정중앙은 눈부시게 밝은 크림화이트(#fffef2), 중간은 노랑(#fde047), 바깥 가장자리로 갈수록 진한 황금빛(#f59e0b)
+    // - 다각형(10각형) 2단계 빛무리로 낮 하늘 위에서 선명하고 깔끔하게 빛남!
+    const rawCoreGeo = new THREE.IcosahedronGeometry(8.6, 1);
     const coreGeo = rawCoreGeo.index ? rawCoreGeo.toNonIndexed() : rawCoreGeo;
     if (coreGeo !== rawCoreGeo && typeof rawCoreGeo.dispose === 'function') rawCoreGeo.dispose();
     const cPos = coreGeo.attributes.position;
-    const facetPalette = [
-      new THREE.Color('#fffef2'),
-      new THREE.Color('#fef9c3'),
-      new THREE.Color('#fef08a'),
-      new THREE.Color('#fde68a'),
-      new THREE.Color('#fffbeb')
-    ];
+    const colCore = new THREE.Color('#fffef2');
+    const colMid  = new THREE.Color('#fde047');
+    const colRim  = new THREE.Color('#ee8f12');
+    const tmpCol  = new THREE.Color();
     const fCols = new Float32Array(cPos.count * 3);
     for (let i = 0; i + 2 < cPos.count; i += 3) {
-      const fc = facetPalette[(Math.floor(i / 3) * 3 + 1) % facetPalette.length];
+      const mx = (cPos.getX(i) + cPos.getX(i + 1) + cPos.getX(i + 2)) / 3;
+      const my = (cPos.getY(i) + cPos.getY(i + 1) + cPos.getY(i + 2)) / 3;
+      const mz = (cPos.getZ(i) + cPos.getZ(i + 1) + cPos.getZ(i + 2)) / 3;
+      const len = Math.hypot(mx, my, mz) || 1;
+      // sunGrp.lookAt(camera.position) 기준 화면 중심에서의 반경 비율 r/R = hypot(mx,my)/len (0=정중앙 밝음, 1=외곽 진한 금색!)
+      const radialT = Math.max(0, Math.min(1, Math.hypot(mx, my) / len));
+      if (radialT < 0.48) {
+        tmpCol.copy(colCore).lerp(colMid, radialT / 0.48);
+      } else {
+        tmpCol.copy(colMid).lerp(colRim, Math.min(1, (radialT - 0.48) / 0.52));
+      }
+      // 다면체 각 삼각형 면의 보석 같은 입체감이 살아나도록 미세한 면별 명암 배리에이션
+      const facetVar = 0.945 + (((Math.floor(i / 3) * 17) % 7) / 6) * 0.095;
       for (let k = 0; k < 3; k++) {
-        fCols[(i + k) * 3]     = fc.r;
-        fCols[(i + k) * 3 + 1] = fc.g;
-        fCols[(i + k) * 3 + 2] = fc.b;
+        fCols[(i + k) * 3]     = Math.min(1, tmpCol.r * facetVar);
+        fCols[(i + k) * 3 + 1] = Math.min(1, tmpCol.g * facetVar);
+        fCols[(i + k) * 3 + 2] = Math.min(1, tmpCol.b * facetVar);
       }
     }
     coreGeo.setAttribute('color', new THREE.Float32BufferAttribute(fCols, 3));
@@ -258,17 +270,17 @@ function setupMiracleDynamicSunAndShadows() {
       fog: false
     });
     const core = new THREE.Mesh(coreGeo, coreMat);
+    core.userData.sunStyle = 'radial_polygonal_core';
 
-    // 3겹 동심 8각형 반투명 폴리곤 빛무리 (회전 없이 카메라만 부드럽게 정면 주시)
+    // 2단계 동심 10각형 다각형 폴리곤 빛무리 (낮 하늘 대비 선명도·모바일 성능 최적 균형!)
     const flareGrp = new THREE.Group();
     const haloSpecs = [
-      { r: 12.6, col: 0xfefce8, op: 0.34, z: -1.4 },
-      { r: 18.2, col: 0xfef9c3, op: 0.17, z: -2.8 },
-      { r: 24.5, col: 0xffffff, op: 0.08, z: -4.2 }
+      { r: 12.8, col: 0xfef08a, op: 0.30, z: -1.6 },
+      { r: 17.8, col: 0xfde68a, op: 0.14, z: -3.2 }
     ];
     haloSpecs.forEach(hs => {
       const hMesh = new THREE.Mesh(
-        new THREE.CircleGeometry(hs.r, 8),
+        new THREE.CircleGeometry(hs.r, 10),
         new THREE.MeshBasicMaterial({
           color: hs.col,
           transparent: true,
@@ -278,7 +290,7 @@ function setupMiracleDynamicSunAndShadows() {
           side: THREE.DoubleSide
         })
       );
-      hMesh.rotation.z = Math.PI / 8;
+      hMesh.rotation.z = Math.PI / 10;
       hMesh.position.z = hs.z;
       flareGrp.add(hMesh);
     });
@@ -332,10 +344,10 @@ function updateMiracleDynamicSun(dt, now) {
       focusY + visY,
       focusZ + visZ
     );
-    if (miracleSunSystem.flareGroup && camera) {
-      miracleSunSystem.flareGroup.lookAt(camera.position);
+    // 태양 본체(중앙 밝음·외곽 진함)와 2단계 다각형 빛무리가 항상 카메라를 정면 주시!
+    if (camera) {
+      miracleSunSystem.sunVisualGroup.lookAt(camera.position);
     }
-    // 시선이 태양을 바라볼 때 화면 렌즈 플레어 발동
     updateMiracleSunScreenFlare(now);
   }
 
@@ -1654,15 +1666,26 @@ function createJesusBellSleeveArm(isLeft, robeHex = '#e8e6e2', cuffHex = '#d8d5d
   const sMesh = createLowPolyMesh(sGeo.toNonIndexed(), robeHex, 0, 0, 0);
   pivot.add(sMesh);
 
-  const innerCuff = createLowPolyMesh(new THREE.CylinderGeometry(0.095, 0.105, 0.08, 6), cuffHex, 0, -0.50, 0);
-  const palm = createLowPolyMesh(new THREE.BoxGeometry(0.10, 0.12, 0.12), skinHex, 0, -0.58, 0.01);
-  const fingers = createLowPolyMesh(new THREE.BoxGeometry(0.09, 0.08, 0.10), skinHex, -side * 0.015, -0.65, 0.01);
-  fingers.rotation.z = -side * 0.24;
-  const thumb = createLowPolyMesh(new THREE.BoxGeometry(0.045, 0.075, 0.055), skinHex, -side * 0.05, -0.59, 0.065, false);
-  thumb.rotation.x = 0.3;
+  const innerCuff = createLowPolyMesh(new THREE.CylinderGeometry(0.095, 0.105, 0.08, 8), cuffHex, 0, -0.50, 0);
+  // 둥글고 부드러운 소프트 로우 폴리곤 예수님 손 (손목 + 둥근 손바닥 + 자연스럽게 모인 손가락 + 둥근 엄지)
+  const wrist = createLowPolyMesh(new THREE.CylinderGeometry(0.056, 0.052, 0.06, 8), skinHex, 0, -0.535, 0.005, false);
+  const palm = createLowPolyMesh(new THREE.IcosahedronGeometry(0.072, 1), skinHex, 0, -0.59, 0.012);
+  palm.scale.set(0.95, 1.12, 0.56);
+  const fingers = createLowPolyMesh(new THREE.DodecahedronGeometry(0.056, 0), skinHex, -side * 0.008, -0.665, 0.018);
+  fingers.scale.set(0.92, 1.08, 0.44);
+  fingers.rotation.x = 0.16;
+  fingers.rotation.z = -side * 0.14;
+  const fingerTips = createLowPolyMesh(new THREE.DodecahedronGeometry(0.044, 0), skinHex, -side * 0.012, -0.71, 0.028, false);
+  fingerTips.scale.set(0.88, 0.72, 0.42);
+  const thumb = createLowPolyMesh(new THREE.DodecahedronGeometry(0.036, 0), skinHex, -side * 0.058, -0.60, 0.042, false);
+  thumb.scale.set(0.75, 1.38, 0.72);
+  thumb.rotation.z = side * 0.42;
+  thumb.rotation.x = 0.25;
 
-  pivot.add(innerCuff, palm, fingers, thumb);
+  pivot.add(innerCuff, wrist, palm, fingers, fingerTips, thumb);
   armGrp.add(pivot);
+  armGrp.userData.handStyle = 'soft_lowpoly_rounded';
+  armGrp.userData.handPivot = pivot;
   return armGrp;
 }
 
@@ -2314,17 +2337,40 @@ function getMergedLowPolySilhouetteGeo(preset, cfg, isFemale) {
   return merged;
 }
 
-// 플레이어 캐릭터 생성기 (항상 고해상도(LOD 0) 강제 추출 유지)
+// 멀티플레이 선택 가능 캐릭터 프리셋 지원 (예수님·천사 원천 차단)
+window.selectedMiracleHeroPreset = window.selectedMiracleHeroPreset || { preset: 'hero', idx: 0 };
+
+function createLowPolyHarvestAxeMesh() {
+  const g = new THREE.Group();
+  const handle = createLowPolyMesh(new THREE.CylinderGeometry(0.036, 0.044, 1.05, 5), '#6b4226', 0, -0.32, 0.16, false);
+  handle.rotation.x = Math.PI * 0.42;
+  const bind = createLowPolyMesh(new THREE.CylinderGeometry(0.056, 0.056, 0.14, 6), '#92400e', 0, -0.58, 0.52, false);
+  bind.rotation.x = Math.PI * 0.42;
+  // 도끼날(철/돌) + 반대편 곡괭이 팁 (나무 베기와 돌 캐기 모두 자연스럽게 표현!)
+  const axeBlade = createLowPolyMesh(new THREE.ConeGeometry(0.18, 0.34, 4), '#94a3b8', 0, -0.74, 0.56, false);
+  axeBlade.rotation.x = Math.PI;
+  axeBlade.scale.set(0.35, 1.0, 1.15);
+  const pickTip = createLowPolyMesh(new THREE.ConeGeometry(0.08, 0.28, 4), '#cbd5e1', 0, -0.44, 0.54, false);
+  pickTip.scale.set(0.55, 1.0, 0.85);
+  g.add(handle, bind, axeBlade, pickTip);
+  return g;
+}
+
+// 플레이어 캐릭터 생성기 (항상 고해상도(LOD 0) 강제 추출 유지 + 멀티플레이 선택 캐릭터 반영)
 window.createMiracleHeroMesh = function () {
-  const g = window.createLowPolyPersonMesh('hero', 0);
+  const sel = window.selectedMiracleHeroPreset || { preset: 'hero', idx: 0 };
+  const rawPreset = String(sel.preset || 'hero');
+  const safePreset = (rawPreset === 'jesus' || rawPreset === 'angel') ? 'hero' : rawPreset;
+  const safeIdx = Number.isFinite(sel.idx) ? sel.idx : 0;
+
+  const g = window.createLowPolyPersonMesh(safePreset, safeIdx);
   const heroGrp = g.levels[0].object.clone();
   heroGrp.scale.copy(g.scale);
   const u = {
     lLeg: heroGrp.children[0], rLeg: heroGrp.children[1],
     lArm: heroGrp.children[7], rArm: heroGrp.children[8], head: heroGrp.children[9]
   };
-  const toolGrp = new THREE.Group();
-  toolGrp.add(createLowPolyMesh(new THREE.CylinderGeometry(0.20, 0.15, 0.24, 7), '#d97706', 0, -0.66, 0.22, false));
+  const toolGrp = createLowPolyHarvestAxeMesh();
   toolGrp.visible = false;
   u.lArm.add(toolGrp);
   carriedBlockGroup = new THREE.Group();
@@ -2515,15 +2561,94 @@ window.createLowPolyDonkey = function (x, z, rotY = 0) {
   return donkey;
 };
 
-function createLowPolyFishMesh(colorHex = '#f97316', scale = 1.0) {
+// [레퍼런스 반영] 소프트 로우 폴리곤 다면체 갈릴리 물고기 6종 팩토리 (등·배 투톤, 눈, 등/가슴/배지느러미, V자 갈래 꼬리)
+const MIRACLE_FISH_PALETTES = [
+  { body: '#f59e0b', belly: '#fde68a', fin: '#fb923c', stripe: '#ea580c' }, // 황금 잉어 (Gold Carp)
+  { body: '#6b9e8a', belly: '#d8e6de', fin: '#a3b899', stripe: '#4d7c6b' }, // 갈릴리 베드로 고기 (Tilapia)
+  { body: '#7fa67c', belly: '#e2e8e0', fin: '#e69b8a', stripe: '#f2a69c' }, // 무지개 송어 (Trout)
+  { body: '#6c9638', belly: '#e9e2b8', fin: '#eab308', stripe: '#3f6212' }, // 줄무늬 농어 (Perch)
+  { body: '#c49a6c', belly: '#ede0c8', fin: '#9a7248', stripe: '#855e36' }, // 모래 잉어 (Barbel)
+  { body: '#2563eb', belly: '#93c5fd', fin: '#facc15', stripe: '#1e3a8a' }  // 코발트 블루피쉬 (Blue Fish)
+];
+window.MIRACLE_FISH_PALETTES = MIRACLE_FISH_PALETTES;
+
+function createLowPolyFishMesh(colorHex = '#f97316', scale = 1.0, variant = null) {
   const fGrp = new THREE.Group();
-  const body = createLowPolyMesh(createSculptedTorsoGeo(0.14 * scale, 0.22 * scale, 0.42 * scale), colorHex, 0, 0, 0, false);
-  const tail = createLowPolyMesh(new THREE.ConeGeometry(0.18 * scale, 0.28 * scale, 3), '#fef08a', 0, 0, -0.45 * scale, false);
-  tail.rotation.x = Math.PI / 2;
-  tail.scale.set(0.35, 1.0, 1.0);
-  fGrp.add(body, tail);
+  const s = scale;
+
+  let pal;
+  if (typeof variant === 'number' && variant >= 0) {
+    pal = MIRACLE_FISH_PALETTES[variant % MIRACLE_FISH_PALETTES.length];
+  } else if (colorHex === '#38bdf8' || colorHex === '#0284c7') {
+    pal = MIRACLE_FISH_PALETTES[1]; // 갈릴리 청록 베드로 고기
+  } else if (colorHex === '#f97316' || colorHex === '#f59e0b') {
+    pal = MIRACLE_FISH_PALETTES[0]; // 황금 오렌지 잉어
+  } else if (colorHex === '#93c5fd') {
+    pal = MIRACLE_FISH_PALETTES[2]; // 은빛 송어
+  } else {
+    pal = { body: colorHex || '#6b9e8a', belly: '#e2e8f0', fin: '#eab308', stripe: colorHex || '#4d7c6b' };
+  }
+
+  // 1) 다면체 유선형 몸통 (앞머리 + 중앙 등/배 + 꼬리자루)
+  const mainBody = createLowPolyMesh(new THREE.IcosahedronGeometry(0.30 * s, 0), pal.body, 0, 0.03 * s, 0.04 * s, false);
+  mainBody.scale.set(0.56, 0.88, 1.58);
+
+  const belly = createLowPolyMesh(new THREE.IcosahedronGeometry(0.24 * s, 0), pal.belly, 0, -0.07 * s, 0.06 * s, false);
+  belly.scale.set(0.52, 0.62, 1.42);
+
+  const snout = createLowPolyMesh(new THREE.ConeGeometry(0.16 * s, 0.34 * s, 5), pal.body, 0, 0.0, 0.48 * s, false);
+  snout.rotation.x = Math.PI * 0.5;
+  snout.scale.set(0.66, 1.0, 0.96);
+
+  const lip = createLowPolyMesh(new THREE.DodecahedronGeometry(0.065 * s, 0), pal.fin, 0, -0.04 * s, 0.61 * s, false);
+  lip.scale.set(0.95, 0.55, 0.72);
+
+  const tailPeduncle = createLowPolyMesh(new THREE.ConeGeometry(0.14 * s, 0.38 * s, 5), pal.stripe, 0, 0.01 * s, -0.44 * s, false);
+  tailPeduncle.rotation.x = -Math.PI * 0.5;
+  tailPeduncle.scale.set(0.52, 1.0, 0.92);
+
+  // 2) V자 갈래 꼬리지느러미 (상/하 비대칭 다면체 날개 — 헤엄칠 때 tailPivot 흔들림 지원!)
+  const tailPivot = new THREE.Group();
+  tailPivot.position.set(0, 0.01 * s, -0.56 * s);
+  const tailUp = createLowPolyMesh(new THREE.ConeGeometry(0.14 * s, 0.38 * s, 4), pal.fin, 0, 0.11 * s, -0.15 * s, false);
+  tailUp.rotation.x = -Math.PI * 0.34;
+  tailUp.scale.set(0.26, 1.0, 0.85);
+  const tailLo = createLowPolyMesh(new THREE.ConeGeometry(0.13 * s, 0.34 * s, 4), pal.fin, 0, -0.10 * s, -0.14 * s, false);
+  tailLo.rotation.x = -Math.PI * 0.66;
+  tailLo.scale.set(0.26, 1.0, 0.85);
+  tailPivot.add(tailUp, tailLo);
+
+  // 3) 뾰족하게 뻗은 등지느러미 + 양쪽 가슴지느러미 + 아래 배지느러미
+  const dorsalMain = createLowPolyMesh(new THREE.ConeGeometry(0.15 * s, 0.36 * s, 4), pal.fin, 0, 0.28 * s, -0.02 * s, false);
+  dorsalMain.rotation.x = -0.58;
+  dorsalMain.scale.set(0.24, 1.0, 1.45);
+  const dorsalRear = createLowPolyMesh(new THREE.ConeGeometry(0.09 * s, 0.22 * s, 4), pal.stripe, 0, 0.21 * s, -0.24 * s, false);
+  dorsalRear.rotation.x = -0.68;
+  dorsalRear.scale.set(0.22, 1.0, 1.10);
+
+  const pecL = createLowPolyMesh(new THREE.ConeGeometry(0.10 * s, 0.28 * s, 4), pal.fin, -0.17 * s, -0.07 * s, 0.10 * s, false);
+  pecL.rotation.set(-0.42, -0.45, 1.08);
+  pecL.scale.set(0.25, 1.0, 0.88);
+  const pecR = createLowPolyMesh(new THREE.ConeGeometry(0.10 * s, 0.28 * s, 4), pal.fin,  0.17 * s, -0.07 * s, 0.10 * s, false);
+  pecR.rotation.set(-0.42,  0.45, -1.08);
+  pecR.scale.set(0.25, 1.0, 0.88);
+
+  const pelvic = createLowPolyMesh(new THREE.ConeGeometry(0.08 * s, 0.20 * s, 4), pal.fin, 0, -0.22 * s, -0.14 * s, false);
+  pelvic.rotation.x = Math.PI + 0.55;
+  pelvic.scale.set(0.24, 1.0, 1.1);
+
+  // 4) 양쪽 또렷한 눈 (금/흰 테두리 + 검은 눈동자)
+  [-1, 1].forEach(side => {
+    const eyeRing = createLowPolyMesh(new THREE.DodecahedronGeometry(0.052 * s, 0), '#fef9c3', side * 0.115 * s, 0.06 * s, 0.36 * s, false);
+    const pupil   = createLowPolyMesh(new THREE.DodecahedronGeometry(0.032 * s, 0), '#111827', side * 0.142 * s, 0.065 * s, 0.375 * s, false);
+    fGrp.add(eyeRing, pupil);
+  });
+
+  fGrp.add(mainBody, belly, snout, lip, tailPeduncle, tailPivot, dorsalMain, dorsalRear, pecL, pecR, pelvic);
+  fGrp.userData = { tailPivot, fishStyle: 'soft_lowpoly_v11', palette: pal };
   return fGrp;
 }
+window.createLowPolyFishMesh = createLowPolyFishMesh;
 
 function createBranchSegmentMesh(p1, p2, rBottom, rTop, colorHex) {
   const dir = new THREE.Vector3().subVectors(p2, p1);

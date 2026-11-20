@@ -191,6 +191,181 @@
         border-radius: 0.65rem !important;
       }
     }
+
+    /* ================================================================
+       [에피소드 3 스테이지 2] 가로형 대화창 캐릭터 가림 방지 (하단 밀착·반투명·자동 축소)
+       ================================================================ */
+    #david-npc-dialog.david-stage2-intro {
+      background: rgba(255, 251, 235, 0.78) !important;
+      backdrop-filter: blur(5px);
+      -webkit-backdrop-filter: blur(5px);
+    }
+    @media (orientation: landscape) and (max-height: 540px) {
+      #david-npc-dialog,
+      #david-npc-dialog.david-stage2-intro {
+        margin-bottom: 0.4rem !important;
+        padding: 0.42rem 0.75rem !important;
+        max-width: min(82vw, 620px) !important;
+        border-width: 2.5px !important;
+        border-radius: 1rem !important;
+        gap: 0.22rem !important;
+        background: rgba(255, 251, 235, 0.74) !important;
+      }
+      #david-npc-dialog .david-dialog-sound-tag {
+        display: none !important;
+      }
+      #david-npc-dialog #david-npc-name {
+        font-size: clamp(10px, 2.6vh, 12px) !important;
+        padding: 0.1rem 0.5rem !important;
+      }
+      #david-npc-dialog #david-npc-text {
+        font-size: clamp(11px, 2.7vh, 13px) !important;
+        line-height: 1.3 !important;
+        min-height: 0 !important;
+      }
+      #david-npc-dialog #david-npc-action-btn {
+        font-size: clamp(10px, 2.5vh, 12px) !important;
+        padding: 0.22rem 0.65rem !important;
+      }
+    }
+
+    /* ================================================================
+       [에피소드 4 인터페이스] 가죽 책 모양 복음서 수첩 버튼 (디바이스별 가변 크기)
+       ================================================================ */
+    .miracle-book-btn {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: clamp(5px, 1.1vw, 9px);
+      padding: clamp(5px, 1.0vh, 8px) clamp(9px, 1.6vw, 13px) clamp(6px, 1.1vh, 9px) clamp(15px, 2.4vw, 20px);
+      background: linear-gradient(140deg, #9a4718 0%, #78350f 65%, #5c2808 100%);
+      border: 2px solid #f59e0b;
+      border-left: none;
+      border-radius: 4px 10px 10px 4px;
+      color: #fef3c7;
+      box-shadow:
+        inset 10px 0 0 #451a03,
+        inset 12px 0 0 rgba(251, 191, 36, 0.42),
+        3px 0 0 #fef3c7,
+        4px 2px 0 #d6b98c,
+        0 5px 12px rgba(15, 23, 42, 0.45);
+      transition: transform 0.12s ease, filter 0.12s ease;
+      cursor: pointer;
+    }
+    .miracle-book-btn:hover {
+      filter: brightness(1.08);
+      transform: translateY(-1px);
+    }
+    .miracle-book-btn:active {
+      transform: translateY(1px);
+    }
+    /* 책 하단으로 살짝 삐져나온 붉은 리본 책갈피 */
+    .miracle-book-btn::after {
+      content: '';
+      position: absolute;
+      right: 12px;
+      bottom: -8px;
+      width: 9px;
+      height: 10px;
+      background: #dc2626;
+      clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 68%, 0 100%);
+      pointer-events: none;
+    }
+    .miracle-book-btn .book-emblem {
+      width: clamp(15px, 2.4vw, 20px);
+      height: clamp(15px, 2.4vw, 20px);
+      flex-shrink: 0;
+    }
+    .miracle-book-btn .book-title {
+      font-size: clamp(11px, 1.6vw, 13.5px);
+      line-height: 1.1;
+      letter-spacing: -0.01em;
+      white-space: nowrap;
+    }
+    .miracle-book-btn .book-count {
+      padding: 1px clamp(5px, 0.8vw, 7px);
+      border-radius: 9999px;
+      background: #fbbf24;
+      color: #451a03;
+      font-size: clamp(10px, 1.4vw, 12px);
+      line-height: 1.25;
+      font-weight: 800;
+    }
+    @media (max-width: 640px) and (orientation: portrait) {
+      .miracle-book-btn {
+        padding: 5px 8px 6px 14px;
+        gap: 5px;
+      }
+      .miracle-book-btn .book-title { font-size: 11px; }
+      .miracle-book-btn .book-count { font-size: 10px; padding: 1px 5px; }
+    }
+    @media (orientation: landscape) and (max-height: 500px) {
+      .miracle-book-btn {
+        padding: 4px 7px 4px 13px;
+        gap: 4px;
+        box-shadow:
+          inset 8px 0 0 #451a03,
+          inset 10px 0 0 rgba(251, 191, 36, 0.42),
+          2px 0 0 #fef3c7,
+          3px 1px 0 #d6b98c,
+          0 3px 8px rgba(15, 23, 42, 0.42);
+      }
+      .miracle-book-btn::after { height: 7px; bottom: -6px; width: 7px; }
+      .miracle-book-btn .book-emblem { width: 14px; height: 14px; }
+      .miracle-book-btn .book-title { font-size: 10.5px; }
+      .miracle-book-btn .book-count { font-size: 9.5px; padding: 0px 4px; }
+    }
+
+    /* [에피소드 4 소년반 전용] 초슬림 미니 나침반/거리 내비게이터 (모바일 세로형·가로형 화면 가림 최소화) */
+    .miracle-mini-nav {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      max-width: clamp(150px, 46vw, 240px);
+      padding: 4px 9px 4px 6px;
+      border-radius: 9999px;
+      background: rgba(15, 23, 42, 0.78);
+      border: 1.5px solid rgba(251, 191, 36, 0.85);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      color: #f8fafc;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+    }
+    .miracle-mini-nav.hidden { display: none !important; }
+    .miracle-mini-nav .nav-dial {
+      width: 22px;
+      height: 22px;
+      border-radius: 9999px;
+      background: rgba(30, 41, 59, 0.92);
+      border: 1.5px solid #fbbf24;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .miracle-mini-nav .nav-arrow {
+      width: 14px;
+      height: 14px;
+      transition: transform 0.08s linear;
+    }
+    @media (max-width: 640px) and (orientation: portrait) {
+      .miracle-mini-nav {
+        max-width: 168px;
+        padding: 3px 7px 3px 5px;
+        gap: 4px;
+      }
+      .miracle-mini-nav .nav-dial { width: 19px; height: 19px; }
+      .miracle-mini-nav .nav-arrow { width: 12px; height: 12px; }
+    }
+    @media (orientation: landscape) and (max-height: 500px) {
+      .miracle-mini-nav {
+        max-width: 182px;
+        padding: 2.5px 7px 2.5px 5px;
+        gap: 4px;
+      }
+      .miracle-mini-nav .nav-dial { width: 18px; height: 18px; }
+      .miracle-mini-nav .nav-arrow { width: 11px; height: 11px; }
+    }
   </style>
 </head>
 <body class="relative w-full h-full select-none">
@@ -341,12 +516,21 @@
       </div>
 
       <div>
-        <button id="btn-start-explore" type="button"
-                onclick="safeGoToClassSelect()"
-                onpointerup="safeGoToClassSelect()"
-                class="opening-start-btn mc-btn w-full py-2.5 sm:py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-jua text-base sm:text-lg">
-          🚀 탐험 출발하기!
-        </button>
+        <div class="grid grid-cols-2 gap-2">
+          <button id="btn-start-explore" type="button"
+                  onclick="safeGoToClassSelect()"
+                  onpointerup="safeGoToClassSelect()"
+                  class="opening-start-btn mc-btn w-full py-2.5 sm:py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-jua text-sm sm:text-base leading-tight">
+            🚀 탐험 출발하기!
+          </button>
+          <button id="btn-open-multiplayer" type="button"
+                  onclick="if(typeof safeOpenMultiplayerEntry==='function') safeOpenMultiplayerEntry();"
+                  onpointerup="if(typeof safeOpenMultiplayerEntry==='function') safeOpenMultiplayerEntry();"
+                  title="에피소드 4 완료 시 오픈월드 멀티플레이 해금"
+                  class="opening-start-btn mc-btn w-full py-2.5 sm:py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-white font-jua text-sm sm:text-base leading-tight">
+            🌐 멀티 플레이
+          </button>
+        </div>
 
         <p class="opening-footer mt-2.5 text-[11px] sm:text-xs font-jua text-amber-900/70 tracking-wide">
           광릉내 재림교회 어린이부
@@ -404,7 +588,7 @@
   <!-- 화면 3: 도트(픽셀아트) 성경 월드맵 & 에피소드 1~4 이동경로 -->
   <!-- =================================================================== -->
   <div id="screen-map" class="hidden fixed inset-0 z-30 items-center justify-center p-2 sm:p-4 bg-slate-950/75 backdrop-blur-sm">
-    <div class="mc-card w-full max-w-5xl rounded-3xl p-2.5 sm:p-4 flex flex-col">
+    <div class="mc-card relative w-full max-w-5xl rounded-3xl p-2.5 sm:p-4 flex flex-col">
       <div class="flex items-center justify-between gap-2 mb-1.5 px-1">
         <div class="flex items-center gap-1.5">
           <span class="text-lg sm:text-xl">🗺️</span>
@@ -476,6 +660,10 @@
       <p class="mt-1.5 text-center text-[11px] sm:text-xs font-jua text-amber-900/70 tracking-wide">
         광릉내 재림교회 어린이부
       </p>
+
+      <a href="admin.html" title="관리자 모드" class="admin-lock-link absolute bottom-2 right-3 text-xs opacity-30 hover:opacity-70 transition-opacity leading-none p-1">
+        🔒
+      </a>
     </div>
   </div>
 
@@ -581,23 +769,24 @@
     </div>
   </div>
 
-<!-- 게임 스크립트 로드 (전체 스크립트 캐시 강제 갱신 ?v=8 및 버전 일관성 자동 검증 적용) -->
-  <script src="core.js?v=8"></script>
-  <script src="ep1_noah.js?v=8"></script>
-  <script src="ep2_exodus.js?v=8"></script>
-  <script src="ep3_david_base.js?v=8"></script>
-  <script src="ep3_david_st1_2.js?v=8"></script>
-  <script src="ep3_david_st3_end.js?v=8"></script>
-  <script src="ep4_miracle_base.js?v=8"></script>
-  <script src="ep4_miracle_assets.js?v=8"></script>
-  <script src="ep4_miracle_world.js?v=8"></script>
-  <script src="ep4_miracle_stages.js?v=8"></script>
+<!-- 게임 스크립트 로드 (전체 스크립트 캐시 강제 갱신 ?v=11 및 버전 일관성 자동 검증 적용) -->
+  <script src="core.js?v=11"></script>
+  <script src="ep1_noah.js?v=11"></script>
+  <script src="ep2_exodus.js?v=11"></script>
+  <script src="ep3_david_base.js?v=11"></script>
+  <script src="ep3_david_st1_2.js?v=11"></script>
+  <script src="ep3_david_st3_end.js?v=11"></script>
+  <script src="ep4_miracle_base.js?v=11"></script>
+  <script src="ep4_miracle_assets.js?v=11"></script>
+  <script src="ep4_miracle_world.js?v=11"></script>
+  <script src="ep4_miracle_stages.js?v=11"></script>
+  <script src="ep4_multiplayer.js?v=11"></script>
   <script>
     // GitHub Pages CDN·브라우저 부분 캐시로 신·구버전 스크립트가 뒤섞여 로드되는 현상을 자동 감지해 1회 강제 새로고침
     (function verifyScriptBuildConsistency() {
-      const EXPECTED = '20261120_v8';
+      const EXPECTED = '20261120_v11';
       const vers = window.__GAME_BUILD_VERSIONS__ || {};
-      const keys = ['core', 'ep4_base', 'ep4_assets', 'ep4_world', 'ep4_stages'];
+      const keys = ['core', 'ep4_base', 'ep4_assets', 'ep4_world', 'ep4_stages', 'ep4_mp'];
       const mismatch = keys.some(k => vers[k] !== EXPECTED);
       if (mismatch && location.protocol !== 'file:') {
         const u = new URL(location.href);

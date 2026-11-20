@@ -5,7 +5,7 @@
 // =========================================================================
 
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.core = '20261120_v8';
+window.__GAME_BUILD_VERSIONS__.core = '20261120_v11';
 
 // 퀴즈 선택지 순서 무작위 셔플 공용 헬퍼 (정답이 항상 1번에 고정되지 않도록 보장)
 function shuffleQuizOptions(opts, ansIdx = 0) {
@@ -702,7 +702,8 @@ function closeEndingWorldMapChoiceModal(showLookAroundToast = false) {
     modal.classList.remove('flex');
   }
   if (showLookAroundToast) {
-    showToast('🌈 엔딩 세상을 자유롭게 둘러보세요! (다시 제단으로 다가오면 이동 창이 열려요)');
+    const landmarkWord = (currentEpisode === 'exodus') ? '십계명으로' : '제단으로';
+    showToast(`🌈 엔딩 세상을 자유롭게 둘러보세요! (다시 ${landmarkWord} 다가오면 이동 창이 열려요)`);
   }
 }
 
@@ -1007,6 +1008,9 @@ function openScreen(screenId) {
     sinaiCutscene.active = false;
     const epPlugin = getActiveEpisodePlugin();
     if (epPlugin && typeof epPlugin.onCloseScreen === 'function') epPlugin.onCloseScreen();
+    if (window.MiracleMultiplayer && typeof window.MiracleMultiplayer.leaveRoom === 'function') {
+      window.MiracleMultiplayer.leaveRoom();
+    }
     document.getElementById('hud-top').classList.add('hidden');
     document.getElementById('joystick-zone').style.display = 'none';
     document.getElementById('cam-bottom-bar').style.display = 'none';
@@ -1054,6 +1058,17 @@ function selectClassAndShowMap(mode) {
   playSfx('jump');
   openScreen('screen-map');
 }
+
+function isEpisode4CompletedForMultiplayer() {
+  if (playerProgressData && playerProgressData.miracle) {
+    const mp = playerProgressData.miracle;
+    if (mp.completed || mp.certIssued || (mp.maxClearedStage || 0) >= 4) return true;
+  }
+  if (typeof miracleAscensionSeen !== 'undefined' && miracleAscensionSeen) return true;
+  if (typeof isMiracleAllStagesUnlocked === 'function' && isMiracleAllStagesUnlocked()) return true;
+  return false;
+}
+window.isEpisode4CompletedForMultiplayer = isEpisode4CompletedForMultiplayer;
 
 function launchEpisode(ep) {
   const lockState = getEpisodeLockState(ep);
@@ -2199,7 +2214,7 @@ function buildEndingWorld() {
   }
 
   if (isExodus) {
-    showToast('🌴 홍해와 시내산을 모두 통과했어요! 기뻐 뛰는 백성들 가운데 제단으로 가보세요!');
+    showToast('🌴 홍해와 시내산을 모두 통과했어요! 기뻐 뛰는 백성들 가운데 십계명으로 가보세요!');
   } else {
     showToast(
       allowCert
@@ -2424,6 +2439,49 @@ function applyCoreCameraByMode() {
     );
   } else {
     setPlayerMeshVisibilityForCamera(false);
+    // [에피소드 4 스테이지 1 반응형 카메라] PC·태블릿·모바일(세로/가로) 모든 화면비에서 캐릭터·물고기·예수님이 한눈에 담기도록 자동 보정!
+    const isMiracleBoatStage = (
+      currentEpisode === 'miracle' &&
+      typeof miracleSubMode !== 'undefined' &&
+      miracleSubMode === 'main1_galilee'
+    );
+    if (isMiracleBoatStage) {
+      const vw = Math.max(1, window.innerWidth || 1280);
+      const vh = Math.max(1, window.innerHeight || 720);
+      const aspect = Math.max(0.45, Math.min(2.2, vw / vh));
+      const st = (typeof miracleActiveMiniState !== 'undefined') ? miracleActiveMiniState : null;
+      const phase = st ? st.phase : 'cast_net';
+
+      if (phase === 'cast_net') {
+        // 1단계 그물 던지기: 배 위 플레이어(우측 전경)와 헤엄치는 물고기 떼(좌측 중경)를 동시에 담는 반응형 대각선 뷰!
+        const distScale = aspect < 1.0
+          ? Math.min(1.58, 0.88 + 0.44 / aspect)
+          : (aspect < 1.3 ? 1.10 : 0.98);
+        const fx = (st && st.targetFishPos) ? st.targetFishPos.x : -16.5;
+        const fz = (st && st.targetFishPos) ? st.targetFishPos.z : -1.5;
+        const midX = playerPos.x * 0.40 + fx * 0.60;
+        const midZ = playerPos.z * 0.55 + fz * 0.45;
+        camera.position.set(
+          playerPos.x + 11.4 * distScale,
+          playerPos.y + 11.2 * distScale,
+          playerPos.z + 14.2 * distScale
+        );
+        camera.lookAt(midX, 0.25, midZ);
+      } else {
+        // 2~3단계 폭풍우·예수님 깨우기·잔잔케 하심: 배 위 플레이어와 고물에 누워/일어나신 예수님이 어떤 화면비에서도 모두 보이게 배치!
+        const stormScale = aspect < 1.0
+          ? Math.min(1.55, 0.92 + 0.42 / aspect)
+          : (aspect < 1.3 ? 1.12 : 1.0);
+        camera.position.set(
+          playerPos.x + 5.2 * stormScale,
+          playerPos.y + 7.4 + 3.6 * stormScale,
+          playerPos.z - 12.8 * stormScale
+        );
+        camera.lookAt(0, 0.85, 4.4);
+      }
+      return;
+    }
+
     const camDist = (currentStage === 1 || currentStage === 4) ? 11.5 : (currentEpisode === 'exodus' ? 11.2 : 8.4);
     const camH = (currentStage === 1 || currentStage === 4) ? 8.5 : (currentEpisode === 'exodus' ? 8.0 : 7.0);
     camera.position.set(
@@ -2673,7 +2731,7 @@ function updateStageHUD() {
     } else {
       countIcon.textContent = '🌴';
       badge.textContent = '구원의 언덕'; countText.textContent = '완주 🌊';
-      missionText.textContent = '🌴 구름기둥과 불기둥 아래 기뻐 뛰는 백성들과 함께 제단으로 가보세요!';
+      missionText.textContent = '🌴 구름기둥과 불기둥 아래 기뻐 뛰는 백성들과 함께 십계명으로 가보세요!';
     }
   }
 
@@ -3255,6 +3313,81 @@ function resolvePlayerAntiStuckPushOut() {
 
 let webglContextLostFlag = false;
 
+// 처음 index.html 오픈 시 해금 여부와 무관하게 에피소드 1~4의 모든 대표 맵 중 하나를 무작위로 3D 배경 화면에 띄움!
+window.openingPreviewMeta = { id: 'noah_s1', cx: 0, cy: 3, cz: -10, rad: 28, camY: 14 };
+function buildRandomOpeningPreviewWorld(forcedId = null) {
+  const candidates = [];
+  if (typeof buildNoahStage1World === 'function') {
+    candidates.push({ id: 'noah_s1', ep: 'noah', stage: 1, cx: 0, cy: 3, cz: -10, rad: 28, camY: 14, build: () => buildNoahStage1World() });
+  }
+  if (typeof buildExodusStage1World === 'function') {
+    candidates.push({ id: 'exodus_s1', ep: 'exodus', stage: 1, cx: 0, cy: 5, cz: 10, rad: 34, camY: 18, build: () => buildExodusStage1World() });
+  }
+  if (typeof buildExodusStage3World === 'function') {
+    candidates.push({ id: 'exodus_s3', ep: 'exodus', stage: 3, cx: 0, cy: 10, cz: -8, rad: 30, camY: 20, build: () => buildExodusStage3World() });
+  }
+  if (typeof buildDavidStage1World === 'function') {
+    candidates.push({ id: 'david_s1', ep: 'david', stage: 1, cx: 0, cy: 4, cz: -8, rad: 30, camY: 15, build: () => buildDavidStage1World() });
+  }
+  if (typeof buildMiracleOpenWorld === 'function') {
+    candidates.push({ id: 'miracle_ow', ep: 'miracle', stage: 1, cx: 0, cy: 5, cz: -18, rad: 44, camY: 22, build: () => buildMiracleOpenWorld(false) });
+  }
+  if (candidates.length === 0) return null;
+
+  const picked = (forcedId && candidates.find(c => c.id === forcedId))
+    || candidates[Math.floor(Math.random() * candidates.length)];
+
+  const prevEp = currentEpisode;
+  const prevStage = currentStage;
+  const prevPlaying = isPlaying;
+  const origToastFn = showToast;
+  const origSpeakFn = speakText;
+  const origOggFn = window.playMiracleOpenWorldOgg;
+  try {
+    window.__isBuildingOpeningPreview = true;
+    showToast = function () {};
+    speakText = function () {};
+    if (typeof window.stopMiracleOpenWorldOgg === 'function') window.stopMiracleOpenWorldOgg(true);
+    window.playMiracleOpenWorldOgg = function () {};
+
+    currentEpisode = picked.ep;
+    currentStage = picked.stage;
+    isPlaying = false;
+    picked.build();
+  } catch (e) {
+    if (typeof buildNoahStage1World === 'function') buildNoahStage1World();
+  } finally {
+    window.__isBuildingOpeningPreview = false;
+    showToast = origToastFn;
+    speakText = origSpeakFn;
+    window.playMiracleOpenWorldOgg = origOggFn;
+    if (typeof hideAllMiracleCustomUI === 'function') hideAllMiracleCustomUI();
+    const dUi = document.getElementById('david-custom-ui');
+    if (dUi) dUi.classList.add('hidden');
+    const lblCont = document.getElementById('labels-container');
+    if (lblCont) {
+      Array.from(lblCont.children).forEach(el => { el.style.opacity = '0'; });
+    }
+    const toastBox = document.getElementById('toast-box');
+    if (toastBox) toastBox.style.opacity = '0';
+    currentEpisode = prevEp;
+    currentStage = prevStage;
+    isPlaying = prevPlaying;
+  }
+
+  window.openingPreviewMeta = {
+    id: picked.id,
+    ep: picked.ep,
+    cx: picked.cx,
+    cy: picked.cy,
+    cz: picked.cz,
+    rad: picked.rad,
+    camY: picked.camY
+  };
+  return window.openingPreviewMeta;
+}
+window.buildRandomOpeningPreviewWorld = buildRandomOpeningPreviewWorld;
+
 function initEngine(skipInitialPreview = false) {
   const container = document.getElementById('canvas-container');
   const isMobDevice = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (Math.min(window.innerWidth, window.innerHeight) <= 768);
@@ -3324,8 +3457,8 @@ function initEngine(skipInitialPreview = false) {
   scene.add(dirLight);
 
   rebuildPlayerAppearance();
-  if (!skipInitialPreview && typeof buildNoahStage1World === 'function') {
-    buildNoahStage1World();
+  if (!skipInitialPreview) {
+    buildRandomOpeningPreviewWorld();
   }
   setupControls();
 
@@ -3349,9 +3482,10 @@ function initEngine(skipInitialPreview = false) {
     updateBlazingPillars(dt, now);
 
     if (!isPlaying && !stage2CountdownActive && document.getElementById('hud-top').classList.contains('hidden')) {
-      const ang = now * 0.0003;
-      camera.position.set(Math.sin(ang) * 28, 14, Math.cos(ang) * 28);
-      camera.lookAt(0, 3, -10);
+      const ang = now * 0.00028;
+      const pm = window.openingPreviewMeta || { cx: 0, cy: 3, cz: -10, rad: 28, camY: 14 };
+      camera.position.set(pm.cx + Math.sin(ang) * pm.rad, pm.camY, pm.cz + Math.cos(ang) * pm.rad);
+      camera.lookAt(pm.cx, pm.cy, pm.cz);
       renderer.render(scene, camera);
       return;
     }

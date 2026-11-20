@@ -4,7 +4,7 @@
 // - 스테이지 3(십자가 사건): 넓어진 골고다 언덕 정상 고원과 세 십자가 등장 연출 적용
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_stages = '20261120_v8';
+window.__GAME_BUILD_VERSIONS__.ep4_stages = '20261120_v11';
 
 // 스테이지 3: 예수님과 플레이어가 무거운 십자가를 지고 걷는 통일 속도 (아무리 세게 터치해도 이 속도로 제한!)
 const MIRACLE_STAGE3_CROSS_WALK_SPEED = 1.65;
@@ -636,10 +636,13 @@ function buildMiracleMainStage1Galilee() {
     balanceGoal,
     tiltWarnCooldown: 0,
     // 3D 참조 객체
+    seaMesh: null,
     boatRootGroup: null,
     sailPivot: null,
     catchBasketGrp: null,
     fishSchoolGroup: null,
+    schoolFishes: [],
+    ambientFishes: [],
     flyingNetMesh: null,
     splashRingMesh: null,
     jesusMesh: null,
@@ -652,29 +655,46 @@ function buildMiracleMainStage1Galilee() {
 
   currentMapRectBounds = { minX: -3.8, maxX: 3.8, minZ: -7.5, maxZ: 7.5 };
 
-  // 1) 갈릴리 바다 수면
-  const seaMat = new THREE.MeshLambertMaterial({ color: 0x0284c7, flatShading: true });
-  const seaFloor = new THREE.Mesh(new THREE.PlaneGeometry(380, 380, 32, 32), seaMat);
-  seaFloor.rotation.x = -Math.PI / 2;
+  // 1) 갈릴리 바다 수면 — 비정형 삼각 분할 소프트 로우폴리 수면 (오픈월드와 동일 스타일!)
+  const seaFloor = (typeof createIrregularLowPolyWaterMesh === 'function')
+    ? createIrregularLowPolyWaterMesh(380, 380, 44, 44, 17, { shoreRightEdgeX: 28, shallowBandW: 54, opacity: 0.85, isStorm: false })
+    : (() => {
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(380, 380, 32, 32), new THREE.MeshLambertMaterial({ color: 0x0284c7, flatShading: true }));
+        m.rotation.x = -Math.PI / 2;
+        return m;
+      })();
   seaFloor.position.y = -1.15;
   seaFloor.receiveShadow = true;
   worldGroup.add(seaFloor);
+  miracleActiveMiniState.seaMesh = seaFloor;
 
-  // 2) 동쪽 해안 원경 (오픈월드와 동일한 크리스프 로우폴리 지형 · 짧은 모래 가장자리 · 비정형 선착장 · 벽돌가옥 · 언덕 돌담)
-  const s1ShoreHeight = (lx, lz) => {
-    const distFromWater = Math.max(0, (lx + 60) / 120);
-    return -1.3 + Math.pow(distFromWater, 0.85) * 14.5 + Math.sin(lx * 0.08) * Math.cos(lz * 0.06) * 0.65;
+  // 2) 동쪽 해안 원경 (Image 1 스타일 해안 단차·경사진 모래 물가 · 비정형 선착장 · 벽돌가옥 · 언덕 돌담)
+  const smooth01S1 = (a, b, v) => {
+    const t = Math.max(0, Math.min(1, (v - a) / (b - a)));
+    return t * t * (3 - 2 * t);
   };
-  const cS1Sand   = new THREE.Color('#e6d09c');
+  const s1ShoreHeight = (lx, lz) => {
+    const wx = lx + 78; // 월드 X (x≈20이 물가)
+    const dShore = wx - 20.0;
+    if (dShore < -1.0) return -1.35 + (dShore + 1.0) * 0.08;
+    if (dShore < 4.5) return -1.35 + smooth01S1(-1.0, 4.5, dShore) * 0.72; // 완만히 경사진 모래 물가
+    if (dShore < 7.0) return -0.63 + smooth01S1(4.5, 7.0, dShore) * 0.68;  // 약간의 해안 둑 단차!
+    const inlandT = Math.max(0, (dShore - 7.0) / 112);
+    return 0.05 + Math.pow(inlandT, 0.92) * 14.0 + Math.sin(lx * 0.08) * Math.cos(lz * 0.06) * 0.62;
+  };
+  const cS1Sand   = new THREE.Color('#ebd8ae');
+  const cS1Bank   = new THREE.Color('#cfa572');
   const cS1Meadow = new THREE.Color('#b6b968');
   const cS1Ochre  = new THREE.Color('#d8b674');
   const cS1Slope  = new THREE.Color('#cf9f60');
-  const cS1Hill   = new THREE.Color('#7c9a45');
+  const cS1Hill   = new THREE.Color('#6a9b43');
   const shoreMesh = (typeof createCrispLowPolyFacetedTerrain === 'function')
-    ? createCrispLowPolyFacetedTerrain(120, 260, 24, 38, s1ShoreHeight, (mx, my, mz, slopeFlat, hash2, outCol) => {
-        const distFromWater = Math.max(0, (mx + 60) / 120);
-        if (distFromWater < 0.09 && my < 1.35) {
+    ? createCrispLowPolyFacetedTerrain(120, 260, 28, 42, s1ShoreHeight, (mx, my, mz, slopeFlat, hash2, outCol) => {
+        const dShore = (mx + 78) - 20.0;
+        if (dShore < 4.5) {
           outCol.copy(cS1Sand);
+        } else if (dShore < 7.2) {
+          outCol.copy(cS1Bank);
         } else if (my > 6.5) {
           outCol.copy(cS1Hill);
         } else if (my > 2.2 && slopeFlat < 0.94) {
@@ -687,6 +707,27 @@ function buildMiracleMainStage1Galilee() {
     : new THREE.Mesh(new THREE.PlaneGeometry(120, 260, 24, 36), new THREE.MeshLambertMaterial({ color: '#9ec164', flatShading: true }));
   shoreMesh.position.set(78, 0, 0);
   worldGroup.add(shoreMesh);
+
+  // 해안 물가 로우폴리 바위 & 부들(갈대) 수초 장식
+  const s1CoastGrp = new THREE.Group();
+  for (let ci = 0; ci < 14; ci++) {
+    const cz = -42 + ci * 6.4;
+    if (Math.abs(cz) < 4.2) continue; // 선착장 제외
+    const rx = 20.5 + (ci % 3) * 1.4;
+    const ry = s1ShoreHeight(rx - 78, cz);
+    const st = createLowPolyMesh(new THREE.DodecahedronGeometry(0.55 + (ci % 3) * 0.22, 0), ci % 2 === 0 ? '#cbd5e1' : '#a8a29e', rx, ry + 0.18, cz, false);
+    st.scale.set(1.3, 0.58, 1.1);
+    s1CoastGrp.add(st);
+    if (typeof createShorelineCattailCluster === 'function' && ci % 2 === 0) {
+      const cat = createShorelineCattailCluster(0.95 + (ci % 3) * 0.12);
+      cat.position.set(rx + 2.4, s1ShoreHeight(rx + 2.4 - 78, cz), cz + 0.8);
+      s1CoastGrp.add(cat);
+    }
+  }
+  if (typeof mergeStaticLowPolyGroupToVertexColor === 'function') {
+    mergeStaticLowPolyGroupToVertexColor(s1CoastGrp, { registerWall: false, castShadow: false });
+  }
+  worldGroup.add(s1CoastGrp);
 
   // 비정형 소프트 로우폴리 갈릴리 선착장 다리
   const s1Pier = (typeof createOrganicGalileePierGroup === 'function')
@@ -793,17 +834,39 @@ function buildMiracleMainStage1Galilee() {
   fInnerRing.rotation.x = -Math.PI / 2;
   fInnerRing.position.y = 0.08;
   fishSchoolGrp.add(fRing, fInnerRing);
-  for (let k = 0; k < 5; k++) {
-    const fAng = (k / 5) * Math.PI * 2;
+  for (let k = 0; k < 6; k++) {
+    const fAng = (k / 6) * Math.PI * 2;
     const fish = (typeof createLowPolyFishMesh === 'function')
-      ? createLowPolyFishMesh(k % 2 === 0 ? '#f97316' : '#38bdf8', 1.15)
+      ? createLowPolyFishMesh(null, 0.95 + (k % 2) * 0.18, k)
       : createLowPolyMesh(new THREE.ConeGeometry(0.26, 0.82, 5), '#f97316', 0, 0, 0, false);
-    fish.position.set(Math.cos(fAng) * 1.1, 0.35 + (k % 2) * 0.2, Math.sin(fAng) * 1.1);
+    fish.position.set(Math.cos(fAng) * 1.25, 0.24 + (k % 3) * 0.14, Math.sin(fAng) * 1.25);
     fish.rotation.y = fAng + Math.PI * 0.5;
     fishSchoolGrp.add(fish);
+    miracleActiveMiniState.schoolFishes.push({ mesh: fish, phase: k * 1.1 });
   }
   worldGroup.add(fishSchoolGrp);
   miracleActiveMiniState.fishSchoolGroup = fishSchoolGrp;
+
+  // 갈릴리 바다 수면 아래·주변을 자유롭게 헤엄치는 다양한 소프트 로우폴리 물고기 18마리!
+  if (typeof createLowPolyFishMesh === 'function') {
+    for (let af = 0; af < 18; af++) {
+      const fScale = 0.72 + (af % 4) * 0.18;
+      const fMesh = createLowPolyFishMesh(null, fScale, af);
+      const cx = -15.5 + ((af * 11) % 24) - 10; // 주로 배 왼쪽(-X)과 앞/뒤 맑은 갈릴리 수역
+      const cz = -16.0 + ((af * 13) % 32);
+      const radX = 3.2 + (af % 4) * 1.4;
+      const radZ = 2.6 + ((af + 1) % 3) * 1.3;
+      const spd = (0.45 + (af % 5) * 0.12) * (af % 2 === 0 ? 1 : -1);
+      const baseY = -0.96 + (af % 3) * 0.10;
+      const ang = (af / 18) * Math.PI * 2;
+      fMesh.position.set(cx + Math.cos(ang) * radX, baseY, cz + Math.sin(ang) * radZ);
+      worldGroup.add(fMesh);
+      miracleActiveMiniState.ambientFishes.push({
+        mesh: fMesh, cx, cz, radX, radZ, baseY,
+        angle: ang, speed: spd, phase: af * 0.85
+      });
+    }
+  }
 
   // 3D 던지는 어망(펼쳐지는 8각 원뿔형 로우폴리 그물)
   const netGrp = new THREE.Group();
@@ -863,6 +926,9 @@ function startGalileeStormPhase() {
 
   scene.background = new THREE.Color(0x1e293b);
   scene.fog = new THREE.Fog(0x1e293b, 26, 108);
+  if (st.seaMesh && typeof tintIrregularLowPolyWater === 'function') {
+    tintIrregularLowPolyWater(st.seaMesh, true);
+  }
   if (st.skyClouds) {
     st.skyClouds.forEach(cl => {
       cl.traverse(ch => {
@@ -917,6 +983,9 @@ function triggerGalileeCalmStormCutscene() {
   setTimeout(() => {
     scene.background = new THREE.Color(0x38bdf8);
     scene.fog = new THREE.Fog(0xbae6fd, 55, 200);
+    if (st.seaMesh && typeof tintIrregularLowPolyWater === 'function') {
+      tintIrregularLowPolyWater(st.seaMesh, false);
+    }
     if (st.skyClouds) {
       st.skyClouds.forEach(cl => {
         cl.traverse(ch => {
@@ -979,6 +1048,31 @@ function updateMiracleMainStage1Frame(dt, now) {
       pu.lArm.rotation.x = isStorming ? (-1.2 + sway) : (-0.3 + sway * 0.4);
       pu.rArm.rotation.x = isStorming ? (-1.2 - sway) : (-0.3 - sway * 0.4);
     }
+  }
+
+  // 바다 속을 자유롭게 유영하는 소프트 로우폴리 물고기 18마리 & 타깃 물고기 꼬리 흔들림 애니메이션
+  if (Array.isArray(st.ambientFishes) && st.ambientFishes.length > 0) {
+    const tSecF = now * 0.001;
+    st.ambientFishes.forEach((af) => {
+      af.angle += dt * af.speed * (isStorming ? 1.45 : 1.0);
+      const nx = af.cx + Math.cos(af.angle) * af.radX;
+      const nz = af.cz + Math.sin(af.angle) * af.radZ;
+      const vx = -Math.sin(af.angle) * af.radX * af.speed;
+      const vz =  Math.cos(af.angle) * af.radZ * af.speed;
+      af.mesh.position.set(nx, af.baseY + Math.sin(tSecF * 2.4 + af.phase) * 0.08, nz);
+      af.mesh.rotation.y = Math.atan2(vx, vz);
+      if (af.mesh.userData && af.mesh.userData.tailPivot) {
+        af.mesh.userData.tailPivot.rotation.y = Math.sin(tSecF * 11.0 + af.phase) * 0.36;
+      }
+    });
+  }
+  if (Array.isArray(st.schoolFishes)) {
+    const tSecS = now * 0.001;
+    st.schoolFishes.forEach((sf) => {
+      if (sf.mesh && sf.mesh.userData && sf.mesh.userData.tailPivot) {
+        sf.mesh.userData.tailPivot.rotation.y = Math.sin(tSecS * 12.5 + sf.phase) * 0.42;
+      }
+    });
   }
 
   // 물보라 링 연출

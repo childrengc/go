@@ -1107,14 +1107,10 @@ function buildArkExteriorOceanWorld(halfW, halfD, wallH) {
   const westHullMats = [];
   const eastHullMats = [];
 
-  addOuterHullPart(halfW * 2 + 4.4, 1.2, 1.2, baseOuterHullMat, 0, wallH - 0.5, -halfD - 1.2, northHullMats);
+  // 스테이지 2 비둘기 창문이 위치한 북쪽(-halfD) 바깥은 탁 트인 바다 시야를 위해 외벽 돌출 구조물을 제거!
   addOuterHullPart(halfW * 2 + 4.4, 1.2, 1.2, baseOuterHullMat, 0, wallH - 0.5, halfD + 1.2, southHullMats);
   addOuterHullPart(1.2, 1.2, halfD * 2 + 4.4, baseOuterHullMat, -halfW - 1.2, wallH - 0.5, 0, westHullMats);
   addOuterHullPart(1.2, 1.2, halfD * 2 + 4.4, baseOuterHullMat, halfW + 1.2, wallH - 0.5, 0, eastHullMats);
-
-  addOuterHullPart(halfW * 1.35, wallH * 0.78, 5.5, baseOuterRailMat, 0, wallH * 0.39, -halfD - 4.2, northHullMats);
-  addOuterHullPart(halfW * 0.72, wallH * 0.85, 5.5, baseOuterHullMat, 0, wallH * 0.42, -halfD - 9.2, northHullMats);
-  addOuterHullPart(2.4, wallH + 2.8, 3.2, baseOuterHullMat, 0, (wallH + 2.8) / 2, -halfD - 12.5, northHullMats);
 
   addOuterHullPart(halfW * 1.35, wallH * 0.78, 5.5, baseOuterRailMat, 0, wallH * 0.39, halfD + 4.2, southHullMats);
   addOuterHullPart(halfW * 0.72, wallH * 0.85, 5.5, baseOuterHullMat, 0, wallH * 0.42, halfD + 9.2, southHullMats);

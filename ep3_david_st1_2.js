@@ -2133,6 +2133,7 @@ function showStage2PreBattleLine(speakerTitle, fullLine, voicePitch, btnLabel) {
   if (!dlg) return;
 
   dlg.classList.remove('hidden');
+  dlg.classList.add('david-stage2-intro');
   nameEl.textContent = speakerTitle;
   btnEl.textContent = btnLabel;
   textEl.textContent = '';
@@ -2180,7 +2181,10 @@ window.advanceDavidStage2Dialogue = function () {
     davidStage2Dialogue.active = false;
     davidStage2Dialogue.step = 0;
     const dlg = document.getElementById('david-npc-dialog');
-    if (dlg) dlg.classList.add('hidden');
+    if (dlg) {
+      dlg.classList.add('hidden');
+      dlg.classList.remove('david-stage2-intro');
+    }
     if (animaleseTimer) { clearInterval(animaleseTimer); animaleseTimer = null; }
 
     playerFacing = Math.PI;
@@ -3050,15 +3054,21 @@ function updateDavidStage2CutsceneFrame(dt, now) {
       playerGroup.rotation.y = Math.PI;
     }
 
+    // 가로형 화면에서는 하단 반투명 대화창 위쪽 상단 70% 영역에 캐릭터가 또렷이 담기도록 카메라 시선을 살짝 아래로 조정!
+    const isLandscape = (typeof window !== 'undefined') && (window.innerWidth > window.innerHeight);
     if (davidStage2Dialogue.step === 1) {
-      camera.position.lerp(new THREE.Vector3(1.8, 7.2, -2.5), 0.08);
-      camera.lookAt(0, 6.8, -17.5);
+      const lookY = isLandscape ? 5.65 : 6.8;
+      const camZ = isLandscape ? -1.4 : -2.5;
+      camera.position.lerp(new THREE.Vector3(1.8, 7.2, camZ), 0.08);
+      camera.lookAt(0, lookY, -17.5);
       if (davidGoliathObj && davidGoliathObj.userData.rArm) {
         davidGoliathObj.userData.rArm.rotation.x = -0.8 + Math.sin(now * 0.008) * 0.45;
       }
     } else if (davidStage2Dialogue.step === 2) {
-      camera.position.lerp(new THREE.Vector3(playerPos.x + 1.9, playerPos.y + 2.35, playerPos.z - 3.6), 0.12);
-      camera.lookAt(playerPos.x - 0.2, playerPos.y + 1.95, playerPos.z - 0.4);
+      const dLookY = isLandscape ? (playerPos.y + 1.38) : (playerPos.y + 1.95);
+      const dCamZ = isLandscape ? (playerPos.z - 4.25) : (playerPos.z - 3.6);
+      camera.position.lerp(new THREE.Vector3(playerPos.x + 1.9, playerPos.y + 2.35, dCamZ), 0.12);
+      camera.lookAt(playerPos.x - 0.2, dLookY, playerPos.z - 0.4);
       if (playerLimbs && playerLimbs.rArm) {
         playerLimbs.rArm.rotation.x = -1.6 + Math.sin(now * 0.01) * 0.35;
       }

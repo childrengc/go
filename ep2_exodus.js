@@ -632,7 +632,7 @@ function buildCurvedExodusDesertBand(halfW, xSteps, getZSouthFn, getZNorthFn, sa
   return mesh;
 }
 
-function buildCurvedCliffWallRibbon(halfW, xSteps, getZEdgeFn, faceNorth, wallMat, rimMat) {
+function buildCurvedCliffWallRibbon(halfW, xSteps, getZEdgeFn, faceNorth, wallMat, rimMat, skipRimSpans = []) {
   const positions = [];
   const uvs = [];
   const indices = [];
@@ -642,7 +642,7 @@ function buildCurvedCliffWallRibbon(halfW, xSteps, getZEdgeFn, faceNorth, wallMa
     const x = -halfW + (ix / xSteps) * (halfW * 2);
     const z = getZEdgeFn(x);
     const topY = getBaseGroundHeight(x, z);
-    positions.push(x, topY + 0.04, z);
+    positions.push(x, topY + 0.02, z);
     positions.push(x, topY - wallDepth, z);
     uvs.push(ix * 0.35, 1);
     uvs.push(ix * 0.35, 0);
@@ -671,42 +671,53 @@ function buildCurvedCliffWallRibbon(halfW, xSteps, getZEdgeFn, faceNorth, wallMa
   wallMesh.receiveShadow = true;
   worldGroup.add(wallMesh);
 
-  // 곡선 협곡 가장자리가 또렷하게 보이도록 상단 사암 암반 테두리 띠 추가
+  // 곡선 협곡 가장자리가 또렷하게 보이도록 상단 사암 암반 테두리 띠 추가 (다리 구간은 테두리가 다리 위로 튀어나오지 않도록 제외!)
   const rimPos = [];
   const rimUvs = [];
   const rimIdx = [];
   const lipOffset = faceNorth ? 0.55 : -0.55;
+  const xAt = (ix) => -halfW + (ix / xSteps) * (halfW * 2);
   for (let ix = 0; ix <= xSteps; ix++) {
-    const x = -halfW + (ix / xSteps) * (halfW * 2);
+    const x = xAt(ix);
     const zEdge = getZEdgeFn(x);
     const zBack = zEdge + lipOffset;
-    const yEdge = getBaseGroundHeight(x, zEdge) + 0.08;
-    const yBack = getBaseGroundHeight(x, zBack) + 0.05;
+    const yEdge = getBaseGroundHeight(x, zEdge) + 0.06;
+    const yBack = getBaseGroundHeight(x, zBack) + 0.04;
     rimPos.push(x, yEdge, zEdge);
     rimPos.push(x, yBack, zBack);
     rimUvs.push(ix * 0.3, 0);
     rimUvs.push(ix * 0.3, 1);
   }
   for (let ix = 0; ix < xSteps; ix++) {
+    const sx0 = xAt(ix), sx1 = xAt(ix + 1);
+    const overlapsBridge = skipRimSpans.some(sp => sx1 > sp.minX && sx0 < sp.maxX);
+    if (overlapsBridge) continue;
     const a = ix * 2, b = ix * 2 + 1, c = (ix + 1) * 2, d = (ix + 1) * 2 + 1;
     // 위(+Y)를 향하는 외향 노멀
     if (faceNorth) rimIdx.push(a, b, d, a, d, c);
     else rimIdx.push(a, c, d, a, d, b);
   }
-  const rimGeo = new THREE.BufferGeometry();
-  rimGeo.setAttribute('position', new THREE.Float32BufferAttribute(rimPos, 3));
-  rimGeo.setAttribute('uv', new THREE.Float32BufferAttribute(rimUvs, 2));
-  rimGeo.setIndex(rimIdx);
-  rimGeo.computeVertexNormals();
-  const rimMesh = new THREE.Mesh(rimGeo, rimMat);
-  rimMesh.receiveShadow = true;
-  worldGroup.add(rimMesh);
+  if (rimIdx.length > 0) {
+    const rimGeo = new THREE.BufferGeometry();
+    rimGeo.setAttribute('position', new THREE.Float32BufferAttribute(rimPos, 3));
+    rimGeo.setAttribute('uv', new THREE.Float32BufferAttribute(rimUvs, 2));
+    rimGeo.setIndex(rimIdx);
+    rimGeo.computeVertexNormals();
+    const rimMesh = new THREE.Mesh(rimGeo, rimMat);
+    rimMesh.receiveShadow = true;
+    worldGroup.add(rimMesh);
+  }
 }
 
 function createChasmWithBridgePuzzle(zCenter, trenchDepthW, halfMapW, bridgeConfigs, isCliffChasm = false, canyonDef = null) {
   const sampleEdge = (x) => canyonDef
     ? getExodusCanyonEdges(canyonDef, x)
     : { zCenter, width: trenchDepthW, zSouth: zCenter + trenchDepthW / 2, zNorth: zCenter - trenchDepthW / 2 };
+
+  const bridgeSkipSpans = (bridgeConfigs || []).map(cfg => ({
+    minX: cfg.x - cfg.w * 0.5 - 0.45,
+    maxX: cfg.x + cfg.w * 0.5 + 0.45
+  }));
 
   if (isCliffChasm) {
     const cliffWallMat = matVoxelCached('#78350f', '#451a03');
@@ -716,8 +727,8 @@ function createChasmWithBridgePuzzle(zCenter, trenchDepthW, halfMapW, bridgeConf
 
     if (canyonDef) {
       const xSteps = 56;
-      buildCurvedCliffWallRibbon(halfMapW, xSteps, (x) => sampleEdge(x).zSouth, true, cliffWallMat, rimMat);
-      buildCurvedCliffWallRibbon(halfMapW, xSteps, (x) => sampleEdge(x).zNorth, false, cliffWallMat, rimMat);
+      buildCurvedCliffWallRibbon(halfMapW, xSteps, (x) => sampleEdge(x).zSouth, true, cliffWallMat, rimMat, bridgeSkipSpans);
+      buildCurvedCliffWallRibbon(halfMapW, xSteps, (x) => sampleEdge(x).zNorth, false, cliffWallMat, rimMat, bridgeSkipSpans);
 
       let maxSouth = -9999, minNorth = 9999;
       for (let sx = -halfMapW; sx <= halfMapW; sx += 2) {
@@ -744,6 +755,73 @@ function createChasmWithBridgePuzzle(zCenter, trenchDepthW, halfMapW, bridgeConf
         createBox(16, 40, trenchDepthW + 1.4, sideCanyonMat,  (halfMapW + 8.2), yMid - 6.5, zCenter)
       );
     }
+
+    // [요청 반영] 협곡 안쪽 벽면과 바닥에 거친 암석 복셀(돌출 암반·계단식 바위)을 군데군데 배치!
+    const rockMats = [
+      matVoxelCached('#9a3412', '#7c2d12'),
+      matVoxelCached('#78350f', '#451a03'),
+      matVoxelCached('#b45309', '#92400e'),
+      matVoxelCached('#57534e', '#44403c')
+    ];
+    const vHash = (n) => {
+      const s = Math.sin(n * 127.1 + zCenter * 31.7) * 43758.5453;
+      return s - Math.floor(s);
+    };
+    const innerVoxGrp = new THREE.Group();
+    innerVoxGrp.userData._canyonInnerVoxels = true;
+    let vSeed = 1;
+    for (let sx = -halfMapW + 2.0; sx <= halfMapW - 2.0; sx += 3.6) {
+      const e = sampleEdge(sx);
+      const underBridge = bridgeSkipSpans.some(sp => sx >= sp.minX - 0.8 && sx <= sp.maxX + 0.8);
+      // 1) 남쪽/북쪽 절벽 안쪽 벽면 돌출 암석 복셀 (다리 아래는 다리 상판과 겹치지 않도록 2.6m 아래로만 배치)
+      [
+        { zEdge: e.zSouth, dir: -1, yBase: getBaseGroundHeight(sx, e.zSouth) },
+        { zEdge: e.zNorth, dir:  1, yBase: getBaseGroundHeight(sx, e.zNorth) }
+      ].forEach((side, sIdx) => {
+        const h0 = vHash(vSeed++);
+        if (h0 < 0.24) return; // 군데군데 자연스러운 빈틈 유지
+        const bw = 1.4 + vHash(vSeed++) * 2.4;
+        const bh = 1.8 + vHash(vSeed++) * 3.8;
+        const bd = 0.9 + vHash(vSeed++) * 1.4;
+        const minDrop = underBridge ? 3.2 : 1.5;
+        const dropY = minDrop + vHash(vSeed++) * 5.8;
+        const mat = rockMats[(Math.floor(vHash(vSeed++) * rockMats.length) + sIdx) % rockMats.length];
+        const rock = createBox(
+          bw, bh, bd, mat,
+          sx + (vHash(vSeed++) - 0.5) * 1.2,
+          side.yBase - dropY - bh * 0.5,
+          side.zEdge + side.dir * (bd * 0.42 + 0.12),
+          false
+        );
+        innerVoxGrp.add(rock);
+
+        // 하단 보조 바위 턱(계단식 거친 단층 느낌)
+        if (vHash(vSeed++) > 0.42) {
+          const bw2 = bw * (0.65 + vHash(vSeed++) * 0.55);
+          const bh2 = 1.4 + vHash(vSeed++) * 2.6;
+          const bd2 = bd + 0.55 + vHash(vSeed++) * 0.85;
+          const rock2 = createBox(
+            bw2, bh2, bd2, rockMats[vSeed % rockMats.length],
+            sx + (vHash(vSeed++) - 0.5) * 1.4,
+            side.yBase - dropY - bh - bh2 * 0.35,
+            side.zEdge + side.dir * (bd2 * 0.48 + 0.20),
+            false
+          );
+          innerVoxGrp.add(rock2);
+        }
+      });
+
+      // 2) 협곡 깊은 바닥 바위 덩어리(점프 발판 불가한 깊은 저지대에만 군데군데 배치)
+      if (vHash(vSeed++) > 0.52) {
+        const midZ = (e.zSouth + e.zNorth) * 0.5 + (vHash(vSeed++) - 0.5) * Math.max(1.5, (e.zSouth - e.zNorth) * 0.35);
+        const yFloor = getBaseGroundHeight(sx, midZ) - 11.8;
+        const fw = 1.6 + vHash(vSeed++) * 2.4;
+        const fh = 1.6 + vHash(vSeed++) * 3.2;
+        const fd = 1.6 + vHash(vSeed++) * 2.4;
+        innerVoxGrp.add(createBox(fw, fh, fd, rockMats[vSeed % rockMats.length], sx, yFloor + fh * 0.5, midZ, false));
+      }
+    }
+    worldGroup.add(innerVoxGrp);
   }
 
   // 곡선 절벽 구간을 1.6m 단위 세그먼트로 충돌체 분할 등록하여 곡선 윤곽 그대로 추락·점프 도하 차단
@@ -843,9 +921,9 @@ function createChasmWithBridgePuzzle(zCenter, trenchDepthW, halfMapW, bridgeConf
           const railMat = matVoxelCached('#5c2d0c', '#451a03');
           const tieMat = matVoxelCached('#92400e', '#78350f');
 
-          const plank = createBox(this.w, 0.48, builtLen, plankMat, this.x, curY - 0.22, curCenterZ);
-          const railL = createBox(0.32, 0.65, builtLen, railMat, this.x - this.w / 2 + 0.18, curY + 0.22, curCenterZ);
-          const railR = createBox(0.32, 0.65, builtLen, railMat, this.x + this.w / 2 - 0.18, curY + 0.22, curCenterZ);
+          const plank = createBox(this.w, 0.48, builtLen, plankMat, this.x, curY - 0.10, curCenterZ);
+          const railL = createBox(0.32, 0.65, builtLen, railMat, this.x - this.w / 2 + 0.18, curY + 0.34, curCenterZ);
+          const railR = createBox(0.32, 0.65, builtLen, railMat, this.x + this.w / 2 - 0.18, curY + 0.34, curCenterZ);
           plank.rotation.x = slopeAngle; railL.rotation.x = slopeAngle; railR.rotation.x = slopeAngle;
           this.solidGroup.add(plank, railL, railR);
 
@@ -855,9 +933,9 @@ function createChasmWithBridgePuzzle(zCenter, trenchDepthW, halfMapW, bridgeConf
           for (let k = 0; k < segCount; k++) {
             const kz = startZ - (k + 0.5) * segStep;
             const ky = getBaseGroundHeight(this.x, kz);
-            const postL = createBox(0.36, 1.05, 0.36, railMat, this.x - this.w / 2 + 0.18, ky + 0.40, kz, false);
-            const postR = createBox(0.36, 1.05, 0.36, railMat, this.x + this.w / 2 - 0.18, ky + 0.40, kz, false);
-            const crossTie = createBox(this.w - 0.5, 0.12, Math.min(0.45, segStep * 0.22), tieMat, this.x, ky + 0.04, kz, false);
+            const postL = createBox(0.36, 1.05, 0.36, railMat, this.x - this.w / 2 + 0.18, ky + 0.50, kz, false);
+            const postR = createBox(0.36, 1.05, 0.36, railMat, this.x + this.w / 2 - 0.18, ky + 0.50, kz, false);
+            const crossTie = createBox(this.w - 0.5, 0.12, Math.min(0.45, segStep * 0.22), tieMat, this.x, ky + 0.16, kz, false);
             crossTie.rotation.x = slopeAngle;
             this.solidGroup.add(postL, postR, crossTie);
           }

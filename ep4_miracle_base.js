@@ -4,7 +4,7 @@
 // - 확장된 오픈월드 지형 고도 계산기(넓어진 골고다 언덕 포함) 및 소프트 로우 폴리곤 자연물 팩토리
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_base = '20261120_v8';
+window.__GAME_BUILD_VERSIONS__.ep4_base = '20261120_v11';
 
 const MIRACLE_SCRIPTURE = {
   1: {
@@ -590,16 +590,24 @@ function getMiracleOpenWorldGroundHeight(x, z) {
   const shoreLineX = window.getMiracleWestShoreLineX(z);
   let h = 0.25;
 
-  // 1) 서쪽 해안선 경사: 단절 없이 바다까지 완만하게 이어지며, 해안 부근에서만 언덕 높이를 부드럽게 0으로 블렌딩
-  if (x < shoreLineX + 20) {
-    const t = Math.max(0, Math.min(1, (shoreLineX + 20 - x) / 20));
-    const smoothSlope = t * t * (3 - 2 * t);
-    h = 0.25 - smoothSlope * 0.65;
-    if (x < shoreLineX) {
-      h -= (shoreLineX - x) * 0.08;
+  // 1) 서쪽 해안선 단차·경사(Image 1 레퍼런스 스타일):
+  //    내륙 풀밭(0.25) → 해안 둑 약간의 단차(d ∈ [4.2, 6.4], 0.25 → -0.10) → 완만하게 경사진 모래 물가(d ∈ [-0.8, 4.2], -0.10 → -0.50) → 얕은 해저
+  const dShore = x - shoreLineX;
+  if (dShore < 6.4) {
+    if (dShore >= 4.2) {
+      // 약간의 해안 둑 단차 (35cm 부드러운 로우폴리 경사 턱)
+      const bankT = smooth01(4.2, 6.4, dShore);
+      h = -0.10 + bankT * 0.35;
+    } else if (dShore >= -0.8) {
+      // 물가로 완만하게 기울어져 내려가는 모래 해변 경사면
+      const beachT = smooth01(-0.8, 4.2, dShore);
+      h = -0.50 + beachT * 0.40;
+    } else {
+      // 얕은 바닷속 해저 경사 (돌과 물고기가 비쳐 보이는 완만한 수심)
+      h = -0.50 + (dShore + 0.8) * 0.085;
     }
   }
-  const inlandHillBlend = smooth01(shoreLineX + 2.5, shoreLineX + 19.0, x);
+  const inlandHillBlend = smooth01(shoreLineX + 5.5, shoreLineX + 19.5, x);
 
   // 2) 동북쪽 외곽 '오병이어 전망 언덕' (x = 88, z = -82, 정상 높이 +14.5)
   const bethDist = Math.hypot((x - 88) / 46, (z - (-82)) / 42);
@@ -2190,18 +2198,44 @@ function addWalkableJerichoInn(cx, cz) {
   const innGrp = new THREE.Group();
   const staticGrp = new THREE.Group();
 
-  // 기초석 & 실내 석재 바닥
+  // 기초석 & 비정형 소프트 로우폴리 실내 석재 바닥 + 손다듬 판석 타일
   const foundationPlinth = createLowPolyMesh(new THREE.BoxGeometry(w + 0.16, 1.4, d + 0.16), trimCol, 0, -0.68, 0, false);
   const floorMesh = createLowPolyMesh(
-    createOrganicBoxGeo(w - 0.3, 0.22, d - 0.3, seed + 1, 0.03, 0.99, 1),
+    createOrganicBoxGeo(w - 0.3, 0.22, d - 0.3, seed + 1, 0.04, 0.99, 2),
     '#d9c6a5', 0, 0.08, 0, false
   );
   staticGrp.add(foundationPlinth, floorMesh);
 
-  // 실내 따뜻한 카펫
-  const rugMesh = createLowPolyMesh(new THREE.BoxGeometry(3.6, 0.05, 2.8), '#b45309', -0.4, 0.21, 0.85, false);
-  const rugInner = createLowPolyMesh(new THREE.BoxGeometry(2.9, 0.06, 2.2), '#f59e0b', -0.4, 0.215, 0.85, false);
-  staticGrp.add(rugMesh, rugInner);
+  // 바닥을 채우는 따뜻한 비정형 디딤 판석 6개 (실내 질감 보강)
+  const flagCoords = [
+    [-2.8, 1.85, 1.35, 1.12, '#cbb48e'], [0.0, 2.05, 1.55, 1.05, '#d4be98'],
+    [2.75, 1.65, 1.32, 1.18, '#c5ad86'], [-2.6, 0.25, 1.25, 1.08, '#d4be98'],
+    [2.85, 0.25, 1.28, 1.10, '#cbb48e'], [0.15, -0.55, 1.45, 1.10, '#c8b08a']
+  ];
+  flagCoords.forEach(([fx, fz, fw, fd, fc], idx) => {
+    const fl = createLowPolyMesh(
+      createOrganicBoxGeo(fw, 0.07, fd, seed + 200 + idx, 0.08, 0.94, 1),
+      fc, fx, 0.18, fz, false
+    );
+    fl.rotation.y = ((idx % 3) - 1) * 0.09;
+    staticGrp.add(fl);
+  });
+
+  // 비정형 소프트 로우폴리 수직조 양탄자(Woven Patchwork Rug) + 테두리 술 장식
+  const rugBase = createLowPolyMesh(createOrganicBoxGeo(3.55, 0.06, 2.55, seed + 210, 0.06, 0.96, 2), '#9a3412', -0.35, 0.215, 0.95, false);
+  const rugMid  = createLowPolyMesh(createOrganicBoxGeo(2.82, 0.06, 1.92, seed + 211, 0.05, 0.97, 2), '#d97706', -0.35, 0.225, 0.95, false);
+  const rugCore = createLowPolyMesh(createOrganicBoxGeo(1.72, 0.06, 1.08, seed + 212, 0.06, 0.96, 1), '#fde68a', -0.35, 0.235, 0.95, false);
+  rugBase.rotation.y = 0.04;
+  rugMid.rotation.y  = 0.04;
+  rugCore.rotation.y = 0.04;
+  staticGrp.add(rugBase, rugMid, rugCore);
+  for (let f = -3; f <= 3; f++) {
+    const fz = 0.95 + f * 0.34;
+    staticGrp.add(
+      createLowPolyMesh(createOrganicBoxGeo(0.24, 0.04, 0.14, seed + 215 + f, 0.08, 0.92, 1), '#f5ead6', -2.22, 0.21, fz, false),
+      createLowPolyMesh(createOrganicBoxGeo(0.24, 0.04, 0.14, seed + 225 + f, 0.08, 0.92, 1), '#f5ead6',  1.52, 0.21, fz, false)
+    );
+  }
 
   // 북/서/동 3면 외벽 + 상단 띠장
   const northWall = createLowPolyMesh(createOrganicBoxGeo(w, h, t, seed + 2, 0.05, 0.98, 2), wallCol, 0, h * 0.5, -d * 0.5 + t * 0.5, true);
@@ -2308,31 +2342,109 @@ function addWalkableJerichoInn(cx, cz) {
   sideCanopyW.position.set(-w * 0.5 - 0.56, 3.35, 0.2);
   staticGrp.add(winW, winE, sideCanopyW);
 
-  // [실내 가구 1] 나무 병상(Sickbed) — 북동쪽 실내 (lx = +1.75, lz = -1.25)
-  const bedX = 1.75, bedZ = -1.25;
-  const bedFrame = createLowPolyMesh(createOrganicBoxGeo(2.45, 0.36, 1.32, seed + 30, 0.04, 0.98, 1), '#7c4722', bedX, 0.44, bedZ, true);
-  [[-1.08, -0.52], [1.08, -0.52], [-1.08, 0.52], [1.08, 0.52]].forEach(([lx, lz]) => {
-    staticGrp.add(createLowPolyMesh(new THREE.BoxGeometry(0.16, 0.42, 0.16), '#5c2d0c', bedX + lx, 0.21, bedZ + lz, false));
+  // [실내 건축 디테일] 비정형 모서리 원목 기둥 + 천장 목재 들보(까치발) + 북벽 아치형 흙화덕 + 서쪽 벽 선반 & 곡식자루·항아리
+  const inHalfW = w * 0.5 - t - 0.18;
+  const inHalfD = d * 0.5 - t - 0.18;
+  [[-inHalfW, -inHalfD], [inHalfW, -inHalfD], [-inHalfW, inHalfD], [inHalfW, inHalfD]].forEach(([px, pz], idx) => {
+    const col = createLowPolyMesh(new THREE.CylinderGeometry(0.14, 0.18, h - 0.12, 6), '#6b3f1d', px, h * 0.5, pz, false);
+    col.rotation.y = idx * 0.5;
+    const baseSt = createLowPolyMesh(createOrganicBoxGeo(0.44, 0.24, 0.44, seed + 240 + idx, 0.08, 0.92, 1), '#b89a70', px, 0.22, pz, false);
+    staticGrp.add(col, baseSt);
   });
-  const headBoard = createLowPolyMesh(createOrganicBoxGeo(0.18, 0.95, 1.36, seed + 31, 0.04, 0.98, 1), '#6b3818', bedX + 1.18, 0.72, bedZ, true);
-  const mattress  = createLowPolyMesh(createOrganicBoxGeo(2.26, 0.20, 1.18, seed + 32, 0.04, 0.98, 1), '#f5ead6', bedX - 0.04, 0.68, bedZ, false);
-  const pillow    = createLowPolyMesh(new THREE.DodecahedronGeometry(0.28, 0), '#fffbeb', bedX + 0.78, 0.84, bedZ, false);
-  pillow.scale.set(0.85, 0.48, 1.55);
-  const blanket   = createLowPolyMesh(createOrganicBoxGeo(1.42, 0.24, 1.16, seed + 33, 0.06, 0.98, 1), '#c2410c', bedX - 0.42, 0.86, bedZ, false);
-  staticGrp.add(bedFrame, headBoard, mattress, pillow, blanket);
+  // 실내 상단 노출 목재 들보 2개 (지붕 투과 시 고대 여관의 따뜻한 목조 감성 연출)
+  [-1.55, 1.35].forEach((bz, bi) => {
+    const beam = createLowPolyMesh(createOrganicBoxGeo(w - t * 2, 0.22, 0.24, seed + 250 + bi, 0.06, 0.96, 2), '#5c3317', 0, h - 0.26, bz, false);
+    staticGrp.add(beam);
+  });
 
-  // [실내 가구 2] 간호용 나무 탁자 & 물병 · 등불 (lx = -2.2, lz = -1.75)
-  const tblX = -2.2, tblZ = -1.75;
-  const tblTop = createLowPolyMesh(createOrganicBoxGeo(1.55, 0.14, 0.95, seed + 35, 0.04, 0.98, 1), '#854d0e', tblX, 0.95, tblZ, true);
-  [[-0.65, -0.35], [0.65, -0.35], [-0.65, 0.35], [0.65, 0.35]].forEach(([lx, lz]) => {
-    staticGrp.add(createLowPolyMesh(new THREE.BoxGeometry(0.12, 0.92, 0.12), '#5c2d0c', tblX + lx, 0.46, tblZ + lz, false));
+  // 북벽 중앙 아치형 흙벽 화덕(Clay Hearth) + 은은한 장작 숯불 + 흙냄비
+  const hearthX = -0.35, hearthZ = -d * 0.5 + t + 0.34;
+  const hearthBase = createLowPolyMesh(createOrganicBoxGeo(1.48, 0.32, 0.82, seed + 255, 0.08, 0.94, 1), '#b89872', hearthX, 0.28, hearthZ, false);
+  const hearthPillarL = createLowPolyMesh(createOrganicBoxGeo(0.28, 1.18, 0.68, seed + 256, 0.08, 0.94, 1), '#d6b68c', hearthX - 0.56, 0.98, hearthZ - 0.04, false);
+  const hearthPillarR = createLowPolyMesh(createOrganicBoxGeo(0.28, 1.18, 0.68, seed + 257, 0.08, 0.94, 1), '#d6b68c', hearthX + 0.56, 0.98, hearthZ - 0.04, false);
+  const hearthHood = createLowPolyMesh(createOrganicBoxGeo(1.56, 0.46, 0.78, seed + 258, 0.08, 0.86, 2), '#c9a678', hearthX, 1.72, hearthZ - 0.06, false);
+  const hearthFlue = createLowPolyMesh(createOrganicBoxGeo(0.76, 1.85, 0.54, seed + 259, 0.07, 0.88, 2), '#d8be98', hearthX, 2.82, hearthZ - 0.14, false);
+  const hearthCoal = createLowPolyMesh(new THREE.DodecahedronGeometry(0.26, 0), '#f97316', hearthX, 0.52, hearthZ + 0.04, false);
+  hearthCoal.scale.set(1.35, 0.45, 0.95);
+  hearthCoal.userData._emissiveGlow = true;
+  const hearthLog1 = createLowPolyMesh(new THREE.CylinderGeometry(0.06, 0.07, 0.68, 5), '#451a03', hearthX - 0.06, 0.48, hearthZ + 0.08, false);
+  hearthLog1.rotation.set(0.15, 0.3, Math.PI * 0.48);
+  const hearthPot = createLowPolyMesh(new THREE.DodecahedronGeometry(0.24, 0), '#9a4f25', hearthX + 0.24, 0.62, hearthZ + 0.05, false);
+  hearthPot.scale.set(1.0, 0.86, 1.0);
+  staticGrp.add(hearthBase, hearthPillarL, hearthPillarR, hearthHood, hearthFlue, hearthCoal, hearthLog1, hearthPot);
+
+  // 서쪽 벽면 목재 선반 + 토기 약병들 + 서남 구석 곡식 자루·항아리 (출입 통로와 겹치지 않게 서벽에 밀착!)
+  const shelfX = -w * 0.5 + t + 0.30;
+  const wallShelf = createLowPolyMesh(createOrganicBoxGeo(0.46, 0.10, 1.85, seed + 262, 0.06, 0.96, 1), '#7c4722', shelfX, 2.02, -0.35, false);
+  const shelfBrk1 = createLowPolyMesh(createOrganicBoxGeo(0.36, 0.24, 0.12, seed + 263, 0.07, 0.92, 1), '#5c2d0c', shelfX - 0.04, 1.86, -1.02, false);
+  const shelfBrk2 = createLowPolyMesh(createOrganicBoxGeo(0.36, 0.24, 0.12, seed + 264, 0.07, 0.92, 1), '#5c2d0c', shelfX - 0.04, 1.86,  0.32, false);
+  const shelfPot1 = createLowPolyMesh(new THREE.DodecahedronGeometry(0.16, 0), '#c26533', shelfX + 0.02, 2.22, -0.82, false);
+  shelfPot1.scale.set(0.85, 1.15, 0.85);
+  const shelfPot2 = createLowPolyMesh(new THREE.DodecahedronGeometry(0.14, 0), '#d97706', shelfX + 0.04, 2.20, -0.34, false);
+  const shelfPot3 = createLowPolyMesh(new THREE.CylinderGeometry(0.10, 0.13, 0.32, 6), '#9a4f25', shelfX + 0.02, 2.23,  0.16, false);
+  const cornerSack1 = createLowPolyMesh(new THREE.IcosahedronGeometry(0.44, 0), '#d6bc90', -w * 0.5 + t + 0.58, 0.44, 1.55, true);
+  cornerSack1.scale.set(1.05, 0.82, 1.18);
+  cornerSack1.rotation.y = 0.4;
+  const cornerSack2 = createLowPolyMesh(new THREE.IcosahedronGeometry(0.34, 0), '#c6a574', -w * 0.5 + t + 0.54, 0.38, 0.78, true);
+  cornerSack2.scale.set(0.95, 0.78, 1.10);
+  const cornerAmph = createBuildingAmphoraProp(0.82, '#b86232', '#8f471e');
+  cornerAmph.position.set(-w * 0.5 + t + 0.56, 0.16, 2.25);
+  staticGrp.add(wallShelf, shelfBrk1, shelfBrk2, shelfPot1, shelfPot2, shelfPot3, cornerSack1, cornerSack2, cornerAmph);
+
+  // [실내 가구 1] 비정형 소프트 로우폴리 나무 병상(Sickbed) & 간병인 둥근 나무 의자 — 북동쪽 실내 (lx = +1.75, lz = -1.25)
+  const bedX = 1.75, bedZ = -1.25;
+  const bedFrame = createLowPolyMesh(createOrganicBoxGeo(2.48, 0.34, 1.34, seed + 30, 0.07, 0.96, 2), '#7c4722', bedX, 0.46, bedZ, true);
+  [[-1.08, -0.52], [1.08, -0.52], [-1.08, 0.52], [1.08, 0.52]].forEach(([lx, lz], li) => {
+    const leg = createLowPolyMesh(new THREE.CylinderGeometry(0.085, 0.11, 0.46, 6), '#5c2d0c', bedX + lx, 0.24, bedZ + lz, false);
+    leg.rotation.y = li * 0.5;
+    staticGrp.add(leg);
   });
+  const headBoard = createLowPolyMesh(createOrganicBoxGeo(0.20, 1.02, 1.40, seed + 31, 0.08, 0.92, 2), '#6b3818', bedX + 1.18, 0.78, bedZ, true);
+  const headCap   = createLowPolyMesh(createOrganicBoxGeo(0.24, 0.18, 1.46, seed + 271, 0.09, 0.90, 1), '#854d0e', bedX + 1.18, 1.32, bedZ, false);
+  const footBoard = createLowPolyMesh(createOrganicBoxGeo(0.16, 0.56, 1.34, seed + 272, 0.08, 0.94, 1), '#6b3818', bedX - 1.18, 0.58, bedZ, true);
+  const mattress  = createLowPolyMesh(createOrganicBoxGeo(2.26, 0.22, 1.18, seed + 32, 0.07, 0.96, 2), '#f5ead6', bedX - 0.04, 0.69, bedZ, false);
+  const pillow    = createLowPolyMesh(new THREE.IcosahedronGeometry(0.30, 0), '#fffbeb', bedX + 0.78, 0.86, bedZ, false);
+  pillow.scale.set(0.88, 0.46, 1.58);
+  pillow.rotation.y = 0.15;
+  const blanket   = createLowPolyMesh(createOrganicBoxGeo(1.44, 0.26, 1.22, seed + 33, 0.09, 0.95, 2), '#c2410c', bedX - 0.42, 0.87, bedZ, false);
+  const blanketFold = createLowPolyMesh(createOrganicBoxGeo(0.28, 0.24, 1.24, seed + 273, 0.08, 0.96, 1), '#ea580c', bedX + 0.26, 0.88, bedZ, false);
+  staticGrp.add(bedFrame, headBoard, headCap, footBoard, mattress, pillow, blanket, blanketFold);
+
+  // 병상 옆 비정형 둥근 간병 의자(Stool) + 바구니
+  const stoolX = 1.65, stoolZ = 0.05;
+  const stoolTop = createLowPolyMesh(new THREE.CylinderGeometry(0.36, 0.33, 0.10, 7), '#8a4f1e', stoolX, 0.52, stoolZ, false);
+  for (let sl = 0; sl < 3; sl++) {
+    const a = (sl / 3) * Math.PI * 2 + 0.3;
+    const sLeg = createLowPolyMesh(new THREE.CylinderGeometry(0.045, 0.055, 0.50, 5), '#5c2d0c', stoolX + Math.cos(a) * 0.20, 0.25, stoolZ + Math.sin(a) * 0.20, false);
+    sLeg.rotation.z = -Math.cos(a) * 0.14;
+    sLeg.rotation.x =  Math.sin(a) * 0.14;
+    staticGrp.add(sLeg);
+  }
+  const bedSideBasket = createLowPolyMesh(new THREE.CylinderGeometry(0.28, 0.21, 0.32, 7), '#b45309', 2.85, 0.34, 0.18, false);
+  const bedSideHerb = createLowPolyMesh(new THREE.DodecahedronGeometry(0.20, 0), '#65a30d', 2.85, 0.54, 0.18, false);
+  bedSideHerb.scale.set(1.1, 0.65, 1.1);
+  staticGrp.add(stoolTop, bedSideBasket, bedSideHerb);
+
+  // [실내 가구 2] 비정형 소프트 로우폴리 간호용 나무 탁자 · 물병 · 붕대 꾸러미 · 등불 (lx = -2.35, lz = -1.75)
+  const tblX = -2.35, tblZ = -1.75;
+  const tblTop = createLowPolyMesh(createOrganicBoxGeo(1.62, 0.15, 0.98, seed + 35, 0.08, 0.95, 2), '#854d0e', tblX, 0.95, tblZ, true);
+  [[-0.65, -0.35], [0.65, -0.35], [-0.65, 0.35], [0.65, 0.35]].forEach(([lx, lz]) => {
+    staticGrp.add(createLowPolyMesh(new THREE.CylinderGeometry(0.06, 0.075, 0.92, 6), '#5c2d0c', tblX + lx, 0.46, tblZ + lz, false));
+  });
+  const tblStretch = createLowPolyMesh(createOrganicBoxGeo(1.32, 0.07, 0.10, seed + 275, 0.06, 0.96, 1), '#6b3818', tblX, 0.34, tblZ, false);
   const jug = createBuildingAmphoraProp(0.62, '#c26533', '#8f471e');
-  jug.position.set(tblX - 0.32, 1.02, tblZ);
-  const lampBase = createLowPolyMesh(new THREE.CylinderGeometry(0.16, 0.22, 0.14, 6), '#d97706', tblX + 0.35, 1.08, tblZ, false);
-  const lampFlame = createLowPolyMesh(new THREE.OctahedronGeometry(0.14, 0), '#fde047', tblX + 0.35, 1.28, tblZ, false);
+  jug.position.set(tblX - 0.42, 1.02, tblZ - 0.06);
+  const linenRoll = createLowPolyMesh(new THREE.CylinderGeometry(0.11, 0.11, 0.38, 7), '#f8f5ee', tblX + 0.02, 1.12, tblZ + 0.14, false);
+  linenRoll.rotation.z = Math.PI * 0.48;
+  linenRoll.rotation.y = 0.25;
+  const herbBowl = createLowPolyMesh(new THREE.CylinderGeometry(0.20, 0.13, 0.14, 7), '#9a4f25', tblX + 0.04, 1.09, tblZ - 0.20, false);
+  const herbMound = createLowPolyMesh(new THREE.DodecahedronGeometry(0.14, 0), '#65a30d', tblX + 0.04, 1.18, tblZ - 0.20, false);
+  herbMound.scale.set(1.1, 0.65, 1.1);
+  const lampBase = createLowPolyMesh(new THREE.DodecahedronGeometry(0.18, 0), '#d97706', tblX + 0.46, 1.08, tblZ + 0.05, false);
+  lampBase.scale.set(1.2, 0.58, 1.0);
+  const lampFlame = createLowPolyMesh(new THREE.OctahedronGeometry(0.14, 0), '#fde047', tblX + 0.46, 1.28, tblZ + 0.05, false);
   lampFlame.userData._emissiveGlow = true;
-  staticGrp.add(tblTop, jug, lampBase, lampFlame);
+  staticGrp.add(tblTop, tblStretch, jug, linenRoll, herbBowl, herbMound, lampBase, lampFlame);
 
   mergeStaticLowPolyGroupToVertexColor(staticGrp, { registerWall: true, castShadow: true });
   innGrp.add(staticGrp);
@@ -3058,6 +3170,413 @@ function createPalmBranchMesh(scale = 1.0) {
   return g;
 }
 
+// [공용 소프트 로우폴리 수면] 비정형 삼각 면 분할 + 얕은 청록~깊은 갈릴리 바다색 그라데이션 수면 생성기
+function createIrregularLowPolyWaterMesh(width, depth, segsX = 36, segsZ = 54, seed = 13, opts = {}) {
+  const indexed = new THREE.PlaneGeometry(width, depth, segsX, segsZ);
+  indexed.rotateX(-Math.PI / 2);
+
+  const hash2 = (x, z) => {
+    const s = Math.sin(x * 12.9898 + z * 78.233 + seed * 37.7) * 43758.5453;
+    return s - Math.floor(s);
+  };
+
+  const stepX = width / Math.max(1, segsX);
+  const stepZ = depth / Math.max(1, segsZ);
+  const posIdx = indexed.attributes.position;
+  for (let i = 0; i < posIdx.count; i++) {
+    let vx = posIdx.getX(i);
+    let vz = posIdx.getZ(i);
+    const onBorder = (Math.abs(vx) > width * 0.485 || Math.abs(vz) > depth * 0.485);
+    if (!onBorder) {
+      vx += (hash2(vx, vz) - 0.5) * stepX * 0.54;
+      vz += (hash2(vz + 19.3, vx - 7.1) - 0.5) * stepZ * 0.54;
+    }
+    const waveY = (Math.sin(vx * 0.14 + vz * 0.11 + seed) * 0.12)
+      + (Math.cos(vx * 0.24 - vz * 0.19) * 0.07)
+      + (hash2(vx * 0.7, vz * 0.7) - 0.5) * 0.08;
+    posIdx.setXYZ(i, vx, waveY, vz);
+  }
+
+  const geo = indexed.toNonIndexed();
+  indexed.dispose();
+
+  const mesh = new THREE.Mesh(
+    geo,
+    new THREE.MeshLambertMaterial({
+      vertexColors: true,
+      flatShading: true,
+      transparent: true,
+      opacity: opts.opacity !== undefined ? opts.opacity : 0.84
+    })
+  );
+  mesh.receiveShadow = true;
+  mesh.userData = {
+    waterStyle: 'irregular_soft_lowpoly',
+    width,
+    depth,
+    seed,
+    shoreRightEdgeX: opts.shoreRightEdgeX !== undefined ? opts.shoreRightEdgeX : (width * 0.5),
+    shallowBandW: opts.shallowBandW || 38.0
+  };
+  tintIrregularLowPolyWater(mesh, Boolean(opts.isStorm));
+  return mesh;
+}
+window.createIrregularLowPolyWaterMesh = createIrregularLowPolyWaterMesh;
+
+function tintIrregularLowPolyWater(waterMesh, isStorm = false) {
+  if (!waterMesh || !waterMesh.geometry || !waterMesh.geometry.attributes || !waterMesh.geometry.attributes.position) return;
+  const geo = waterMesh.geometry;
+  const pos = geo.attributes.position;
+  const colors = new Float32Array(pos.count * 3);
+  const u = waterMesh.userData || {};
+  const seed = u.seed || 13;
+  const shoreX = u.shoreRightEdgeX !== undefined ? u.shoreRightEdgeX : 150;
+  const shallowW = u.shallowBandW || 38.0;
+
+  const hash2 = (x, z) => {
+    const s = Math.sin(x * 15.73 + z * 63.17 + seed * 19.1) * 43758.5453;
+    return s - Math.floor(s);
+  };
+
+  // Image 1 스타일의 맑은 연청록 물가 → 청량한 갈릴리 옥색/코발트 블루 (폭풍 시 깊은 청회색 바다)
+  const cShallow = new THREE.Color(isStorm ? '#2b5870' : '#73c7c8');
+  const cMid     = new THREE.Color(isStorm ? '#1d445c' : '#2ea3c2');
+  const cDeep    = new THREE.Color(isStorm ? '#0f283b' : '#0b7ab0');
+  const cFoam    = new THREE.Color(isStorm ? '#4b748a' : '#bce6e6');
+  const fCol     = new THREE.Color();
+
+  for (let i = 0; i + 2 < pos.count; i += 3) {
+    const mx = (pos.getX(i) + pos.getX(i + 1) + pos.getX(i + 2)) / 3;
+    const my = (pos.getY(i) + pos.getY(i + 1) + pos.getY(i + 2)) / 3;
+    const mz = (pos.getZ(i) + pos.getZ(i + 1) + pos.getZ(i + 2)) / 3;
+
+    const distFromShore = Math.max(0, shoreX - mx);
+    const tShore = Math.min(1.0, distFromShore / shallowW);
+    if (tShore < 0.36) {
+      fCol.copy(cShallow).lerp(cMid, tShore / 0.36);
+    } else {
+      fCol.copy(cMid).lerp(cDeep, (tShore - 0.36) / 0.64);
+    }
+    // 물결 마루/해안 포말 하이라이트 + 삼각형 면별 명도 대비로 소프트 로우폴리 질감 극대화
+    if (my > 0.11 || (tShore < 0.10 && hash2(mx, mz) > 0.55)) {
+      fCol.lerp(cFoam, isStorm ? 0.18 : 0.28);
+    }
+    const facetTone = (hash2(mx * 0.9 + i * 0.01, mz * 0.9) - 0.5) * 0.14;
+    const scaleLum = 1.0 + facetTone;
+    fCol.r = Math.max(0, Math.min(1, fCol.r * scaleLum));
+    fCol.g = Math.max(0, Math.min(1, fCol.g * scaleLum));
+    fCol.b = Math.max(0, Math.min(1, fCol.b * scaleLum));
+
+    for (let k = 0; k < 3; k++) {
+      colors[(i + k) * 3]     = fCol.r;
+      colors[(i + k) * 3 + 1] = fCol.g;
+      colors[(i + k) * 3 + 2] = fCol.b;
+    }
+  }
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  if (geo.attributes.color) geo.attributes.color.needsUpdate = true;
+  geo.computeVertexNormals();
+}
+window.tintIrregularLowPolyWater = tintIrregularLowPolyWater;
+
+// [Image 1 레퍼런스] 바닷가 물가 갈대·부들(Cattail) 수초 다발
+function createShorelineCattailCluster(scale = 1.0) {
+  const g = new THREE.Group();
+  const s = scale;
+  const leafCols = ['#5c8d36', '#72a142', '#4d7c2b', '#86b049'];
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + 0.3;
+    const bladeH = (0.75 + (i % 3) * 0.26) * s;
+    const blade = createLowPolyMesh(new THREE.ConeGeometry(0.065 * s, bladeH, 4), leafCols[i % leafCols.length], Math.cos(a) * 0.16 * s, bladeH * 0.45, Math.sin(a) * 0.16 * s, false);
+    blade.rotation.z = -Math.cos(a) * 0.26;
+    blade.rotation.x =  Math.sin(a) * 0.26;
+    g.add(blade);
+  }
+  // 갈색 부들 이삭 2개
+  [[-0.08, 0.06, 1.32, 0.08], [0.10, -0.05, 1.10, -0.10]].forEach(([sx, sz, h, tilt]) => {
+    const stem = createLowPolyMesh(new THREE.CylinderGeometry(0.018 * s, 0.024 * s, h * s, 4), '#4d7c2b', sx * s, h * 0.5 * s, sz * s, false);
+    stem.rotation.z = tilt;
+    const head = createLowPolyMesh(new THREE.CylinderGeometry(0.052 * s, 0.056 * s, 0.30 * s, 6), '#6b3818', (sx - Math.sin(tilt) * h * 0.35) * s, h * 0.86 * s, sz * s, false);
+    head.rotation.z = tilt;
+    g.add(stem, head);
+  });
+  return g;
+}
+
+// [Image 1 레퍼런스] 바닷가 낚시용 둥근 대바구니 + 토기 그릇
+function createWickerBasketMesh(scale = 1.0) {
+  const g = new THREE.Group();
+  const s = scale;
+  const body = createLowPolyMesh(new THREE.CylinderGeometry(0.32 * s, 0.28 * s, 0.48 * s, 8), '#c49a5c', 0, 0.26 * s, 0, true);
+  const belly = createLowPolyMesh(new THREE.DodecahedronGeometry(0.36 * s, 0), '#b4874a', 0, 0.25 * s, 0, true);
+  belly.scale.set(1.04, 0.72, 1.04);
+  const rim = createLowPolyMesh(new THREE.TorusGeometry(0.30 * s, 0.048 * s, 5, 9), '#9a6b35', 0, 0.50 * s, 0, false);
+  rim.rotation.x = Math.PI * 0.5;
+  const inside = createLowPolyMesh(new THREE.CylinderGeometry(0.26 * s, 0.24 * s, 0.06 * s, 8), '#5c3818', 0, 0.47 * s, 0, false);
+  const bowl = createLowPolyMesh(new THREE.CylinderGeometry(0.18 * s, 0.12 * s, 0.16 * s, 7), '#b86232', 0.48 * s, 0.08 * s, 0.18 * s, true);
+  g.add(body, belly, rim, inside, bowl);
+  return g;
+}
+
+// [미션 아이템 5 - Image 1 레퍼런스] 마디가 있는 곡선 대나무 장대 낚싯대 + 정확한 끝점(tipNode) 앵커
+function createFishingRodMesh(scale = 1.0) {
+  const g = new THREE.Group();
+  const s = scale;
+  const segSpecs = [
+    { rBot: 0.054, rTop: 0.046, len: 0.82, bendX: 0.02, col: '#b89452' },
+    { rBot: 0.046, rTop: 0.038, len: 0.85, bendX: 0.08, col: '#cfb06e' },
+    { rBot: 0.038, rTop: 0.030, len: 0.84, bendX: 0.16, col: '#c5a25e' },
+    { rBot: 0.030, rTop: 0.022, len: 0.80, bendX: 0.26, col: '#d6ba7a' },
+    { rBot: 0.022, rTop: 0.014, len: 0.72, bendX: 0.38, col: '#c9a966' }
+  ];
+
+  // 손잡이 삼베끈 감개
+  const grip = createLowPolyMesh(new THREE.CylinderGeometry(0.058 * s, 0.064 * s, 0.44 * s, 6), '#6b4226', 0, 0.20 * s, 0, false);
+  g.add(grip);
+
+  // 관절식으로 자연스럽게 휘어지는 5단 대나무 마디 체인 구축 → 끝점에 tipNode 고정!
+  let curParent = g;
+  let attachY = 0.05 * s;
+  segSpecs.forEach((sp, idx) => {
+    const piv = new THREE.Group();
+    piv.position.set(0, attachY, 0);
+    piv.rotation.x = idx === 0 ? sp.bendX : (sp.bendX - segSpecs[idx - 1].bendX);
+
+    const cyl = createLowPolyMesh(
+      new THREE.CylinderGeometry(sp.rTop * s, sp.rBot * s, sp.len * s, 6),
+      sp.col, 0, sp.len * 0.5 * s, 0, true
+    );
+    const nodeRing = createLowPolyMesh(
+      new THREE.CylinderGeometry((sp.rTop + 0.010) * s, (sp.rTop + 0.010) * s, 0.055 * s, 6),
+      '#8a6838', 0, sp.len * s, 0, false
+    );
+    piv.add(cyl, nodeRing);
+    curParent.add(piv);
+    curParent = piv;
+    attachY = sp.len * s;
+  });
+
+  // 대나무 끝단 낚시줄 매듭(삼베끈 감개) + 정확한 월드 좌표 추출용 tipNode!
+  const tipLash = createLowPolyMesh(new THREE.CylinderGeometry(0.026 * s, 0.028 * s, 0.11 * s, 6), '#855828', 0, attachY - 0.04 * s, 0, false);
+  const tipNode = new THREE.Object3D();
+  tipNode.position.set(0, attachY, 0);
+  curParent.add(tipLash, tipNode);
+
+  g.userData.tipNode = tipNode;
+  g.userData.rodStyle = 'curved_bamboo_v11';
+  return g;
+}
+
+// [미션 아이템 6] 디테일 소프트 로우폴리 갈릴리 바닷가 모닥불 (활활 타는 숯불 vs 영구 불꺼진 숯나무·재)
+function createGalileeCampfireMesh(extinguished = false, scale = 1.0) {
+  const g = new THREE.Group();
+  const s = scale;
+
+  // 1) 2중 비정형 바닷가 자연석 화덕 돌 테두리 (큰 돌 11개 + 틈새 쐐기 조약돌 7개)
+  for (let i = 0; i < 11; i++) {
+    const a = (i / 11) * Math.PI * 2;
+    const r = (1.02 + (i % 2) * 0.09) * s;
+    const stGeo = (typeof createIrregularFieldstoneGeo === 'function')
+      ? createIrregularFieldstoneGeo((0.46 + (i % 3) * 0.06) * s, (0.30 + (i % 2) * 0.07) * s, 0.38 * s, 700 + i)
+      : new THREE.DodecahedronGeometry(0.28 * s, 0);
+    const col = i % 3 === 0 ? '#94a3b8' : (i % 2 === 0 ? '#78716c' : '#b2aaa0');
+    const st = createLowPolyMesh(stGeo, col, Math.cos(a) * r, 0.15 * s, Math.sin(a) * r, true);
+    st.rotation.set(((i % 3) - 1) * 0.08, a + 0.45, ((i % 2) - 0.5) * 0.08);
+    g.add(st);
+  }
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2 + 0.28;
+    const r = 1.24 * s;
+    const peb = createLowPolyMesh(new THREE.DodecahedronGeometry(0.15 * s, 0), i % 2 === 0 ? '#cbd5e1' : '#a8a29e', Math.cos(a) * r, 0.08 * s, Math.sin(a) * r, false);
+    peb.scale.set(1.25, 0.58, 1.05);
+    g.add(peb);
+  }
+
+  if (extinguished) {
+    // [디테일 불꺼진 모닥불: 다층 회색 잿더미 + 재가 묻은 까만 숯 장작 + 숯덩이 + 그을린 Y자 꼬치 기둥]
+    const ashBase = createLowPolyMesh(new THREE.DodecahedronGeometry(0.84 * s, 0), '#9ca3af', 0, 0.08 * s, 0, false);
+    ashBase.scale.set(1.18, 0.24, 1.15);
+    const ashMid = createLowPolyMesh(new THREE.DodecahedronGeometry(0.60 * s, 0), '#6b7280', 0.06 * s, 0.14 * s, -0.05 * s, false);
+    ashMid.scale.set(1.15, 0.30, 1.10);
+    const ashTop = createLowPolyMesh(new THREE.DodecahedronGeometry(0.36 * s, 0), '#d1d5db', -0.08 * s, 0.19 * s, 0.06 * s, false);
+    ashTop.scale.set(1.10, 0.26, 1.05);
+    g.add(ashBase, ashMid, ashTop);
+
+    const burntLogs = [
+      { x: -0.10, y: 0.20, z:  0.05, rx: 0.20, ry:  0.35, rz: Math.PI * 0.45, len: 1.26, col: '#1c1917' },
+      { x:  0.14, y: 0.22, z: -0.09, rx: -0.24, ry: 1.48, rz: Math.PI * 0.44, len: 1.20, col: '#292524' },
+      { x:  0.02, y: 0.26, z:  0.14, rx: 0.28, ry:  2.55, rz: Math.PI * 0.42, len: 1.08, col: '#111827' },
+      { x: -0.24, y: 0.17, z: -0.18, rx: -0.14, ry: 0.92, rz: Math.PI * 0.47, len: 0.96, col: '#374151' },
+      { x:  0.22, y: 0.18, z:  0.18, rx: 0.16, ry:  2.05, rz: Math.PI * 0.46, len: 0.88, col: '#1f2937' }
+    ];
+    burntLogs.forEach((lg) => {
+      const m = createLowPolyMesh(new THREE.CylinderGeometry(0.075 * s, 0.108 * s, lg.len * s, 6), lg.col, lg.x * s, lg.y * s, lg.z * s, true);
+      m.rotation.set(lg.rx, lg.ry, lg.rz);
+      g.add(m);
+    });
+    for (let c = 0; c < 9; c++) {
+      const a = (c / 9) * Math.PI * 2 + 0.4;
+      const r = (0.18 + (c % 3) * 0.20) * s;
+      const coal = createLowPolyMesh(new THREE.DodecahedronGeometry((0.09 + (c % 2) * 0.03) * s, 0), c % 3 === 0 ? '#111827' : (c % 2 === 0 ? '#27272a' : '#4b5563'), Math.cos(a) * r, 0.17 * s, Math.sin(a) * r, false);
+      coal.scale.set(1.22, 0.62, 0.95);
+      g.add(coal);
+    }
+    // 그을려 남은 양옆 Y자 나무 말뚝
+    [-0.95, 0.95].forEach((fx) => {
+      const stake = createLowPolyMesh(new THREE.CylinderGeometry(0.036 * s, 0.052 * s, 0.85 * s, 5), '#3f2e21', fx * s, 0.42 * s, 0, true);
+      stake.rotation.z = fx < 0 ? 0.08 : -0.08;
+      g.add(stake);
+    });
+    g.userData.extinguished = true;
+    g.userData.campfireStyle = 'detailed_soft_lowpoly_v11';
+    return g;
+  }
+
+  // [디테일 활활 타오르는 바닷가 숯불 모닥불]
+  // 2) 다층 숯불 바닥(어두운 숯층 + 붉은 잔불 + 밝은 황금 잉걸불 덩어리들)
+  const coalBed = createLowPolyMesh(new THREE.DodecahedronGeometry(0.74 * s, 0), '#3b1808', 0, 0.10 * s, 0, false);
+  coalBed.scale.set(1.16, 0.28, 1.14);
+  const emberBed = createLowPolyMesh(new THREE.DodecahedronGeometry(0.50 * s, 0), '#c2410c', 0, 0.16 * s, 0, false);
+  emberBed.scale.set(1.12, 0.34, 1.08);
+  emberBed.userData._emissiveGlow = true;
+  g.add(coalBed, emberBed);
+
+  for (let e = 0; e < 7; e++) {
+    const a = (e / 7) * Math.PI * 2;
+    const r = (0.20 + (e % 2) * 0.22) * s;
+    const hotCoal = createLowPolyMesh(new THREE.DodecahedronGeometry(0.11 * s, 0), e % 2 === 0 ? '#f97316' : '#facc15', Math.cos(a) * r, 0.20 * s, Math.sin(a) * r, false);
+    hotCoal.scale.set(1.15, 0.65, 1.0);
+    hotCoal.userData._emissiveGlow = true;
+    g.add(hotCoal);
+  }
+
+  // 3) 입체적으로 교차 적층된 쪼갠 장작 6개 + 옆에 쌓아둔 여분 장작 더미
+  for (let l = 0; l < 6; l++) {
+    const a = (l / 6) * Math.PI * 2 + 0.15;
+    const log = createLowPolyMesh(new THREE.CylinderGeometry(0.085 * s, 0.115 * s, 1.32 * s, 6), l % 2 === 0 ? '#5c2d0c' : '#3f1d0b', Math.cos(a) * 0.30 * s, 0.26 * s, Math.sin(a) * 0.30 * s, true);
+    log.rotation.z = Math.PI * 0.36;
+    log.rotation.y = a;
+    g.add(log);
+  }
+  // 화덕 뒤편 여분 장작 3개 묶음
+  [[0.15, 0.10, -1.52], [-0.14, 0.10, -1.54], [0.0, 0.24, -1.53]].forEach(([lx, ly, lz], idx) => {
+    const spare = createLowPolyMesh(new THREE.CylinderGeometry(0.078 * s, 0.086 * s, 0.96 * s, 6), idx === 2 ? '#78350f' : '#5c2d0c', lx * s, ly * s, lz * s, true);
+    spare.rotation.z = Math.PI * 0.5;
+    spare.rotation.y = 0.12 * (idx - 1);
+    g.add(spare);
+  });
+
+  // 4) 5겹 소프트 로우폴리 불꽃 혀(Flame Tongues) + 피어오르는 불똥 스파크 7개
+  const flames = [];
+  const flameSpecs = [
+    { r: 0.44, h: 1.15, col: 0xea580c, x:  0.00, z:  0.00, op: 0.90 },
+    { r: 0.34, h: 0.96, col: 0xf97316, x: -0.16, z:  0.11, op: 0.92 },
+    { r: 0.30, h: 0.88, col: 0xfacc15, x:  0.15, z: -0.09, op: 0.94 },
+    { r: 0.22, h: 0.78, col: 0xfef08a, x:  0.03, z:  0.06, op: 0.96 },
+    { r: 0.20, h: 0.68, col: 0xfbbf24, x: -0.08, z: -0.14, op: 0.92 }
+  ];
+  flameSpecs.forEach((fs, idx) => {
+    const fMat = new THREE.MeshBasicMaterial({ color: fs.col, transparent: true, opacity: fs.op });
+    const fMesh = new THREE.Mesh(new THREE.ConeGeometry(fs.r * s, fs.h * s, 5), fMat);
+    fMesh.position.set(fs.x * s, (0.28 + fs.h * 0.44) * s, fs.z * s);
+    fMesh.rotation.y = idx * 1.15;
+    g.add(fMesh);
+    flames.push({ mesh: fMesh, baseY: fMesh.position.y, phase: idx * 1.7 });
+  });
+
+  const sparks = [];
+  for (let sp = 0; sp < 7; sp++) {
+    const spMat = new THREE.MeshBasicMaterial({ color: sp % 2 === 0 ? 0xfde047 : 0xf97316, transparent: true, opacity: 0.9 });
+    const spMesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.055 * s, 0), spMat);
+    g.add(spMesh);
+    sparks.push({ mesh: spMesh, mat: spMat, angle: sp * 1.1, phase: sp / 7, rad: (0.15 + (sp % 3) * 0.14) * s });
+  }
+
+  // 5) 삼베끈으로 묶은 Y자 나무 꼬치 지지대 + 가로 꼬치 + 소프트 로우폴리 구이 물고기!
+  [-1, 1].forEach((side) => {
+    const fx = side * 0.96 * s;
+    const pole = createLowPolyMesh(new THREE.CylinderGeometry(0.042 * s, 0.058 * s, 1.32 * s, 5), '#6b4226', fx, 0.64 * s, 0, true);
+    const prongA = createLowPolyMesh(new THREE.CylinderGeometry(0.025 * s, 0.036 * s, 0.34 * s, 5), '#7c4722', fx, 1.32 * s, -0.09 * s, false);
+    prongA.rotation.x = -0.45;
+    const prongB = createLowPolyMesh(new THREE.CylinderGeometry(0.025 * s, 0.036 * s, 0.34 * s, 5), '#7c4722', fx, 1.32 * s,  0.09 * s, false);
+    prongB.rotation.x =  0.45;
+    const lash = createLowPolyMesh(new THREE.CylinderGeometry(0.058 * s, 0.058 * s, 0.11 * s, 6), '#d6b685', fx, 1.18 * s, 0, false);
+    g.add(pole, prongA, prongB, lash);
+  });
+  const spitRod = createLowPolyMesh(new THREE.CylinderGeometry(0.028 * s, 0.028 * s, 2.22 * s, 5), '#92400e', 0, 1.24 * s, 0, false);
+  spitRod.rotation.z = Math.PI * 0.5;
+  g.add(spitRod);
+
+  const roastFishGrp = new THREE.Group();
+  const roastFishMat = new THREE.MeshLambertMaterial({ color: 0x93c5fd, flatShading: true });
+  const fishBody = new THREE.Mesh(new THREE.IcosahedronGeometry(0.28 * s, 0), roastFishMat);
+  fishBody.scale.set(1.75, 0.72, 0.46);
+  const fishHead = new THREE.Mesh(new THREE.ConeGeometry(0.16 * s, 0.32 * s, 5), roastFishMat);
+  fishHead.rotation.z = -Math.PI * 0.5;
+  fishHead.position.set(0.46 * s, 0, 0);
+  const fishDorsal = new THREE.Mesh(new THREE.ConeGeometry(0.11 * s, 0.28 * s, 4), roastFishMat);
+  fishDorsal.rotation.z = 0.55;
+  fishDorsal.scale.set(1.3, 1.0, 0.28);
+  fishDorsal.position.set(-0.04 * s, 0.22 * s, 0);
+  const fishTailUp = new THREE.Mesh(new THREE.ConeGeometry(0.11 * s, 0.30 * s, 4), roastFishMat);
+  fishTailUp.rotation.z = Math.PI * 0.35;
+  fishTailUp.scale.set(1.0, 1.0, 0.28);
+  fishTailUp.position.set(-0.56 * s, 0.09 * s, 0);
+  const fishTailLo = new THREE.Mesh(new THREE.ConeGeometry(0.11 * s, 0.28 * s, 4), roastFishMat);
+  fishTailLo.rotation.z = Math.PI * 0.65;
+  fishTailLo.scale.set(1.0, 1.0, 0.28);
+  fishTailLo.position.set(-0.56 * s, -0.09 * s, 0);
+  roastFishGrp.add(fishBody, fishHead, fishDorsal, fishTailUp, fishTailLo);
+  roastFishGrp.position.set(0, 1.24 * s, 0);
+  roastFishGrp.visible = false;
+  g.add(roastFishGrp);
+
+  // 연기/김 파티클 5개 (노릇할 땐 하얀 김, 타면 검은 연기!)
+  const smokePuffs = [];
+  for (let p = 0; p < 5; p++) {
+    const sMat = new THREE.MeshBasicMaterial({ color: 0xf8fafc, transparent: true, opacity: 0.45 });
+    const sMesh = new THREE.Mesh(new THREE.DodecahedronGeometry(0.15 * s, 0), sMat);
+    sMesh.position.set((p - 2) * 0.14 * s, 1.32 * s, 0);
+    sMesh.visible = false;
+    g.add(sMesh);
+    smokePuffs.push({ mesh: sMesh, mat: sMat, phase: p * 0.22 });
+  }
+
+  g.userData.extinguished = false;
+  g.userData.campfireStyle = 'detailed_soft_lowpoly_v11';
+  g.userData.flames = flames;
+  g.userData.sparks = sparks;
+  g.userData.roastFishGrp = roastFishGrp;
+  g.userData.roastFishMat = roastFishMat;
+  g.userData.smokePuffs = smokePuffs;
+  return g;
+}
+
+// [미션 아이템 7] 엠마오 마을 예수님과 떡을 떼는 소프트 로우폴리 식탁 3D 에셋
+function createEmmausTableMesh(scale = 1.0) {
+  const g = new THREE.Group();
+  const s = scale;
+  const top = createLowPolyMesh(createOrganicBoxGeo(1.75 * s, 0.14 * s, 1.10 * s, 771, 0.06, 0.96, 2), '#854d0e', 0, 0.88 * s, 0, true);
+  const runner = createLowPolyMesh(createOrganicBoxGeo(1.20 * s, 0.04 * s, 0.64 * s, 772, 0.05, 0.97, 1), '#f5ead6', 0, 0.97 * s, 0, false);
+  [[-0.72, -0.40], [0.72, -0.40], [-0.72, 0.40], [0.72, 0.40]].forEach(([lx, lz]) => {
+    g.add(createLowPolyMesh(new THREE.CylinderGeometry(0.055 * s, 0.070 * s, 0.86 * s, 6), '#5c2d0c', lx * s, 0.43 * s, lz * s, false));
+  });
+  // 축사하시고 떼어 주시는 둥근 떡(빵) & 황금 잔
+  const breadL = createLowPolyMesh(new THREE.DodecahedronGeometry(0.22 * s, 0), '#d97706', -0.14 * s, 1.09 * s, 0.02 * s, false);
+  breadL.scale.set(1.15, 0.62, 0.95);
+  const breadR = createLowPolyMesh(new THREE.DodecahedronGeometry(0.20 * s, 0), '#b45309',  0.18 * s, 1.08 * s, -0.02 * s, false);
+  breadR.scale.set(1.05, 0.58, 0.92);
+  const cup = createLowPolyMesh(new THREE.CylinderGeometry(0.11 * s, 0.07 * s, 0.24 * s, 7), '#eab308', 0.48 * s, 1.11 * s, 0.12 * s, false);
+  // 양옆 낮은 나무 의자 2개
+  [-1.25, 1.25].forEach((sx) => {
+    const st = createLowPolyMesh(new THREE.CylinderGeometry(0.30 * s, 0.28 * s, 0.10 * s, 7), '#78350f', sx * s, 0.48 * s, 0, false);
+    const sb = createLowPolyMesh(new THREE.CylinderGeometry(0.16 * s, 0.22 * s, 0.44 * s, 6), '#5c2d0c', sx * s, 0.22 * s, 0, false);
+    g.add(st, sb);
+  });
+  g.add(top, runner, breadL, breadR, cup);
+  return g;
+}
+
 // [미션 공통] NPC 주변 무릎 높이(y ≤ ~0.95m) 파형(웨이브) + 반짝이는 상승 파티클 오라 그룹
 function createGoldenAuraGroup(colorHex = 0xfde047, radius = 1.65) {
   const auraGrp = new THREE.Group();
@@ -3158,42 +3677,74 @@ function createGoldenAuraGroup(colorHex = 0xfde047, radius = 1.65) {
   return auraGrp;
 }
 
-// [반석 위의 집] 넓은 비정형 반석 바위 지반 생성기
+// [반석 위의 집 확장형] 멀티플레이 협동 건축까지 수용하는 초대형 다단 소프트 로우폴리 반석 부지 (~18m × 16m)
 function createWideBedrockFormation(cx, cz) {
   const by = getBaseGroundHeight(cx, cz);
   const grp = new THREE.Group();
-  const rockCols = ['#94a3b8', '#cbd5e1', '#78716c', '#a8a29e', '#b8b0a4'];
-  const slabs = [
-    { x: 0,    z: 0,    w: 7.4, h: 0.58, d: 6.4, col: '#94a3b8', rot: 0.08 },
-    { x: -3.2, z: 1.5,  w: 4.2, h: 0.44, d: 3.6, col: '#a8a29e', rot: -0.25 },
-    { x:  3.4, z: -1.4, w: 4.4, h: 0.46, d: 3.8, col: '#cbd5e1', rot: 0.32 },
-    { x: -2.6, z: -2.4, w: 3.8, h: 0.42, d: 3.4, col: '#78716c', rot: 0.48 },
-    { x:  2.7, z:  2.5, w: 3.9, h: 0.40, d: 3.2, col: '#b8b0a4', rot: -0.38 },
-    { x:  0.1, z: -3.4, w: 4.6, h: 0.36, d: 2.6, col: '#94a3b8', rot: 0.15 },
-    { x: -0.2, z:  3.5, w: 4.5, h: 0.34, d: 2.5, col: '#a8a29e', rot: -0.12 }
+  const rockCols = ['#94a3b8', '#cbd5e1', '#78716c', '#a8a29e', '#b8b0a4', '#8b95a5'];
+
+  // 1) 하단 넓은 암반 기층(Lower Terraced Bedrock Apron)
+  const lowerSlabs = [
+    { x:  0.0, z:  0.0, w: 15.6, h: 0.56, d: 13.8, col: '#8b95a5', rot: 0.04 },
+    { x: -6.2, z:  2.8, w:  6.4, h: 0.46, d:  5.8, col: '#94a3b8', rot: -0.22 },
+    { x:  6.4, z: -2.6, w:  6.6, h: 0.48, d:  5.8, col: '#a8a29e', rot: 0.28 },
+    { x: -5.4, z: -4.4, w:  6.2, h: 0.44, d:  5.2, col: '#78716c', rot: 0.36 },
+    { x:  5.6, z:  4.2, w:  6.0, h: 0.44, d:  5.2, col: '#b8b0a4', rot: -0.32 },
+    { x:  0.2, z: -6.2, w:  8.8, h: 0.40, d:  4.0, col: '#94a3b8', rot: 0.08 },
+    { x: -0.3, z:  6.3, w:  8.6, h: 0.38, d:  4.0, col: '#a8a29e', rot: -0.06 }
   ];
-  slabs.forEach((sl, i) => {
-    const s = 800 + i * 19;
-    const m = createLowPolyMesh(createOrganicBoxGeo(sl.w, sl.h, sl.d, s, 0.10, 0.88, 2), sl.col, sl.x, sl.h * 0.42, sl.z, true);
+  lowerSlabs.forEach((sl, i) => {
+    const m = createLowPolyMesh(createOrganicBoxGeo(sl.w, sl.h, sl.d, 800 + i * 19, 0.11, 0.86, 2), sl.col, sl.x, sl.h * 0.38, sl.z, true);
     m.rotation.y = sl.rot;
     grp.add(m);
   });
-  // 반석 가장자리 비정형 바위 덩어리들
-  for (let i = 0; i < 10; i++) {
-    const ang = (i / 10) * Math.PI * 2 + 0.25;
-    const rad = 4.6 + (i % 3) * 0.72;
-    const boulder = createLowPolyMesh(
-      new THREE.DodecahedronGeometry(0.68 + (i % 3) * 0.18, 0),
-      rockCols[i % rockCols.length],
-      Math.cos(ang) * rad, 0.22, Math.sin(ang) * rad, true
-    );
-    boulder.scale.set(1.35, 0.56, 1.15);
-    boulder.rotation.y = ang;
-    grp.add(boulder);
+
+  // 2) 중앙 단단한 반석 대지(Upper Flat Foundation Plateau) + 4모서리 다듬은 주춧돌 받침
+  const upperPlateau = createLowPolyMesh(createOrganicBoxGeo(11.8, 0.52, 10.2, 860, 0.07, 0.92, 2), '#cbd5e1', 0, 0.54, 0, true);
+  upperPlateau.rotation.y = 0.02;
+  grp.add(upperPlateau);
+
+  [[-4.8, -4.1], [4.8, -4.1], [-4.8, 4.1], [4.8, 4.1]].forEach(([px, pz], pi) => {
+    const plinth = createLowPolyMesh(createOrganicBoxGeo(1.45, 0.32, 1.45, 870 + pi, 0.08, 0.92, 1), '#d6cfc2', px, 0.88, pz, true);
+    plinth.rotation.y = pi * 0.15;
+    grp.add(plinth);
+  });
+
+  // 3) 서쪽·남쪽 반석 오르막 석재 디딤계단(자연석 3단)
+  for (let s = 0; s < 3; s++) {
+    const stW = createLowPolyMesh(createOrganicBoxGeo(1.15, 0.24, 3.6 - s * 0.3, 880 + s, 0.08, 0.94, 1), s % 2 === 0 ? '#d6cfc2' : '#b8b0a4', -6.8 + s * 0.72, 0.16 + s * 0.22, 0.2, false);
+    const stS = createLowPolyMesh(createOrganicBoxGeo(3.8 - s * 0.3, 0.24, 1.15, 885 + s, 0.08, 0.94, 1), s % 2 === 0 ? '#d6cfc2' : '#b8b0a4', 0, 0.16 + s * 0.22, 6.2 - s * 0.72, false);
+    grp.add(stW, stS);
   }
+
+  // 4) 반석 외곽을 감싸는 웅장한 비정형 바위 덩어리(18개) + 바위 틈 이끼/풀포기(10개)
+  for (let i = 0; i < 18; i++) {
+    const ang = (i / 18) * Math.PI * 2 + 0.18;
+    // 서쪽(-X) 및 남쪽(+Z) 계단 진입구 비워두기
+    if (Math.abs(Math.cos(ang) + 1) < 0.12 || Math.abs(Math.sin(ang) - 1) < 0.12) continue;
+    const radX = 8.4 + (i % 3) * 1.05;
+    const radZ = 7.4 + ((i + 1) % 3) * 0.95;
+    const boulder = createLowPolyMesh(
+      new THREE.DodecahedronGeometry(0.85 + (i % 3) * 0.28, 0),
+      rockCols[i % rockCols.length],
+      Math.cos(ang) * radX, 0.32 + (i % 2) * 0.16, Math.sin(ang) * radZ, true
+    );
+    boulder.scale.set(1.38, 0.62, 1.18);
+    boulder.rotation.set((i % 3) * 0.12, ang, 0);
+    grp.add(boulder);
+
+    if (i % 2 === 0) {
+      const tuft = createLowPolyMesh(new THREE.DodecahedronGeometry(0.32, 0), '#65a30d', Math.cos(ang) * (radX - 1.1), 0.34, Math.sin(ang) * (radZ - 1.0), false);
+      tuft.scale.set(1.2, 0.55, 1.1);
+      grp.add(tuft);
+    }
+  }
+
   mergeStaticLowPolyGroupToVertexColor(grp, { registerWall: false, castShadow: true });
   grp.traverse(ch => { if (ch.isMesh) ch.receiveShadow = true; });
   grp.position.set(cx, by - 0.06, cz);
+  grp.userData.bedrockRadius = 9.2;
+  grp.userData.bedrockStyle = 'expanded_grand_v11';
   worldGroup.add(grp);
   return grp;
 }
@@ -3393,10 +3944,45 @@ function createCrispLowPolyFacetedTerrain(width, depth, segX, segZ, heightFn, co
   return mesh;
 }
 
-// 스테이지 공용: 언덕 계단식 비정형 돌담 빌더 (전체 1 드로우콜 병합)
+// 첨부 레퍼런스 돌담 스타일: 모서리가 깎이고 둥근 다면체 비정형 자연석(Fieldstone) 지오메트리 생성기
+// - 직사각형 벽돌 대신 십이면체 기반 베벨 쿠션(Superellipsoid) + 정점별 비정형 요철 변형으로 자연스럽게 맞물리는 돌담 구현!
+function createIrregularFieldstoneGeo(bw = 0.85, bh = 0.44, bd = 1.15, seed = 1) {
+  const raw = new THREE.DodecahedronGeometry(1.0, 0);
+  const geo = raw.index ? raw.toNonIndexed() : raw;
+  if (geo !== raw && typeof raw.dispose === 'function') raw.dispose();
+  const pos = geo.attributes.position;
+  const h3 = (x, y, z, s) => {
+    const v = Math.sin(Math.round(x * 100) * 12.9898 + Math.round(y * 100) * 78.233 + Math.round(z * 100) * 37.719 + s * 19.3) * 43758.5453;
+    return v - Math.floor(v);
+  };
+  const spow = (v, p) => (v < 0 ? -Math.pow(-v, p) : Math.pow(v, p));
+  for (let i = 0; i < pos.count; i++) {
+    const ox = pos.getX(i), oy = pos.getY(i), oz = pos.getZ(i);
+    // 다면체 꼭짓점을 부드럽게 각진 자연석 쿠션 형태로 다듬기
+    let x = spow(ox, 0.76);
+    let y = spow(oy, 0.72);
+    let z = spow(oz, 0.76);
+    // 윗면·아랫면을 살짝 평평하게 눌러 돌담끼리 안정적으로 포개져 쌓이도록 보정
+    if (Math.abs(y) > 0.72) y = Math.sign(y) * (0.72 + (Math.abs(y) - 0.72) * 0.45);
+    const jx = (h3(ox, oy, oz, seed + 1) - 0.5) * 0.22;
+    const jy = (h3(ox, oy, oz, seed + 2) - 0.5) * 0.16;
+    const jz = (h3(ox, oy, oz, seed + 3) - 0.5) * 0.22;
+    pos.setXYZ(
+      i,
+      (x + jx) * (bw * 0.62),
+      (y + jy) * (bh * 0.74),
+      (z + jz) * (bd * 0.62)
+    );
+  }
+  if (typeof geo.computeVertexNormals === 'function') geo.computeVertexNormals();
+  return geo;
+}
+window.createIrregularFieldstoneGeo = createIrregularFieldstoneGeo;
+
+// 스테이지 공용: 언덕 계단식 비정형 자연석 돌담 빌더 (전체 1 드로우콜 병합)
 function buildStageDryStoneTerraceWalls(curves, heightFn, seedBase = 700) {
   const stoneWallGrp = new THREE.Group();
-  const stoneCols = ['#e2d8c5', '#d5c7ae', '#c8b89d', '#ebe3d3', '#baa98d'];
+  const stoneCols = ['#ede0c8', '#e1cda9', '#d4bc94', '#c6aa80', '#f2e7d3', '#baa078'];
   const hash1 = (v) => {
     const s = Math.sin(v * 127.1 + 311.7) * 43758.5453;
     return s - Math.floor(s);
@@ -3411,26 +3997,28 @@ function buildStageDryStoneTerraceWalls(curves, heightFn, seedBase = 700) {
       const segLen = Math.hypot(x1 - x0, z1 - z0);
       if (segLen < 0.5) continue;
       const yaw = Math.atan2(x1 - x0, z1 - z0);
-      const stepCount = Math.max(2, Math.round(segLen / 1.18));
+      const stepCount = Math.max(2, Math.round(segLen / 0.88));
 
       for (let row = 0; row < courses; row++) {
-        const stagger = (row % 2 === 0) ? 0.0 : 0.45;
+        const stagger = (row % 2 === 0) ? 0.0 : 0.48;
         for (let k = 0; k < stepCount; k++) {
-          const t = (k + 0.5 + stagger * 0.35) / stepCount;
-          if (t > 1.0) continue;
+          const s = seedBase + ci * 137 + p * 43 + row * 29 + k * 7;
+          const t = (k + 0.5 + stagger * 0.42 + (hash1(s + 9) - 0.5) * 0.10) / stepCount;
+          if (t < 0.01 || t > 0.995) continue;
           const sx = x0 + (x1 - x0) * t;
           const sz = z0 + (z1 - z0) * t;
           const gy = heightFn(sx, sz);
-          const s = seedBase + ci * 137 + p * 43 + row * 29 + k * 7;
-          const bw = 0.72 + hash1(s) * 0.24;
-          const bh = 0.36 + hash1(s + 1) * 0.13;
-          const bd = 1.02 + hash1(s + 2) * 0.36;
+          const isCapstone = (row === courses - 1);
+          const bw = (isCapstone ? 0.88 : 0.82) + hash1(s) * 0.24;
+          const bh = (isCapstone ? 0.36 : 0.40) + hash1(s + 1) * 0.14;
+          const bd = 0.86 + hash1(s + 2) * 0.38;
           const col = stoneCols[Math.floor(hash1(s + 3) * stoneCols.length) % stoneCols.length];
-          const geo = createOrganicBoxGeo(bw, bh, bd, s, 0.08, 0.94, 1);
-          const by = gy - 0.20 + row * 0.35 + (hash1(s + 4) - 0.5) * 0.04;
+          const geo = createIrregularFieldstoneGeo(bw, bh, bd, s);
+          const by = gy - 0.10 + row * 0.31 + (hash1(s + 4) - 0.5) * 0.04;
           const stone = createLowPolyMesh(geo, col, sx, by, sz, true);
-          stone.rotation.y = yaw + (hash1(s + 5) - 0.5) * 0.10;
-          stone.rotation.z = (hash1(s + 6) - 0.5) * 0.06;
+          stone.rotation.y = yaw + (hash1(s + 5) - 0.5) * 0.18;
+          stone.rotation.z = (hash1(s + 6) - 0.5) * 0.08;
+          stone.rotation.x = (hash1(s + 7) - 0.5) * 0.06;
           stoneWallGrp.add(stone);
         }
       }
@@ -3537,12 +4125,28 @@ function ensureMiracleCustomUI() {
     uiRoot.id = 'miracle-custom-ui';
     uiRoot.className = 'fixed inset-0 pointer-events-none z-20 flex flex-col items-center';
     uiRoot.innerHTML = `
-      <div id="miracle-hud-left" class="hidden fixed left-2.5 sm:left-3 z-20 flex flex-col gap-1.5 pointer-events-auto" style="top: 86px;">
-        <button id="miracle-notebook-btn" type="button" onclick="openMiracleNotebookModal('all')"
-                class="mc-btn px-3 py-1.5 rounded-2xl bg-amber-900/90 hover:bg-amber-800 border-2 border-amber-300 text-amber-100 font-jua text-xs shadow-lg flex items-center gap-1.5">
-          <span>📖</span>
-          <span id="miracle-notebook-badge-text">나의 복음서 수첩 (0/36)</span>
+      <div id="miracle-hud-left" class="hidden fixed left-2 sm:left-3 z-20 flex flex-col items-start gap-2 pointer-events-auto" style="top: 86px;">
+        <!-- 가죽 양장 책 모양 + 디바이스 가변형 크기 복음서 수첩 버튼 -->
+        <button id="miracle-notebook-btn" type="button" onclick="openMiracleNotebookModal('all')" aria-label="나의 복음서 수첩 열기"
+                class="miracle-book-btn font-jua">
+          <svg class="book-emblem" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <rect x="3" y="2" width="18" height="20" rx="2.5" stroke="#fde68a" stroke-width="1.8" fill="rgba(251,191,36,0.14)"/>
+            <path d="M12 6.5V17.5M8.5 10H15.5" stroke="#fde047" stroke-width="2.2" stroke-linecap="round"/>
+          </svg>
+          <span class="book-title">복음서 수첩</span>
+          <span id="miracle-notebook-badge-text" class="book-count">0/36</span>
         </button>
+
+        <!-- [소년반 전용] 초슬림 미니 나침반/거리 내비게이터 (모바일 세로·가로형 화면 가림 최소화) -->
+        <div id="miracle-mini-nav" class="hidden miracle-mini-nav" title="목표 방향과 거리 안내">
+          <div class="nav-dial">
+            <svg id="miracle-nav-arrow" class="nav-arrow" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 2L18.5 19.5L12 15.5L5.5 19.5L12 2Z" fill="#fde047" stroke="#92400e" stroke-width="1.4" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <span id="miracle-nav-target" class="font-jua text-[10px] sm:text-[11px] text-amber-100 truncate flex-1">목표 탐색</span>
+          <span id="miracle-nav-dist" class="font-jua text-[10px] sm:text-[11px] text-emerald-300 shrink-0">0m</span>
+        </div>
 
         <div id="miracle-parable-banner" class="hidden px-2.5 py-1 rounded-xl bg-emerald-900/90 border border-emerald-300 text-emerald-100 font-jua text-[11px] shadow">
           🌱 예수님이 들려주신 비유 체험
@@ -3580,6 +4184,61 @@ function ensureMiracleCustomUI() {
         <button id="miracle-sower-sow-btn" type="button" onclick="if (typeof window.triggerMiracleSowerPlant === 'function') window.triggerMiracleSowerPlant();"
                 class="mc-btn px-6 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 border-4 border-amber-300 text-white font-jua text-base sm:text-lg shadow-2xl animate-bounce">
           🌱 좋은 땅에 씨앗 뿌리기!
+        </button>
+      </div>
+
+      <!-- [부활 이후 갈릴리 바닷가 아침식사 전용] 낚시(힘 조절 투척 + 랜덤 입질 게이지) & 모닥불 생선 굽기 UI -->
+      <div id="miracle-breakfast-ui" class="hidden fixed bottom-20 sm:bottom-24 left-1/2 -translate-x-1/2 z-30 pointer-events-auto w-[92%] max-w-[348px] bg-slate-900/90 border-2 border-amber-300 rounded-2xl p-3 text-white shadow-2xl backdrop-blur-sm flex flex-col gap-2">
+        <div class="flex items-center justify-between gap-2">
+          <span id="miracle-bf-phase" class="font-jua text-xs sm:text-sm text-amber-300">🎣 갈릴리 바닷가 낚시</span>
+          <span id="miracle-bf-count" class="px-2 py-0.5 rounded-full bg-sky-500 text-slate-950 font-jua text-[11px]">🐟 0 / 3</span>
+        </div>
+        <p id="miracle-bf-hint" class="text-[11px] sm:text-xs text-slate-100 leading-snug text-center">버튼을 길게 누를수록 멀리 던져 물고기가 더 잘 잡혀요!</p>
+
+        <!-- 1단계: 투척 힘 게이지 바 -->
+        <div id="miracle-bf-cast-wrap" class="flex flex-col gap-1">
+          <div class="w-full h-4 rounded-full bg-slate-800 border border-slate-500 overflow-hidden relative">
+            <div id="miracle-bf-power-bar" class="h-full bg-gradient-to-r from-sky-400 via-emerald-400 to-amber-400" style="width: 0%;"></div>
+            <span id="miracle-bf-power-label" class="absolute inset-0 flex items-center justify-center font-jua text-[10px] text-white drop-shadow">힘 0%</span>
+          </div>
+          <div class="flex justify-between text-[10px] text-slate-300 px-1">
+            <span>가까이 (느린 입질)</span>
+            <span class="text-amber-300 font-bold">멀리 던질수록 잘 잡혀요! 🌊</span>
+          </div>
+        </div>
+
+        <!-- 2단계: 입질 타이밍 게이지 바 (랜덤 구간 + 랜덤 이동 속도) -->
+        <div id="miracle-bf-bite-wrap" class="hidden flex flex-col gap-1">
+          <div class="w-full h-6 rounded-full bg-slate-800 border-2 border-amber-300 overflow-hidden relative">
+            <div id="miracle-bf-zone" class="absolute top-0 bottom-0 bg-emerald-400/85 border-x-2 border-white" style="left: 35%; width: 24%;"></div>
+            <div id="miracle-bf-needle" class="absolute top-0 bottom-0 w-2 -ml-1 bg-rose-500 border border-white rounded-full shadow" style="left: 10%;"></div>
+          </div>
+          <div class="text-[10px] text-center text-emerald-300 font-jua">⚡ 빨간 바늘이 초록 구간에 들어왔을 때 버튼을 누르세요!</div>
+        </div>
+
+        <!-- 3단계: 모닥불 물고기 굽기 게이지 바 (너무 오래 두면 타버림!) -->
+        <div id="miracle-bf-cook-wrap" class="hidden flex flex-col gap-1">
+          <div class="w-full h-5 rounded-full bg-slate-800 border border-amber-300 overflow-hidden relative">
+            <div class="absolute inset-y-0 left-0 bg-sky-400/35" style="width: 44%;"></div>
+            <div class="absolute inset-y-0 bg-emerald-400/65 border-x border-amber-200" style="left: 44%; width: 46%;"></div>
+            <div class="absolute inset-y-0 right-0 bg-rose-600/75" style="width: 10%;"></div>
+            <div id="miracle-bf-cook-bar" class="h-full bg-gradient-to-r from-amber-300 via-orange-500 to-rose-600 transition-none" style="width: 0%;"></div>
+            <span id="miracle-bf-cook-label" class="absolute inset-0 flex items-center justify-center font-jua text-[10px] text-white drop-shadow">굽기 준비</span>
+          </div>
+          <div class="flex justify-between text-[10px] px-1">
+            <span class="text-sky-300">덜 익음</span>
+            <span class="text-emerald-300 font-bold">✨ 노릇노릇 (꺼내기!)</span>
+            <span class="text-rose-400 font-bold">🔥 탄다!</span>
+          </div>
+        </div>
+
+        <button id="miracle-bf-action-btn" type="button"
+                onpointerdown="if (typeof window.miracleBreakfastPointerDown === 'function') window.miracleBreakfastPointerDown(event);"
+                onpointerup="if (typeof window.miracleBreakfastPointerUp === 'function') window.miracleBreakfastPointerUp(event);"
+                onpointercancel="if (typeof window.miracleBreakfastPointerUp === 'function') window.miracleBreakfastPointerUp(event);"
+                onclick="if (typeof window.miracleBreakfastClickFallback === 'function') window.miracleBreakfastClickFallback(event);"
+                class="mc-btn w-full py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 border-2 border-white text-slate-950 font-jua text-sm sm:text-base shadow-lg select-none touch-none">
+          🎣 꾹 눌러서 낚시줄 던지기
         </button>
       </div>
 
@@ -3670,7 +4329,11 @@ function updateMiracleNotebookHudBadge() {
 
   const total = getMiracleNotebookTotalCount();
   if (badgeText) {
-    badgeText.textContent = `나의 복음서 수첩 (${miracleCollectedIds.size}/${total})`;
+    badgeText.textContent = `${miracleCollectedIds.size}/${total}`;
+  }
+  const nbBtn = document.getElementById('miracle-notebook-btn');
+  if (nbBtn) {
+    nbBtn.setAttribute('aria-label', `나의 복음서 수첩 (${miracleCollectedIds.size}/${total})`);
   }
 
   const isParableMode =
@@ -3732,6 +4395,25 @@ window.updateMiracleMissionStatusUI = function (info) {
 window.hideMiracleMissionStatusUI = function () {
   const box = document.getElementById('miracle-mission-status-box');
   if (box) box.classList.add('hidden');
+};
+
+window.updateMiracleMiniNavigatorUI = function (info) {
+  ensureMiracleCustomUI();
+  const nav = document.getElementById('miracle-mini-nav');
+  if (!nav) return;
+  if (!info || !info.visible) {
+    nav.classList.add('hidden');
+    return;
+  }
+  nav.classList.remove('hidden');
+  const arrowEl = document.getElementById('miracle-nav-arrow');
+  const targetEl = document.getElementById('miracle-nav-target');
+  const distEl = document.getElementById('miracle-nav-dist');
+  if (arrowEl && typeof info.deg === 'number') {
+    arrowEl.style.transform = `rotate(${Math.round(info.deg)}deg)`;
+  }
+  if (targetEl) targetEl.textContent = info.label || '목표 지점';
+  if (distEl) distEl.textContent = info.distText || '';
 };
 
 window.openMiracleNotebookModal = function (tabKey = 'all') {
@@ -3955,17 +4637,21 @@ window.replayMiracleDialogMission = function () {
 function hideAllMiracleCustomUI() {
   const leftHud = document.getElementById('miracle-hud-left');
   const msBox = document.getElementById('miracle-mission-status-box');
+  const miniNav = document.getElementById('miracle-mini-nav');
   const nbModal = document.getElementById('miracle-notebook-modal');
   const dlgModal = document.getElementById('miracle-dialog-modal');
   const s1Ui = document.getElementById('miracle-s1-ui');
   const sowerWrap = document.getElementById('miracle-sower-btn-wrap');
+  const bfUi = document.getElementById('miracle-breakfast-ui');
   const flareLayer = document.getElementById('miracle-sun-flare-layer');
   if (leftHud) leftHud.classList.add('hidden');
   if (msBox) msBox.classList.add('hidden');
+  if (miniNav) miniNav.classList.add('hidden');
   if (nbModal) nbModal.classList.add('hidden');
   if (dlgModal) dlgModal.classList.add('hidden');
   if (s1Ui) s1Ui.classList.add('hidden');
   if (sowerWrap) sowerWrap.classList.add('hidden');
+  if (bfUi) bfUi.classList.add('hidden');
   if (flareLayer) {
     flareLayer.style.opacity = '0';
     flareLayer.style.display = 'none';
