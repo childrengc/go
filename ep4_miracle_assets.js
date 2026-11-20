@@ -6,7 +6,7 @@
 // =========================================================================
 
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_assets = '20261120_v12';
+window.__GAME_BUILD_VERSIONS__.ep4_assets = '20261120_v13';
 
 const _miracleDoubleSideMatCache = {};
 function matLowPolyDouble(hexColor) {
@@ -2561,6 +2561,71 @@ window.createLowPolyDonkey = function (x, z, rotY = 0, isStatic = false) {
     colliders.push({ minX: x - 0.65, maxX: x + 0.65, minZ: z - 0.75, maxZ: z + 0.75 });
   }
   return donkey;
+};
+
+// [에피소드 4 스테이지 4 순찰용] 소프트 로우폴리 로마 군인(투구 붉은 깃털·갑옷·붉은 망토·방패·창)
+window.createRomanSoldierMesh = function (variantIdx = 0) {
+  const g = new THREE.Group();
+  const cSkin   = '#f2c8a0';
+  const cTunic  = '#b91c1c';
+  const cCape   = '#991b1b';
+  const cArmor  = '#94a3b8';
+  const cArmorH = '#cbd5e1';
+  const cHelm   = '#64748b';
+  const cPlume  = '#ef4444';
+  const cGold   = '#eab308';
+  const cLeather= '#5c2d0c';
+
+  // 다리 (좌/우 관절 피벗)
+  const lLeg = new THREE.Group(); lLeg.position.set(-0.14, 0.72, 0);
+  const rLeg = new THREE.Group(); rLeg.position.set( 0.14, 0.72, 0);
+  [lLeg, rLeg].forEach(lg => {
+    lg.add(
+      createLowPolyMesh(new THREE.CylinderGeometry(0.085, 0.075, 0.52, 6), cSkin, 0, -0.26, 0, true),
+      createLowPolyMesh(new THREE.CylinderGeometry(0.095, 0.09, 0.22, 6), cArmor, 0, -0.44, 0, false),
+      createLowPolyMesh(new THREE.BoxGeometry(0.15, 0.12, 0.24), cLeather, 0, -0.66, 0.03, false)
+    );
+  });
+
+  // 몸통 (붉은 튜닉 + 로마 철갑 로리카 + 허리 가죽띠 + 붉은 망토)
+  const tunicSkirt = createLowPolyMesh(new THREE.CylinderGeometry(0.24, 0.30, 0.38, 7), cTunic, 0, 0.78, 0, true);
+  const armorTorso = createLowPolyMesh(new THREE.CylinderGeometry(0.26, 0.24, 0.56, 7), cArmor, 0, 1.18, 0, true);
+  const chestBand  = createLowPolyMesh(new THREE.CylinderGeometry(0.275, 0.265, 0.14, 7), cArmorH, 0, 1.32, 0, false);
+  const belt       = createLowPolyMesh(new THREE.CylinderGeometry(0.265, 0.265, 0.10, 7), cLeather, 0, 0.94, 0, false);
+  const buckle     = createLowPolyMesh(new THREE.BoxGeometry(0.11, 0.10, 0.06), cGold, 0, 0.94, 0.25, false);
+  const pauldronL  = createLowPolyMesh(new THREE.DodecahedronGeometry(0.15, 0), cArmorH, -0.30, 1.42, 0, false);
+  const pauldronR  = createLowPolyMesh(new THREE.DodecahedronGeometry(0.15, 0), cArmorH,  0.30, 1.42, 0, false);
+  const cape       = createLowPolyMesh(new THREE.BoxGeometry(0.46, 0.88, 0.08), cCape, 0, 1.02, -0.26, true);
+  cape.rotation.x = 0.10;
+
+  // 머리 & 로마 갈레아 투구 + 붉은 깃털 장식(Plume)
+  const head = createLowPolyMesh(new THREE.IcosahedronGeometry(0.21, 1), cSkin, 0, 1.66, 0, true);
+  const helmDome = createLowPolyMesh(new THREE.IcosahedronGeometry(0.24, 0), cHelm, 0, 1.72, -0.02, true);
+  helmDome.scale.set(1.02, 0.86, 1.08);
+  const helmBrow = createLowPolyMesh(new THREE.BoxGeometry(0.44, 0.08, 0.26), cGold, 0, 1.73, 0.12, false);
+  const plume    = createLowPolyMesh(new THREE.BoxGeometry(0.10, 0.26, 0.48), cPlume, 0, 1.98, -0.02, false);
+  const eyeL = createLowPolyMesh(new THREE.BoxGeometry(0.05, 0.05, 0.04), '#1e293b', -0.075, 1.66, 0.19, false);
+  const eyeR = createLowPolyMesh(new THREE.BoxGeometry(0.05, 0.05, 0.04), '#1e293b',  0.075, 1.66, 0.19, false);
+
+  // 왼팔 + 사각 로마 방패(Scutum)
+  const lArm = new THREE.Group(); lArm.position.set(-0.32, 1.40, 0);
+  const lSleeve = createLowPolyMesh(new THREE.CylinderGeometry(0.075, 0.065, 0.46, 5), cTunic, 0, -0.23, 0, true);
+  const shield = createLowPolyMesh(new THREE.BoxGeometry(0.10, 0.82, 0.56), '#991b1b', -0.10, -0.34, 0.16, true);
+  const shieldTrim = createLowPolyMesh(new THREE.BoxGeometry(0.11, 0.86, 0.08), cGold, -0.10, -0.34, 0.42, false);
+  const shieldBoss = createLowPolyMesh(new THREE.DodecahedronGeometry(0.11, 0), cGold, -0.16, -0.34, 0.16, false);
+  lArm.add(lSleeve, shield, shieldTrim, shieldBoss);
+
+  // 오른팔 + 로마 창(Pilum)
+  const rArm = new THREE.Group(); rArm.position.set( 0.32, 1.40, 0);
+  const rSleeve = createLowPolyMesh(new THREE.CylinderGeometry(0.075, 0.065, 0.46, 5), cTunic, 0, -0.23, 0, true);
+  const spearShaft = createLowPolyMesh(new THREE.CylinderGeometry(0.032, 0.036, 2.35, 5), '#6b4226', 0.04, 0.12, 0.18, true);
+  const spearTip   = createLowPolyMesh(new THREE.ConeGeometry(0.07, 0.34, 4), '#e2e8f0', 0.04, 1.38, 0.18, false);
+  rArm.add(rSleeve, spearShaft, spearTip);
+  rArm.rotation.x = -0.35;
+
+  g.add(lLeg, rLeg, tunicSkirt, armorTorso, chestBand, belt, buckle, pauldronL, pauldronR, cape, head, helmDome, helmBrow, plume, eyeL, eyeR, lArm, rArm);
+  g.userData = { lLeg, rLeg, lArm, rArm, isRomanSoldier: true, variantIdx };
+  return g;
 };
 
 // [레퍼런스 반영] 소프트 로우 폴리곤 다면체 갈릴리 물고기 6종 팩토리 (등·배 투톤, 눈, 등/가슴/배지느러미, V자 갈래 꼬리)

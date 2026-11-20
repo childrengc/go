@@ -5,7 +5,7 @@
 // - 멀티플레이 미션 1: 반석 위의 집 확장형 (돌 20 + 나무 20, 도끼질 5회 / 돌 캐기 5회, 완료 시 말씀 출력)
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_mp = '20261120_v12';
+window.__GAME_BUILD_VERSIONS__.ep4_mp = '20261120_v13';
 
 // [선택적 온라인 릴레이 설정] 무료 Firebase Realtime Database URL을 넣으면 서로 다른 기기 간 실시간 온라인 접속!
 // 예: window.MP_FIREBASE_DB_URL = 'https://your-church-game-default-rtdb.asia-southeast1.firebasedatabase.app';
@@ -36,8 +36,11 @@ const MiracleMultiplayer = {
   channel: null,
   syncTimer: 0,
   remoteSyncTimer: 0,
-  remotePlayers: new Map(), // peerId -> { name, preset, idx, mesh, label, targetPos, rotY, lastSeen, chopping, emote, emoteTimer }
+  remotePlayers: new Map(), // peerId -> { name, preset, idx, mesh, label, bubble, targetPos, rotY, lastSeen, chopping, emote, emoteTimer, lastEmoteAt }
   particles: [],
+  signalRings: [],
+  localEmote: { text: '', at: 0, timer: 0 },
+  questCollapsed: false,
   harvestCooldown: 0,
   nearestTarget: null, // { kind: 'wood'|'stone'|'deliver', node?, dist }
   mission: {
@@ -164,43 +167,82 @@ const MiracleMultiplayer = {
     return modal;
   },
 
+  toggleQuestCard() {
+    this.questCollapsed = !this.questCollapsed;
+    const body = document.getElementById('mp-quest-body');
+    const tog = document.getElementById('mp-quest-toggle');
+    if (body) body.classList.toggle('hidden', this.questCollapsed);
+    if (tog) tog.textContent = this.questCollapsed ? '▾' : '▴';
+  },
+
   ensureMultiplayerHUD() {
+    // 1) 항상 화면에 고정되는 [접속자 수 · 방 이름] 전용 상단 배지 (퀘스트창을 접어도 항상 표시!)
+    let badge = document.getElementById('mp-online-badge');
+    if (!badge) {
+      badge = document.createElement('div');
+      badge.id = 'mp-online-badge';
+      badge.className = 'hidden fixed right-2 sm:right-3 z-30 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-900/90 border border-emerald-400 text-white shadow-lg backdrop-blur-sm pointer-events-auto';
+      badge.style.top = '52px';
+      badge.innerHTML = `
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+        <span id="mp-online-count-text" class="font-jua text-[11px] text-emerald-200 whitespace-nowrap">접속 중 1명</span>
+        <span id="mp-online-room-text" class="text-[10px] text-slate-300 truncate max-w-[78px]">· 광릉내1방</span>
+        <button type="button" onclick="window.MiracleMultiplayer.exitToOpening()"
+                class="ml-0.5 px-1.5 py-0.5 rounded-full bg-slate-700 hover:bg-slate-600 text-[9px] font-jua text-slate-200 shrink-0">나가기</button>
+      `;
+      document.body.appendChild(badge);
+    }
+
+    // 2) 컴팩트 공동 퀘스트 미니창 (접기/펼치기 지원 · 향후 다중 공동 퀘스트 확장 대비 구조) + 초소형 감정표현/인사 바
     let hud = document.getElementById('miracle-mp-hud');
     if (hud) return hud;
     hud = document.createElement('div');
     hud.id = 'miracle-mp-hud';
-    hud.className = 'hidden fixed right-2 sm:right-3 z-20 flex flex-col items-end gap-1.5 pointer-events-auto';
-    hud.style.top = '88px';
+    hud.className = 'hidden fixed right-2 sm:right-3 z-20 flex flex-col items-end gap-1 pointer-events-auto';
+    hud.style.top = '84px';
     hud.innerHTML = `
-      <div class="w-[218px] sm:w-[248px] p-2.5 rounded-2xl bg-slate-900/88 border-2 border-emerald-400 text-white shadow-xl backdrop-blur-sm text-left">
-        <div class="flex items-center justify-between gap-1 mb-1">
-          <span id="mp-hud-room" class="font-jua text-[11px] sm:text-xs text-emerald-300 truncate">🌐 광릉내1방 · 1명</span>
-          <button type="button" onclick="window.MiracleMultiplayer.exitToOpening()"
-                  class="px-1.5 py-0.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-[10px] font-jua text-slate-200 shrink-0">나가기</button>
+      <div class="w-[170px] sm:w-[186px] p-2 rounded-2xl bg-slate-900/86 border border-emerald-400/85 text-white shadow-lg backdrop-blur-sm text-left">
+        <div class="flex items-center justify-between gap-1 cursor-pointer" onclick="window.MiracleMultiplayer.toggleQuestCard()">
+          <span class="font-jua text-[11px] text-amber-300 truncate">🏗️ 공동#1 반석의 집</span>
+          <button id="mp-quest-toggle" type="button" class="text-[10px] text-slate-300 leading-none px-1">▴</button>
         </div>
-        <div class="font-jua text-xs text-amber-300 mb-1">🏗️ 협동: 반석 위의 집 확장형</div>
-        <div class="grid grid-cols-2 gap-1.5 mb-1.5">
-          <div class="px-2 py-1 rounded-xl bg-slate-800 border border-slate-600 text-center">
-            <div class="text-[10px] text-slate-300">🪨 돌</div>
-            <div id="mp-hud-stone" class="font-jua text-xs text-sky-300">0 / 20</div>
+        <div id="mp-quest-body" class="mt-1 space-y-1">
+          <div class="flex items-center justify-between text-[10px] font-jua">
+            <span class="text-sky-300">🪨 <b id="mp-hud-stone">0/20</b></span>
+            <span class="text-amber-300">🪵 <b id="mp-hud-wood">0/20</b></span>
           </div>
-          <div class="px-2 py-1 rounded-xl bg-slate-800 border border-slate-600 text-center">
-            <div class="text-[10px] text-slate-300">🪵 나무</div>
-            <div id="mp-hud-wood" class="font-jua text-xs text-amber-300">0 / 20</div>
+          <div class="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+            <div id="mp-hud-prog" class="h-full bg-gradient-to-r from-emerald-400 to-amber-300 transition-all duration-200" style="width:0%"></div>
+          </div>
+          <div class="flex items-center justify-between gap-1">
+            <span id="mp-hud-carry" class="text-[9px] text-emerald-200 font-bold truncate">🎒 🪨0 · 🪵0</span>
+            <button type="button" onclick="window.MiracleMultiplayer.teleportNearRockSite()"
+                    class="px-1.5 py-0.5 rounded-md bg-amber-400 hover:bg-amber-300 text-slate-950 font-jua text-[9px] shrink-0">⛰️ 이동</button>
           </div>
         </div>
-        <div id="mp-hud-carry" class="text-[10px] text-emerald-200 font-bold mb-1.5">🎒 들고 있음: 🪨0 · 🪵0 (반석에 놓기)</div>
-        <div class="flex items-center justify-between gap-1">
-          <button type="button" onclick="window.MiracleMultiplayer.sendEmote('👋 안녕!')" class="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px]">👋</button>
-          <button type="button" onclick="window.MiracleMultiplayer.sendEmote('🙌 같이 해요!')" class="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px]">🙌</button>
-          <button type="button" onclick="window.MiracleMultiplayer.sendEmote('🏗️ 여기로!')" class="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px]">🏗️</button>
-          <button type="button" onclick="window.MiracleMultiplayer.teleportNearRockSite()" class="px-2 py-0.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-jua text-[10px] flex-1">⛰️ 반석으로</button>
-        </div>
+      </div>
+
+      <!-- 초소형 감정표현 · 인사 시그널 바 (누르면 내 캐릭터와 상대방 화면 모두에 말풍선 + 신호 링 전송!) -->
+      <div id="mp-emote-bar" class="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-slate-900/85 border border-slate-600/80 shadow">
+        <button type="button" title="안녕!" onclick="window.MiracleMultiplayer.sendEmote('👋 안녕!')" class="w-6 h-6 rounded-full hover:bg-slate-700 text-xs flex items-center justify-center">👋</button>
+        <button type="button" title="같이 해요!" onclick="window.MiracleMultiplayer.sendEmote('🙌 같이 해요!')" class="w-6 h-6 rounded-full hover:bg-slate-700 text-xs flex items-center justify-center">🙌</button>
+        <button type="button" title="사랑해요!" onclick="window.MiracleMultiplayer.sendEmote('❤️ 축복해요!')" class="w-6 h-6 rounded-full hover:bg-slate-700 text-xs flex items-center justify-center">❤️</button>
+        <button type="button" title="힘내요!" onclick="window.MiracleMultiplayer.sendEmote('💪 파이팅!')" class="w-6 h-6 rounded-full hover:bg-slate-700 text-xs flex items-center justify-center">💪</button>
+        <button type="button" title="여기로 와요!" onclick="window.MiracleMultiplayer.sendEmote('📍 여기로!')" class="w-6 h-6 rounded-full hover:bg-slate-700 text-xs flex items-center justify-center">📍</button>
       </div>
     `;
     document.body.appendChild(hud);
 
-    // 채집(나무 도끼질 5회 / 돌 캐기 5회) & 반석 재료 놓기 전용 하단 액션 버튼
+    // 3) 내 캐릭터 머리 위 메시지 말풍선 (상대방에게도 동일 신호 전송!)
+    if (!document.getElementById('mp-local-bubble')) {
+      const lb = document.createElement('div');
+      lb.id = 'mp-local-bubble';
+      lb.className = 'hidden fixed z-30 pointer-events-none px-2.5 py-1 rounded-2xl bg-amber-300 text-slate-950 border-2 border-white font-jua text-xs shadow-lg whitespace-nowrap';
+      lb.style.transform = 'translate(-50%, -100%)';
+      document.body.appendChild(lb);
+    }
+
+    // 4) 채집(나무 도끼질 5회 / 돌 캐기 5회) & 반석 재료 놓기 전용 하단 액션 버튼
     let actWrap = document.getElementById('mp-harvest-btn-wrap');
     if (!actWrap) {
       actWrap = document.createElement('div');
@@ -322,13 +364,25 @@ const MiracleMultiplayer = {
     this.remotePlayers.forEach(rp => {
       if (rp.mesh && typeof worldGroup !== 'undefined' && worldGroup) worldGroup.remove(rp.mesh);
       if (rp.label) rp.label.remove();
+      if (rp.bubble) rp.bubble.remove();
     });
     this.remotePlayers.clear();
+    this.signalRings.forEach(sr => {
+      if (sr.mesh && typeof worldGroup !== 'undefined' && worldGroup) worldGroup.remove(sr.mesh);
+    });
+    this.signalRings = [];
 
+    const badge = document.getElementById('mp-online-badge');
+    if (badge) badge.classList.add('hidden');
+    const lb = document.getElementById('mp-local-bubble');
+    if (lb) lb.classList.add('hidden');
     const hud = document.getElementById('miracle-mp-hud');
     if (hud) hud.classList.add('hidden');
     const actWrap = document.getElementById('mp-harvest-btn-wrap');
     if (actWrap) actWrap.classList.add('hidden');
+    if (typeof window.updateMiracleMiniNavigatorUI === 'function') {
+      window.updateMiracleMiniNavigatorUI({ visible: false });
+    }
   },
 
   getRoomStorageKey() {
@@ -456,6 +510,7 @@ const MiracleMultiplayer = {
       if (rp) {
         if (rp.mesh && typeof worldGroup !== 'undefined' && worldGroup) worldGroup.remove(rp.mesh);
         if (rp.label) rp.label.remove();
+        if (rp.bubble) rp.bubble.remove();
         this.remotePlayers.delete(msg.peerId);
         this.syncHUD();
       }
@@ -475,6 +530,10 @@ const MiracleMultiplayer = {
         mesh.position.set(px, py, pz);
         if (typeof worldGroup !== 'undefined' && worldGroup) worldGroup.add(mesh);
         const lbl = (typeof createWorldLabel === 'function') ? createWorldLabel(`🟢 ${msg.name || '친구'}`) : null;
+        const bub = document.createElement('div');
+        bub.className = 'hidden fixed z-30 pointer-events-none px-2.5 py-1 rounded-2xl bg-white text-slate-950 border-2 border-emerald-400 font-jua text-xs shadow-lg whitespace-nowrap';
+        bub.style.transform = 'translate(-50%, -100%)';
+        document.body.appendChild(bub);
         rp = {
           peerId: msg.peerId,
           name: msg.name || '친구',
@@ -482,11 +541,13 @@ const MiracleMultiplayer = {
           idx: msg.idx || 0,
           mesh,
           label: lbl,
+          bubble: bub,
           targetPos: new THREE.Vector3(px, py, pz),
           rotY: msg.rotY || 0,
           chopping: false,
           emote: '',
           emoteTimer: 0,
+          lastEmoteAt: 0,
           lastSeen: performance.now()
         };
         this.remotePlayers.set(msg.peerId, rp);
@@ -499,14 +560,20 @@ const MiracleMultiplayer = {
       if (typeof msg.rotY === 'number') rp.rotY = msg.rotY;
       rp.chopping = Boolean(msg.chopping);
       rp.lastSeen = performance.now();
+
+      // Firebase/상태 패킷에 실려 온 상대방 감정표현 시그널 자동 감지 및 말풍선·링 출력!
+      if (msg.lastEmote && msg.lastEmote.text && msg.lastEmote.at && msg.lastEmote.at > (rp.lastEmoteAt || 0)) {
+        this.triggerRemoteEmoteVisual(rp, msg.lastEmote.text, msg.lastEmote.at);
+      }
     }
 
     if (msg.type === 'emote') {
       const rp = this.remotePlayers.get(msg.peerId);
       if (rp) {
-        rp.emote = String(msg.text || '');
-        rp.emoteTimer = 3.2;
-        if (rp.label) rp.label.innerHTML = `🟢 ${rp.name} · ${rp.emote}`;
+        this.triggerRemoteEmoteVisual(rp, String(msg.text || ''), msg.at || Date.now());
+      } else if (msg.text) {
+        if (typeof playSfx === 'function') playSfx('switch');
+        if (typeof showToast === 'function') showToast(`💬 ${msg.name || '친구'}: ${msg.text}`);
       }
     }
 
@@ -530,11 +597,84 @@ const MiracleMultiplayer = {
     }
   },
 
+  spawnEmoteSignalRing(pos, colorHex = 0xfacc15) {
+    if (!pos || typeof worldGroup === 'undefined' || !worldGroup) return;
+    const mat = new THREE.MeshBasicMaterial({ color: colorHex, side: THREE.DoubleSide, transparent: true, opacity: 0.90 });
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.95, 20), mat);
+    ring.rotation.x = -Math.PI * 0.5;
+    ring.position.set(pos.x, (pos.y || 0) + 0.16, pos.z);
+    worldGroup.add(ring);
+    this.signalRings.push({ mesh: ring, mat, life: 1.35, maxLife: 1.35 });
+  },
+
+  triggerRemoteEmoteVisual(rp, text, atTs) {
+    if (!rp || !text) return;
+    rp.emote = text;
+    rp.emoteTimer = 4.2;
+    rp.lastEmoteAt = atTs || Date.now();
+    if (rp.label) rp.label.innerHTML = `🟢 ${rp.name}`;
+    if (rp.bubble) {
+      rp.bubble.textContent = `💬 ${rp.name}: ${text}`;
+      rp.bubble.classList.remove('hidden');
+    }
+    if (rp.mesh) this.spawnEmoteSignalRing(rp.mesh.position, 0x34d399);
+    if (typeof playSfx === 'function') playSfx('switch');
+    if (typeof showToast === 'function') showToast(`💬 ${rp.name}: ${text}`);
+  },
+
   sendEmote(text) {
     if (!this.active) return;
+    const nowAt = Date.now();
+    const myName = (typeof explorerDisplayName !== 'undefined' && explorerDisplayName) ? explorerDisplayName : (window.explorerName || '대원');
+    this.localEmote = { text: String(text || ''), at: nowAt, timer: 3.8 };
+    const lb = document.getElementById('mp-local-bubble');
+    if (lb) {
+      lb.textContent = text;
+      lb.classList.remove('hidden');
+    }
+    if (typeof playerPos !== 'undefined' && playerPos) {
+      this.spawnEmoteSignalRing(playerPos, 0xfacc15);
+    }
     if (typeof playSfx === 'function') playSfx('switch');
-    if (typeof showToast === 'function') showToast(`💬 나: ${text}`);
-    this.broadcastMessage({ type: 'emote', peerId: this.peerId, text });
+    if (typeof showToast === 'function') showToast(`📡 신호 전송 · ${myName}: ${text}`);
+    this.broadcastMessage({ type: 'emote', peerId: this.peerId, name: myName, text, at: nowAt });
+    // Firebase 온라인 릴레이에도 즉시 전송해 다른 기기 친구들이 바로 말풍선과 신호를 볼 수 있게 함!
+    if (window.MP_FIREBASE_DB_URL && typeof fetch === 'function') {
+      this.syncWithFirebaseRelay();
+    }
+  },
+
+  getNavigatorTarget() {
+    if (!this.active) return null;
+    const site = window.MIRACLE_GRAND_BEDROCK_POS || { x: 63, z: 18 };
+    const sy = (typeof getMiracleOpenWorldGroundHeight === 'function') ? getMiracleOpenWorldGroundHeight(site.x, site.z) : 0.25;
+    if (this.mission.completed || this.mission.carryStone > 0 || this.mission.carryWood > 0) {
+      return {
+        pos: new THREE.Vector3(site.x, sy, site.z),
+        label: this.mission.completed ? '🏠 반석 위의 집' : '⛰️ 반석 집터'
+      };
+    }
+    const needStone = Math.max(0, this.mission.stoneReq - this.mission.stoneDeposited);
+    const needWood = Math.max(0, this.mission.woodReq - this.mission.woodDeposited);
+    const preferKind = (needStone > needWood) ? 'stone' : (needWood > 0 ? 'wood' : 'stone');
+    const nodes = Array.isArray(window.miracleHarvestNodes) ? window.miracleHarvestNodes : [];
+    let best = null, bestD = Infinity;
+    for (let i = 0; i < nodes.length; i++) {
+      const nd = nodes[i];
+      if (!nd || nd.depleted) continue;
+      if (needStone > 0 && needWood > 0 && nd.kind !== preferKind) continue;
+      if (needStone === 0 && nd.kind === 'stone') continue;
+      if (needWood === 0 && nd.kind === 'wood') continue;
+      const d = Math.hypot(playerPos.x - nd.x, playerPos.z - nd.z);
+      if (d < bestD) { bestD = d; best = nd; }
+    }
+    if (best) {
+      return {
+        pos: new THREE.Vector3(best.x, best.y || 0.25, best.z),
+        label: best.kind === 'wood' ? '🪵 가까운 나무' : '🪨 가까운 바위'
+      };
+    }
+    return { pos: new THREE.Vector3(site.x, sy, site.z), label: '⛰️ 반석 집터' };
   },
 
   teleportNearRockSite() {
@@ -590,8 +730,13 @@ const MiracleMultiplayer = {
 
     this.rebuildGrandRockHouseVisuals();
     this.ensureMultiplayerHUD();
+    const badge = document.getElementById('mp-online-badge');
+    if (badge) badge.classList.remove('hidden');
     const hud = document.getElementById('miracle-mp-hud');
     if (hud) hud.classList.remove('hidden');
+    if (typeof guideArrowGroup !== 'undefined' && guideArrowGroup) {
+      guideArrowGroup.visible = false;
+    }
     this.syncHUD();
   },
 
@@ -822,18 +967,25 @@ const MiracleMultiplayer = {
   },
 
   syncHUD() {
-    const roomEl = document.getElementById('mp-hud-room');
+    const cntEl = document.getElementById('mp-online-count-text');
+    const rmEl = document.getElementById('mp-online-room-text');
     const stEl = document.getElementById('mp-hud-stone');
     const wdEl = document.getElementById('mp-hud-wood');
+    const progEl = document.getElementById('mp-hud-prog');
     const crEl = document.getElementById('mp-hud-carry');
     const onlineCount = 1 + this.remotePlayers.size;
-    if (roomEl) roomEl.textContent = `🌐 ${this.roomId} · ${onlineCount}명`;
-    if (stEl) stEl.textContent = `${this.mission.stoneDeposited} / ${this.mission.stoneReq}`;
-    if (wdEl) wdEl.textContent = `${this.mission.woodDeposited} / ${this.mission.woodReq}`;
+    if (cntEl) cntEl.textContent = `접속 중 ${onlineCount}명`;
+    if (rmEl) rmEl.textContent = `· ${this.roomId}`;
+    if (stEl) stEl.textContent = `${this.mission.stoneDeposited}/${this.mission.stoneReq}`;
+    if (wdEl) wdEl.textContent = `${this.mission.woodDeposited}/${this.mission.woodReq}`;
+    if (progEl) {
+      const pct = Math.min(100, Math.round(((this.mission.stoneDeposited + this.mission.woodDeposited) / (this.mission.stoneReq + this.mission.woodReq)) * 100));
+      progEl.style.width = `${pct}%`;
+    }
     if (crEl) {
       crEl.textContent = this.mission.completed
-        ? '🎉 반석 위의 집 완공 완료!'
-        : `🎒 들고 있음: 🪨${this.mission.carryStone} · 🪵${this.mission.carryWood} (최대 각 ${this.mission.maxCarryEach})`;
+        ? '🎉 완공 완료!'
+        : `🎒 🪨${this.mission.carryStone} · 🪵${this.mission.carryWood}`;
     }
     if (this.mission.siteLabel) {
       this.mission.siteLabel.innerHTML = this.mission.completed
@@ -886,19 +1038,49 @@ const MiracleMultiplayer = {
       }
     }
 
+    // 1-B) 감정표현 신호 링 애니메이션 & 내 말풍선 화면 투영 위치 갱신
+    for (let i = this.signalRings.length - 1; i >= 0; i--) {
+      const sr = this.signalRings[i];
+      sr.life -= dt;
+      const p = 1 - Math.max(0, sr.life / sr.maxLife);
+      const sc = 1.0 + p * 4.2;
+      sr.mesh.scale.set(sc, sc, 1);
+      if (sr.mat) sr.mat.opacity = Math.max(0, 0.9 * (1 - p));
+      if (sr.life <= 0) {
+        if (typeof worldGroup !== 'undefined' && worldGroup) worldGroup.remove(sr.mesh);
+        this.signalRings.splice(i, 1);
+      }
+    }
+    const localBub = document.getElementById('mp-local-bubble');
+    if (this.localEmote && this.localEmote.timer > 0) {
+      this.localEmote.timer -= dt;
+      if (localBub && typeof camera !== 'undefined' && camera && typeof playerPos !== 'undefined' && playerPos) {
+        const v = new THREE.Vector3(playerPos.x, playerPos.y + 2.55, playerPos.z);
+        v.project(camera);
+        if (v.z <= 1) {
+          localBub.style.left = `${(v.x * 0.5 + 0.5) * window.innerWidth}px`;
+          localBub.style.top = `${(-v.y * 0.5 + 0.5) * window.innerHeight}px`;
+          localBub.classList.remove('hidden');
+        } else {
+          localBub.classList.add('hidden');
+        }
+      }
+      if (this.localEmote.timer <= 0 && localBub) localBub.classList.add('hidden');
+    }
+
     // 2) 채집 노드(나무/외곽 바위) 재생성 & 흔들림 복구 + 가장 가까운 인터랙션 대상 탐색
     const nodes = Array.isArray(window.miracleHarvestNodes) ? window.miracleHarvestNodes : [];
     let bestTarget = null;
     let bestDist = 4.2;
 
-    // 반석 위의 집 재료 전달 범위 체크 우선
+    // 반석 위의 집 재료 전달 범위 체크 우선 (반석 기반 충돌 외곽 바로 앞에서 쾌적하게 전달!)
     const site = window.MIRACLE_GRAND_BEDROCK_POS || { x: 63, z: 18 };
     const distSite = Math.hypot(playerPos.x - site.x, playerPos.z - site.z);
     if (this.mission.siteLabel && typeof updateWorldLabelPos === 'function') {
       const sy = getMiracleOpenWorldGroundHeight(site.x, site.z);
       updateWorldLabelPos(this.mission.siteLabel, new THREE.Vector3(site.x, sy + 2.4, site.z), distSite < 32.0);
     }
-    if (!this.mission.completed && distSite < 10.2 && (this.mission.carryStone > 0 || this.mission.carryWood > 0)) {
+    if (!this.mission.completed && distSite < 10.6 && (this.mission.carryStone > 0 || this.mission.carryWood > 0)) {
       bestTarget = { kind: 'deliver', dist: distSite };
     } else if (!this.mission.completed) {
       for (let i = 0; i < nodes.length; i++) {
@@ -938,6 +1120,7 @@ const MiracleMultiplayer = {
       if (now - rp.lastSeen > staleMs) {
         if (rp.mesh && typeof worldGroup !== 'undefined' && worldGroup) worldGroup.remove(rp.mesh);
         if (rp.label) rp.label.remove();
+        if (rp.bubble) rp.bubble.remove();
         this.remotePlayers.delete(pid);
         countChanged = true;
         return;
@@ -956,7 +1139,21 @@ const MiracleMultiplayer = {
         }
         if (rp.emoteTimer > 0) {
           rp.emoteTimer -= dt;
-          if (rp.emoteTimer <= 0 && rp.label) rp.label.innerHTML = `🟢 ${rp.name}`;
+          if (rp.bubble && typeof camera !== 'undefined' && camera) {
+            const bv = new THREE.Vector3(rp.mesh.position.x, rp.mesh.position.y + 2.75, rp.mesh.position.z);
+            bv.project(camera);
+            if (bv.z <= 1) {
+              rp.bubble.style.left = `${(bv.x * 0.5 + 0.5) * window.innerWidth}px`;
+              rp.bubble.style.top = `${(-bv.y * 0.5 + 0.5) * window.innerHeight}px`;
+              rp.bubble.classList.remove('hidden');
+            } else {
+              rp.bubble.classList.add('hidden');
+            }
+          }
+          if (rp.emoteTimer <= 0) {
+            if (rp.label) rp.label.innerHTML = `🟢 ${rp.name}`;
+            if (rp.bubble) rp.bubble.classList.add('hidden');
+          }
         }
         if (rp.label && typeof updateWorldLabelPos === 'function') {
           const d = Math.hypot(playerPos.x - rp.mesh.position.x, playerPos.z - rp.mesh.position.z);
@@ -1011,6 +1208,7 @@ const MiracleMultiplayer = {
           x: Number(playerPos.x.toFixed(2)), y: Number(playerPos.y.toFixed(2)), z: Number(playerPos.z.toFixed(2)),
           rotY: Number((typeof playerFacing !== 'undefined' ? playerFacing : 0).toFixed(2)),
           chopping: Boolean(typeof playerChopAnimTimer !== 'undefined' && playerChopAnimTimer > 0),
+          lastEmote: (this.localEmote && this.localEmote.at) ? { text: this.localEmote.text, at: this.localEmote.at } : null,
           ts: Date.now()
         })
       });

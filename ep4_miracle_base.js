@@ -4,7 +4,7 @@
 // - 확장된 오픈월드 지형 고도 계산기(넓어진 골고다 언덕 포함) 및 소프트 로우 폴리곤 자연물 팩토리
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_base = '20261120_v12';
+window.__GAME_BUILD_VERSIONS__.ep4_base = '20261120_v13';
 
 const MIRACLE_SCRIPTURE = {
   1: {
@@ -3746,6 +3746,16 @@ function createWideBedrockFormation(cx, cz) {
   grp.userData.bedrockRadius = 9.2;
   grp.userData.bedrockStyle = 'expanded_grand_v11';
   worldGroup.add(grp);
+  // 멀티플레이 공동 건설 반석 터 & 건축 구역 전체를 단단한 충돌체로 등록해 캐릭터 통과 원천 차단!
+  if (typeof colliders !== 'undefined' && Array.isArray(colliders)) {
+    colliders.push({
+      minX: cx - 6.8,
+      maxX: cx + 6.8,
+      minZ: cz - 6.0,
+      maxZ: cz + 6.0,
+      isBedrockFoundation: true
+    });
+  }
   return grp;
 }
 
@@ -3780,9 +3790,201 @@ function createCompactBedrockFormation(cx, cz) {
   grp.userData.bedrockRadius = 4.2;
   grp.userData.bedrockStyle = 'compact_single_v12';
   worldGroup.add(grp);
+  // 반석 기반에 몸이 통과하지 않도록 단단한 충돌 영역 등록!
+  if (typeof colliders !== 'undefined' && Array.isArray(colliders)) {
+    colliders.push({
+      minX: cx - 3.4,
+      maxX: cx + 3.4,
+      minZ: cz - 3.0,
+      maxZ: cz + 3.0,
+      isBedrockFoundation: true
+    });
+  }
   return grp;
 }
 window.createCompactBedrockFormation = createCompactBedrockFormation;
+
+// [비정형 소프트 로우폴리 십자가 팩토리] 거친 손도끼 가공 통나무·밧줄 결속·나무 쐐기·명패·돌무더기 받침
+function createOrganicLowPolyCrossMesh(scale = 1.0, opts = {}) {
+  const grp = new THREE.Group();
+  const s = scale;
+  const seed = opts.seed || 301;
+  const withBase = opts.withBase !== false;
+  const withPlaque = Boolean(opts.withPlaque);
+
+  const mkOrg = (w, h, d, col, x, y, z, sd, irr = 0.09, taper = 0.90, seg = 2) => {
+    const geo = (typeof createOrganicBoxGeo === 'function')
+      ? createOrganicBoxGeo(w, h, d, sd, irr, taper, seg)
+      : new THREE.BoxGeometry(w, h, d);
+    return createLowPolyMesh(geo, col, x, y, z, true);
+  };
+
+  // 1) 비정형 손도끼 가공 세로 원목 기둥 (하단 굵고 상단으로 갈수록 자연스럽게 가늘어짐 + 옹이 텍스처 조각)
+  const vLower = mkOrg(0.42 * s, 3.1 * s, 0.38 * s, '#562b10', 0, 1.45 * s, 0, seed + 1, 0.10, 0.90, 2);
+  vLower.rotation.y = 0.08;
+  const vUpper = mkOrg(0.36 * s, 2.7 * s, 0.34 * s, '#633315', 0.02 * s, 4.10 * s, 0, seed + 2, 0.11, 0.88, 2);
+  vUpper.rotation.z = -0.022;
+  const knot1 = createLowPolyMesh(new THREE.DodecahedronGeometry(0.14 * s, 0), '#47220b', 0.16 * s, 2.15 * s, 0.12 * s, false);
+  knot1.scale.set(0.85, 1.3, 0.72);
+  grp.add(vLower, vUpper, knot1);
+
+  // 2) 비정형 가로 들보 (끝단이 거칠게 다듬어진 통나무 + 살짝 비대칭 자연 기울기)
+  const hBeam = mkOrg(3.35 * s, 0.34 * s, 0.30 * s, '#6e3a18', 0, 3.92 * s, 0.04 * s, seed + 5, 0.11, 0.94, 3);
+  hBeam.rotation.z = 0.024;
+  hBeam.rotation.y = -0.04;
+  grp.add(hBeam);
+
+  // 3) 교차점 나무 쐐기(Mortise) + 대각선 밧줄 결속 매듭
+  const wedge = mkOrg(0.46 * s, 0.44 * s, 0.38 * s, '#4a230b', 0, 3.92 * s, 0.03 * s, seed + 9, 0.09, 0.96, 1);
+  const ropeCol = '#ccb082';
+  const strapA = mkOrg(0.54 * s, 0.11 * s, 0.44 * s, ropeCol, 0, 3.92 * s, 0.04 * s, seed + 11, 0.07, 0.96, 1);
+  strapA.rotation.z = 0.76;
+  const strapB = mkOrg(0.54 * s, 0.11 * s, 0.44 * s, ropeCol, 0, 3.92 * s, 0.04 * s, seed + 12, 0.07, 0.96, 1);
+  strapB.rotation.z = -0.76;
+  const ropeTie = mkOrg(0.46 * s, 0.10 * s, 0.42 * s, '#b89866', 0, 3.68 * s, 0.03 * s, seed + 13, 0.07, 0.96, 1);
+  grp.add(wedge, strapA, strapB, ropeTie);
+
+  // 4) 하단 목재 지지 쐐기 & 골고다 비정형 돌무더기 받침
+  if (withBase) {
+    const braceL = mkOrg(0.16 * s, 0.72 * s, 0.18 * s, '#4a230b', -0.28 * s, 0.48 * s, 0.05 * s, seed + 15, 0.10, 0.88, 1);
+    braceL.rotation.z = -0.38;
+    const braceR = mkOrg(0.16 * s, 0.68 * s, 0.18 * s, '#562b10', 0.28 * s, 0.46 * s, -0.04 * s, seed + 16, 0.10, 0.88, 1);
+    braceR.rotation.z = 0.36;
+    grp.add(braceL, braceR);
+
+    const stoneCols = ['#78716c', '#94a3b8', '#a8a29e', '#64748b', '#8b8378'];
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 + 0.3;
+      const rad = (0.48 + (i % 2) * 0.28) * s;
+      const st = createLowPolyMesh(
+        new THREE.DodecahedronGeometry((0.46 + (i % 3) * 0.14) * s, 0),
+        stoneCols[i % stoneCols.length],
+        Math.cos(a) * rad, (0.12 + (i % 2) * 0.12) * s, Math.sin(a) * rad, true
+      );
+      st.scale.set(1.28, 0.62, 1.14);
+      st.rotation.set(0.12 * i, a, -0.08 * (i % 3));
+      grp.add(st);
+    }
+  }
+
+  // 5) 중앙 십자가 상단 비정형 나무 명패
+  if (withPlaque) {
+    const plaque = mkOrg(0.76 * s, 0.34 * s, 0.08 * s, '#e2cfa8', 0.02 * s, 4.78 * s, 0.20 * s, seed + 21, 0.09, 0.95, 1);
+    plaque.rotation.z = -0.07;
+    const inkLine1 = createLowPolyMesh(new THREE.BoxGeometry(0.46 * s, 0.04 * s, 0.03 * s), '#451a03', 0.02 * s, 4.82 * s, 0.24 * s, false);
+    const inkLine2 = createLowPolyMesh(new THREE.BoxGeometry(0.34 * s, 0.04 * s, 0.03 * s), '#451a03', 0.02 * s, 4.73 * s, 0.24 * s, false);
+    inkLine1.rotation.z = -0.07;
+    inkLine2.rotation.z = -0.07;
+    grp.add(plaque, inkLine1, inkLine2);
+  }
+
+  grp.userData.crossStyle = 'organic_soft_lowpoly_v13';
+  return grp;
+}
+window.createOrganicLowPolyCrossMesh = createOrganicLowPolyCrossMesh;
+
+// [비정형 소프트 로우폴리 예수님의 동산 무덤 팩토리]
+// - 다층 비정형 석회암 바위 절벽·처마 돌출바위·조각 석조 아치 문틀·내부 돌 침상과 개어진 세마포·굴려진 비정형 둥근 돌문 & 홈통·동산 백합꽃
+function createDetailedOrganicTombGroup(opts = {}) {
+  const grp = new THREE.Group();
+  const s = opts.scale || 1.0;
+  const openGlow = Boolean(opts.openGlow);
+  const seed = opts.seed || 740;
+
+  const mkRock = (rx, ry, rz, col, x, y, z, sd, rotX = 0, rotY = 0, rotZ = 0) => {
+    const geo = (typeof createIrregularFieldstoneGeo === 'function')
+      ? createIrregularFieldstoneGeo(rx * s, ry * s, rz * s, sd)
+      : new THREE.DodecahedronGeometry(rx * 0.55 * s, 0);
+    const m = createLowPolyMesh(geo, col, x * s, y * s, z * s, true);
+    m.rotation.set(rotX, rotY, rotZ);
+    return m;
+  };
+  const mkOrg = (w, h, d, col, x, y, z, sd, irr = 0.07, taper = 0.94, seg = 2) => {
+    const geo = (typeof createOrganicBoxGeo === 'function')
+      ? createOrganicBoxGeo(w * s, h * s, d * s, sd, irr, taper, seg)
+      : new THREE.BoxGeometry(w * s, h * s, d * s);
+    return createLowPolyMesh(geo, col, x * s, y * s, z * s, true);
+  };
+
+  // 입구 방향은 +Z(오픈월드: 북쪽에서 남쪽을 봄은 rotY = Math.PI로 회전, 스테이지4: +Z 남쪽을 정면으로 봄!)
+  // 1) 다층 비정형 바위 절벽 몸체 (입구 중앙 x ∈ [-1.65, +1.65], z > 0 공간은 완전히 비워 방해 바위 0%)
+  const backMain  = mkRock(9.6, 5.4, 5.8, '#8f9bb0',  0.0, 2.55, -4.4, seed + 1,  0.04, 0.08, -0.03);
+  const backCrest = mkRock(7.4, 3.2, 4.4, '#a2aec2', -0.4, 4.75, -3.6, seed + 2, -0.05, 0.22,  0.04);
+  const leftMass  = mkRock(5.4, 4.6, 5.4, '#8492a6', -4.7, 2.15, -1.3, seed + 3,  0.06, 0.35, -0.08);
+  const rightMass = mkRock(5.4, 4.6, 5.4, '#8492a6',  4.7, 2.15, -1.3, seed + 4, -0.04, -0.28, 0.07);
+  const leftFlank = mkRock(3.6, 2.6, 3.8, '#94a3b8', -6.6, 1.15,  0.4, seed + 5,  0.08, 0.52, -0.10);
+  const rightFlank= mkRock(3.6, 2.6, 3.8, '#94a3b8',  6.6, 1.15,  0.4, seed + 6, -0.06, -0.46, 0.09);
+  const browTop   = mkRock(6.8, 2.2, 4.2, '#9aa8bc',  0.1, 4.65, -0.8, seed + 7,  0.07, 0.10, -0.04);
+  const browRidgeL= mkRock(3.2, 1.5, 2.6, '#b0bccd', -2.6, 4.25, -0.1, seed + 8,  0.05, 0.42,  0.14);
+  const browRidgeR= mkRock(3.2, 1.5, 2.6, '#b0bccd',  2.7, 4.18, -0.1, seed + 9, -0.04, -0.38, -0.12);
+  grp.add(backMain, backCrest, leftMass, rightMass, leftFlank, rightFlank, browTop, browRidgeL, browRidgeR);
+
+  // 2) 비정형 손으로 깎아낸 석조 아치 문틀 (좌·우 기둥 + 인방보 + 쐐기돌 + 디딤 문턱)
+  const jambL   = mkOrg(0.82, 3.25, 1.55, '#bfb4a2', -1.68, 1.62, 0.85, seed + 11, 0.07, 0.94, 2);
+  const jambR   = mkOrg(0.82, 3.25, 1.55, '#bfb4a2',  1.68, 1.62, 0.85, seed + 12, 0.07, 0.94, 2);
+  const lintel  = mkOrg(4.55, 0.78, 1.78, '#cfc5b4',  0.00, 3.42, 0.92, seed + 13, 0.08, 0.95, 2);
+  const keystone= mkOrg(1.05, 0.62, 1.92, '#d8d0c2',  0.00, 3.68, 1.02, seed + 14, 0.09, 0.88, 1);
+  const sill    = mkOrg(4.25, 0.24, 1.65, '#a89f91',  0.00, 0.12, 1.05, seed + 15, 0.06, 0.98, 1);
+  grp.add(jambL, jambR, lintel, keystone, sill);
+
+  // 3) 무덤 내부 공간 + 깎아 만든 돌 침상(Burial Bench) + 정갈히 개어진 흰 세마포 천!
+  const chamberBackCol = openGlow ? '#fef08a' : '#1e293b';
+  const chamberFloorCol = openGlow ? '#fde68a' : '#334155';
+  const chamberBack = createLowPolyMesh(new THREE.BoxGeometry(2.65 * s, 3.05 * s, 0.30 * s), chamberBackCol, 0, 1.62 * s, -0.55 * s, false);
+  if (openGlow) chamberBack.userData._emissiveGlow = true;
+  const chamberFloor = createLowPolyMesh(new THREE.BoxGeometry(2.70 * s, 0.14 * s, 2.2 * s), chamberFloorCol, 0, 0.16 * s, 0.25 * s, false);
+  // 내부 돌 침상 & 흰 세마포 + 갠 수건
+  const bench = mkOrg(1.85, 0.62, 0.92, openGlow ? '#e2d9c8' : '#64748b', 0.15, 0.48, -0.05, seed + 18, 0.05, 0.96, 1);
+  const linenBody = mkOrg(1.10, 0.16, 0.66, '#f8fafc', -0.05, 0.86, -0.05, seed + 19, 0.08, 0.94, 1);
+  const linenNapkin = mkOrg(0.42, 0.20, 0.42, '#e2e8f0', 0.68, 0.88, -0.04, seed + 20, 0.10, 0.90, 1);
+  if (openGlow) {
+    linenBody.userData._emissiveGlow = true;
+    linenNapkin.userData._emissiveGlow = true;
+  }
+  grp.add(chamberBack, chamberFloor, bench, linenBody, linenNapkin);
+
+  // 4) 굴려진 비정형 둥근 돌문 (돌문 홈통 트랙 + 다면체 원반 바위)
+  const grooveTrack = mkOrg(6.6, 0.22, 0.72, '#9a9285', 1.2, 0.11, 2.02, seed + 22, 0.05, 0.98, 2);
+  const wheelGeoIdx = new THREE.CylinderGeometry(1.78 * s, 1.84 * s, 0.74 * s, 11, 2);
+  const wPos = wheelGeoIdx.attributes.position;
+  for (let i = 0; i < wPos.count; i++) {
+    const vx = wPos.getX(i), vy = wPos.getY(i), vz = wPos.getZ(i);
+    const n = (Math.sin(vx * 4.3 + vz * 5.7 + seed) * 0.09) + (Math.cos(vy * 6.1 - vx * 3.1) * 0.05);
+    wPos.setXYZ(i, vx * (1 + n), vy * (1 + n * 0.5), vz * (1 + n));
+  }
+  const wheelGeo = wheelGeoIdx.toNonIndexed();
+  wheelGeo.computeVertexNormals();
+  wheelGeoIdx.dispose();
+  const rolledStone = new THREE.Mesh(wheelGeo, matLowPoly('#cbd5e1'));
+  rolledStone.position.set(3.45 * s, 1.78 * s, 2.02 * s);
+  rolledStone.rotation.set(Math.PI * 0.5, 0.08, 0.16);
+  rolledStone.castShadow = true;
+  rolledStone.receiveShadow = true;
+  const stoneChock = mkRock(0.95, 0.52, 0.85, '#78716c', 4.65, 0.22, 2.15, seed + 25, 0.1, 0.4, 0);
+  grp.add(grooveTrack, rolledStone, stoneChock);
+
+  // 5) 바위 틈 이끼 덩굴 + 동산 백합꽃 + 입구 디딤돌 3개
+  [[-3.6, 3.15, 0.3], [2.9, 3.55, 0.2], [-1.8, 4.45, 0.1], [4.5, 2.95, 0.6], [-5.2, 1.95, 1.1]].forEach(([mx, my, mz], mi) => {
+    const moss = createLowPolyMesh(new THREE.DodecahedronGeometry((0.52 + (mi % 2) * 0.18) * s, 0), mi % 2 === 0 ? '#65a30d' : '#4d7c0f', mx * s, my * s, mz * s, false);
+    moss.scale.set(1.45, 0.48, 1.15);
+    grp.add(moss);
+  });
+  [[-2.8, 2.35], [-3.4, 2.95], [2.2, 2.85]].forEach(([fx, fz], fi) => {
+    const stem = createLowPolyMesh(new THREE.CylinderGeometry(0.04 * s, 0.05 * s, 0.55 * s, 4), '#4d7c0f', fx * s, 0.28 * s, fz * s, false);
+    const bloom = createLowPolyMesh(new THREE.DodecahedronGeometry(0.16 * s, 0), fi === 1 ? '#fef08a' : '#f8fafc', fx * s, 0.58 * s, fz * s, false);
+    grp.add(stem, bloom);
+  });
+  [[0, 2.85], [-0.45, 4.10], [0.35, 5.25]].forEach(([sx, sz], si) => {
+    const stepStone = mkOrg(1.45, 0.14, 0.92, si % 2 === 0 ? '#cfc5b4' : '#b8afa0', sx, 0.06, sz, seed + 30 + si, 0.09, 0.94, 1);
+    stepStone.rotation.y = (si - 1) * 0.22;
+    grp.add(stepStone);
+  });
+
+  grp.userData.tombStyle = 'detailed_organic_soft_lowpoly_v13';
+  grp.userData.wallRocks = [backMain, leftMass, rightMass];
+  return grp;
+}
+window.createDetailedOrganicTombGroup = createDetailedOrganicTombGroup;
 
 // -------------------------------------------------------------------------
 // 6-B. 공용 비정형 소프트 로우폴리 갈릴리 선착장 다리 & 스테이지 공용 로우폴리 지형/돌담/벽돌포장 팩토리

@@ -769,22 +769,22 @@
     </div>
   </div>
 
-<!-- 게임 스크립트 로드 (전체 스크립트 캐시 강제 갱신 ?v=12 및 버전 일관성 자동 검증 적용) -->
-  <script src="core.js?v=12"></script>
-  <script src="ep1_noah.js?v=12"></script>
-  <script src="ep2_exodus.js?v=12"></script>
-  <script src="ep3_david_base.js?v=12"></script>
-  <script src="ep3_david_st1_2.js?v=12"></script>
-  <script src="ep3_david_st3_end.js?v=12"></script>
-  <script src="ep4_miracle_base.js?v=12"></script>
-  <script src="ep4_miracle_assets.js?v=12"></script>
-  <script src="ep4_miracle_world.js?v=12"></script>
-  <script src="ep4_miracle_stages.js?v=12"></script>
-  <script src="ep4_multiplayer.js?v=12"></script>
+<!-- 게임 스크립트 로드 (전체 스크립트 캐시 강제 갱신 ?v=13 및 버전 일관성 자동 검증 적용) -->
+  <script src="core.js?v=13"></script>
+  <script src="ep1_noah.js?v=13"></script>
+  <script src="ep2_exodus.js?v=13"></script>
+  <script src="ep3_david_base.js?v=13"></script>
+  <script src="ep3_david_st1_2.js?v=13"></script>
+  <script src="ep3_david_st3_end.js?v=13"></script>
+  <script src="ep4_miracle_base.js?v=13"></script>
+  <script src="ep4_miracle_assets.js?v=13"></script>
+  <script src="ep4_miracle_world.js?v=13"></script>
+  <script src="ep4_miracle_stages.js?v=13"></script>
+  <script src="ep4_multiplayer.js?v=13"></script>
   <script>
     // GitHub Pages CDN·브라우저 부분 캐시로 신·구버전 스크립트가 뒤섞여 로드되는 현상을 자동 감지해 1회 강제 새로고침
     (function verifyScriptBuildConsistency() {
-      const EXPECTED = '20261120_v12';
+      const EXPECTED = '20261120_v13';
       const vers = window.__GAME_BUILD_VERSIONS__ || {};
       const keys = ['core', 'ep4_base', 'ep4_assets', 'ep4_world', 'ep4_stages', 'ep4_mp'];
       const mismatch = keys.some(k => vers[k] !== EXPECTED);

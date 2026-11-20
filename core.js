@@ -5,7 +5,7 @@
 // =========================================================================
 
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.core = '20261120_v12';
+window.__GAME_BUILD_VERSIONS__.core = '20261120_v13';
 
 // 퀴즈 선택지 순서 무작위 셔플 공용 헬퍼 (정답이 항상 1번에 고정되지 않도록 보장)
 function shuffleQuizOptions(opts, ansIdx = 0) {
@@ -2371,12 +2371,13 @@ function setPlayerMeshVisibilityForCamera(isFpsMode) {
 }
 
 window.cycleGlobalCameraViewMode = function () {
-  // 에피소드 4 스테이지 1(그물 던지기 · 풍랑 균형 잡기 · 잔잔케 하심)에서는 항상 전용 기본 시점으로 고정!
-  if (
+  // 에피소드 4 스테이지 1·2·3에서는 항상 기본 시점 카메라로 고정!
+  const isMiracleLockedDefaultCam = (
     currentEpisode === 'miracle' &&
     typeof miracleSubMode !== 'undefined' &&
-    miracleSubMode === 'main1_galilee'
-  ) {
+    (miracleSubMode === 'main1_galilee' || miracleSubMode === 'main2_loaves' || miracleSubMode === 'main3_cross')
+  );
+  if (isMiracleLockedDefaultCam) {
     window.globalCameraViewMode = 'default';
     const btnLocked = ensureGlobalCameraViewToggleUI();
     if (btnLocked) {
@@ -2384,7 +2385,7 @@ window.cycleGlobalCameraViewMode = function () {
         '<span class="text-sm leading-none">🎥</span><span id="global-camera-view-label" class="text-[9px] text-sky-200 mt-0.5 leading-none">기본</span>';
     }
     setPlayerMeshVisibilityForCamera(false);
-    showToast('⛵ 갈릴리 바다 미션에서는 기본 시점으로 고정돼요!');
+    showToast('🎥 이 스테이지에서는 기본 시점 카메라로 고정돼요!');
     snapCameraToPlayer();
     return;
   }
@@ -2489,6 +2490,60 @@ function applyCoreCameraByMode() {
       );
       camera.lookAt(0, 1.05, 3.6);
     }
+    return;
+  }
+
+  // [에피소드 4 스테이지 2·3 기본 시점 고정 + 스테이지 2 시작 버드뷰 언덕 스윕 인트로]
+  const isMiracleStage2Or3Locked = (
+    currentEpisode === 'miracle' &&
+    typeof miracleSubMode !== 'undefined' &&
+    (miracleSubMode === 'main2_loaves' || miracleSubMode === 'main3_cross')
+  );
+  if (isMiracleStage2Or3Locked) {
+    setPlayerMeshVisibilityForCamera(false);
+    const st = (typeof miracleActiveMiniState !== 'undefined') ? miracleActiveMiniState : null;
+    const defDist = (currentStage === 1 || currentStage === 4) ? 11.5 : 8.4;
+    const defH = (currentStage === 1 || currentStage === 4) ? 8.5 : 7.0;
+    const defCamX = playerPos.x + sinY * defDist;
+    const defCamY = playerPos.y + defH;
+    const defCamZ = playerPos.z + cosY * defDist;
+
+    if (miracleSubMode === 'main2_loaves' && st && st.introFlyover && st.introFlyover.active) {
+      const dur = Math.max(0.1, st.introFlyover.duration || 3.4);
+      const u = Math.max(0, Math.min(1, (st.introFlyover.timer || 0) / dur));
+      const ease = (x) => x * x * (3 - 2 * x);
+      if (u < 0.62) {
+        // 1구간: 높은 버드뷰로 벳새다 언덕과 48+ 군중·예수님을 천천히 한 바퀴 훑어보기!
+        const s = ease(u / 0.62);
+        const angle = -0.65 + s * 1.30;
+        const bx = Math.sin(angle) * 20.0;
+        const by = 30.0 - s * 4.5;
+        const bz = -10.0 + Math.cos(angle) * 22.0;
+        camera.position.set(bx, by, bz);
+        camera.lookAt(0, 4.5 + s * 2.5, -16.0 - s * 4.0);
+      } else {
+        // 2구간: 버드뷰 종료점에서 캐릭터 기본 시점(3인칭 후방)으로 매끄럽게 하강 착륙!
+        const d = ease((u - 0.62) / 0.38);
+        const endAngle = 0.65;
+        const startBx = Math.sin(endAngle) * 20.0;
+        const startBy = 25.5;
+        const startBz = -10.0 + Math.cos(endAngle) * 22.0;
+        camera.position.set(
+          startBx + (defCamX - startBx) * d,
+          startBy + (defCamY - startBy) * d,
+          startBz + (defCamZ - startBz) * d
+        );
+        camera.lookAt(
+          playerPos.x * d,
+          7.0 + (playerPos.y + 1.5 - 7.0) * d,
+          -20.0 + (playerPos.z - (-20.0)) * d
+        );
+      }
+      return;
+    }
+
+    camera.position.set(defCamX, defCamY, defCamZ);
+    camera.lookAt(playerPos.x, playerPos.y + 1.5, playerPos.z);
     return;
   }
 

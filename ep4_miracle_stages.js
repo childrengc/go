@@ -4,7 +4,7 @@
 // - 스테이지 3(십자가 사건): 넓어진 골고다 언덕 정상 고원과 세 십자가 등장 연출 적용
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_stages = '20261120_v12';
+window.__GAME_BUILD_VERSIONS__.ep4_stages = '20261120_v13';
 
 // 스테이지 3: 예수님과 플레이어가 무거운 십자가를 지고 걷는 통일 속도 (아무리 세게 터치해도 이 속도로 제한!)
 const MIRACLE_STAGE3_CROSS_WALK_SPEED = 1.65;
@@ -159,6 +159,9 @@ window.isPlayerMovementLocked = function () {
     if (ph === 'cast_net' || ph === 'storm_balance' || ph === 'calm') {
       return true;
     }
+  }
+  if (miracleSubMode === 'main2_loaves' && miracleActiveMiniState && miracleActiveMiniState.introFlyover && miracleActiveMiniState.introFlyover.active) {
+    return true;
   }
   if (miracleSubMode === 'ascension' && typeof miracleAscensionState !== 'undefined' && miracleAscensionState.active) {
     return true;
@@ -1381,7 +1384,8 @@ function buildMiracleMainStage2Loaves() {
     reqBaskets,
     jesusPos: new THREE.Vector3(0, getMiracleGroundHeight(0, -24, 2), -24),
     jesusLabel: null,
-    crowdList: []
+    crowdList: [],
+    introFlyover: { active: true, timer: 0, duration: 3.4 }
   };
 
   currentMapRectBounds = { minX: -32, maxX: 32, minZ: -38, maxZ: 34 };
@@ -1622,6 +1626,11 @@ function buildMiracleMainStage2Loaves() {
     });
   }
 
+  // 스테이지 2 시작 시 기본 시점으로 고정 + 버드뷰로 언덕을 한 번 훑고 캐릭터 시점으로 내려옴!
+  window.globalCameraViewMode = 'default';
+  const camLbl2 = document.getElementById('global-camera-view-label');
+  if (camLbl2) camLbl2.textContent = '기본';
+
   playerPos.set(0, getMiracleGroundHeight(0, 18, 2), 18);
   lastGroundedY = playerPos.y;
   playerVelY = 0;
@@ -1631,7 +1640,7 @@ function buildMiracleMainStage2Loaves() {
   cameraTargetYaw = 0;
   snapCameraToPlayer();
 
-  showToast('🍱 [1단계] 언덕 위 많은 인파 속에서 보리떡 5개와 물고기 2마리 도시락을 가진 어린아이를 직접 찾아보세요!');
+  showToast('🦅 벳새다 언덕에 모인 수많은 인파를 둘러본 뒤, 보리떡 5개와 물고기 2마리 도시락을 가진 소년을 찾아보세요!');
 }
 
 function spawnTwelveLeftoverBaskets(count) {
@@ -1674,6 +1683,17 @@ function updateMiracleMainStage2Frame(dt, now) {
   }
   const st = miracleActiveMiniState;
   let nextGuidePos = null;
+
+  // 시작 버드뷰 언덕 스윕 인트로 진행 (끝나면 자동으로 캐릭터 기본 시점으로 착륙!)
+  if (st.introFlyover && st.introFlyover.active) {
+    st.introFlyover.timer += dt;
+    if (typeof applyCoreCameraByMode === 'function') applyCoreCameraByMode();
+    if (st.introFlyover.timer >= (st.introFlyover.duration || 3.4)) {
+      st.introFlyover.active = false;
+      if (typeof snapCameraToPlayer === 'function') snapCameraToPlayer();
+      showToast('🍱 이제 언덕 위 많은 인파 속에서 도시락을 가진 어린아이를 직접 찾아보세요!');
+    }
+  }
 
   if (st.crowdList) {
     st.crowdList.forEach(c => {
@@ -1965,23 +1985,33 @@ function buildStageJerusalemTemple(cx = 0, cy = 0, cz = 54, scale = 1.0, rotY = 
 // -------------------------------------------------------------------------
 function createCarryableWoodenCross(scale = 1.0) {
   const crossGrp = new THREE.Group();
-  const cWoodDark  = '#5c2d0c';
-  const cWoodGrain = '#6f3a14';
-  const cRope      = '#c2a278';
+  const cWoodDark  = '#562b10';
+  const cWoodGrain = '#6e3a18';
+  const cRope      = '#ccb082';
+  const mkOrg = (w, h, d, col, x, y, z, sd, irr = 0.09, taper = 0.92, seg = 2) => {
+    const geo = (typeof createOrganicBoxGeo === 'function')
+      ? createOrganicBoxGeo(w, h, d, sd, irr, taper, seg)
+      : new THREE.BoxGeometry(w, h, d);
+    return createLowPolyMesh(geo, col, x, y, z, true);
+  };
 
-  // 세로 기둥 (등 뒤 z = -0.56 위치, 약간 앞으로 숙인 기울기이지만 머리/두건 뒤쪽(-0.36)과 충분한 여유 유지!)
-  const vBeam = createLowPolyMesh(new THREE.BoxGeometry(0.19, 2.72, 0.17), cWoodDark, 0, 1.44, -0.56, true);
+  // 비정형 손도끼 가공 세로 기둥 (등 뒤 z = -0.56 위치, 머리/후드 관통 0%)
+  const vBeam = mkOrg(0.21, 2.74, 0.19, cWoodDark, 0, 1.44, -0.56, 401, 0.10, 0.91, 2);
   vBeam.rotation.x = 0.08;
-  // 가로 들보 (어깨 위쪽 등 뒤 y = 1.98, z = -0.51 — 앞면 z = -0.43으로 머리·후드 관통 완전 0%)
-  const hBeam = createLowPolyMesh(new THREE.BoxGeometry(2.05, 0.18, 0.16), cWoodGrain, 0, 1.98, -0.51, true);
-  // 중앙 교차점 결속 밧줄
-  const knot = createLowPolyMesh(new THREE.BoxGeometry(0.26, 0.25, 0.22), cRope, 0, 1.98, -0.51, false);
-  // 양쪽 어깨에 걸어 등에 고정하는 밧줄 끈
+  // 비정형 가로 들보 (끝단이 거칠게 다듬어진 통나무)
+  const hBeam = mkOrg(2.08, 0.20, 0.18, cWoodGrain, 0, 1.98, -0.51, 402, 0.11, 0.94, 3);
+  hBeam.rotation.z = 0.025;
+  // 중앙 교차점 X자 결속 밧줄 & 나무 쐐기
+  const knotA = mkOrg(0.32, 0.08, 0.25, cRope, 0, 1.98, -0.51, 403, 0.06, 0.96, 1);
+  knotA.rotation.z = 0.78;
+  const knotB = mkOrg(0.32, 0.08, 0.25, cRope, 0, 1.98, -0.51, 404, 0.06, 0.96, 1);
+  knotB.rotation.z = -0.78;
   const strapL = createBranchSegmentMesh(new THREE.Vector3(-0.26, 1.92, -0.45), new THREE.Vector3(-0.24, 1.50, 0.04), 0.032, 0.032, cRope);
   const strapR = createBranchSegmentMesh(new THREE.Vector3( 0.26, 1.92, -0.45), new THREE.Vector3( 0.24, 1.50, 0.04), 0.032, 0.032, cRope);
 
-  crossGrp.add(vBeam, hBeam, knot, strapL, strapR);
+  crossGrp.add(vBeam, hBeam, knotA, knotB, strapL, strapR);
   crossGrp.scale.set(scale, scale, scale);
+  crossGrp.userData.crossStyle = 'organic_soft_lowpoly_v13';
   return crossGrp;
 }
 
@@ -2067,22 +2097,26 @@ function buildMiracleMainStage3Cross() {
     );
   }
 
-  // 북쪽 골고다 언덕 정상(z = -54)의 세 십자가
+  // 북쪽 골고다 언덕 정상(z = -54)의 비정형 소프트 로우폴리 세 십자가
   const summitCrossesGrp = new THREE.Group();
   [
     [ 0.0, -54.5, 1.42, 0.0],
     [-7.2, -53.0, 1.08,  0.18],
     [ 7.2, -53.0, 1.08, -0.18]
-  ].forEach(([cx, cz, sc, rotY]) => {
+  ].forEach(([cx, cz, sc, rotY], idx) => {
     const cy = getMiracleGroundHeight(cx, cz, 3);
-    const singleCross = new THREE.Group();
-    const rockBase = createLowPolyMesh(new THREE.DodecahedronGeometry(1.05 * sc, 0), '#78716c', 0, 0.35 * sc, 0, true);
-    rockBase.scale.set(1.25, 0.55, 1.25);
-    const vBeam = createLowPolyMesh(new THREE.CylinderGeometry(0.20 * sc, 0.25 * sc, 5.5 * sc, 6), '#5c2d0c', 0, 2.75 * sc, 0, true);
-    const hBeam = createLowPolyMesh(new THREE.CylinderGeometry(0.16 * sc, 0.16 * sc, 3.3 * sc, 6), '#5c2d0c', 0, 4.0 * sc, 0, true);
-    hBeam.rotation.z = Math.PI / 2;
-    singleCross.add(rockBase, vBeam, hBeam);
-    singleCross.position.set(cx, cy, cz);
+    const singleCross = (typeof createOrganicLowPolyCrossMesh === 'function')
+      ? createOrganicLowPolyCrossMesh(sc, { seed: 420 + idx * 29, withBase: true, withPlaque: idx === 0 })
+      : new THREE.Group();
+    if (singleCross.children.length === 0) {
+      const rockBase = createLowPolyMesh(new THREE.DodecahedronGeometry(1.05 * sc, 0), '#78716c', 0, 0.35 * sc, 0, true);
+      rockBase.scale.set(1.25, 0.55, 1.25);
+      const vBeam = createLowPolyMesh(new THREE.CylinderGeometry(0.20 * sc, 0.25 * sc, 5.5 * sc, 6), '#5c2d0c', 0, 2.75 * sc, 0, true);
+      const hBeam = createLowPolyMesh(new THREE.CylinderGeometry(0.16 * sc, 0.16 * sc, 3.3 * sc, 6), '#5c2d0c', 0, 4.0 * sc, 0, true);
+      hBeam.rotation.z = Math.PI / 2;
+      singleCross.add(rockBase, vBeam, hBeam);
+    }
+    singleCross.position.set(cx, cy - 0.10 * sc, cz);
     singleCross.rotation.y = rotY;
     summitCrossesGrp.add(singleCross);
   });
@@ -2198,6 +2232,11 @@ function buildMiracleMainStage3Cross() {
   miracleActiveMiniState.goalRing = gRing;
   miracleActiveMiniState.goalLabel = createWorldLabel('⛰️ 골고다 언덕 정상 세 십자가 앞 목적지');
   miracleActiveMiniState.goalLabel.style.opacity = '0';
+
+  // 스테이지 3은 항상 기본 시점 카메라로 고정 진행!
+  window.globalCameraViewMode = 'default';
+  const camLbl3 = document.getElementById('global-camera-view-label');
+  if (camLbl3) camLbl3.textContent = '기본';
 
   playerPos.set(0, 0, 28);
   lastGroundedY = 0;
@@ -2598,7 +2637,12 @@ function buildMiracleMainStage4Tomb() {
     gateCollider: null,
     angelMesh: null,
     tombPos: new THREE.Vector3(0, 0.5, -38),
-    tombLabel: null
+    tombLabel: null,
+    houseRects: [],
+    romanSoldiers: [],
+    romanHintNpc: null,
+    spottedCooldown: 0,
+    spottedCount: 0
   };
 
   const halfW = 28, halfD = 48;
@@ -2654,13 +2698,20 @@ function buildMiracleMainStage4Tomb() {
     );
   }
 
-  // 서쪽 골고다 언덕 정상 고원 위의 세 십자가 원경 배치
-  [[-50, -10, 1.32], [-55, -8.5, 1.00], [-45, -8.5, 1.00]].forEach(([cx, cz, sc]) => {
+  // 서쪽 골고다 언덕 정상 고원 위의 비정형 세 십자가 원경 배치
+  [[-50, -10, 1.32, 0.0], [-55, -8.5, 1.00, 0.2], [-45, -8.5, 1.00, -0.2]].forEach(([cx, cz, sc, ry], ci) => {
     const cy = 8.6;
-    const vBeam = createLowPolyMesh(new THREE.CylinderGeometry(0.18 * sc, 0.22 * sc, 5.0 * sc, 6), '#5c2d0c', cx, cy + 2.5 * sc, cz);
-    const hBeam = createLowPolyMesh(new THREE.CylinderGeometry(0.15 * sc, 0.15 * sc, 3.0 * sc, 6), '#5c2d0c', cx, cy + 3.6 * sc, cz);
-    hBeam.rotation.z = Math.PI / 2;
-    worldGroup.add(vBeam, hBeam);
+    if (typeof createOrganicLowPolyCrossMesh === 'function') {
+      const cMesh = createOrganicLowPolyCrossMesh(sc, { seed: 470 + ci * 23, withBase: true, withPlaque: ci === 0 });
+      cMesh.position.set(cx, cy - 0.12 * sc, cz);
+      cMesh.rotation.y = ry;
+      worldGroup.add(cMesh);
+    } else {
+      const vBeam = createLowPolyMesh(new THREE.CylinderGeometry(0.18 * sc, 0.22 * sc, 5.0 * sc, 6), '#5c2d0c', cx, cy + 2.5 * sc, cz);
+      const hBeam = createLowPolyMesh(new THREE.CylinderGeometry(0.15 * sc, 0.15 * sc, 3.0 * sc, 6), '#5c2d0c', cx, cy + 3.6 * sc, cz);
+      hBeam.rotation.z = Math.PI / 2;
+      worldGroup.add(vBeam, hBeam);
+    }
   });
 
   // 주변 가장자리 닫힌 다면체 언덕 배치 (충돌 판정 활성화)
@@ -2671,48 +2722,54 @@ function buildMiracleMainStage4Tomb() {
     createBumpyLowPolyHillMesh( 22, -62, 22, 7.5, 16, '#84a955', 21, true);
   }
 
-  // 마을 외곽 양옆에 배치된 고대 유대 가옥들 (비정형 벽돌 가옥 혼합 + 계단 간격 충분히 확보)
-  [
-    [-23,  36, 0,  Math.PI / 2, 'stonebrick'],
-    [-23,  24, 1,  Math.PI / 2, 'plaster'],
-    [ 23,  36, 1, -Math.PI / 2, 'plaster'],
-    [ 23,  24, 2, -Math.PI / 2, 'stonebrick'],
-    [-23,  10, 2,  Math.PI / 2, 'stonebrick'],
-    [ 23,  10, 3, -Math.PI / 2, 'plaster'],
-    [-23, -12, 1,  Math.PI / 2, 'plaster'],
-    [ 23, -12, 0, -Math.PI / 2, 'stonebrick']
-  ].forEach(([hx, hz, v, yaw, masonry]) => {
-    addJudeanRoadsideBuilding(hx, hz, v, yaw, 0.88, false, masonry);
+  // [스테이지 4 리디자인] 오픈월드 스타일의 촘촘한 유대 마을 가옥 + 구불구불한 골목길 + 로마 병사 은신처 구성!
+  // 외곽 좌·우 8채 + 골목길 내부 6채 = 총 14채로 자연스러운 시야 차단 골목길 형성
+  const stage4Houses = [
+    // 외곽 서/동 골목 경계 가옥 (8채)
+    [-21.5,  26.0, 0,  Math.PI / 2, 0.84, 'stonebrick'],
+    [-21.5,  13.0, 1,  Math.PI / 2, 0.84, 'plaster'],
+    [-21.5,   0.0, 2,  Math.PI / 2, 0.84, 'stonebrick'],
+    [-21.5, -13.0, 3,  Math.PI / 2, 0.84, 'plaster'],
+    [ 21.5,  26.0, 1, -Math.PI / 2, 0.84, 'plaster'],
+    [ 21.5,  13.0, 2, -Math.PI / 2, 0.84, 'stonebrick'],
+    [ 21.5,   0.0, 3, -Math.PI / 2, 0.84, 'plaster'],
+    [ 21.5, -13.0, 0, -Math.PI / 2, 0.84, 'stonebrick'],
+    // 골목길을 촘촘히 구획하는 내부 마을 가옥 (6채 — 로마 병사 시야를 막아주는 은신처!)
+    [ -9.5,  24.0, 1,  0.0,         0.78, 'stonebrick'],
+    [  9.5,  24.0, 0,  Math.PI,     0.78, 'plaster'],
+    [  0.0,  12.0, 2,  Math.PI / 2, 0.80, 'stonebrick'],
+    [-10.0,   0.0, 4,  0.0,         0.78, 'plaster'],
+    [ 10.0,   0.0, 1,  Math.PI,     0.78, 'stonebrick'],
+    [  0.0, -12.0, 3, -Math.PI / 2, 0.80, 'plaster']
+  ];
+  stage4Houses.forEach(([hx, hz, v, yaw, sc, masonry]) => {
+    const beforeCnt = Array.isArray(window.miracleBuildingBounds) ? window.miracleBuildingBounds.length : 0;
+    addJudeanRoadsideBuilding(hx, hz, v, yaw, sc, false, masonry);
+    // 로마 병사 시야선(Line-of-Sight) 차단 판정용 사각형 등록
+    if (Array.isArray(window.miracleBuildingBounds) && window.miracleBuildingBounds.length > beforeCnt) {
+      const b = window.miracleBuildingBounds[window.miracleBuildingBounds.length - 1];
+      miracleActiveMiniState.houseRects.push({ minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ });
+    } else {
+      const hw = 3.2 * sc, hd = 2.8 * sc;
+      miracleActiveMiniState.houseRects.push({ minX: hx - hw, maxX: hx + hw, minZ: hz - hd, maxZ: hz + hd });
+    }
   });
 
-  // 비정형 소프트 로우 폴리곤 사암 담장 미로 생성 헬퍼
-  let mazeWallSeed = 11;
-  const addGardenMazeWall = (x, z, w, d) => {
-    const wallH = 3.8;
+  // 동산 입구 북쪽 성벽(좌·우) & 단서 수집 전까지 동산 입구를 막고 있는 나무 성문
+  const addNorthGardenWall = (x, z, w, d, sd) => {
     const wGeo = (typeof createOrganicBoxGeo === 'function')
-      ? createOrganicBoxGeo(w, wallH, d, mazeWallSeed++, 0.028, 0.96, 2)
-      : new THREE.BoxGeometry(w, wallH, d);
-    const cGeo = (typeof createOrganicBoxGeo === 'function')
-      ? createOrganicBoxGeo(w + 0.24, 0.36, d + 0.24, mazeWallSeed++, 0.04, 0.96, 1)
-      : new THREE.BoxGeometry(w + 0.24, 0.36, d + 0.24);
-    const wMesh = createLowPolyMesh(wGeo, '#ead7b7', x, wallH * 0.5, z);
-    const topCap = createLowPolyMesh(cGeo, '#c89654', x, wallH + 0.18, z, false);
+      ? createOrganicBoxGeo(w, 3.8, d, sd, 0.03, 0.96, 2)
+      : new THREE.BoxGeometry(w, 3.8, d);
+    const wMesh = createLowPolyMesh(wGeo, '#ead7b7', x, 1.9, z);
+    const topCap = createLowPolyMesh(new THREE.BoxGeometry(w + 0.24, 0.36, d + 0.24), '#c89654', x, 3.98, z, false);
     worldGroup.add(wMesh, topCap);
     wallMeshes.push(wMesh, topCap);
     colliders.push({ minX: x - w * 0.5 - 0.35, maxX: x + w * 0.5 + 0.35, minZ: z - d * 0.5 - 0.35, maxZ: z + d * 0.5 + 0.35 });
+    miracleActiveMiniState.houseRects.push({ minX: x - w * 0.5, maxX: x + w * 0.5, minZ: z - d * 0.5, maxZ: z + d * 0.5 });
   };
+  addNorthGardenWall(-16.5, -24, 23, 1.8, 17);
+  addNorthGardenWall( 16.5, -24, 23, 1.8, 19);
 
-  addGardenMazeWall(-14,  24, 18, 1.6);
-  addGardenMazeWall( 16,  24, 16, 1.6);
-  addGardenMazeWall(  0,  10, 20, 1.6);
-  addGardenMazeWall(-14,  -2, 14, 1.6);
-  addGardenMazeWall( 14,  -2, 14, 1.6);
-  addGardenMazeWall(-10, -14,  1.6, 16);
-  addGardenMazeWall( 10, -14,  1.6, 16);
-  addGardenMazeWall(-16, -24, 22, 1.6);
-  addGardenMazeWall( 16, -24, 22, 1.6);
-
-  // 단서 수집 전까지 동산 입구를 막고 있는 나무 성문
   const gateBlocker = createLowPolyMesh(new THREE.BoxGeometry(10.2, 3.8, 1.1), '#78350f', 0, 1.9, -24);
   worldGroup.add(gateBlocker);
   wallMeshes.push(gateBlocker);
@@ -2721,11 +2778,102 @@ function buildMiracleMainStage4Tomb() {
   miracleActiveMiniState.gateBlockerMesh = gateBlocker;
   miracleActiveMiniState.gateCollider = gateCol;
 
-  // 2) 마을 미로 곳곳에서 무덤의 단서를 알려주는 NPC 3명 (무릎 높이 불규칙 빛의 원 적용)
+  // [출발 전 힌트 NPC] 출발 광장 길가(2.8, 35.0)에서 로마 군인을 만나면 안 된다고 미리 알려주는 예루살렘 이웃!
+  const hintGrp = new THREE.Group();
+  const hintNpcMesh = createLowPolyPersonMesh('villager', 17);
+  hintNpcMesh.rotation.y = -0.35;
+  const hintRing = new THREE.Mesh(
+    new THREE.RingGeometry(0.95, 1.38, 20),
+    new THREE.MeshBasicMaterial({ color: 0xfacc15, side: THREE.DoubleSide })
+  );
+  hintRing.rotation.x = -Math.PI / 2;
+  hintRing.position.y = 0.08;
+  hintGrp.add(hintNpcMesh, hintRing);
+  hintGrp.position.set(2.8, 0, 35.0);
+  worldGroup.add(hintGrp);
+  const hintLbl = createWorldLabel('💬 예루살렘 이웃 (출발 전 꼭 들어요! 로마 병사 주의)');
+  hintLbl.style.opacity = '1';
+  miracleActiveMiniState.romanHintNpc = {
+    kind: 'roman_hint_npc',
+    mesh: hintGrp,
+    npcMesh: hintNpcMesh,
+    pos: new THREE.Vector3(2.8, 0.5, 35.0),
+    label: hintLbl,
+    warned: false,
+    lastWarnAt: 0,
+    hintText: '🤫 "조심하세요! 로마 군인들이 골목길을 순찰하고 있어요! 로마 군인을 만나면 안 돼요 — 노란 시야 불빛에 들키지 않도록 집 사이 골목 뒤로 숨어 빈 무덤으로 가세요!"'
+  };
+
+  // [순찰 로마 병사 배치] 골목길 교차로를 순찰하며 전방 시야 콘(Vision Cone)으로 감시! (집 뒤에 숨으면 시야 차단)
+  const sightRange = isKinder ? 7.2 : 8.8;
+  const sightHalfAngle = isKinder ? 0.48 : 0.56; // 약 27.5° ~ 32°
+  const patrolRoutes = [
+    { ax: -14.5, az:  18.0, bx:  14.5, bz:  18.0, spd: isKinder ? 2.5 : 3.2, startT: 0.20 },
+    { ax:  14.5, az:   6.0, bx: -14.5, bz:   6.0, spd: isKinder ? 2.6 : 3.4, startT: 0.55 },
+    { ax: -14.5, az:  -6.0, bx:  14.5, bz:  -6.0, spd: isKinder ? 2.5 : 3.3, startT: 0.78 }
+  ];
+  if (!isKinder) {
+    patrolRoutes.push({ ax: 12.5, az: -18.0, bx: -12.5, bz: -18.0, spd: 3.4, startT: 0.35 });
+  }
+  const buildVisionConeGeo = (rad, halfAng, segs = 10) => {
+    const verts = [];
+    for (let s = 0; s < segs; s++) {
+      const a0 = -halfAng + (s / segs) * (halfAng * 2);
+      const a1 = -halfAng + ((s + 1) / segs) * (halfAng * 2);
+      verts.push(0, 0, 0, Math.sin(a0) * rad, 0, Math.cos(a0) * rad, Math.sin(a1) * rad, 0, Math.cos(a1) * rad);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    return g;
+  };
+  patrolRoutes.forEach((pr, idx) => {
+    const sGrp = new THREE.Group();
+    const sMesh = (typeof window.createRomanSoldierMesh === 'function')
+      ? window.createRomanSoldierMesh(idx)
+      : createLowPolyPersonMesh('villager', 40 + idx);
+    const coneMat = new THREE.MeshBasicMaterial({
+      color: 0xfbbf24,
+      transparent: true,
+      opacity: 0.30,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    const visionCone = new THREE.Mesh(buildVisionConeGeo(sightRange, sightHalfAngle, 10), coneMat);
+    visionCone.position.y = 0.10;
+    sGrp.add(sMesh, visionCone);
+
+    const sx = pr.ax + (pr.bx - pr.ax) * pr.startT;
+    const sz = pr.az + (pr.bz - pr.az) * pr.startT;
+    sGrp.position.set(sx, 0, sz);
+    const initAng = Math.atan2(pr.bx - pr.ax, pr.bz - pr.az);
+    sGrp.rotation.y = initAng;
+    worldGroup.add(sGrp);
+
+    const sLbl = createWorldLabel('🛡️ 로마 병사 (시야 주의!)');
+    sLbl.style.opacity = '0';
+    miracleActiveMiniState.romanSoldiers.push({
+      mesh: sGrp,
+      bodyMesh: sMesh,
+      visionCone,
+      coneMat,
+      label: sLbl,
+      ax: pr.ax, az: pr.az,
+      bx: pr.bx, bz: pr.bz,
+      goingToB: true,
+      speed: pr.spd,
+      heading: initAng,
+      sightRange,
+      sightHalfAngle,
+      pauseTimer: 0,
+      phase: idx * 1.4
+    });
+  });
+
+  // 2) 골목길 은신처 구석구석에서 무덤의 단서를 알려주는 NPC 3명 (무릎 높이 불규칙 빛의 원 적용)
   const clueNpcSpots = [
-    { x: -15, z: 32, preset: 'woman',    title: '🏺 향품을 준비한 살로메',   msg: '"아리마대 요셉의 새 돌무덤은 북쪽 성문 너머 감람나무 동산 안에 있어요!"' },
-    { x:  15, z: 14, preset: 'woman',    title: '🌿 새벽에 길을 나선 요안나', msg: '"무덤 입구를 막았던 커다란 돌이 이미 굴러가 버렸대요! 어서 북쪽 동산으로 가보세요!"' },
-    { x:   0, z: -8, preset: 'disciple', title: '🏃 달려가는 요한과 베드로',  msg: '"동산 문이 열렸어요! 무덤 안에 세마포만 놓여 있고 빛나는 천사가 앉아 있어요!"' }
+    { x: -15.5, z: 27.5, preset: 'woman',    title: '🏺 향품을 준비한 살로메',   msg: '"로마 병사 눈을 피해 잘 오셨어요! 새 돌무덤은 북쪽 성문 너머 감람나무 동산에 있어요!"' },
+    { x:  15.5, z:  8.5, preset: 'woman',    title: '🌿 새벽에 길을 나선 요안나', msg: '"무덤 입구를 막았던 커다란 돌이 이미 굴러가 버렸대요! 집 뒤 골목으로 북쪽 동산에 가세요!"' },
+    { x: -15.5, z: -6.5, preset: 'disciple', title: '🏃 달려가는 요한과 베드로',  msg: '"동산 문이 열렸어요! 무덤 안에 세마포만 놓여 있고 빛나는 천사가 앉아 있어요!"' }
   ];
   for (let i = 0; i < reqClues; i++) {
     const cs = clueNpcSpots[i];
@@ -2759,43 +2907,24 @@ function buildMiracleMainStage4Tomb() {
     });
   }
 
-  // 3) 북쪽 끝 동산(z = -44)의 열린 다면체 바위 무덤과 굴러간 돌문, 빛나는 천사
-  //    - [요청 반영] 열린 무덤문 가운데로 돌이 삐져나오지 않도록 좌·우·후면·상단 아치형 바위 언덕으로 분리 조형하고
-  //      후면 바위는 입구 안쪽(z <= -43.0) 뒤에 배치해 열린 무덤 입구 내부가 완전히 깨끗하게 보이도록 구성!
-  const tombGroup = new THREE.Group();
-  const tombBackRock = createLowPolyMesh(new THREE.DodecahedronGeometry(5.6, 0), '#8f9bb0', 0, 2.8, -49.2);
-  tombBackRock.scale.set(1.65, 0.95, 0.92); // 앞면 최대 z = -49.2 + 5.15 = -44.05 (입구와 3.6m 완전 이격)
-  const tombLeftRock = createLowPolyMesh(new THREE.DodecahedronGeometry(4.1, 0), '#94a3b8', -6.3, 2.3, -44.4);
-  tombLeftRock.scale.set(1.00, 0.92, 1.02); // 안쪽 끝 x = -6.3 + 4.1 = -2.2 (열린 문 x = ±1.6 완전 이격!)
-  const tombRightRock = createLowPolyMesh(new THREE.DodecahedronGeometry(4.1, 0), '#94a3b8',  6.3, 2.3, -44.4);
-  tombRightRock.scale.set(1.00, 0.92, 1.02); // 안쪽 끝 x = +6.3 - 4.1 = +2.2 (열린 문 x = ±1.6 완전 이격!)
-  const tombTopCap = createLowPolyMesh(new THREE.DodecahedronGeometry(3.8, 0), '#9aa8bc', 0, 5.75, -44.2);
-  tombTopCap.scale.set(1.62, 0.56, 1.05); // 하단 최소 y = 5.75 - 2.13 = 3.62 (열린 문 상단 y = 3.53 완전 이격!)
-  const tombFlankL = createLowPolyMesh(new THREE.DodecahedronGeometry(2.6, 0), '#8391a6', -7.8, 1.5, -42.6);
-  tombFlankL.scale.set(1.1, 0.78, 0.95);
-  const tombFlankR = createLowPolyMesh(new THREE.DodecahedronGeometry(2.6, 0), '#8391a6',  7.8, 1.5, -42.6);
-  tombFlankR.scale.set(1.1, 0.78, 0.95);
-
-  // 무덤 입구 석조 문틀 (좌·우 기둥 + 인방보 + 돌 문턱) & 내부 황금빛 개방 공간 (방해 바위 0%)
-  const frameCol = '#b8afa0';
-  const jambL = createLowPolyMesh(createOrganicBoxGeo(0.85, 3.65, 1.85, 861, 0.06, 0.96, 1), frameCol, -2.02, 1.82, -41.1, true);
-  const jambR = createLowPolyMesh(createOrganicBoxGeo(0.85, 3.65, 1.85, 862, 0.06, 0.96, 1), frameCol,  2.02, 1.82, -41.1, true);
-  const lintel = createLowPolyMesh(createOrganicBoxGeo(5.15, 0.85, 2.05, 863, 0.06, 0.96, 1), '#c7beb0', 0, 3.85, -41.0, true);
-  const sill = createLowPolyMesh(createOrganicBoxGeo(4.6, 0.24, 1.85, 864, 0.05, 0.98, 1), '#a89f91', 0, 0.12, -40.8, false);
-  const openCaveGlow = createLowPolyMesh(new THREE.BoxGeometry(3.18, 3.42, 0.35), '#fef08a', 0, 1.82, -41.85, false);
-  openCaveGlow.userData._emissiveGlow = true;
-  const openCaveFloor = createLowPolyMesh(new THREE.BoxGeometry(3.2, 0.14, 2.4), '#fde68a', 0, 0.18, -41.0, false);
-
-  const rolledStone = createLowPolyMesh(new THREE.CylinderGeometry(2.1, 2.1, 0.82, 10), '#cbd5e1', 4.1, 2.0, -39.5);
-  rolledStone.rotation.x = Math.PI / 2;
-
-  tombGroup.add(
-    tombBackRock, tombLeftRock, tombRightRock, tombTopCap, tombFlankL, tombFlankR,
-    jambL, jambR, lintel, sill, openCaveGlow, openCaveFloor, rolledStone
-  );
-  worldGroup.add(tombGroup);
-  wallMeshes.push(tombBackRock, tombLeftRock, tombRightRock);
-  colliders.push({ minX: -9.5, maxX: 9.5, minZ: -52.0, maxZ: -40.8 });
+  // 3) 북쪽 끝 동산(z = -42)의 디테일 비정형 소프트 로우폴리 열린 무덤과 굴러간 비정형 돌문, 빛나는 천사
+  let tombGroup;
+  if (typeof createDetailedOrganicTombGroup === 'function') {
+    tombGroup = createDetailedOrganicTombGroup({ scale: 1.15, openGlow: true, seed: 860 });
+    tombGroup.position.set(0, -0.05, -42.2);
+    worldGroup.add(tombGroup);
+    if (Array.isArray(tombGroup.userData.wallRocks)) {
+      wallMeshes.push(...tombGroup.userData.wallRocks);
+    }
+  } else {
+    tombGroup = new THREE.Group();
+    const tombBackRock = createLowPolyMesh(new THREE.DodecahedronGeometry(5.6, 0), '#8f9bb0', 0, 2.8, -49.2);
+    tombGroup.add(tombBackRock);
+    worldGroup.add(tombGroup);
+    wallMeshes.push(tombBackRock);
+  }
+  miracleActiveMiniState.tombMeshGroup = tombGroup;
+  colliders.push({ minX: -9.5, maxX: 9.5, minZ: -52.0, maxZ: -41.4 });
 
   const angelMesh = createLowPolyPersonMesh('angel', 0);
   angelMesh.position.set(-1.6, 0.1, -39.2);
@@ -2844,8 +2973,24 @@ function buildMiracleMainStage4Tomb() {
   cameraTargetYaw = 0;
   snapCameraToPlayer();
 
-  showToast(`🌅 [1단계] 마을 미로에서 사람들에게 단서 ${reqClues}개를 찾아 예수님의 빈 무덤으로 나아가세요!`);
+  showToast(`🌅 [1단계] 로마 병사의 눈을 피해 촘촘한 마을 골목길에서 단서 ${reqClues}개를 모아 빈 무덤으로 나아가세요!`);
 }
+
+function isStage4SightBlockedByHouses(x1, z1, x2, z2, houseRects) {
+  if (!Array.isArray(houseRects) || houseRects.length === 0) return false;
+  const steps = 8;
+  for (let s = 1; s < steps; s++) {
+    const t = s / steps;
+    const px = x1 + (x2 - x1) * t;
+    const pz = z1 + (z2 - z1) * t;
+    for (let i = 0; i < houseRects.length; i++) {
+      const r = houseRects[i];
+      if (px >= r.minX && px <= r.maxX && pz >= r.minZ && pz <= r.maxZ) return true;
+    }
+  }
+  return false;
+}
+window.isStage4SightBlockedByHouses = isStage4SightBlockedByHouses;
 
 function updateMiracleMainStage4Frame(dt, now) {
   if (typeof updateMiracleDynamicSun === 'function') {
@@ -2853,6 +2998,99 @@ function updateMiracleMainStage4Frame(dt, now) {
   }
   const st = miracleActiveMiniState;
   let nextGuidePos = null;
+
+  // 0) 출발 전 힌트 NPC (로마 군인을 만나면 안 된다는 사전 안내!)
+  if (st.romanHintNpc && st.phase !== 'angel_met') {
+    const hn = st.romanHintNpc;
+    const hd = Math.hypot(playerPos.x - hn.pos.x, playerPos.z - hn.pos.z);
+    updateWorldLabelPos(hn.label, hn.pos, hd < 13.0);
+    if (hn.npcMesh && hn.npcMesh.userData) {
+      const angToP = Math.atan2(playerPos.x - hn.pos.x, playerPos.z - hn.pos.z);
+      hn.npcMesh.rotation.y = lerpAngle(hn.npcMesh.rotation.y, angToP, dt * 5.0);
+      if (hn.npcMesh.userData.rArm) {
+        hn.npcMesh.userData.rArm.rotation.x = -1.1 + Math.sin(now * 0.008) * 0.35;
+      }
+    }
+    if (hd < 4.6 && (!hn.warned || now - hn.lastWarnAt > 8500)) {
+      hn.warned = true;
+      hn.lastWarnAt = now;
+      if (hn.label) hn.label.innerHTML = '🤫 로마 병사의 노란 시야를 피해 집 뒤로 숨어 이동하세요!';
+      playSfx('switch');
+      showToast(hn.hintText);
+    }
+  }
+
+  // 1) 순찰 로마 병사 이동 & 전방 시야 콘 감지 (집 뒤에 숨으면 시야 완벽 차단!)
+  if (st.spottedCooldown > 0) st.spottedCooldown -= dt;
+  if (Array.isArray(st.romanSoldiers) && st.phase !== 'angel_met') {
+    st.romanSoldiers.forEach((sol) => {
+      const tx = sol.goingToB ? sol.bx : sol.ax;
+      const tz = sol.goingToB ? sol.bz : sol.az;
+      const dx = tx - sol.mesh.position.x;
+      const dz = tz - sol.mesh.position.z;
+      const dist = Math.hypot(dx, dz);
+
+      if (sol.pauseTimer > 0) {
+        sol.pauseTimer -= dt;
+        const u = sol.bodyMesh && sol.bodyMesh.userData;
+        if (u && u.lLeg && u.rLeg) { u.lLeg.rotation.x = 0; u.rLeg.rotation.x = 0; }
+      } else if (dist < 0.45) {
+        sol.goingToB = !sol.goingToB;
+        sol.pauseTimer = 0.65;
+      } else {
+        const step = Math.min(dist, sol.speed * dt);
+        sol.mesh.position.x += (dx / dist) * step;
+        sol.mesh.position.z += (dz / dist) * step;
+        const targetAng = Math.atan2(dx, dz);
+        sol.heading = lerpAngle(sol.heading, targetAng, Math.min(1, dt * 8.0));
+        sol.mesh.rotation.y = sol.heading;
+        const u = sol.bodyMesh && sol.bodyMesh.userData;
+        if (u && u.lLeg && u.rLeg) {
+          const sw = Math.sin(now * 0.013 + sol.phase) * 0.52;
+          u.lLeg.rotation.x = sw;
+          u.rLeg.rotation.x = -sw;
+          if (u.rArm) u.rArm.rotation.x = -0.35 - sw * 0.35;
+        }
+      }
+
+      const pdx = playerPos.x - sol.mesh.position.x;
+      const pdz = playerPos.z - sol.mesh.position.z;
+      const pDist = Math.hypot(pdx, pdz);
+      updateWorldLabelPos(sol.label, sol.mesh.position, pDist < 15.0);
+
+      let spottedNow = false;
+      if (pDist < sol.sightRange && playerPos.z < 33.5 && playerPos.z > -24.5) {
+        const fwdX = Math.sin(sol.heading), fwdZ = Math.cos(sol.heading);
+        const dot = (pdx * fwdX + pdz * fwdZ) / Math.max(0.001, pDist);
+        const inCone = (pDist < 1.65) || (dot >= Math.cos(sol.sightHalfAngle));
+        if (inCone && !isStage4SightBlockedByHouses(sol.mesh.position.x, sol.mesh.position.z, playerPos.x, playerPos.z, st.houseRects)) {
+          spottedNow = true;
+        }
+      }
+
+      if (sol.coneMat && sol.coneMat.color) {
+        sol.coneMat.color.setHex(spottedNow ? 0xef4444 : 0xfbbf24);
+        sol.coneMat.opacity = spottedNow ? 0.52 : 0.28;
+      }
+
+      if (spottedNow && st.spottedCooldown <= 0) {
+        st.spottedCooldown = 2.2;
+        st.spottedCount = (st.spottedCount || 0) + 1;
+        playSfx('wrong');
+        const df = document.getElementById('damage-flash');
+        if (df) {
+          df.style.opacity = '0.55';
+          setTimeout(() => { df.style.opacity = '0'; }, 260);
+        }
+        playerPos.set(0, 0, 38.5);
+        lastGroundedY = 0;
+        playerVelY = 0;
+        if (playerGroup) playerGroup.position.copy(playerPos);
+        if (typeof snapCameraToPlayer === 'function') snapCameraToPlayer();
+        showToast('🚨 로마 병사에게 들켰어요! 집 사이 골목길 뒤로 숨어서 병사의 시야를 피해 이동해 보세요!');
+      }
+    });
+  }
 
   if (st.phase === 'maze_clues') {
     miracleStageObjects.forEach((obj, idx) => {

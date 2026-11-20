@@ -4,7 +4,7 @@
 // - 계단으로 건물 2층 등반 후 인접한 옆 건물 옥상·2층으로 점프 이동할 수 있는 근접 마을 배치
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_world = '20261120_v12';
+window.__GAME_BUILD_VERSIONS__.ep4_world = '20261120_v13';
 
 let miracleWorldMissionObjects = [];
 let miracleActiveFieldEvent = null;
@@ -1385,46 +1385,50 @@ function buildMiracleRegionalLandmarks() {
     addLowPolyVillageHouse(-24, 58, 8.8, 4.3, 7.0, '#f2e3c9', '#c89654', true, 1, 0);
   }
 
-  // 4) 넓어진 골고다 언덕(x = -62, z = 78) 위의 세 십자가 — 십자가 스테이지(스테이지 3) 클리어 후에만 등장!
+  // 4) 넓어진 골고다 언덕(x = -62, z = 78) 위의 비정형 소프트 로우폴리 세 십자가 — 스테이지 3 클리어 후 등장!
   const isStage3Cleared = Boolean(miracleMainStagesCleared[3] || miracleMainStagesCleared[4] || miracleIsPostResurrection);
   miracleGolgothaCrossesGroup = new THREE.Group();
-  [[-62, 78, 1.38], [-68.5, 79.5, 1.05], [-55.5, 79.5, 1.05]].forEach(([cx, cz, sc]) => {
+  [[-62, 78, 1.38, 0.0], [-68.5, 79.5, 1.05, 0.22], [-55.5, 79.5, 1.05, -0.20]].forEach(([cx, cz, sc, ry], ci) => {
     const cy = getMiracleOpenWorldGroundHeight(cx, cz);
-    // 바위 받침과 기둥 하단을 지면 아래로 살짝 깊게 심어 경사면에서도 절대 뜨지 않게 밀착!
-    const mound = createLowPolyMesh(new THREE.DodecahedronGeometry(1.05 * sc, 0), '#78716c', cx, cy + 0.14 * sc, cz);
-    mound.scale.set(1.30, 0.58, 1.30);
-    const vBeam = createLowPolyMesh(new THREE.CylinderGeometry(0.20 * sc, 0.24 * sc, 5.7 * sc, 6), '#5c2d0c', cx, cy + 2.55 * sc, cz);
-    const hBeam = createLowPolyMesh(new THREE.CylinderGeometry(0.16 * sc, 0.16 * sc, 3.2 * sc, 6), '#5c2d0c', cx, cy + 3.85 * sc, cz);
-    hBeam.rotation.z = Math.PI / 2;
-    miracleGolgothaCrossesGroup.add(mound, vBeam, hBeam);
+    if (typeof createOrganicLowPolyCrossMesh === 'function') {
+      const cMesh = createOrganicLowPolyCrossMesh(sc, { seed: 310 + ci * 27, withBase: true, withPlaque: ci === 0 });
+      cMesh.position.set(cx, cy - 0.14 * sc, cz);
+      cMesh.rotation.y = ry;
+      miracleGolgothaCrossesGroup.add(cMesh);
+    } else {
+      const mound = createLowPolyMesh(new THREE.DodecahedronGeometry(1.05 * sc, 0), '#78716c', cx, cy + 0.14 * sc, cz);
+      mound.scale.set(1.30, 0.58, 1.30);
+      const vBeam = createLowPolyMesh(new THREE.CylinderGeometry(0.20 * sc, 0.24 * sc, 5.7 * sc, 6), '#5c2d0c', cx, cy + 2.55 * sc, cz);
+      const hBeam = createLowPolyMesh(new THREE.CylinderGeometry(0.16 * sc, 0.16 * sc, 3.2 * sc, 6), '#5c2d0c', cx, cy + 3.85 * sc, cz);
+      hBeam.rotation.z = Math.PI / 2;
+      miracleGolgothaCrossesGroup.add(mound, vBeam, hBeam);
+    }
   });
   miracleGolgothaCrossesGroup.visible = isStage3Cleared;
   worldGroup.add(miracleGolgothaCrossesGroup);
 
-  // 5) 동산의 빈 무덤 다면체 바위 굴 외관 (x = -22, z = 92)
+  // 5) 동산의 빈 무덤 — 디테일 비정형 소프트 로우폴리 석회암 바위굴·아치 문틀·내부 돌침상/세마포·굴려진 비정형 돌문 (x = -22, z = 92)
   //    - 스테이지 3 클리어 전까지는 풀·덤불 위장막으로 가려지고, 클리어 시 돌 무덤이 공개됨!
   const tombY = getMiracleOpenWorldGroundHeight(-22, 92);
 
   miracleOpenWorldTombGroup = new THREE.Group();
-  // 무덤 입구 가운데로 바위가 삐져나오지 않도록 좌·우·후면·상단 아치형 다면체 바위로 깔끔히 감쌈
-  const tombMoundBack = createLowPolyMesh(new THREE.DodecahedronGeometry(4.8, 0), '#94a3b8', -22, tombY + 2.4, 94.0);
-  tombMoundBack.scale.set(1.42, 0.90, 0.85);
-  const tombRockL = createLowPolyMesh(new THREE.DodecahedronGeometry(3.2, 0), '#8492a6', -25.6, tombY + 1.9, 90.4);
-  tombRockL.scale.set(0.95, 0.92, 1.05);
-  const tombRockR = createLowPolyMesh(new THREE.DodecahedronGeometry(3.2, 0), '#8492a6', -18.2, tombY + 1.9, 90.4);
-  tombRockR.scale.set(0.95, 0.92, 1.05);
-  const tombRockTop = createLowPolyMesh(new THREE.DodecahedronGeometry(2.9, 0), '#94a3b8', -21.8, tombY + 4.2, 90.2);
-  tombRockTop.scale.set(1.38, 0.56, 0.95);
-  const jambL = createLowPolyMesh(createOrganicBoxGeo(0.72, 3.0, 1.15, 741, 0.07, 0.95, 1), '#b8a892', -23.1, tombY + 1.5, 88.2, true);
-  const jambR = createLowPolyMesh(createOrganicBoxGeo(0.72, 3.0, 1.15, 742, 0.07, 0.95, 1), '#b8a892', -20.5, tombY + 1.5, 88.2, true);
-  const lintel = createLowPolyMesh(createOrganicBoxGeo(3.6, 0.72, 1.25, 743, 0.07, 0.96, 1), '#c7baa4', -21.8, tombY + 3.15, 88.2, true);
-  const tombDarkEntrance = createLowPolyMesh(new THREE.BoxGeometry(2.15, 2.85, 0.55), '#1e293b', -21.8, tombY + 1.42, 88.55, false);
-  const rolledStone = createLowPolyMesh(new THREE.CylinderGeometry(1.65, 1.65, 0.72, 10), '#cbd5e1', -18.0, tombY + 1.55, 87.6);
-  rolledStone.rotation.x = Math.PI / 2;
-  miracleOpenWorldTombGroup.add(tombMoundBack, tombRockL, tombRockR, tombRockTop, jambL, jambR, lintel, tombDarkEntrance, rolledStone);
+  if (typeof createDetailedOrganicTombGroup === 'function') {
+    const tombDetail = createDetailedOrganicTombGroup({ scale: 0.96, openGlow: false, seed: 740 });
+    tombDetail.position.set(-21.8, tombY - 0.08, 90.2);
+    tombDetail.rotation.y = Math.PI; // 입구가 북쪽 마을 길(-Z) 방향을 바라보도록 배치
+    miracleOpenWorldTombGroup.add(tombDetail);
+    miracleOpenWorldTombGroup.userData.tombStyle = tombDetail.userData.tombStyle;
+    if (Array.isArray(tombDetail.userData.wallRocks)) {
+      wallMeshes.push(...tombDetail.userData.wallRocks);
+    }
+  } else {
+    const tombMoundBack = createLowPolyMesh(new THREE.DodecahedronGeometry(4.8, 0), '#94a3b8', -22, tombY + 2.4, 94.0);
+    tombMoundBack.scale.set(1.42, 0.90, 0.85);
+    miracleOpenWorldTombGroup.add(tombMoundBack);
+    wallMeshes.push(tombMoundBack);
+  }
   miracleOpenWorldTombGroup.visible = isStage3Cleared;
   worldGroup.add(miracleOpenWorldTombGroup);
-  wallMeshes.push(tombMoundBack, tombRockL, tombRockR);
   colliders.push({ minX: -27.5, maxX: -16.5, minZ: 88.5, maxZ: 96.5 });
 
   // 무덤 위장용 우거진 풀·관목·야생 수풀 (스테이지 3 클리어 전까지 무덤 자리에 배치)
@@ -5019,7 +5023,8 @@ function updateMiracleFieldEventFrame(dt, now) {
       const dy = tz.requireYMatch ? Math.abs(playerPos.y - (tz.goalY || 0)) : 0;
       updateWorldLabelPos(tz.label, tz.pos, td < MIRACLE_TAG_DIST_SPOT);
 
-      if (td < 3.1 && dy < 2.2 && fe.carrying > 0) {
+      const deliverRad = (evSpot.id === 'par_builder') ? 5.6 : 3.1;
+      if (td < deliverRad && dy < 2.2 && fe.carrying > 0) {
         fe.collected += fe.carrying;
         fe.carrying = 0;
         playSfx('build');
@@ -6358,15 +6363,29 @@ function updateMiracleOpenWorldFrame(dt, now) {
     navLabel = `스테이지 ${lastSp.stageNum}`;
   }
 
-  if (guideArrowGroup && guideArrowGroup.visible && guideTarget) {
+  const isMpMode = Boolean(window.isMiracleMultiplayerMode);
+  if (isMpMode) {
+    // [멀티플레이 전용] 머리 위 3D 화살표는 숨기고 소년반 내비게이터(방향 나침반 + 거리)를 적용!
+    if (guideArrowGroup) guideArrowGroup.visible = false;
+    if (window.MiracleMultiplayer && typeof window.MiracleMultiplayer.getNavigatorTarget === 'function') {
+      const mpNav = window.MiracleMultiplayer.getNavigatorTarget();
+      if (mpNav && mpNav.pos) {
+        guideTarget = mpNav.pos;
+        navLabel = mpNav.label || '반석 집터';
+        navIs2F = false;
+      }
+    }
+  }
+
+  if (!isMpMode && guideArrowGroup && guideArrowGroup.visible && guideTarget) {
     const baseFacing = (window.globalCameraViewMode === 'fps') ? (cameraYaw + Math.PI) : playerFacing;
     guideArrowGroup.rotation.y = Math.atan2(guideTarget.x - playerPos.x, guideTarget.z - playerPos.z) - baseFacing;
   }
 
-  // [소년반(senior) 전용 초슬림 미니 나침반/거리 내비게이터] 머리 위 화살표가 없는 소년반에서 방대한 오픈월드 탐색 지원!
+  // [소년반(senior) 및 멀티플레이 전용 초슬림 미니 나침반/거리 내비게이터]
   if (typeof window.updateMiracleMiniNavigatorUI === 'function') {
-    const showSeniorNav = (currentMode === 'senior' && miracleSubMode === 'openworld' && Boolean(guideTarget));
-    if (showSeniorNav) {
+    const showMiniNav = ((currentMode === 'senior' || isMpMode) && miracleSubMode === 'openworld' && Boolean(guideTarget));
+    if (showMiniNav) {
       const dx = guideTarget.x - playerPos.x;
       const dz = guideTarget.z - playerPos.z;
       const distM = Math.round(Math.hypot(dx, dz));
