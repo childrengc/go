@@ -2335,8 +2335,17 @@ function ensureGlobalCameraViewToggleUI() {
     };
     btn.className =
       'pointer-events-auto mc-btn w-12 h-11 p-0 rounded-xl bg-slate-900/90 hover:bg-slate-800 border-2 border-sky-400 text-white font-jua shadow-lg flex flex-col items-center justify-center leading-none shrink-0 select-none active:scale-95';
-    btn.innerHTML =
-      '<span class="text-sm leading-none">🎥</span><span id="global-camera-view-label" class="text-[9px] text-sky-200 mt-0.5 leading-none">기본</span>';
+    
+    // 현재 모드에 맞춰 버튼 아이콘과 텍스트 동적으로 생성
+    if (window.globalCameraViewMode === 'default') {
+      btn.innerHTML = '<span class="text-sm leading-none">🎥</span><span id="global-camera-view-label" class="text-[9px] text-sky-200 mt-0.5 leading-none">기본</span>';
+    } else if (window.globalCameraViewMode === 'topdown') {
+      btn.innerHTML = '<span class="text-sm leading-none">🚁</span><span id="global-camera-view-label" class="text-[9px] text-indigo-300 mt-0.5 leading-none">탑다운</span>';
+    } else if (window.globalCameraViewMode === 'fps') {
+      btn.innerHTML = '<span class="text-sm leading-none">👀</span><span id="global-camera-view-label" class="text-[9px] text-emerald-300 mt-0.5 leading-none">1인칭</span>';
+    } else {
+      btn.innerHTML = '<span class="text-sm leading-none">🌤️</span><span id="global-camera-view-label" class="text-[9px] text-amber-300 mt-0.5 leading-none">올려봄</span>';
+    }
   }
 
   if (camBar && btn.parentElement !== camBar) {
@@ -2391,6 +2400,8 @@ window.cycleGlobalCameraViewMode = function () {
   }
 
   if (window.globalCameraViewMode === 'default') {
+    window.globalCameraViewMode = 'topdown';
+  } else if (window.globalCameraViewMode === 'topdown') {
     window.globalCameraViewMode = 'fps';
   } else if (window.globalCameraViewMode === 'fps') {
     window.globalCameraViewMode = 'lookup';
@@ -2400,18 +2411,19 @@ window.cycleGlobalCameraViewMode = function () {
 
   const btn = ensureGlobalCameraViewToggleUI();
   if (window.globalCameraViewMode === 'default') {
-    btn.innerHTML =
-      '<span class="text-sm leading-none">🎥</span><span id="global-camera-view-label" class="text-[9px] text-sky-200 mt-0.5 leading-none">기본</span>';
+    btn.innerHTML = '<span class="text-sm leading-none">🎥</span><span id="global-camera-view-label" class="text-[9px] text-sky-200 mt-0.5 leading-none">기본</span>';
     setPlayerMeshVisibilityForCamera(false);
     showToast('🎥 카메라: [기본 시점]');
+  } else if (window.globalCameraViewMode === 'topdown') {
+    btn.innerHTML = '<span class="text-sm leading-none">🚁</span><span id="global-camera-view-label" class="text-[9px] text-indigo-300 mt-0.5 leading-none">탑다운</span>';
+    setPlayerMeshVisibilityForCamera(false);
+    showToast('🚁 카메라: [탑다운 시점]');
   } else if (window.globalCameraViewMode === 'fps') {
-    btn.innerHTML =
-      '<span class="text-sm leading-none">👀</span><span id="global-camera-view-label" class="text-[9px] text-emerald-300 mt-0.5 leading-none">1인칭</span>';
+    btn.innerHTML = '<span class="text-sm leading-none">👀</span><span id="global-camera-view-label" class="text-[9px] text-emerald-300 mt-0.5 leading-none">1인칭</span>';
     setPlayerMeshVisibilityForCamera(true);
     showToast('👀 카메라: [1인칭 시점]');
   } else {
-    btn.innerHTML =
-      '<span class="text-sm leading-none">🌤️</span><span id="global-camera-view-label" class="text-[9px] text-amber-300 mt-0.5 leading-none">올려봄</span>';
+    btn.innerHTML = '<span class="text-sm leading-none">🌤️</span><span id="global-camera-view-label" class="text-[9px] text-amber-300 mt-0.5 leading-none">올려봄</span>';
     setPlayerMeshVisibilityForCamera(false);
     showToast('🌤️ 카메라: [올려봄 시점]');
   }
@@ -2650,14 +2662,11 @@ function applyCoreCameraByMode() {
     const camY = Math.max(playerPos.y + 1.45, groundH + 1.15);
 
     camera.position.set(camX, camY, camZ);
-    camera.lookAt(
-      playerPos.x - sinY * 8.0,
-      playerPos.y + 5.2,
-      playerPos.z - cosY * 8.0
-    );
-  } else {
+    camera.lookAt(playerPos.x - sinY * 8.0, playerPos.y + 5.2, playerPos.z - cosY * 8.0);
+    
+  } else if (window.globalCameraViewMode === 'topdown') {
+    // [변경 전 원본 카메라] 에피소드 1~3에서 기본으로 사용되는 예전 구도 
     setPlayerMeshVisibilityForCamera(false);
-
     const camDist = (currentStage === 1 || currentStage === 4) ? 11.5 : (currentEpisode === 'exodus' ? 11.2 : 8.4);
     const camH = (currentStage === 1 || currentStage === 4) ? 8.5 : (currentEpisode === 'exodus' ? 8.0 : 7.0);
     camera.position.set(
@@ -2666,6 +2675,60 @@ function applyCoreCameraByMode() {
       playerPos.z + cosY * camDist
     );
     camera.lookAt(playerPos.x, playerPos.y + 1.5, playerPos.z);
+    
+  } else {
+    // [새로운 입체형 기본 카메라] 에피소드 4 전용 
+    setPlayerMeshVisibilityForCamera(false);
+
+    const aspect = window.innerWidth / Math.max(1, window.innerHeight);
+    const isPortrait = aspect < 1.0;
+    const isIndoor = (currentStage === 2 || currentStage === 3) && currentEpisode !== 'miracle';
+
+    const baseDist = (currentStage === 1 || currentStage === 4) ? 11.5 : (currentEpisode === 'exodus' ? 11.2 : 8.4);
+    const baseH = (currentStage === 1 || currentStage === 4) ? 8.5 : (currentEpisode === 'exodus' ? 8.0 : 7.0);
+
+    let distMult = 1.0, hMult = 1.0;
+
+    if (isPortrait) {
+      if (isIndoor) { distMult = 0.7; hMult = 0.45; } 
+      else { distMult = 1.0; hMult = 0.55; }
+    } else {
+      distMult = 0.85; hMult = 0.45;       
+    }
+
+    const finalDist = baseDist * distMult;
+    const finalH = baseH * hMult;
+
+    const lookTarget = new THREE.Vector3(playerPos.x, playerPos.y + 2.4, playerPos.z);
+    const idealCamPos = new THREE.Vector3(
+      playerPos.x + sinY * finalDist,
+      playerPos.y + finalH,
+      playerPos.z + cosY * finalDist
+    );
+
+    const dirToCam = new THREE.Vector3().subVectors(idealCamPos, lookTarget);
+    const targetDist = dirToCam.length();
+    dirToCam.normalize();
+
+    if (typeof raycaster !== 'undefined' && typeof wallMeshes !== 'undefined' && wallMeshes.length > 0) {
+      raycaster.set(lookTarget, dirToCam);
+      const hits = raycaster.intersectObjects(wallMeshes, true);
+      
+      let closestDist = targetDist;
+      for (let i = 0; i < hits.length; i++) {
+        if (hits[i].distance < closestDist && !(hits[i].object.userData && hits[i].object.userData._isGroundSurface)) {
+          closestDist = hits[i].distance;
+        }
+      }
+
+      if (closestDist < targetDist) {
+        const safeDist = Math.max(0.5, closestDist - 0.3);
+        idealCamPos.copy(lookTarget).add(dirToCam.multiplyScalar(safeDist));
+      }
+    }
+
+    camera.position.copy(idealCamPos);
+    camera.lookAt(lookTarget);
   }
 }
 
@@ -2705,7 +2768,21 @@ function startVoxelGame(mode, targetStage = 1, fromMapSelect = false) {
   saveLocalPlayerProgress(explorerName);
 
   rebuildPlayerAppearance();
+  
+  // 에피소드 1~3은 '탑다운', 에피소드 4는 '기본' 시점으로 자동 설정
+  window.globalCameraViewMode = (currentEpisode === 'miracle') ? 'default' : 'topdown';
+
   ensureGlobalCameraViewToggleUI();
+  
+  // 이미 생성된 버튼이 있을 수 있으므로 버튼 내용 강제 동기화
+  const viewBtn = document.getElementById('global-camera-view-btn');
+  if (viewBtn) {
+    if (window.globalCameraViewMode === 'default') {
+      viewBtn.innerHTML = '<span class="text-sm leading-none">🎥</span><span id="global-camera-view-label" class="text-[9px] text-sky-200 mt-0.5 leading-none">기본</span>';
+    } else {
+      viewBtn.innerHTML = '<span class="text-sm leading-none">🚁</span><span id="global-camera-view-label" class="text-[9px] text-indigo-300 mt-0.5 leading-none">탑다운</span>';
+    }
+  }
 
   document.getElementById('hud-top').classList.remove('hidden');
   document.getElementById('hud-player-tag').textContent = `${explorerDisplayName || explorerName}`;
@@ -3666,8 +3743,13 @@ function initEngine(skipInitialPreview = false) {
 
   const handleViewportResize = () => {
     const mobNow = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (Math.min(window.innerWidth, window.innerHeight) <= 768);
-    camera.aspect = window.innerWidth / Math.max(1, window.innerHeight);
+    const aspect = window.innerWidth / Math.max(1, window.innerHeight);
+    camera.aspect = aspect;
+    
+    // 세로형(aspect < 1.0)일 때 시야각(FOV)을 +10도 넓혀 거대한 구조물 높이감과 시야 확보
+    camera.fov = aspect < 1.0 ? 65 : 55;
     camera.updateProjectionMatrix();
+    
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, mobNow ? 1.25 : 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
   };

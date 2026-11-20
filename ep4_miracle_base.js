@@ -4477,15 +4477,34 @@ window.showMiracleGuideBubble = function (opts = {}) {
   }
   if (cancelBtn) cancelBtn.classList.toggle('hidden', !canCancel);
 
-  // 이전 빨려들어감 변환 초기화 후 정중앙 표시
-  bubble.style.transition = 'none';
-  bubble.style.transform = 'translate(-50%, -50%) scale(0.92)';
-  bubble.style.opacity = '0';
-  bubble.classList.remove('hidden');
-  void bubble.offsetWidth;
-  bubble.style.transition = 'transform 0.24s cubic-bezier(0.22, 1.15, 0.36, 1), opacity 0.22s ease-out';
-  bubble.style.transform = 'translate(-50%, -50%) scale(1)';
-  bubble.style.opacity = '1';
+  // 우측 상단 안내 버튼에서 튀어나오는(팝업) 애니메이션을 위해 시작 위치 계산
+      const btn = document.getElementById('miracle-guide-btn');
+      let dx = Math.round((window.innerWidth || 1000) * 0.42);
+      let dy = -Math.round((window.innerHeight || 700) * 0.38);
+      
+      try {
+        const tr = (btn && !btn.classList.contains('hidden')) ? btn.getBoundingClientRect() : null;
+        if (tr && tr.width > 0) {
+          const bubbleCenterX = window.innerWidth * 0.5;
+          const bubbleCenterY = window.innerHeight * 0.46; // 말풍선 CSS 기준 (left: 50%, top: 46%)
+          dx = (tr.left + tr.width * 0.5) - bubbleCenterX;
+          dy = (tr.top + tr.height * 0.5) - bubbleCenterY;
+        }
+      } catch (e) {}
+
+      // 1. 시작 지점: 안내 버튼 위치에서 작고 기울어진 상태(scale 0.08, rotate 10deg)로 셋팅
+      bubble.style.transition = 'none';
+      bubble.style.transform = `translate(calc(-50% + ${dx.toFixed(1)}px), calc(-50% + ${dy.toFixed(1)}px)) scale(0.08) rotate(10deg)`;
+      bubble.style.opacity = '0';
+      bubble.classList.remove('hidden');
+      
+      // DOM 업데이트 강제 반영
+      void bubble.offsetWidth;
+      
+      // 2. 정중앙으로 날아오며 톡 튀어나오는 탄성(cubic-bezier) 효과 적용
+      bubble.style.transition = 'transform 0.45s cubic-bezier(0.22, 1.15, 0.36, 1), opacity 0.35s ease-out';
+      bubble.style.transform = 'translate(-50%, -50%) scale(1) rotate(0deg)';
+      bubble.style.opacity = '1';
 
   MiracleGuideUI.isBubbleOpen = true;
   MiracleGuideUI.isSucking = false;
@@ -4857,8 +4876,11 @@ function ensureMiracleCustomUI() {
       <div id="miracle-guide-bubble" onclick="window.onMiracleGuideBubbleClick()" class="hidden miracle-guide-bubble pointer-events-auto cursor-pointer text-left">
         <div class="flex items-center justify-between gap-2 mb-1.5">
           <span id="miracle-guide-bubble-title" class="px-2.5 py-0.5 rounded-full bg-amber-600 text-white font-jua text-xs sm:text-sm truncate">💬 탐험 안내</span>
-          <button type="button" onclick="event.stopPropagation(); window.dismissMiracleGuideBubbleToButton();"
-                  class="px-2 py-0.5 rounded-full bg-amber-200 hover:bg-amber-300 text-amber-950 font-jua text-[11px] shrink-0">확인 ✕</button>
+          <button id="miracle-guide-bubble-cancel-btn" type="button"
+                  onclick="event.stopPropagation(); window.dismissMiracleGuideBubbleToButton(); if (typeof window.cancelActiveMiracleFieldEvent === 'function') window.cancelActiveMiracleFieldEvent();"
+                  class="hidden px-4 py-1 rounded-lg bg-rose-500 hover:bg-rose-400 text-white font-jua text-[11px] shrink-0 shadow">
+            미션 포기 ✕
+          </button>
         </div>
         <p class="font-jua text-sm sm:text-base text-slate-900 leading-relaxed min-h-[42px]">
           <span id="miracle-guide-bubble-text"></span><span id="miracle-guide-cursor" class="miracle-guide-cursor">▌</span>
@@ -4869,11 +4891,8 @@ function ensureMiracleCustomUI() {
         </div>
         <div class="flex items-center justify-between gap-2 mt-2">
           <span class="text-[10px] text-amber-800/80 font-bold">👆 터치하면 우측 상단 안내 버튼에 쏙 들어가요!</span>
-          <button id="miracle-guide-bubble-cancel-btn" type="button"
-                  onclick="event.stopPropagation(); window.dismissMiracleGuideBubbleToButton(); if (typeof window.cancelActiveMiracleFieldEvent === 'function') window.cancelActiveMiracleFieldEvent();"
-                  class="hidden px-2.5 py-0.5 rounded-lg bg-rose-500 hover:bg-rose-400 text-white font-jua text-[11px] shrink-0">
-            미션 포기 ✕
-          </button>
+          <button type="button" onclick="event.stopPropagation(); window.dismissMiracleGuideBubbleToButton();"
+                  class="px-3 py-1 rounded-full bg-amber-200 hover:bg-amber-300 text-amber-950 font-jua text-[11px] shrink-0 shadow">확인 ▶</button>
         </div>
       </div>
 
