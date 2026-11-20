@@ -5,7 +5,7 @@
 // =========================================================================
 
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.core = '20261120_v11';
+window.__GAME_BUILD_VERSIONS__.core = '20261120_v12';
 
 // 퀴즈 선택지 순서 무작위 셔플 공용 헬퍼 (정답이 항상 1번에 고정되지 않도록 보장)
 function shuffleQuizOptions(opts, ansIdx = 0) {
@@ -2371,6 +2371,24 @@ function setPlayerMeshVisibilityForCamera(isFpsMode) {
 }
 
 window.cycleGlobalCameraViewMode = function () {
+  // 에피소드 4 스테이지 1(그물 던지기 · 풍랑 균형 잡기 · 잔잔케 하심)에서는 항상 전용 기본 시점으로 고정!
+  if (
+    currentEpisode === 'miracle' &&
+    typeof miracleSubMode !== 'undefined' &&
+    miracleSubMode === 'main1_galilee'
+  ) {
+    window.globalCameraViewMode = 'default';
+    const btnLocked = ensureGlobalCameraViewToggleUI();
+    if (btnLocked) {
+      btnLocked.innerHTML =
+        '<span class="text-sm leading-none">🎥</span><span id="global-camera-view-label" class="text-[9px] text-sky-200 mt-0.5 leading-none">기본</span>';
+    }
+    setPlayerMeshVisibilityForCamera(false);
+    showToast('⛵ 갈릴리 바다 미션에서는 기본 시점으로 고정돼요!');
+    snapCameraToPlayer();
+    return;
+  }
+
   if (window.globalCameraViewMode === 'default') {
     window.globalCameraViewMode = 'fps';
   } else if (window.globalCameraViewMode === 'fps') {
@@ -2412,6 +2430,68 @@ function applyCoreCameraByMode() {
   const sinY = Math.sin(cameraYaw);
   const cosY = Math.cos(cameraYaw);
 
+  // [에피소드 4 스테이지 1 시점 고정 & 반응형 카메라]
+  // 어떤 시점(1인칭·올려봄·기본)으로 입장했더라도 그물 던지기·풍랑 균형 잡기·예수님 깨우기·잔잔케 하심은 항상 전용 기본 카메라로 고정!
+  const isMiracleBoatStage = (
+    currentEpisode === 'miracle' &&
+    typeof miracleSubMode !== 'undefined' &&
+    miracleSubMode === 'main1_galilee'
+  );
+  if (isMiracleBoatStage) {
+    setPlayerMeshVisibilityForCamera(false);
+    const vw = Math.max(1, window.innerWidth || 1280);
+    const vh = Math.max(1, window.innerHeight || 720);
+    const aspect = Math.max(0.45, Math.min(2.2, vw / vh));
+    const st = (typeof miracleActiveMiniState !== 'undefined') ? miracleActiveMiniState : null;
+    const phase = st ? st.phase : 'cast_net';
+
+    if (phase === 'cast_net') {
+      // 1단계 그물 던지기: 배 위 플레이어와 헤엄치는 물고기 떼가 모든 화면비에서 함께 보이도록 대각선 조망
+      const distScale = aspect < 1.0
+        ? Math.min(1.58, 0.88 + 0.44 / aspect)
+        : (aspect < 1.3 ? 1.10 : 0.98);
+      const fx = (st && st.targetFishPos) ? st.targetFishPos.x : -16.5;
+      const fz = (st && st.targetFishPos) ? st.targetFishPos.z : -1.5;
+      const midX = playerPos.x * 0.40 + fx * 0.60;
+      const midZ = playerPos.z * 0.55 + fz * 0.45;
+      camera.position.set(
+        playerPos.x + 11.4 * distScale,
+        playerPos.y + 11.2 * distScale,
+        playerPos.z + 14.2 * distScale
+      );
+      camera.lookAt(midX, 0.25, midZ);
+    } else if (phase === 'calm') {
+      // 4단계 풍랑이 멈춘 뒤: 카메라가 예수님(-Z 정면 방향) 앞쪽으로 부드럽게 이동하여 일어나신 예수님의 정면 모습을 클로즈업!
+      const calmScale = aspect < 1.0 ? Math.min(1.36, 0.95 + 0.22 / aspect) : 1.0;
+      const jx = (st && st.jesusMesh) ? st.jesusMesh.position.x : 0;
+      const jz = (st && st.jesusMesh) ? st.jesusMesh.position.z : 8.2;
+      const targetCam = new THREE.Vector3(
+        jx + 2.1 * calmScale,
+        2.55 + 0.48 * calmScale,
+        jz - 5.4 * calmScale
+      );
+      const cTimer = (typeof miracleStageCutscene !== 'undefined' && miracleStageCutscene.active)
+        ? miracleStageCutscene.timer
+        : 2.0;
+      const alpha = Math.min(1.0, 0.14 + cTimer * 0.18);
+      camera.position.lerp(targetCam, alpha);
+      camera.lookAt(jx, 1.78, jz);
+    } else {
+      // 2~3단계 풍랑 균형 잡기 & 예수님 깨우기: 반대쪽(고물 뒤쪽 +Z)에서 배 앞쪽(-Z)을 바라보아
+      // 돛 가림 없이 고물에 누워 계신 예수님(전경)과 균형 잡는 캐릭터의 정면(중경)을 한 화면에 함께 표시!
+      const stormScale = aspect < 1.0
+        ? Math.min(1.52, 0.92 + 0.40 / aspect)
+        : (aspect < 1.3 ? 1.10 : 1.0);
+      camera.position.set(
+        4.8 * stormScale,
+        5.8 + 2.8 * stormScale,
+        11.6 + 9.2 * stormScale
+      );
+      camera.lookAt(0, 1.05, 3.6);
+    }
+    return;
+  }
+
   if (window.globalCameraViewMode === 'fps') {
     setPlayerMeshVisibilityForCamera(true);
     const eyeX = playerPos.x - sinY * 0.15;
@@ -2439,48 +2519,6 @@ function applyCoreCameraByMode() {
     );
   } else {
     setPlayerMeshVisibilityForCamera(false);
-    // [에피소드 4 스테이지 1 반응형 카메라] PC·태블릿·모바일(세로/가로) 모든 화면비에서 캐릭터·물고기·예수님이 한눈에 담기도록 자동 보정!
-    const isMiracleBoatStage = (
-      currentEpisode === 'miracle' &&
-      typeof miracleSubMode !== 'undefined' &&
-      miracleSubMode === 'main1_galilee'
-    );
-    if (isMiracleBoatStage) {
-      const vw = Math.max(1, window.innerWidth || 1280);
-      const vh = Math.max(1, window.innerHeight || 720);
-      const aspect = Math.max(0.45, Math.min(2.2, vw / vh));
-      const st = (typeof miracleActiveMiniState !== 'undefined') ? miracleActiveMiniState : null;
-      const phase = st ? st.phase : 'cast_net';
-
-      if (phase === 'cast_net') {
-        // 1단계 그물 던지기: 배 위 플레이어(우측 전경)와 헤엄치는 물고기 떼(좌측 중경)를 동시에 담는 반응형 대각선 뷰!
-        const distScale = aspect < 1.0
-          ? Math.min(1.58, 0.88 + 0.44 / aspect)
-          : (aspect < 1.3 ? 1.10 : 0.98);
-        const fx = (st && st.targetFishPos) ? st.targetFishPos.x : -16.5;
-        const fz = (st && st.targetFishPos) ? st.targetFishPos.z : -1.5;
-        const midX = playerPos.x * 0.40 + fx * 0.60;
-        const midZ = playerPos.z * 0.55 + fz * 0.45;
-        camera.position.set(
-          playerPos.x + 11.4 * distScale,
-          playerPos.y + 11.2 * distScale,
-          playerPos.z + 14.2 * distScale
-        );
-        camera.lookAt(midX, 0.25, midZ);
-      } else {
-        // 2~3단계 폭풍우·예수님 깨우기·잔잔케 하심: 배 위 플레이어와 고물에 누워/일어나신 예수님이 어떤 화면비에서도 모두 보이게 배치!
-        const stormScale = aspect < 1.0
-          ? Math.min(1.55, 0.92 + 0.42 / aspect)
-          : (aspect < 1.3 ? 1.12 : 1.0);
-        camera.position.set(
-          playerPos.x + 5.2 * stormScale,
-          playerPos.y + 7.4 + 3.6 * stormScale,
-          playerPos.z - 12.8 * stormScale
-        );
-        camera.lookAt(0, 0.85, 4.4);
-      }
-      return;
-    }
 
     const camDist = (currentStage === 1 || currentStage === 4) ? 11.5 : (currentEpisode === 'exodus' ? 11.2 : 8.4);
     const camH = (currentStage === 1 || currentStage === 4) ? 8.5 : (currentEpisode === 'exodus' ? 8.0 : 7.0);
@@ -3687,6 +3725,14 @@ function parseAdminDirectJumpParams() {
     const cleaned = searchStr.replace(/^[?#]+/, '');
     if (!cleaned) return null;
     const p = new URLSearchParams(cleaned);
+    const mpFlag = (p.get('mp') || '').trim();
+    if (mpFlag === '1' || mpFlag.toLowerCase() === 'true') {
+      const name = (p.get('name') || '관리자').trim() || '관리자';
+      const room = (p.get('room') || '광릉내1방').trim() || '광릉내1방';
+      const charId = (p.get('char') || 'hero').trim() || 'hero';
+      const autoEnter = (p.get('auto') || '1') !== '0';
+      return { isMp: true, ep: 'miracle', mode: 'junior', stage: 1, name, room, charId, autoEnter };
+    }
     const ep = (p.get('ep') || '').trim().toLowerCase();
     const mode = (p.get('mode') || '').trim().toLowerCase();
     const stage = parseInt(p.get('stage') || '0', 10);
@@ -3706,12 +3752,25 @@ function parseAdminDirectJumpParams() {
       const saved = JSON.parse(raw);
       sessionStorage.removeItem('bible_admin_direct_jump');
       if (!jump && saved && (Date.now() - (saved.ts || 0)) < 35000) {
-        const ep = String(saved.ep || '').trim().toLowerCase();
-        const mode = String(saved.mode || '').trim().toLowerCase();
-        const stage = parseInt(saved.stage || '0', 10);
-        const name = String(saved.name || '관리자').trim() || '관리자';
-        if (validEps.has(ep) && validModes.has(mode) && stage >= 1 && stage <= 4) {
-          jump = { ep, mode, stage, name };
+        if (saved.type === 'mp' || saved.isMp) {
+          jump = {
+            isMp: true,
+            ep: 'miracle',
+            mode: 'junior',
+            stage: 1,
+            name: String(saved.name || '관리자').trim() || '관리자',
+            room: String(saved.room || '광릉내1방').trim() || '광릉내1방',
+            charId: String(saved.charId || 'hero').trim() || 'hero',
+            autoEnter: saved.autoEnter !== false
+          };
+        } else {
+          const ep = String(saved.ep || '').trim().toLowerCase();
+          const mode = String(saved.mode || '').trim().toLowerCase();
+          const stage = parseInt(saved.stage || '0', 10);
+          const name = String(saved.name || '관리자').trim() || '관리자';
+          if (validEps.has(ep) && validModes.has(mode) && stage >= 1 && stage <= 4) {
+            jump = { ep, mode, stage, name };
+          }
         }
       }
     }
@@ -3724,9 +3783,17 @@ function applyAdminDirectJump(jump) {
   if (!jump) return;
   explorerName = jump.name;
   explorerDisplayName = jump.name;
+  window.explorerName = jump.name;
   loadLocalPlayerProgress(explorerName);
   currentEpisode = jump.ep;
   currentMode = jump.mode;
+  if (jump.isMp) {
+    window.__mpAdminBypassUnlock = true;
+    if (window.MiracleMultiplayer && typeof window.MiracleMultiplayer.launchFromAdmin === 'function') {
+      window.MiracleMultiplayer.launchFromAdmin(jump);
+      return;
+    }
+  }
   openScreen(null);
   startVoxelGame(jump.mode, jump.stage, jump.stage === 4);
 }

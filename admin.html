@@ -68,6 +68,41 @@
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="launcher-grid"></div>
+
+      <!-- 온라인 멀티플레이 맵 바로가기 (관리자 전용: 에피소드 4 완주 제한 없이 즉시 입장) -->
+      <div class="mt-4 bg-gradient-to-r from-emerald-950/90 to-teal-950/85 border-2 border-emerald-400/70 rounded-xl p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded-full bg-emerald-400 text-slate-950 font-jua text-[11px]">🌐 ONLINE MULTIPLAYER</span>
+            <h3 class="font-jua text-base sm:text-lg text-emerald-200">에피소드 4 온라인 멀티플레이 확장 맵 입장</h3>
+          </div>
+          <p class="text-xs text-slate-300 mt-1">
+            넓은 반석 부지(주변 건물 비움) · 외곽 나무/바위 채집 · 돌 20 + 나무 20 협동 건축 맵으로 잠금 없이 바로 진입합니다.
+          </p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <input id="admin-mp-room-name" type="text" value="광릉내1방" maxlength="16" placeholder="방 이름"
+            class="px-3 py-2 rounded-lg bg-slate-900 border border-emerald-500/60 text-xs font-bold text-emerald-200 w-28 text-center" />
+          <select id="admin-mp-char-select" class="px-2.5 py-2 rounded-lg bg-slate-900 border border-emerald-500/60 text-xs font-bold text-white">
+            <option value="hero">🧔 갈릴리 청년</option>
+            <option value="disciple_1">🎣 어부 제자</option>
+            <option value="disciple_2">🌿 올리브 목자</option>
+            <option value="female_0">👩 갈릴리 자매</option>
+            <option value="female_1">🌸 베다니 자매</option>
+            <option value="female_2">🧺 나사렛 자매</option>
+            <option value="child_0">👦 꼬마 탐험가(남)</option>
+            <option value="child_1">👧 꼬마 탐험가(여)</option>
+          </select>
+          <button id="btn-admin-enter-mp" type="button" onclick="jumpToMultiplayerMap(true)"
+            class="mc-btn px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-jua text-xs sm:text-sm">
+            🌐 온라인 맵 바로 입장 ▶
+          </button>
+          <button type="button" onclick="jumpToMultiplayerMap(false)"
+            class="mc-btn px-3 py-2 rounded-xl bg-teal-700 hover:bg-teal-600 text-white font-jua text-xs">
+            🎭 캐릭터 선택창
+          </button>
+        </div>
+      </div>
     </section>
 
     <!-- 섹션 B: 접속자 및 플레이 기록 조회 -->
@@ -392,6 +427,34 @@
         mode: payload.mode,
         stage: String(payload.stage),
         name: payload.name
+      });
+      window.location.href = `index.html?${params.toString()}#${hashParams.toString()}`;
+    }
+
+    function jumpToMultiplayerMap(autoEnter = true) {
+      const name = (document.getElementById('test-player-name').value || '').trim() || '관리자';
+      const roomEl = document.getElementById('admin-mp-room-name');
+      const charEl = document.getElementById('admin-mp-char-select');
+      const room = (roomEl ? roomEl.value.trim() : '') || '광릉내1방';
+      const charId = (charEl ? charEl.value : '') || 'hero';
+      const payload = { type: 'mp', isMp: true, name, room, charId, autoEnter: Boolean(autoEnter), ts: Date.now() };
+      try {
+        sessionStorage.setItem('bible_admin_direct_jump', JSON.stringify(payload));
+      } catch (e) {}
+      const params = new URLSearchParams({
+        mp: '1',
+        room,
+        char: charId,
+        name,
+        auto: autoEnter ? '1' : '0',
+        _t: String(payload.ts)
+      });
+      const hashParams = new URLSearchParams({
+        mp: '1',
+        room,
+        char: charId,
+        name,
+        auto: autoEnter ? '1' : '0'
       });
       window.location.href = `index.html?${params.toString()}#${hashParams.toString()}`;
     }

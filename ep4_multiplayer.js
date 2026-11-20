@@ -5,11 +5,11 @@
 // - 멀티플레이 미션 1: 반석 위의 집 확장형 (돌 20 + 나무 20, 도끼질 5회 / 돌 캐기 5회, 완료 시 말씀 출력)
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_mp = '20261120_v11';
+window.__GAME_BUILD_VERSIONS__.ep4_mp = '20261120_v12';
 
 // [선택적 온라인 릴레이 설정] 무료 Firebase Realtime Database URL을 넣으면 서로 다른 기기 간 실시간 온라인 접속!
 // 예: window.MP_FIREBASE_DB_URL = 'https://your-church-game-default-rtdb.asia-southeast1.firebasedatabase.app';
-window.MP_FIREBASE_DB_URL = window.MP_FIREBASE_DB_URL || '';
+window.MP_FIREBASE_DB_URL = window.MP_FIREBASE_DB_URL || 'https://gwangneung-bible-game-default-rtdb.asia-southeast1.firebasedatabase.app/';
 
 // 멀티플레이 선택 가능 캐릭터 8종 (예수님 'jesus' 및 천사 'angel'은 절대 선택 불가!)
 const MP_FORBIDDEN_PRESETS = ['jesus', 'angel'];
@@ -58,10 +58,26 @@ const MiracleMultiplayer = {
   },
 
   isUnlocked() {
+    if (window.__mpAdminBypassUnlock === true) return true;
     if (typeof window.isEpisode4CompletedForMultiplayer === 'function') {
       return window.isEpisode4CompletedForMultiplayer();
     }
     return false;
+  },
+
+  launchFromAdmin(opts = {}) {
+    window.__mpAdminBypassUnlock = true;
+    const room = String(opts.room || '광릉내1방').trim().slice(0, 16) || '광릉내1방';
+    const charId = String(opts.charId || 'hero').trim() || 'hero';
+    this.selectCharacter(charId);
+    const modal = this.ensureEntryModal();
+    const roomInput = modal ? modal.querySelector('#mp-room-input') : document.getElementById('mp-room-input');
+    if (roomInput) roomInput.value = room;
+    if (opts.autoEnter !== false) {
+      this.enterMultiplayerWorld(room, this.selectedCharId);
+    } else {
+      this.openEntryModal();
+    }
   },
 
   getCharConfig(charId) {

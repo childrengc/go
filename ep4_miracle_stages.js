@@ -4,7 +4,7 @@
 // - 스테이지 3(십자가 사건): 넓어진 골고다 언덕 정상 고원과 세 십자가 등장 연출 적용
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_stages = '20261120_v11';
+window.__GAME_BUILD_VERSIONS__.ep4_stages = '20261120_v12';
 
 // 스테이지 3: 예수님과 플레이어가 무거운 십자가를 지고 걷는 통일 속도 (아무리 세게 터치해도 이 속도로 제한!)
 const MIRACLE_STAGE3_CROSS_WALK_SPEED = 1.65;
@@ -377,15 +377,35 @@ function syncMiracleStage1UI() {
     const leftBtn = root.querySelector('#ms1-bal-left');
     const rightBtn = root.querySelector('#ms1-bal-right');
 
-    if (progTxt) progTxt.textContent = `균형 버티기 ${progPct}%`;
-    if (progBar) progBar.style.width = `${progPct}%`;
+    if (progTxt) {
+      progTxt.textContent = st.isDrainingGauge ? `⚠️ 게이지 감소 중! ${progPct}%` : `균형 버티기 ${progPct}%`;
+      progTxt.className = st.isDrainingGauge ? 'text-rose-400 animate-pulse' : 'text-emerald-300';
+    }
+    if (progBar) {
+      progBar.style.width = `${progPct}%`;
+      progBar.className = st.isDrainingGauge
+        ? 'h-full bg-gradient-to-r from-rose-500 to-amber-400 transition-all duration-100'
+        : 'h-full bg-gradient-to-r from-emerald-400 to-teal-300 transition-all duration-100';
+    }
     if (marker) {
       const mPct = 50 + st.boatTilt * 44;
       marker.style.left = `${mPct.toFixed(1)}%`;
       marker.style.transform = `rotate(${(st.boatTilt * 28).toFixed(1)}deg)`;
     }
     if (warnEl && leftBtn && rightBtn) {
-      if (st.boatTilt < -0.18) {
+      if (st.isDrainingGauge) {
+        warnEl.textContent = st.boatTilt < 0
+          ? '🚨 균형을 안 잡아 게이지가 깎이고 있어요! [오른쪽 버튼 ▶]을 누르세요!'
+          : '🚨 균형을 안 잡아 게이지가 깎이고 있어요! [◀ 왼쪽 버튼]을 누르세요!';
+        warnEl.className = 'text-center font-jua text-xs sm:text-sm text-rose-300 mb-1.5';
+        if (st.boatTilt < 0) {
+          rightBtn.className = 'mc-btn py-3.5 rounded-xl bg-rose-500 active:scale-95 text-white font-jua text-base sm:text-lg border-2 border-yellow-200 shadow-lg ring-2 ring-rose-300';
+          leftBtn.className  = 'mc-btn py-3.5 rounded-xl bg-slate-700 active:scale-95 text-slate-200 font-jua text-base sm:text-lg border-2 border-slate-500';
+        } else {
+          leftBtn.className  = 'mc-btn py-3.5 rounded-xl bg-rose-500 active:scale-95 text-white font-jua text-base sm:text-lg border-2 border-yellow-200 shadow-lg ring-2 ring-rose-300';
+          rightBtn.className = 'mc-btn py-3.5 rounded-xl bg-slate-700 active:scale-95 text-slate-200 font-jua text-base sm:text-lg border-2 border-slate-500';
+        }
+      } else if (st.boatTilt < -0.18) {
         warnEl.textContent = '⚠️ 왼쪽으로 기울었어요! [오른쪽 버튼 ▶]을 누르세요!';
         warnEl.className = 'text-center font-jua text-xs sm:text-sm text-amber-300 mb-1.5';
         rightBtn.className = 'mc-btn py-3.5 rounded-xl bg-amber-400 active:scale-95 text-slate-900 font-jua text-base sm:text-lg border-2 border-yellow-100 shadow-lg ring-2 ring-amber-300';
@@ -894,6 +914,11 @@ function buildMiracleMainStage1Galilee() {
   worldGroup.add(splashRing);
   miracleActiveMiniState.splashRingMesh = splashRing;
 
+  // 어떤 시점(1인칭·올려봄)으로 입장했더라도 스테이지 1은 항상 기본 시점으로 고정!
+  window.globalCameraViewMode = 'default';
+  const camLblEl = document.getElementById('global-camera-view-label');
+  if (camLblEl) camLblEl.textContent = '기본';
+
   // 플레이어를 좌현 난간 앞에 세우고 서쪽 바다(물고기 떼)를 바라보게 배치
   playerPos.set(-3.1, 0.06, -1.5);
   lastGroundedY = 0.06;
@@ -911,11 +936,18 @@ function buildMiracleMainStage1Galilee() {
 
 function startGalileeStormPhase() {
   const st = miracleActiveMiniState;
+  window.globalCameraViewMode = 'default';
+  const camLblEl = document.getElementById('global-camera-view-label');
+  if (camLblEl) camLblEl.textContent = '기본';
+
   st.phase = 'storm_balance';
-  st.boatTilt = 0.24;
+  st.boatTilt = 0.28;
   st.waveGustDir = 1;
+  st.waveGustForce = (currentMode === 'kinder') ? 0.50 : 0.68;
   st.waveGustTimer = 1.6;
   st.balanceProgress = 0;
+  st.noBalanceInputTimer = 0;
+  st.isDrainingGauge = false;
   st.holdLeft = false;
   st.holdRight = false;
   st.isCharging = false;
@@ -952,11 +984,12 @@ function startGalileeStormPhase() {
     st.jesusLabel.innerHTML = '😴 풍랑 속에서도 베개에 누워 평안히 주무시는 예수님';
   }
 
-  // 플레이어를 배 중앙 갑판으로 이동 & 고물(누워 계신 예수님) 방향(+Z)이 정면에 보이도록 카메라 전환
+  // 플레이어를 배 중앙 갑판으로 이동 & 고물 쪽(+Z) 카메라를 정면으로 마주 보도록 배치 (고물에 누우신 예수님과 캐릭터가 함께 보임!)
   playerPos.set(0, 0.06, -0.8);
   lastGroundedY = 0.06;
   playerFacing = 0;
-  cameraTargetYaw = Math.PI;
+  cameraTargetYaw = 0;
+  snapCameraToPlayer();
 
   playRainOrSeaSound(5.5, true);
   playSfx('thunder');
@@ -1096,7 +1129,7 @@ function updateMiracleMainStage1Frame(dt, now) {
     if (playerGroup) playerGroup.rotation.z = 0;
 
     if (st.jesusMesh) {
-      // 누운 자세(-PI/2)에서 우뚝 일어서는 부드러운 전환
+      // 누운 자세(-PI/2)에서 우뚝 일어서는 부드러운 전환 (rotation.y = Math.PI → -Z 정면 방향!)
       const riseT = Math.min(1, t / 0.85);
       st.jesusMesh.rotation.x = THREE.MathUtils.lerp(-Math.PI / 2, 0, riseT);
       st.jesusMesh.rotation.y = Math.PI;
@@ -1107,6 +1140,8 @@ function updateMiracleMainStage1Frame(dt, now) {
       }
     }
     cameraTargetYaw = Math.PI;
+    // 풍랑이 멈춘 뒤 카메라가 예수님 정면(-Z 앞쪽)으로 부드럽게 이동해 일어나신 예수님을 비춤!
+    if (typeof applyCoreCameraByMode === 'function') applyCoreCameraByMode();
 
     if (t >= 3.3) {
       miracleStageCutscene.active = false;
@@ -1223,8 +1258,8 @@ function updateMiracleMainStage1Frame(dt, now) {
     st.boatTilt *= (1.0 - dt * 0.22);
     st.boatTilt = THREE.MathUtils.clamp(st.boatTilt, -1.0, 1.0);
 
-    // 카메라가 +Z(고물 쪽)를 보므로 +rotZ = 화면 오른쪽 기울기, -rotZ = 화면 왼쪽 기울기
-    const rollAngle = st.boatTilt * 0.44;
+    // 카메라가 반대쪽(+Z 고물 뒤)에서 -Z(배 앞쪽)를 바라보므로, 화면 오른쪽(+X) 기울기 = -rotZ, 화면 왼쪽(-X) 기울기 = +rotZ!
+    const rollAngle = -st.boatTilt * 0.44;
     if (st.boatRootGroup) {
       st.boatRootGroup.rotation.z = rollAngle;
       st.boatRootGroup.position.y = Math.sin(now * 0.006) * 0.48;
@@ -1235,8 +1270,8 @@ function updateMiracleMainStage1Frame(dt, now) {
     }
     // 플레이어 양팔 균형잡기 포즈
     if (playerLimbs && playerLimbs.lArm && playerLimbs.rArm) {
-      playerLimbs.lArm.rotation.z = 0.75 + st.boatTilt * 0.45;
-      playerLimbs.rArm.rotation.z = -0.75 + st.boatTilt * 0.45;
+      playerLimbs.lArm.rotation.z = 0.75 - st.boatTilt * 0.45;
+      playerLimbs.rArm.rotation.z = -0.75 - st.boatTilt * 0.45;
     }
 
     // 예수님 누워서 평안히 호흡하는 미세 움직임
@@ -1244,16 +1279,31 @@ function updateMiracleMainStage1Frame(dt, now) {
       st.jesusMesh.position.y = 0.72 + Math.sin(now * 0.003) * 0.02;
     }
 
-    // 균형 유지 판정
+    // 좌·우 버튼을 계속 안 누르고 방치하거나 배가 크게 기울면 균형 게이지가 실제로 깎이도록 처리!
+    if (st.holdLeft || st.holdRight) {
+      st.noBalanceInputTimer = 0;
+    } else {
+      st.noBalanceInputTimer = (st.noBalanceInputTimer || 0) + dt;
+    }
+
     if (st.tiltWarnCooldown > 0) st.tiltWarnCooldown -= dt;
-    if (Math.abs(st.boatTilt) <= 0.74) {
+    const outOfSafeZone = Math.abs(st.boatTilt) > 0.56;
+    const idleUnbalanced = (!st.holdLeft && !st.holdRight && st.noBalanceInputTimer > 1.35 && Math.abs(st.boatTilt) > 0.08);
+
+    if (outOfSafeZone || idleUnbalanced) {
+      st.isDrainingGauge = true;
+      const drainRate = outOfSafeZone ? (isKinder ? 1.35 : 1.85) : (isKinder ? 1.05 : 1.45);
+      st.balanceProgress = Math.max(0, st.balanceProgress - dt * drainRate);
+      if (st.tiltWarnCooldown <= 0) {
+        st.tiltWarnCooldown = 2.0;
+        playSfx('wrong');
+        showToast(st.boatTilt < 0
+          ? '🚨 배가 기울어 균형 게이지가 깎이고 있어요! [오른쪽 버튼 ▶]을 빠르게 눌러주세요!'
+          : '🚨 배가 기울어 균형 게이지가 깎이고 있어요! [◀ 왼쪽 버튼]을 빠르게 눌러주세요!');
+      }
+    } else {
+      st.isDrainingGauge = false;
       st.balanceProgress += dt;
-    } else if (st.tiltWarnCooldown <= 0) {
-      st.tiltWarnCooldown = 2.0;
-      playSfx('wrong');
-      showToast(st.boatTilt < 0
-        ? '🌊 배가 왼쪽으로 크게 기울었어요! [오른쪽 버튼 ▶]을 빠르게 눌러주세요!'
-        : '🌊 배가 오른쪽으로 크게 기울었어요! [◀ 왼쪽 버튼]을 빠르게 눌러주세요!');
     }
 
     syncMiracleStage1UI();

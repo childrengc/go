@@ -4,7 +4,7 @@
 // - 확장된 오픈월드 지형 고도 계산기(넓어진 골고다 언덕 포함) 및 소프트 로우 폴리곤 자연물 팩토리
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_base = '20261120_v11';
+window.__GAME_BUILD_VERSIONS__.ep4_base = '20261120_v12';
 
 const MIRACLE_SCRIPTURE = {
   1: {
@@ -3748,6 +3748,41 @@ function createWideBedrockFormation(cx, cz) {
   worldGroup.add(grp);
   return grp;
 }
+
+// [개인 기본 오픈월드용] 원래 크기의 단단한 소형 소프트 로우폴리 반석 부지 (~7.5m × 6.5m)
+function createCompactBedrockFormation(cx, cz) {
+  const by = getBaseGroundHeight(cx, cz);
+  const grp = new THREE.Group();
+  const rockCols = ['#94a3b8', '#cbd5e1', '#78716c', '#a8a29e'];
+
+  const lowerSlab = createLowPolyMesh(createOrganicBoxGeo(7.4, 0.44, 6.4, 710, 0.10, 0.88, 2), '#8b95a5', 0, 0.18, 0, true);
+  lowerSlab.rotation.y = 0.05;
+  const upperSlab = createLowPolyMesh(createOrganicBoxGeo(5.6, 0.36, 4.8, 715, 0.07, 0.92, 2), '#cbd5e1', 0, 0.44, 0, true);
+  grp.add(lowerSlab, upperSlab);
+
+  for (let i = 0; i < 8; i++) {
+    const ang = (i / 8) * Math.PI * 2 + 0.22;
+    const radX = 3.7 + (i % 2) * 0.45;
+    const radZ = 3.2 + ((i + 1) % 2) * 0.40;
+    const boulder = createLowPolyMesh(
+      new THREE.DodecahedronGeometry(0.55 + (i % 3) * 0.14, 0),
+      rockCols[i % rockCols.length],
+      Math.cos(ang) * radX, 0.22, Math.sin(ang) * radZ, true
+    );
+    boulder.scale.set(1.3, 0.58, 1.12);
+    boulder.rotation.set(0.08, ang, 0);
+    grp.add(boulder);
+  }
+
+  mergeStaticLowPolyGroupToVertexColor(grp, { registerWall: false, castShadow: true });
+  grp.traverse(ch => { if (ch.isMesh) ch.receiveShadow = true; });
+  grp.position.set(cx, by - 0.06, cz);
+  grp.userData.bedrockRadius = 4.2;
+  grp.userData.bedrockStyle = 'compact_single_v12';
+  worldGroup.add(grp);
+  return grp;
+}
+window.createCompactBedrockFormation = createCompactBedrockFormation;
 
 // -------------------------------------------------------------------------
 // 6-B. 공용 비정형 소프트 로우폴리 갈릴리 선착장 다리 & 스테이지 공용 로우폴리 지형/돌담/벽돌포장 팩토리

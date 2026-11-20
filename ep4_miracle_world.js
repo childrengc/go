@@ -4,7 +4,7 @@
 // - 계단으로 건물 2층 등반 후 인접한 옆 건물 옥상·2층으로 점프 이동할 수 있는 근접 마을 배치
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_world = '20261120_v11';
+window.__GAME_BUILD_VERSIONS__.ep4_world = '20261120_v12';
 
 let miracleWorldMissionObjects = [];
 let miracleActiveFieldEvent = null;
@@ -769,7 +769,13 @@ function buildMiracleRoadsideVillagesAndForests() {
     { x:  16.0, z:   1.2, v: 3, yaw: -Math.PI / 2, sc: 0.98 },
     { x:  52.5, z: -11.8, v: 1, yaw: -Math.PI / 2, sc: 0.98 },
     { x:  52.5, z:   1.6, v: 0, yaw: -Math.PI / 2, sc: 0.96, m: 'stonebrick' },
-    // (52.5, 11.4) 및 (72.0, 8.0) 건물은 확장형 반석 위의 집 넓은 부지 확보를 위해 비워둠!
+    // [기본맵 vs 멀티플레이 맵 구분]
+    // 개인 기본맵에서는 원래 있던 인근 가옥 2채((52.5, 11.4), (72.0, 8.0))를 그대로 복구하고,
+    // 온라인 멀티플레이 맵에서만 두 채를 비워 확장형 대형 반석 부지(63, 18)를 확보!
+    ...(window.isMiracleMultiplayerMode ? [] : [
+      { x: 52.5, z: 11.4, v: 2, yaw: -Math.PI / 2, sc: 0.95 },
+      { x: 72.0, z:  8.0, v: 1, yaw: -1.15,        sc: 0.96, m: 'stonebrick' }
+    ]),
     // [클러스터 7: 유대 광야 ~ 예루살렘 성문 앞 가옥 — 계단 겹침 해소]
     { x: -15.0, z:  10.6, v: 0, yaw:  Math.PI / 2, sc: 0.96 },
     { x: -15.0, z:  24.2, v: 3, yaw:  Math.PI / 2, sc: 0.98, m: 'stonebrick' },
@@ -807,9 +813,7 @@ function buildMiracleRoadsideVillagesAndForests() {
   createOrganicStreetPropCluster( 10.6, -24.5, -0.3, 44);
   createOrganicStreetPropCluster(-10.4,  20.0,  0.5, 55);
   createOrganicStreetPropCluster( 23.0,  49.0, -0.4, 66);
-  createLowPolyDonkey(10.5, -24, -0.6);
-  createLowPolyDonkey(-9.8,  16,  0.8);
-  createLowPolyDonkey( 9.5,  54, -1.2);
+  // 짐을 실은 당나귀들은 정지 프롭이 아니라 마을 길가를 살아 움직이며 순찰하도록 wanderingConfigs로 이동 배치!
 
   if (typeof addLowPolyCanopyTree === 'function') {
     [[74, -92, 1.35], [98, -76, 1.35], [-48, -32, 1.25], [58, -22, 1.25], [94, 68, 1.30]].forEach(([tx, tz, sc]) => {
@@ -950,7 +954,12 @@ function buildMiracleRoadsideVillagesAndForests() {
     { kind: 'sheep',  x:  48, z: -58, rad: 7.5, spd: 1.5 },
     { kind: 'sheep',  x:  76, z: -90, rad: 7.5, spd: 1.5 },
     { kind: 'sheep',  x: -46, z:  44, rad: 7.5, spd: 1.6 },
-    { kind: 'sheep',  x:  56, z:  64, rad: 7.5, spd: 1.6 }
+    { kind: 'sheep',  x:  56, z:  64, rad: 7.5, spd: 1.6 },
+    // 짐을 실은 당나귀 4마리: 마을 길가·시장·성전 앞 거리를 실제로 걸어 다니며 짐을 나름!
+    { kind: 'donkey', x:   6.8, z: -24.0, rad: 10.5, spd: 1.75 },
+    { kind: 'donkey', x:  -7.2, z:  16.0, rad: 10.5, spd: 1.65 },
+    { kind: 'donkey', x:   8.0, z:  54.0, rad:  9.5, spd: 1.60 },
+    { kind: 'donkey', x:  -6.8, z: -40.0, rad: 10.0, spd: 1.70 }
   ];
 
   wanderingConfigs.forEach((wc, idx) => {
@@ -967,7 +976,9 @@ function buildMiracleRoadsideVillagesAndForests() {
     worldGroup.add(mesh);
 
     miracleWanderingActors.push({
+      kind: wc.kind,
       isAnimal: wc.kind !== 'person',
+      isPackDonkey: wc.kind === 'donkey',
       mesh,
       homeX: wc.x,
       homeZ: wc.z,
@@ -976,7 +987,7 @@ function buildMiracleRoadsideVillagesAndForests() {
       radius: wc.rad,
       speed: wc.spd,
       heading: Math.random() * Math.PI * 2,
-      waitTimer: (idx % 3) * 0.8,
+      waitTimer: wc.kind === 'donkey' ? 0 : (idx % 3) * 0.8,
       phase: idx * 0.9
     });
   });
@@ -1344,9 +1355,15 @@ function buildMiracleRegionalLandmarks() {
     addLowPolyVillageHouse(24, 24, 8.4, 4.0, 6.6, '#f2e3c9', '#ea580c', false, 2, 0);
   }
 
-  // 3-B) 반석 위의 집 확장형 — 넓은 부지(주변 건물 비움) 초대형 다단 소프트 로우폴리 반석 지반 (x = 63, z = 18)
-  if (typeof createWideBedrockFormation === 'function') {
-    createWideBedrockFormation(63, 18);
+  // 3-B) [기본맵 vs 멀티플레이 맵 구분]
+  // - 온라인 멀티플레이 맵: 넓은 초대형 다단 반석(63, 18)에 돌20+나무20 협동 큰 집 건설
+  // - 개인 기본맵: 원래대로 작은 반석 영역(57, 21)에 보통 집 건설
+  if (window.isMiracleMultiplayerMode && typeof createWideBedrockFormation === 'function') {
+    window.miracleCurrentBedrockMesh = createWideBedrockFormation(63, 18);
+  } else if (typeof createCompactBedrockFormation === 'function') {
+    window.miracleCurrentBedrockMesh = createCompactBedrockFormation(57, 21);
+  } else if (typeof createWideBedrockFormation === 'function') {
+    window.miracleCurrentBedrockMesh = createWideBedrockFormation(57, 21);
   }
 
   // [C. 남부 예루살렘 · 성전 · 다락방 · 골고다 · 빈 무덤 · 감람산 권역]
@@ -2150,8 +2167,8 @@ function getMiracleOptionalEventsCatalog() {
       itemCount: 4,
       itemColor: '#94a3b8',
       itemLabel: '🪨 든든한 반석 주춧돌',
-      targetOffset: { x: 11, z: -6 },
-      targetLabel: '⛰️ 넓은 반석 바위 터',
+      targetOffset: { x: 5, z: -3 },
+      targetLabel: '⛰️ 단단한 반석 바위 터',
       completeSpeaker: '예수님',
       completeText: '"누구든지 나의 이 말을 듣고 행하는 자는 그 집을 반석 위에 지은 지혜로운 사람 같으리니 비가 내리고 창수가 나고 바람이 불어 그 집에 부딪치되 무너지지 아니하나니 이는 주추를 반석 위에 놓은 까닭이요!" (마 7:24~27)',
       unlockNotebookIds: ['par_builder'],
@@ -2302,6 +2319,8 @@ function spawnMiracleOptionalEventSpots() {
   }
 
   allCatalog.forEach(ev => {
+    // 멀티플레이 맵에서는 확장형 반석 위의 집 협동 미션(mp_rock_house)이 해당 구역을 담당하므로 개인용 par_builder 마커는 중복 배치 제외
+    if (window.isMiracleMultiplayerMode && ev.id === 'par_builder') return;
     const isCompleted = ev.unlockNotebookIds && ev.unlockNotebookIds.every(id => miracleCollectedIds.has(id));
     // useTallBeam = false 로 설정하여 긴 빛기둥 대신 무릎 높이의 불규칙 빛의 원(kneeAura) 적용
     const marker = createMiracleSpotMarker(
@@ -5772,7 +5791,7 @@ function updateMiracleActorWalkAI(actor, dt, now, stopNearPlayerDist = 3.2) {
   const nz = curZ + (dz / dist) * step;
   const ny = getMiracleOpenWorldGroundHeight(nx, nz);
 
-  if (ny < -0.25 || nx > 103 || nz < -103 || nz > 103 || !isSpawnSpotClear(nx, nz, 0.55)) {
+  if (ny < -0.25 || nx > 103 || nz < -103 || nz > 103 || !isSpawnSpotClear(nx, nz, 0.55) || (actor.isPackDonkey && !isMiracleNpcPointClear(nx, nz, 0.55))) {
     pickNewTarget(true);
     return;
   }
@@ -5796,6 +5815,12 @@ function updateMiracleActorWalkAI(actor, dt, now, stopNearPlayerDist = 3.2) {
     u.brLeg.rotation.x = walkSwing * 0.8;
     u.frLeg.rotation.x = -walkSwing * 0.8;
     u.blLeg.rotation.x = -walkSwing * 0.8;
+  }
+  // 짐을 실은 당나귀는 걸을 때 머리 끄덕임과 양옆 짐보따리 흔들림 애니메이션 추가!
+  if (u.isPackDonkey) {
+    if (u.headGroup) u.headGroup.rotation.x = Math.sin(now * 0.012 + (actor.phase || 0)) * 0.10;
+    if (u.packL) u.packL.rotation.z = Math.sin(now * 0.012 + (actor.phase || 0)) * 0.08;
+    if (u.packR) u.packR.rotation.z = -Math.sin(now * 0.012 + (actor.phase || 0)) * 0.08;
   }
 }
 

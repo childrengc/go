@@ -6,7 +6,7 @@
 // =========================================================================
 
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_assets = '20261120_v11';
+window.__GAME_BUILD_VERSIONS__.ep4_assets = '20261120_v12';
 
 const _miracleDoubleSideMatCache = {};
 function matLowPolyDouble(hexColor) {
@@ -2509,7 +2509,7 @@ function createLowPolyAnimalMesh(kind = 'sheep', scale = 1.0) {
     g.add(body, neck, headGroup, mane, tail, blanket, packL, packR, flLeg, frLeg, blLeg, brLeg);
     g.scale.set(scale, scale, scale);
     g.traverse(ch => { if (ch.isMesh) { ch.castShadow = true; ch.receiveShadow = true; } });
-    g.userData = { flLeg, frLeg, blLeg, brLeg, headGroup, walkPhase: Math.random() * 6.28 };
+    g.userData = { flLeg, frLeg, blLeg, brLeg, headGroup, packL, packR, isPackDonkey: true, walkPhase: Math.random() * 6.28 };
     return g;
   }
 
@@ -2551,13 +2551,15 @@ function createLowPolyAnimalMesh(kind = 'sheep', scale = 1.0) {
   return g;
 }
 
-window.createLowPolyDonkey = function (x, z, rotY = 0) {
+window.createLowPolyDonkey = function (x, z, rotY = 0, isStatic = false) {
   const by = typeof getMiracleOpenWorldGroundHeight === 'function' ? getMiracleOpenWorldGroundHeight(x, z) : 0;
   const donkey = createLowPolyAnimalMesh('donkey', 1.0);
   donkey.position.set(x, by, z);
   donkey.rotation.y = rotY;
   worldGroup.add(donkey);
-  colliders.push({ minX: x - 0.65, maxX: x + 0.65, minZ: z - 0.75, maxZ: z + 0.75 });
+  if (isStatic) {
+    colliders.push({ minX: x - 0.65, maxX: x + 0.65, minZ: z - 0.75, maxZ: z + 0.75 });
+  }
   return donkey;
 };
 
