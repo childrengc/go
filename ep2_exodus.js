@@ -1342,6 +1342,7 @@ function startStage2Countdown() {
           timeAttackFirstRechargeUsed = false;
           isTimeAttackActive = true;
         }
+        updateStageHUD();
         showToast(
           currentMode === 'timeattack'
             ? '🏃 출발! 진주를 먹으면 1초간 속도가 빨라져요! 불기둥까지 달리세요!'
@@ -1352,6 +1353,7 @@ function startStage2Countdown() {
   } else {
     stage2CountdownActive = false;
     isPlaying = true;
+    updateStageHUD();
   }
 }
 
@@ -1568,8 +1570,8 @@ function buildExodusStage2World() {
   if (renderer && scene && camera) {
     renderer.compile(scene, camera);
   }
-  updateStageHUD();
   startStage2Countdown();
+  updateStageHUD();
 }
 
 function updateStage2Speedrun(dt, now) {

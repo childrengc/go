@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
+  <link rel="icon" type="image/png" href="./favicon.png">
   <meta charset="UTF-8" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
@@ -341,7 +342,7 @@
       align-items: center;
       justify-content: center;
       gap: 4px;
-      padding: 6px 11px;
+      padding: 5px 10px;
       border-radius: 9999px;
       background: linear-gradient(135deg, #fef08a 0%, #f59e0b 60%, #d97706 100%);
       border: 2px solid #fffbeb;
@@ -356,7 +357,126 @@
       animation: miracleGuideAbsorbPop 0.36s cubic-bezier(0.22, 1.25, 0.36, 1), miracleGuideSlowGlow 2.8s ease-in-out infinite;
     }
     .miracle-guide-btn.hidden { display: none !important; }
+    @media (max-width: 640px) {
+      .miracle-guide-btn {
+        padding: 3.5px 8px;
+        gap: 3px;
+        border-width: 1.5px;
+      }
+    }
 
+    /* 좌측 상단 펼침/접힘 통합 메뉴 버튼 최대 폭 제한 (모바일 세로형 우측 진행창과 겹침 방지 + 긴 이름 말줄임) */
+    #hud-menu-btn {
+      max-width: min(34vw, 126px);
+    }
+    @media (max-width: 380px) {
+      #hud-menu-btn {
+        max-width: 104px;
+      }
+    }
+    @media (min-width: 640px) {
+      #hud-menu-btn {
+        max-width: 184px;
+      }
+    }
+
+    /* 좌측 상단 펼침/접힘 통합 메뉴 드롭다운 애니메이션 (탐험수첩 버튼 위로 펼쳐짐) */
+    .hud-menu-dropdown {
+      transform-origin: top left;
+      transition: transform 0.18s cubic-bezier(0.22, 1.15, 0.36, 1), opacity 0.16s ease;
+    }
+    .hud-menu-dropdown.menu-closed {
+      opacity: 0;
+      transform: translateY(-6px) scaleY(0.9);
+      pointer-events: none;
+    }
+    .hud-menu-dropdown.menu-open {
+      opacity: 1;
+      transform: translateY(0) scaleY(1);
+      pointer-events: auto;
+    }
+    @media (orientation: landscape) and (max-height: 460px) {
+      #hud-menu-dropdown {
+        max-height: calc(100dvh - 52px);
+        overflow-y: auto;
+      }
+    }
+
+    /* 조이스틱 & 점프 버튼 반투명 유리 느낌 스타일 */
+    .translucent-control-btn {
+      border: 2px solid rgba(255, 255, 255, 0.55) !important;
+      box-shadow: 0 3px 0 rgba(120, 53, 15, 0.25), 0 6px 14px rgba(15, 23, 42, 0.22) !important;
+      backdrop-filter: blur(3px);
+      -webkit-backdrop-filter: blur(3px);
+    }
+
+    /* 월드맵 스테이지 선택 모달: 가로형에서 스크롤 없이 한 화면에 깔끔하게 2열 배치 */
+    @media (orientation: landscape) and (max-height: 580px) {
+      #episode-stage-select-modal {
+        padding: 0.45rem !important;
+      }
+      #episode-stage-select-modal .stage-select-card {
+        max-width: min(94vw, 660px) !important;
+        max-height: 95dvh !important;
+        overflow: hidden !important;
+        padding: 0.6rem 0.9rem !important;
+        border-radius: 1.25rem !important;
+      }
+      #episode-stage-select-modal .stage-select-header {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 0.5rem !important;
+        margin-bottom: 0.4rem !important;
+        text-align: left !important;
+      }
+      #episode-stage-select-modal #ep-select-icon {
+        font-size: 1.6rem !important;
+        margin-bottom: 0 !important;
+        line-height: 1 !important;
+        flex-shrink: 0 !important;
+      }
+      #episode-stage-select-modal #ep-select-title {
+        font-size: 1rem !important;
+        margin-bottom: 0.05rem !important;
+        line-height: 1.15 !important;
+      }
+      #episode-stage-select-modal #ep-select-desc {
+        font-size: 0.68rem !important;
+        margin-bottom: 0 !important;
+        line-height: 1.2 !important;
+      }
+      #episode-stage-select-modal #ep-select-buttons {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 0.4rem !important;
+        margin-bottom: 0.45rem !important;
+      }
+      #episode-stage-select-modal #ep-select-buttons > button {
+        padding: 0.38rem 0.6rem !important;
+        border-radius: 0.85rem !important;
+        font-size: 0.76rem !important;
+        gap: 0.25rem !important;
+      }
+      #episode-stage-select-modal #ep-select-buttons > button > span:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #episode-stage-select-modal #ep-select-buttons > button > span:last-child {
+        font-size: 0.64rem !important;
+        padding: 0.1rem 0.38rem !important;
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+      #episode-stage-select-modal .stage-select-back-btn {
+        padding: 0.36rem 0.75rem !important;
+        border-radius: 0.85rem !important;
+        font-size: 0.72rem !important;
+      }
+    }
+
+    /* 스테이지/미션 안내 정중앙 말풍선: 반투명 유리(Glassmorphism) 스타일 */
     .miracle-guide-bubble {
       position: fixed;
       left: 50%;
@@ -364,12 +484,18 @@
       transform: translate(-50%, -50%) scale(1);
       transform-origin: center center;
       width: min(90vw, 410px);
-      background: linear-gradient(180deg, #fffdf5 0%, #fef3c7 100%);
-      border: 3.5px solid #d97706;
+      background: linear-gradient(155deg, rgba(255, 253, 246, 0.74) 0%, rgba(254, 243, 199, 0.54) 100%);
+      backdrop-filter: blur(14px) saturate(150%);
+      -webkit-backdrop-filter: blur(14px) saturate(150%);
+      border: 2.5px solid rgba(255, 255, 255, 0.82);
       border-radius: 26px;
       padding: 15px 18px 14px;
-      color: #1e293b;
-      box-shadow: 0 18px 42px rgba(15, 23, 42, 0.45), 0 0 0 3px rgba(255, 251, 235, 0.72);
+      color: #0f172a;
+      text-shadow: 0 1px 2px rgba(255, 255, 255, 0.65);
+      box-shadow:
+        0 18px 42px rgba(15, 23, 42, 0.30),
+        inset 0 1px 0 rgba(255, 255, 255, 0.90),
+        0 0 0 2px rgba(245, 158, 11, 0.55);
       z-index: 38;
       opacity: 1;
       transition: transform 0.52s cubic-bezier(0.45, -0.15, 0.85, 0.35), opacity 0.46s ease-in;
@@ -384,7 +510,7 @@
       height: 0;
       border-left: 12px solid transparent;
       border-right: 12px solid transparent;
-      border-top: 14px solid #d97706;
+      border-top: 14px solid rgba(245, 158, 11, 0.62);
     }
     .miracle-guide-bubble::before {
       content: '';
@@ -396,7 +522,7 @@
       height: 0;
       border-left: 9px solid transparent;
       border-right: 9px solid transparent;
-      border-top: 11px solid #fef3c7;
+      border-top: 11px solid rgba(255, 252, 240, 0.78);
       z-index: 1;
     }
     .miracle-guide-bubble.hidden { display: none !important; }
@@ -406,6 +532,70 @@
       color: #d97706;
       font-weight: 900;
       animation: miracleCursorBlink 0.7s steps(2, start) infinite;
+    }
+
+    /* [인터페이스 튜토리얼] 아기자기한 움직이는 화살표 & 하이라이트 스포트라이트 */
+    @keyframes tutSpotPulse {
+      0%, 100% {
+        box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.70), 0 0 14px rgba(253, 224, 71, 0.85);
+      }
+      50% {
+        box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.70), 0 0 26px rgba(251, 191, 36, 1), 0 0 0 4px rgba(254, 240, 138, 0.55);
+      }
+    }
+    @keyframes tutArrowBobUp {
+      0%, 100% { transform: translate(-50%, 0px) scale(1); }
+      50%      { transform: translate(-50%, -8px) scale(1.06); }
+    }
+    @keyframes tutArrowBobDown {
+      0%, 100% { transform: translate(-50%, 0px) scale(1); }
+      50%      { transform: translate(-50%, 8px) scale(1.06); }
+    }
+    @keyframes tutArrowBobLeft {
+      0%, 100% { transform: translate(0px, -50%) scale(1); }
+      50%      { transform: translate(-8px, -50%) scale(1.06); }
+    }
+    @keyframes tutArrowBobRight {
+      0%, 100% { transform: translate(0px, -50%) scale(1); }
+      50%      { transform: translate(8px, -50%) scale(1.06); }
+    }
+    .ui-tut-spotlight {
+      position: fixed;
+      border: 3px solid #fde047;
+      border-radius: 16px;
+      pointer-events: none;
+      animation: tutSpotPulse 1.7s ease-in-out infinite;
+      transition: left 0.24s ease, top 0.24s ease, width 0.24s ease, height 0.24s ease, border-radius 0.24s ease;
+    }
+    .ui-tut-arrow {
+      position: fixed;
+      width: 44px;
+      height: 44px;
+      pointer-events: none;
+      filter: drop-shadow(0 4px 8px rgba(15, 23, 42, 0.55));
+      transition: left 0.22s ease, top 0.22s ease;
+    }
+    .ui-tut-arrow.dir-up    { animation: tutArrowBobUp 1.05s ease-in-out infinite; }
+    .ui-tut-arrow.dir-down  { animation: tutArrowBobDown 1.05s ease-in-out infinite; }
+    .ui-tut-arrow.dir-left  { animation: tutArrowBobLeft 1.05s ease-in-out infinite; }
+    .ui-tut-arrow.dir-right { animation: tutArrowBobRight 1.05s ease-in-out infinite; }
+    .ui-tut-card {
+      position: fixed;
+      width: min(86vw, 316px);
+      background: linear-gradient(155deg, rgba(255, 253, 245, 0.94) 0%, rgba(254, 243, 199, 0.88) 100%);
+      backdrop-filter: blur(12px) saturate(140%);
+      -webkit-backdrop-filter: blur(12px) saturate(140%);
+      border: 3px solid #f59e0b;
+      border-radius: 22px;
+      box-shadow: 0 14px 34px rgba(15, 23, 42, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+      transition: left 0.24s ease, top 0.24s ease;
+    }
+    @media (orientation: landscape) and (max-height: 460px) {
+      .ui-tut-card {
+        width: min(74vw, 310px);
+        padding: 10px 12px !important;
+      }
+      .ui-tut-arrow { width: 36px; height: 36px; }
     }
 
     /* [에피소드 4 소년반 전용] 초슬림 미니 나침반/거리 내비게이터 (모바일 세로형·가로형 화면 가림 최소화) */
@@ -458,6 +648,214 @@
       .miracle-mini-nav .nav-dial { width: 18px; height: 18px; }
       .miracle-mini-nav .nav-arrow { width: 11px; height: 11px; }
     }
+
+    /* ================================================================
+       [최상위 레이어 보장] 탐험수첩·모든 퀴즈·인증서·모험의 증표가
+       조이스틱·점프·카메라 전환 버튼에 절대 가려지지 않도록 강제
+       ================================================================ */
+    #joystick-zone, #cam-bottom-bar, #action-zone { z-index: 20 !important; }
+    #miracle-hud-left { z-index: 22 !important; }
+    #hud-top { z-index: 25 !important; }
+    #miracle-dialog-overlay { z-index: 135 !important; }
+    #miracle-notebook-modal { z-index: 140 !important; }
+    #retry-modal, #episode-stage-select-modal, #ending-map-choice-modal { z-index: 142 !important; }
+    #stage-modal, #miracle-dialog-overlay.is-quiz-overlay { z-index: 145 !important; }
+    #ending-modal { z-index: 150 !important; }
+    #adventure-badges-modal { z-index: 155 !important; }
+    #ui-tutorial-overlay { z-index: 165 !important; }
+    #toast-box { z-index: 170 !important; }
+    body.overlay-modal-open #joystick-zone,
+    body.overlay-modal-open #cam-bottom-bar,
+    body.overlay-modal-open #action-zone {
+      visibility: hidden !important;
+      pointer-events: none !important;
+    }
+
+    /* ================================================================
+       [공통: 모험의 증표 & 3D 입체 인증서 카드]
+       - 앞면: 인게임 3D 그래픽 일러스트 / 뒷면: 공식 인증서 + 클리어 레벨 누적 표기
+       - 빛나며 등장(빠밤!) → 자동 뒷면 전환 → 터치/클릭 시 앞·뒷면 3D 플립
+       ================================================================ */
+    @keyframes certSunburstSpin {
+      from { transform: translate(-50%, -50%) rotate(0deg); }
+      to   { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+    @keyframes certCardAppearFlash {
+      0%   { transform: scale(0.56) translateY(22px); filter: brightness(2.1) drop-shadow(0 0 42px rgba(253, 224, 71, 1)); opacity: 0; }
+      45%  { transform: scale(1.06) translateY(-4px); filter: brightness(1.45) drop-shadow(0 0 36px rgba(253, 224, 71, 0.95)); opacity: 1; }
+      78%  { transform: scale(0.99) translateY(0px);  filter: brightness(1.12) drop-shadow(0 0 22px rgba(251, 191, 36, 0.75)); opacity: 1; }
+      100% { transform: scale(1) translateY(0px);     filter: brightness(1.0) drop-shadow(0 12px 28px rgba(15, 23, 42, 0.55)); opacity: 1; }
+    }
+    @keyframes certSheenSweep {
+      0%   { transform: translateX(-140%) skewX(-24deg); opacity: 0; }
+      35%  { opacity: 0.72; }
+      100% { transform: translateX(220%) skewX(-24deg); opacity: 0; }
+    }
+    @keyframes certQuestionPulse {
+      0%, 100% { transform: scale(1); filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.45)); }
+      50%      { transform: scale(1.08); filter: drop-shadow(0 0 22px rgba(253, 224, 71, 0.9)); }
+    }
+
+    .cert-reveal-stage {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .cert-reveal-rays {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 390px;
+      height: 390px;
+      border-radius: 9999px;
+      background: repeating-conic-gradient(
+        from 0deg,
+        rgba(253, 224, 71, 0.42) 0deg 12deg,
+        rgba(253, 224, 71, 0.0) 12deg 24deg
+      );
+      -webkit-mask-image: radial-gradient(circle, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.45) 45%, rgba(0,0,0,0) 72%);
+      mask-image: radial-gradient(circle, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.45) 45%, rgba(0,0,0,0) 72%);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.65s ease;
+      animation: certSunburstSpin 14s linear infinite;
+    }
+    .cert-reveal-rays.active {
+      opacity: 1;
+    }
+
+    .cert-card-scene {
+      perspective: 1200px;
+      -webkit-perspective: 1200px;
+      width: min(74vw, 276px);
+      aspect-ratio: 3 / 4;
+      position: relative;
+      z-index: 2;
+    }
+    .cert-card-scene.reveal-flash {
+      animation: certCardAppearFlash 0.95s cubic-bezier(0.22, 1.15, 0.36, 1) forwards;
+    }
+    .cert-card-inner {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      transform-style: preserve-3d;
+      -webkit-transform-style: preserve-3d;
+      transition: transform 0.78s cubic-bezier(0.22, 1.12, 0.36, 1);
+      cursor: pointer;
+    }
+    .cert-card-inner.is-flipped {
+      transform: rotateY(180deg);
+    }
+    .cert-card-face {
+      position: absolute;
+      inset: 0;
+      border-radius: 22px;
+      overflow: hidden;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      border: 3.5px solid #f59e0b;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.55), inset 0 0 0 2px rgba(254, 243, 199, 0.65);
+    }
+    .cert-card-front {
+      background: linear-gradient(160deg, #1e293b 0%, #0f172a 100%);
+      display: flex;
+      flex-direction: column;
+    }
+    .cert-card-front-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .cert-card-sheen {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.68) 48%, rgba(254, 240, 138, 0.35) 54%, transparent 68%);
+      pointer-events: none;
+      opacity: 0;
+    }
+    .cert-card-scene.reveal-flash .cert-card-sheen,
+    .cert-card-front:hover .cert-card-sheen {
+      animation: certSheenSweep 1.15s ease-out 0.15s 1;
+    }
+    .cert-card-back {
+      transform: rotateY(180deg);
+      background: linear-gradient(165deg, #fffbeb 0%, #fef3c7 52%, #fde68a 100%);
+      color: #1e293b;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 12px 13px 10px;
+      text-align: center;
+    }
+
+    /* 모험의 증표 횡스크롤 카드 갤러리 */
+    .badges-scroll-track {
+      display: flex;
+      align-items: stretch;
+      gap: 1rem;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+      padding: 0.5rem 0.6rem 0.9rem;
+    }
+    .badges-scroll-track::-webkit-scrollbar {
+      height: 7px;
+    }
+    .badges-scroll-track::-webkit-scrollbar-thumb {
+      background: rgba(217, 119, 6, 0.55);
+      border-radius: 9999px;
+    }
+    .badge-gallery-slot {
+      flex: 0 0 auto;
+      scroll-snap-align: center;
+      width: clamp(222px, 62vw, 264px);
+      aspect-ratio: 3 / 4;
+    }
+    .badge-card-locked {
+      width: 100%;
+      height: 100%;
+      border-radius: 22px;
+      border: 3px dashed rgba(251, 191, 36, 0.45);
+      background: radial-gradient(circle at 50% 38%, rgba(51, 65, 85, 0.92) 0%, rgba(15, 23, 42, 0.98) 72%);
+      box-shadow: inset 0 0 28px rgba(0, 0, 0, 0.6), 0 10px 24px rgba(15, 23, 42, 0.45);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 14px;
+      color: #cbd5e1;
+      text-align: center;
+    }
+    .badge-locked-q {
+      font-size: 4.1rem;
+      line-height: 1;
+      color: #fbbf24;
+      animation: certQuestionPulse 2.4s ease-in-out infinite;
+    }
+
+    /* 모바일 가로모드(높이 540px 이하)에서 인증서 카드와 액션 버튼 좌우 2단 배치 */
+    @media (max-height: 560px) and (orientation: landscape) {
+      #ending-modal .ending-card-layout {
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 1rem !important;
+        max-width: min(94vw, 680px) !important;
+      }
+      #ending-modal .cert-card-scene {
+        width: min(44vh, 210px) !important;
+      }
+      #ending-modal .ending-card-actions {
+        width: min(44vw, 250px) !important;
+      }
+      .badge-gallery-slot {
+        width: clamp(168px, 34vh, 210px) !important;
+      }
+    }
   </style>
 </head>
 <body class="relative w-full h-full select-none">
@@ -483,74 +881,205 @@
   </div>
 
   <!-- 토스트 알림 -->
-  <div id="toast-box" class="fixed top-14 left-1/2 -translate-x-1/2 z-40 pointer-events-none opacity-0 transition-opacity duration-300 w-[88%] max-w-md">
+  <div id="toast-box" class="fixed top-14 left-1/2 -translate-x-1/2 z-[65] pointer-events-none opacity-0 transition-opacity duration-300 w-[88%] max-w-md">
     <div class="mc-panel px-3 py-1.5 rounded-xl text-center">
       <span id="toast-text" class="font-jua text-amber-200 text-[11px] sm:text-xs"></span>
     </div>
   </div>
 
-  <!-- 상단 HUD (얇고 슬림한 디자인 & 반투명 그림자 & 전체화면 토글 버튼 포함) -->
-  <div id="hud-top" class="hidden fixed top-1.5 left-2 right-2 z-20 flex flex-col gap-1 pointer-events-none">
-    <div class="flex items-center justify-between gap-1">
-      <div class="mc-panel px-2 py-0.5 rounded-lg flex items-center gap-1 pointer-events-auto">
-        <span id="hud-avatar-icon" class="text-sm">🧔🏻</span>
-        <span id="hud-player-tag" class="font-jua text-white text-[11px] sm:text-xs">대원</span>
-        <span class="text-amber-400 text-xs">·</span>
-        <span id="hud-stage-badge" class="font-jua text-amber-300 text-[11px] sm:text-xs">스테이지 1</span>
-      </div>
+  <!-- 상단 HUD (좌측: ☰ 플레이어 이름 ▾ 펼침/접힘 메뉴 + 우측: 진행 정보창 · 구석 발광 미션안내 버튼 · 아래 내비게이터) -->
+  <div id="hud-top" class="hidden fixed top-1.5 left-2 right-2 z-[25] flex items-start justify-between gap-1.5 pointer-events-none">
+    <!-- 좌측 상단: 메뉴 버튼(☰ 플레이어 이름 ▾) & 아래로 탐험수첩 위로 펼쳐지는 메뉴 패널 -->
+    <div id="hud-menu-wrap" class="relative flex flex-col items-start pointer-events-auto z-30 shrink-0">
+      <button id="hud-menu-btn" type="button" onclick="toggleHudMenu()" aria-expanded="false" aria-controls="hud-menu-dropdown"
+              class="mc-panel px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl flex items-center gap-1 sm:gap-1.5 text-amber-100 hover:brightness-110 active:translate-y-[1px] transition-all cursor-pointer shrink-0 overflow-hidden">
+        <span class="text-xs sm:text-sm leading-none shrink-0">☰</span>
+        <span id="hud-avatar-icon" class="hidden" aria-hidden="true">🧔🏻</span>
+        <span id="hud-player-tag" class="font-jua text-xs sm:text-sm text-white leading-none truncate min-w-0 flex-1 text-left">대원</span>
+        <span id="hud-menu-chevron" class="text-[10px] text-amber-300 leading-none transition-transform duration-200 shrink-0">▾</span>
+      </button>
 
-      <div class="flex items-center gap-1 pointer-events-auto">
-        <div id="hud-block-box" class="hidden mc-panel px-2 py-0.5 rounded-lg items-center gap-1 bg-amber-950/75">
-          <span class="text-xs">🪵</span>
-          <span id="hud-block-text" class="font-jua text-amber-200 text-[11px]">통나무 0/2개</span>
+      <!-- 메뉴 버튼을 누르면 탐험수첩 버튼 위로 펼쳐지고, 다시 누르면 접히는 메뉴 목록 -->
+      <div id="hud-menu-dropdown" class="hud-menu-dropdown menu-closed hidden absolute left-0 top-full mt-1.5 w-[216px] sm:w-[236px] p-2 rounded-2xl bg-slate-900/95 border-2 border-amber-400/90 shadow-2xl backdrop-blur-md flex flex-col gap-1.5 z-40">
+        <!-- 1. 현재 맵(스테이지 1-3) 이름 -->
+        <div class="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-slate-800/85 border border-slate-700/80">
+          <span class="text-sm leading-none shrink-0">📍</span>
+          <div class="min-w-0 flex-1">
+            <div class="text-[9px] text-amber-300/85 font-bold leading-none mb-0.5">현재 맵</div>
+            <div id="hud-stage-badge" class="font-jua text-amber-300 text-xs sm:text-sm truncate leading-tight">스테이지 1</div>
+          </div>
         </div>
 
-        <div id="hud-timer-box" class="hidden mc-panel px-2 py-0.5 rounded-lg items-center gap-1 bg-rose-950/75 border-rose-400/80">
-          <span class="text-xs">⏰</span>
-          <span id="hud-timer-val" class="font-jua text-rose-200 text-[11px] sm:text-xs">10.0초</span>
+        <!-- 2. 월드 맵 -->
+        <button id="hud-mode-btn" type="button" onclick="openWorldMapFromGame()"
+                class="mc-btn-slim w-full px-2.5 py-1.5 rounded-xl bg-amber-500/95 hover:bg-amber-400 text-slate-950 font-jua text-xs sm:text-sm flex items-center justify-between">
+          <span>🗺️ 월드 맵</span>
+          <span class="text-[10px] opacity-80">이동 ▶</span>
+        </button>
+
+        <!-- 3. 유치반, 유년반, 소년반 등 레벨 정보 -->
+        <div class="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-slate-800/85 border border-slate-700/80">
+          <span class="text-[10px] text-slate-300 font-bold shrink-0">🎖️ 레벨</span>
+          <span id="hud-level-badge" class="font-jua text-emerald-300 text-xs truncate">🌱 유년반</span>
         </div>
 
-        <div class="mc-panel px-2 py-0.5 rounded-lg flex items-center gap-1">
-          <span id="hud-counter-icon" class="text-xs">🐾</span>
-          <span id="hud-counter-text" class="font-jua text-emerald-300 text-[11px] sm:text-xs">0/7쌍</span>
-        </div>
+        <!-- 4. 모험의 증표 (에피소드별 수집한 인증 카드 횡스크롤 컬렉션) -->
+        <button id="hud-badges-btn" type="button" onclick="openAdventureBadgesModal()"
+                class="mc-btn-slim w-full px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-300 via-yellow-300 to-amber-400 hover:brightness-105 text-amber-950 font-jua text-xs sm:text-sm flex items-center justify-between">
+          <span>🏅 모험의 증표</span>
+          <span id="hud-badges-count" class="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-amber-950/15">0 / 4</span>
+        </button>
 
-        <button id="hud-mode-btn" type="button" onclick="openScreen('screen-map')" class="mc-btn-slim px-2 py-0.5 rounded-lg bg-amber-500/90 hover:bg-amber-400 text-slate-950 font-jua text-[11px]">
-          🗺️맵
+        <!-- 5. 화면 안내 (현재 스테이지 인터페이스 튜토리얼 다시 보기) -->
+        <button id="hud-tutorial-btn" type="button" onclick="openInterfaceTutorialFromMenu()"
+                class="mc-btn-slim w-full px-2.5 py-1.5 rounded-xl bg-sky-500/90 hover:bg-sky-400 text-slate-950 font-jua text-xs sm:text-sm flex items-center justify-between">
+          <span>❓ 화면 안내</span>
+          <span class="text-[10px] opacity-85">보기 ▶</span>
         </button>
-        <button id="bgm-btn" type="button" onclick="toggleBgm()" class="mc-btn-slim w-6 h-6 rounded-lg bg-slate-800/85 text-white text-xs flex items-center justify-center" title="배경음악 켜기/끄기">
-          🎵
-        </button>
-        <button id="fullscreen-btn" type="button" onclick="toggleGameFullscreen()" class="mc-btn-slim w-6 h-6 rounded-lg bg-slate-800/85 text-white text-xs flex items-center justify-center" title="전체화면 전환">
-          ⛶
-        </button>
+
+        <!-- 6. 음악끄기, 전체화면 -->
+        <div class="grid grid-cols-2 gap-1.5 pt-0.5">
+          <button id="bgm-btn" type="button" onclick="toggleBgm()"
+                  class="mc-btn-slim px-2 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-amber-100 font-jua text-[11px] flex items-center justify-center gap-1 whitespace-nowrap" title="배경음악 켜기/끄기">
+            🎵 음악 끄기
+          </button>
+          <button id="fullscreen-btn" type="button" onclick="toggleGameFullscreen()"
+                  class="mc-btn-slim px-2 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-amber-100 font-jua text-[11px] flex items-center justify-center gap-1 whitespace-nowrap" title="전체화면 전환">
+            ⛶ 전체화면
+          </button>
+        </div>
       </div>
     </div>
 
-    <div id="hud-mission-box" onclick="speakCurrentMission()" class="mc-panel px-2.5 py-0.5 rounded-lg self-center max-w-lg w-full text-center pointer-events-auto cursor-pointer">
-      <p class="text-amber-100 font-jua text-[11px] sm:text-xs truncate leading-tight">
-        🔊 <span id="hud-mission-text">미션 안내</span>
-      </p>
-      <p id="hud-compass-hint" class="text-[9px] text-amber-300/85 leading-tight">💛 머리 위 노란 화살표를 따라가 보세요! (터치 시 음성 안내)</p>
+    <!-- 우측 상단: 진행 정보창(좌) + 구석 발광 [미션 안내] 버튼(우) / '미션 안내' 버튼 바로 아래 내비게이터 -->
+    <div id="hud-top-right" class="flex flex-col items-end gap-1.5 pointer-events-none flex-1 min-w-0">
+      <div class="flex items-center justify-end gap-1 sm:gap-1.5 flex-wrap pointer-events-auto max-w-full">
+        <div id="hud-block-box" class="hidden mc-panel px-2 py-1 rounded-xl items-center gap-1 bg-amber-950/75">
+          <span class="text-xs">🪵</span>
+          <span id="hud-block-text" class="font-jua text-amber-200 text-[10px] sm:text-xs whitespace-nowrap">통나무 0/2개</span>
+        </div>
+
+        <div id="hud-timer-box" class="hidden mc-panel px-2 py-1 rounded-xl items-center gap-1 bg-rose-950/75 border-rose-400/80">
+          <span class="text-xs">⏰</span>
+          <span id="hud-timer-val" class="font-jua text-rose-200 text-[10px] sm:text-xs whitespace-nowrap">10.0초</span>
+        </div>
+
+        <div id="hud-progress-box" class="mc-panel px-2 py-1 rounded-xl flex items-center gap-1 min-w-0 max-w-full">
+          <span id="hud-counter-icon" class="text-xs shrink-0">🐾</span>
+          <span id="hud-counter-text" class="font-jua text-emerald-300 text-[10px] sm:text-xs truncate">0/7쌍</span>
+        </div>
+
+        <!-- 우측 상단 구석 천천히 발광하는 [미션 안내] 버튼 (모든 에피소드 공통 · 중앙 말풍선이 빨려 들어가 저장됨!) -->
+        <button id="miracle-guide-btn" type="button" onclick="window.openMiracleGuideFromButton()"
+                aria-label="현재 미션 안내 다시 보기"
+                class="hidden miracle-guide-btn font-jua text-[11px] sm:text-xs shrink-0">
+          <span class="text-xs sm:text-sm leading-none">💬</span>
+          <span id="miracle-guide-btn-label" class="leading-none whitespace-nowrap">미션 안내</span>
+        </button>
+      </div>
+
+      <!-- '미션 안내' 버튼 바로 아래로 이동한 초슬림 미니 나침반/거리 내비게이터 -->
+      <div id="miracle-mini-nav" class="hidden miracle-mini-nav pointer-events-auto" title="목표 방향과 거리 안내">
+        <div class="nav-dial">
+          <svg id="miracle-nav-arrow" class="nav-arrow" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 2L18.5 19.5L12 15.5L5.5 19.5L12 2Z" fill="#fde047" stroke="#92400e" stroke-width="1.4" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <span id="miracle-nav-target" class="font-jua text-[10px] sm:text-[11px] text-amber-100 truncate flex-1">목표 탐색</span>
+        <span id="miracle-nav-dist" class="font-jua text-[10px] sm:text-[11px] text-emerald-300 shrink-0">0m</span>
+      </div>
+    </div>
+
+    <!-- 호환성 유지용 숨김 미션 텍스트 저장소 (모든 에피소드에서 중앙 말풍선 + 우측 상단 미션 안내 버튼으로 통합) -->
+    <div id="hud-mission-box" class="hidden" aria-hidden="true">
+      <span id="hud-mission-text">미션 안내</span>
+      <span id="hud-compass-hint"></span>
     </div>
   </div>
 
-  <!-- 좌측 하단 가상 조이스틱 -->
-  <div id="joystick-zone" style="display:none;" class="ingame-touch fixed bottom-4 left-4 w-28 h-28 rounded-full bg-slate-900/50 border-2 border-amber-400/65 z-20">
-    <div id="joystick-knob" class="w-12 h-12 rounded-full bg-amber-400/90 border-2 border-white shadow-md absolute top-1/2 left-1/2 -mt-6 -ml-6 pointer-events-none"></div>
+  <!-- 모든 에피소드 공통: 화면 정중앙 반투명 유리 타이핑 말풍선 안내창 (완료 시 우측 상단 미션안내 버튼으로 빨려 들어가듯 축소 이동!) -->
+  <div id="miracle-guide-bubble" onclick="window.onMiracleGuideBubbleClick()" class="hidden miracle-guide-bubble pointer-events-auto cursor-pointer text-left">
+    <div class="flex items-center justify-between gap-2 mb-1.5">
+      <span id="miracle-guide-bubble-title" class="px-2.5 py-0.5 rounded-full bg-amber-600/90 text-white font-jua text-xs sm:text-sm truncate shadow-sm">💬 탐험 안내</span>
+      <button id="miracle-guide-bubble-cancel-btn" type="button"
+              onclick="event.stopPropagation(); window.dismissMiracleGuideBubbleToButton(); if (typeof window.cancelActiveMiracleFieldEvent === 'function') window.cancelActiveMiracleFieldEvent();"
+              class="hidden px-4 py-1 rounded-lg bg-rose-500 hover:bg-rose-400 text-white font-jua text-[11px] shrink-0 shadow">
+        미션 포기 ✕
+      </button>
+    </div>
+    <p class="font-jua text-sm sm:text-base text-slate-900 leading-relaxed min-h-[42px]">
+      <span id="miracle-guide-bubble-text"></span><span id="miracle-guide-cursor" class="miracle-guide-cursor">▌</span>
+    </p>
+    <div id="miracle-guide-bubble-progress-row" class="hidden flex items-center justify-between gap-2 mt-2 pt-1.5 border-t border-amber-500/35">
+      <span id="miracle-guide-bubble-progress" class="px-2 py-0.5 rounded-full bg-amber-400/90 text-slate-950 font-jua text-[11px]"></span>
+      <span id="miracle-guide-bubble-extra" class="text-[11px] font-bold text-amber-950 truncate"></span>
+    </div>
+    <div class="flex items-center justify-between gap-2 mt-2">
+      <span class="text-[10px] text-amber-950/85 font-bold">👆 터치하면 우측 상단 안내 버튼에 쏙 들어가요!</span>
+      <button type="button" onclick="event.stopPropagation(); window.dismissMiracleGuideBubbleToButton();"
+              class="px-3 py-1 rounded-full bg-white/75 hover:bg-white/95 border border-amber-500/50 text-amber-950 font-jua text-[11px] shrink-0 shadow-sm">확인 ▶</button>
+    </div>
+  </div>
+
+  <!-- [인터페이스 튜토리얼] 아기자기한 움직이는 화살표 화면 안내 오버레이 -->
+  <div id="ui-tutorial-overlay" class="hidden fixed inset-0 z-[70] pointer-events-auto" onclick="nextUiTutorialStep()">
+    <!-- 대상 버튼 스포트라이트 링 -->
+    <div id="ui-tut-spotlight" class="ui-tut-spotlight"></div>
+
+    <!-- 아기자기한 통통 움직이는 화살표 SVG -->
+    <div id="ui-tut-arrow" class="ui-tut-arrow dir-up" aria-hidden="true">
+      <svg id="ui-tut-arrow-svg" viewBox="0 0 48 48" fill="none" class="w-full h-full">
+        <path d="M24 6L38 22H29.5V39C29.5 41.2 27.7 43 25.5 43H22.5C20.3 43 18.5 41.2 18.5 39V22H10L24 6Z"
+              fill="#fde047" stroke="#92400e" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round"/>
+        <path d="M24 11.5L32.5 21H26.8V37.5H21.2V21H15.5L24 11.5Z" fill="#fef08a" opacity="0.65"/>
+      </svg>
+    </div>
+
+    <!-- 친근한 튜토리얼 설명 말풍선 카드 -->
+    <div id="ui-tut-card" class="ui-tut-card p-3.5 sm:p-4 text-left" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between gap-2 mb-1.5">
+        <div class="flex items-center gap-1.5 min-w-0">
+          <span id="ui-tut-badge" class="px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 font-jua text-[10px] sm:text-[11px] shrink-0">1 / 6</span>
+          <h3 id="ui-tut-title" class="font-jua text-sm sm:text-base text-amber-950 truncate">화면 안내</h3>
+        </div>
+        <button type="button" onclick="closeUiTutorial(true)"
+                class="px-2 py-0.5 rounded-full bg-amber-200/80 hover:bg-amber-300 text-amber-950 font-jua text-[10px] sm:text-[11px] shrink-0 cursor-pointer">
+          건너뛰기 ✕
+        </button>
+      </div>
+      <p id="ui-tut-desc" class="text-xs sm:text-[13px] font-bold text-slate-800 leading-relaxed mb-2.5"></p>
+      <div class="flex items-center justify-between gap-2">
+        <div id="ui-tut-dots" class="flex items-center gap-1"></div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button id="ui-tut-prev-btn" type="button" onclick="prevUiTutorialStep()"
+                  class="hidden mc-btn-slim px-2.5 py-1 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-jua text-[11px]">
+            ◀ 이전
+          </button>
+          <button id="ui-tut-next-btn" type="button" onclick="nextUiTutorialStep()"
+                  class="mc-btn-slim px-3 py-1 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white font-jua text-xs">
+            다음 ▶
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 좌측 하단 가상 조이스틱 (반투명) -->
+  <div id="joystick-zone" style="display:none;" class="ingame-touch fixed bottom-4 left-4 w-28 h-28 rounded-full bg-slate-900/30 border-2 border-amber-300/45 backdrop-blur-[2px] z-20">
+    <div id="joystick-knob" class="w-12 h-12 rounded-full bg-amber-400/55 border-2 border-white/75 shadow-md absolute top-1/2 left-1/2 -mt-6 -ml-6 pointer-events-none"></div>
   </div>
 
   <!-- 하단 중앙 시점 회전 바 (작고 슬림한 사이즈 + 멀티터치 즉시 반응) -->
   <div id="cam-bottom-bar" style="display:none;" class="ingame-touch fixed bottom-3 left-1/2 -translate-x-1/2 z-20 items-center gap-1.5">
-    <button type="button" onpointerdown="event.preventDefault(); event.stopPropagation(); rotateCameraDeg(-25);" class="ingame-touch mc-btn-slim px-2 py-1 rounded-lg bg-slate-900/75 text-amber-200/95 font-jua text-[10px] sm:text-[11px]">
+    <button type="button" onpointerdown="event.preventDefault(); event.stopPropagation(); rotateCameraDeg(-25);" class="ingame-touch mc-btn-slim px-2 py-1 rounded-lg bg-slate-900/60 text-amber-200/95 font-jua text-[10px] sm:text-[11px]">
       ↺ 좌회전
     </button>
-    <button type="button" onpointerdown="event.preventDefault(); event.stopPropagation(); rotateCameraDeg(25);" class="ingame-touch mc-btn-slim px-2 py-1 rounded-lg bg-slate-900/75 text-amber-200/95 font-jua text-[10px] sm:text-[11px]">
+    <button type="button" onpointerdown="event.preventDefault(); event.stopPropagation(); rotateCameraDeg(25);" class="ingame-touch mc-btn-slim px-2 py-1 rounded-lg bg-slate-900/60 text-amber-200/95 font-jua text-[10px] sm:text-[11px]">
       우회전 ↻
     </button>
   </div>
 
-  <!-- 우측 하단 액션 & 점프 버튼 (조이스틱 조작 중 동시 터치 즉시 작동) -->
+  <!-- 우측 하단 액션 & 점프 버튼 (조이스틱 조작 중 동시 터치 즉시 작동 · 점프 버튼 반투명) -->
   <div id="action-zone" style="display:none;" class="ingame-touch fixed bottom-4 right-4 z-20 flex flex-col items-end gap-1.5">
     <button id="cert-open-btn" type="button" onpointerdown="event.preventDefault(); event.stopPropagation(); showEndingCertificate();" class="ingame-touch hidden mc-btn px-3.5 py-1.5 rounded-xl bg-amber-400 text-slate-950 font-jua text-xs sm:text-sm animate-bounce">
       🏆 인증서 보기
@@ -561,7 +1090,7 @@
     <button id="context-action-btn" type="button" onpointerdown="event.preventDefault(); event.stopPropagation(); triggerContextAction();" class="ingame-touch hidden mc-btn px-3.5 py-2 rounded-xl bg-emerald-400 text-slate-950 font-jua text-xs sm:text-sm animate-bounce">
       ✨ 액션 실행!
     </button>
-    <button type="button" onpointerdown="event.preventDefault(); event.stopPropagation(); playerJump();" class="jump-action-btn ingame-touch mc-btn w-20 h-20 rounded-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-jua text-base flex flex-col items-center justify-center">
+    <button id="jump-action-btn" type="button" onpointerdown="event.preventDefault(); event.stopPropagation(); playerJump();" class="jump-action-btn translucent-control-btn ingame-touch mc-btn w-20 h-20 rounded-full bg-amber-500/50 hover:bg-amber-400/65 text-slate-950/90 font-jua text-base flex flex-col items-center justify-center">
       <span class="text-xl leading-none pointer-events-none">🦘</span>
       <span class="pointer-events-none">점프</span>
     </button>
@@ -689,7 +1218,10 @@
             <p class="text-[10px] sm:text-xs text-slate-600">도트 지도 위의 탐험 경로(1→2→3→4)를 따라 에피소드를 선택하세요!</p>
           </div>
         </div>
-        <div class="flex items-center gap-1.5">
+        <div class="flex items-center gap-1.5 flex-wrap justify-end">
+          <button id="map-return-game-btn" type="button" onclick="resumeGameFromWorldMap()" class="hidden mc-btn px-2.5 py-0.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white font-jua text-[10px] sm:text-xs shadow">
+            ◀ 돌아가기
+          </button>
           <span id="map-selected-badge" class="px-2 py-0.5 rounded-full bg-amber-200 border border-amber-500 font-jua text-amber-950 text-[10px] sm:text-xs">🌱 유년반</span>
           <button type="button" onclick="openScreen('screen-class')" class="mc-btn px-2.5 py-0.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-jua text-[10px] sm:text-xs">
             ◀ 반 변경
@@ -760,24 +1292,28 @@
   </div>
 
   <!-- =================================================================== -->
-  <!-- 월드맵 클리어 스테이지 선택 모달 (클리어 기록이 있는 대원에게 스테이지 선택 제공) -->
+  <!-- 월드맵 클리어 스테이지 선택 모달 (가로형에서도 스크롤 없이 한 화면에 표시) -->
   <!-- =================================================================== -->
   <div id="episode-stage-select-modal" class="hidden fixed inset-0 z-50 items-center justify-center p-3 bg-slate-950/75 backdrop-blur-sm">
-    <div class="mc-card modal-scroll w-full max-w-sm rounded-3xl p-5 text-center">
-      <div id="ep-select-icon" class="text-4xl mb-1">🛶</div>
-      <h2 id="ep-select-title" class="font-jua text-xl sm:text-2xl text-amber-900 mb-1">에피소드 스테이지 선택</h2>
-      <p id="ep-select-desc" class="text-xs text-slate-600 mb-3">클리어한 스테이지를 자유롭게 선택해 출발할 수 있어요!</p>
+    <div class="mc-card modal-scroll stage-select-card w-full max-w-sm rounded-3xl p-5 text-center">
+      <div class="stage-select-header">
+        <div id="ep-select-icon" class="text-4xl mb-1">🛶</div>
+        <div class="min-w-0">
+          <h2 id="ep-select-title" class="font-jua text-xl sm:text-2xl text-amber-900 mb-1">에피소드 스테이지 선택</h2>
+          <p id="ep-select-desc" class="text-xs text-slate-600 mb-3">클리어한 스테이지를 자유롭게 선택해 출발할 수 있어요!</p>
+        </div>
+      </div>
       <div id="ep-select-buttons" class="flex flex-col gap-2 mb-3"></div>
-      <button type="button" onclick="closeEpisodeStageSelectModal()" class="mc-btn w-full py-2 rounded-2xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-jua text-xs">
+      <button type="button" onclick="closeEpisodeStageSelectModal()" class="stage-select-back-btn mc-btn w-full py-2 rounded-2xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-jua text-xs">
         ◀ 월드맵으로 돌아가기
       </button>
     </div>
   </div>
 
   <!-- =================================================================== -->
-  <!-- 스테이지 클리어 & 말씀 퀴즈 모달 (모바일 가로모드 2단 레이아웃 지원) -->
+  <!-- 스테이지 클리어 & 말씀 퀴즈 모달 (항상 최상위 레이어 z-[60] · 모바일 가로모드 2단 레이아웃 지원) -->
   <!-- =================================================================== -->
-  <div id="stage-modal" class="hidden fixed inset-0 z-50 items-center justify-center p-2 sm:p-4 bg-slate-950/75 backdrop-blur-sm">
+  <div id="stage-modal" class="hidden fixed inset-0 z-[60] items-center justify-center p-2 sm:p-4 bg-slate-950/75 backdrop-blur-sm">
     <div class="mc-card modal-scroll landscape-modal-card w-full max-w-md rounded-3xl p-4 sm:p-6 text-center">
       <div class="landscape-split">
         <div>
@@ -826,57 +1362,130 @@
   </div>
 
   <!-- =================================================================== -->
-  <!-- 엔딩 달란트 인증서 모달 -->
+  <!-- 엔딩 달란트 인증서 카드 모달 (3D 앞·뒷면 입체 플립 + 빠밤! 빛나는 등장) -->
   <!-- =================================================================== -->
-  <div id="ending-modal" class="hidden fixed inset-0 z-50 items-center justify-center p-2 sm:p-4 bg-slate-950/75 backdrop-blur-sm">
-    <div class="mc-card modal-scroll landscape-modal-card w-full max-w-md rounded-3xl p-4 sm:p-6 text-center">
-      <div class="inline-block px-3 py-0.5 rounded-full bg-amber-300 text-amber-950 font-jua text-xs mb-1" id="ending-ep-badge">
-        🌈 에피소드 완주!
-      </div>
-      <h2 id="ending-main-title" class="font-jua text-2xl sm:text-3xl text-amber-900 mb-1">말씀 탐험 완주 인증서</h2>
-      <p id="ending-main-verse" class="text-[11px] sm:text-xs text-slate-600 mb-3"></p>
+  <div id="ending-modal" class="hidden fixed inset-0 z-[150] items-center justify-center p-2 sm:p-4 bg-slate-950/82 backdrop-blur-md">
+    <div class="ending-card-layout flex flex-col items-center justify-center gap-3 w-full max-w-md max-h-[96dvh] overflow-y-auto py-1">
+      <div class="cert-reveal-stage">
+        <div id="ending-reveal-rays" class="cert-reveal-rays"></div>
+        <div id="ending-cert-scene" class="cert-card-scene">
+          <div id="ending-cert-card" class="cert-card-inner" role="button" tabindex="0"
+               onclick="toggleEndingCertCardFlip()"
+               onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleEndingCertCardFlip();}"
+               aria-label="인증서 카드 앞면·뒷면 전환">
+            <!-- 앞면: 인게임 3D 그래픽 상징 카드 일러스트 -->
+            <div class="cert-card-face cert-card-front">
+              <img id="ending-card-front-img" class="cert-card-front-img" alt="에피소드 모험의 증표 카드 앞면" />
+              <div class="cert-card-sheen"></div>
+              <div class="absolute bottom-2 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-slate-950/75 border border-amber-300/80 text-amber-200 font-jua text-[10px] whitespace-nowrap pointer-events-none shadow">
+                ✨ 터치해서 뒷면 인증서 보기 ↻
+              </div>
+            </div>
 
-      <div class="bg-white border-2 border-amber-400 rounded-2xl p-3 mb-3 text-left text-xs space-y-1">
-        <div class="flex justify-between"><span class="text-slate-500">대원 이름</span><span id="cert-name-display" class="font-bold text-slate-900"></span></div>
-        <div class="flex justify-between"><span class="text-slate-500">선택 과정</span><span id="cert-dept" class="font-bold text-amber-800"></span></div>
-        <div class="flex justify-between"><span class="text-slate-500">완주 미션</span><span id="cert-mission-display" class="font-bold text-emerald-700"></span></div>
-        <div class="flex justify-between pt-1 border-t border-amber-200"><span class="text-slate-500">달란트 인증코드</span><span id="cert-code" class="font-jua text-base text-rose-600">ARK-000</span></div>
+            <!-- 뒷면: 공식 인증서 내용 + 에피소드별 누적 클리어 레벨 -->
+            <div class="cert-card-face cert-card-back">
+              <div>
+                <div class="inline-block px-2.5 py-0.5 rounded-full bg-amber-300 text-amber-950 font-jua text-[10px] mb-1 shadow-sm" id="ending-ep-badge">
+                  🌈 에피소드 완주!
+                </div>
+                <h2 id="ending-main-title" class="font-jua text-base sm:text-lg text-amber-900 leading-tight mb-1">말씀 탐험 완주 인증서</h2>
+                <p id="ending-main-verse" class="text-[9.5px] sm:text-[10px] text-slate-600 leading-snug mb-1.5 line-clamp-3"></p>
+              </div>
+
+              <div class="bg-white/95 border-2 border-amber-400 rounded-2xl p-2 text-left text-[10.5px] space-y-1 shadow-inner">
+                <div class="flex justify-between gap-2"><span class="text-slate-500 shrink-0">대원 이름</span><span id="cert-name-display" class="font-bold text-slate-900 truncate"></span></div>
+                <div class="flex justify-between gap-2"><span class="text-slate-500 shrink-0">현재 과정</span><span id="cert-dept" class="font-bold text-amber-800 truncate"></span></div>
+                <div class="pt-0.5 border-t border-amber-100">
+                  <div class="text-[9.5px] text-slate-500 mb-0.5">클리어 레벨 (누적)</div>
+                  <div id="cert-levels-display" class="flex flex-wrap gap-1"></div>
+                </div>
+                <div class="flex justify-between gap-2 pt-0.5 border-t border-amber-100"><span class="text-slate-500 shrink-0">완주 미션</span><span id="cert-mission-display" class="font-bold text-emerald-700 text-right leading-tight"></span></div>
+                <div class="flex justify-between items-center pt-1 border-t border-amber-200">
+                  <span class="text-slate-500 shrink-0">인증코드</span>
+                  <span id="cert-code" class="font-jua text-sm text-rose-600">ARK-000</span>
+                </div>
+                <div class="flex justify-between text-[9px] text-slate-400">
+                  <span>발급일</span>
+                  <span id="cert-date-display"></span>
+                </div>
+              </div>
+
+              <div class="pt-1 flex items-center justify-between text-[9.5px] font-jua text-amber-900/80">
+                <span>광릉내 재림교회 어린이부</span>
+                <span class="text-amber-700">↻ 터치: 앞면</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div class="grid grid-cols-2 gap-2">
-        <button type="button" onclick="closeEndingToLookAround()" class="mc-btn py-2.5 rounded-2xl bg-sky-400 hover:bg-sky-300 text-slate-950 font-jua text-xs sm:text-sm">
-          👀 엔딩 세상 둘러보기
+      <div class="ending-card-actions w-full max-w-[300px] flex flex-col gap-1.5 text-center">
+        <p id="ending-card-flip-hint" class="font-jua text-amber-200 text-[11px] sm:text-xs drop-shadow">
+          ✨ 카드를 터치하면 앞면 그림과 뒷면 인증서가 뒤집혀요!
+        </p>
+        <div class="grid grid-cols-2 gap-1.5">
+          <button type="button" onclick="closeEndingToLookAround()" class="mc-btn py-2 rounded-2xl bg-sky-400 hover:bg-sky-300 text-slate-950 font-jua text-xs sm:text-sm">
+            👀 세상 둘러보기
+          </button>
+          <button type="button" onclick="openScreen('screen-map')" class="mc-btn py-2 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-jua text-xs sm:text-sm">
+            🗺️ 월드맵 이동
+          </button>
+        </div>
+        <button type="button" onclick="openAdventureBadgesModalFromEnding()" class="mc-btn w-full py-2 rounded-2xl bg-gradient-to-r from-amber-300 via-yellow-300 to-amber-400 hover:brightness-105 text-amber-950 font-jua text-xs sm:text-sm">
+          🏅 모험의 증표 카드첩 보기
         </button>
-        <button type="button" onclick="openScreen('screen-map')" class="mc-btn py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-jua text-xs sm:text-sm">
-          🗺️ 월드맵으로 이동
+        <button id="ending-return-openworld-btn" type="button" onclick="closeEndingToReturnMiracleOpenWorld()" class="hidden mc-btn w-full py-2 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-white font-jua text-xs sm:text-sm">
+          🌍 오픈월드로 돌아가 남은 미션·수첩 채우기
         </button>
       </div>
-      <button id="ending-return-openworld-btn" type="button" onclick="closeEndingToReturnMiracleOpenWorld()" class="hidden mt-2 mc-btn w-full py-2.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-white font-jua text-xs sm:text-sm">
-        🌍 오픈월드로 돌아가 남은 미션·수첩 채우기
-      </button>
+    </div>
+  </div>
 
-      <p class="mt-2.5 text-[11px] sm:text-xs font-jua text-amber-900/70 tracking-wide">
-        광릉내 재림교회 어린이부
+  <!-- =================================================================== -->
+  <!-- [공통] 모험의 증표 카드 수집함 모달 (횡스크롤 · 미수집 ? 실루엣 · 3D 플립) -->
+  <!-- =================================================================== -->
+  <div id="adventure-badges-modal" class="hidden fixed inset-0 z-[155] items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md">
+    <div class="mc-card w-full max-w-4xl rounded-3xl p-3.5 sm:p-5 flex flex-col max-h-[94dvh]">
+      <div class="flex items-start justify-between gap-2 mb-2">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h2 class="font-jua text-lg sm:text-2xl text-amber-900 leading-tight">🏅 모험의 증표</h2>
+            <span id="badges-modal-count" class="px-2.5 py-0.5 rounded-full bg-amber-300 text-amber-950 font-jua text-xs">0 / 4 수집</span>
+          </div>
+          <p class="text-[11px] sm:text-xs text-slate-600 mt-0.5">
+            좌우로 넘겨 수집한 인증 카드를 확인하고, 카드를 터치해 앞면 그림과 뒷면 인증 내역을 뒤집어 보세요!
+          </p>
+        </div>
+        <button type="button" onclick="closeAdventureBadgesModal()"
+                class="mc-btn-slim shrink-0 px-3 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-jua text-xs sm:text-sm">
+          ✕ 닫기
+        </button>
+      </div>
+
+      <div id="adventure-badges-track" class="badges-scroll-track"></div>
+
+      <p class="text-[10.5px] sm:text-xs text-amber-900/80 font-bold text-center mt-1">
+        💡 에피소드당 1장의 인증서가 발급되며, 다른 레벨을 추가 클리어하면 클리어 레벨이 함께 누적 기록돼요!
       </p>
     </div>
   </div>
 
-<!-- 게임 스크립트 로드 (전체 스크립트 캐시 강제 갱신 ?v=14 및 버전 일관성 자동 검증 적용) -->
-  <script src="core.js?v=14"></script>
-  <script src="ep1_noah.js?v=14"></script>
-  <script src="ep2_exodus.js?v=14"></script>
-  <script src="ep3_david_base.js?v=14"></script>
-  <script src="ep3_david_st1_2.js?v=14"></script>
-  <script src="ep3_david_st3_end.js?v=14"></script>
-  <script src="ep4_miracle_base.js?v=14"></script>
-  <script src="ep4_miracle_assets.js?v=14"></script>
-  <script src="ep4_miracle_world.js?v=14"></script>
-  <script src="ep4_miracle_stages.js?v=14"></script>
-  <script src="ep4_multiplayer.js?v=14"></script>
+<!-- 게임 스크립트 로드 (전체 스크립트 캐시 강제 갱신 ?v=29 및 버전 일관성 자동 검증 적용) -->
+  <script src="core.js?v=29"></script>
+  <script src="ep1_noah.js?v=29"></script>
+  <script src="ep2_exodus.js?v=29"></script>
+  <script src="ep3_david_base.js?v=29"></script>
+  <script src="ep3_david_st1_2.js?v=29"></script>
+  <script src="ep3_david_st3_end.js?v=29"></script>
+  <script src="ep4_miracle_base.js?v=29"></script>
+  <script src="ep4_miracle_assets.js?v=29"></script>
+  <script src="ep4_miracle_world.js?v=29"></script>
+  <script src="ep4_miracle_stages.js?v=29"></script>
+  <script src="ep4_multiplayer.js?v=29"></script>
   <script>
     // GitHub Pages CDN·브라우저 부분 캐시로 신·구버전 스크립트가 뒤섞여 로드되는 현상을 자동 감지해 1회 강제 새로고침
     (function verifyScriptBuildConsistency() {
-      const EXPECTED = '20261120_v14';
+      const EXPECTED = '20261123_v29';
       const vers = window.__GAME_BUILD_VERSIONS__ || {};
       const keys = ['core', 'ep4_base', 'ep4_assets', 'ep4_world', 'ep4_stages', 'ep4_mp'];
       const mismatch = keys.some(k => vers[k] !== EXPECTED);

@@ -5,23 +5,25 @@
 // - 멀티플레이 미션 1: 반석 위의 집 확장형 (돌 20 + 나무 20, 도끼질 5회 / 돌 캐기 5회, 완료 시 말씀 출력)
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_mp = '20261120_v14';
+window.__GAME_BUILD_VERSIONS__.ep4_mp = '20261123_v29';
 
 // [선택적 온라인 릴레이 설정] 무료 Firebase Realtime Database URL을 넣으면 서로 다른 기기 간 실시간 온라인 접속!
 // 예: window.MP_FIREBASE_DB_URL = 'https://your-church-game-default-rtdb.asia-southeast1.firebasedatabase.app';
 window.MP_FIREBASE_DB_URL = window.MP_FIREBASE_DB_URL || 'https://gwangneung-bible-game-default-rtdb.asia-southeast1.firebasedatabase.app/';
 
-// 멀티플레이 선택 가능 캐릭터 8종 (예수님 'jesus' 및 천사 'angel'은 절대 선택 불가!)
+// 멀티플레이 선택 가능 캐릭터 10종 (온라인 전용 패스파인더·어드벤처러 대원 포함 · 예수님/천사 제외)
 const MP_FORBIDDEN_PRESETS = ['jesus', 'angel'];
 const MP_SELECTABLE_CHARACTERS = [
-  { id: 'hero',       preset: 'hero',     idx: 0, icon: '🧔', name: '갈릴리 청년',    desc: '푸른 숄과 흰 두건' },
-  { id: 'disciple_1', preset: 'disciple', idx: 1, icon: '🎣', name: '어부 제자',      desc: '따뜻한 황토 로브' },
-  { id: 'disciple_2', preset: 'disciple', idx: 2, icon: '🌿', name: '올리브 목자',    desc: '올리브빛 숄' },
-  { id: 'female_0',   preset: 'female_0', idx: 0, icon: '👩', name: '갈릴리 자매',    desc: '코랄 베일과 로브' },
-  { id: 'female_1',   preset: 'female_1', idx: 1, icon: '🌸', name: '베다니 자매',    desc: '청록빛 숄' },
-  { id: 'female_2',   preset: 'female_2', idx: 2, icon: '🧺', name: '나사렛 자매',    desc: '황금빛 베일' },
-  { id: 'child_0',    preset: 'child',    idx: 0, icon: '👦', name: '꼬마 탐험가(남)', desc: '씩씩한 소년 대원' },
-  { id: 'child_1',    preset: 'child',    idx: 1, icon: '👧', name: '꼬마 탐험가(여)', desc: '활발한 소녀 대원' }
+  { id: 'hero',       preset: 'hero',       idx: 0, icon: '🧭', name: '갈릴리 탐험가',  desc: '청록 망토 · 아이보리 튜닉' },
+  { id: 'pathfinder', preset: 'pathfinder', idx: 0, icon: '🏕️', name: '패스파인더 대원', desc: '파란 반팔 티셔츠 어린이' },
+  { id: 'adventurer', preset: 'adventurer', idx: 0, icon: '⭐', name: '어드벤처러 대원', desc: '노란 반팔 티셔츠 어린이' },
+  { id: 'disciple_1', preset: 'disciple',   idx: 1, icon: '🎣', name: '어부 제자',      desc: '따뜻한 황토 로브' },
+  { id: 'disciple_2', preset: 'disciple',   idx: 2, icon: '🌿', name: '올리브 목자',    desc: '올리브빛 숄' },
+  { id: 'female_0',   preset: 'female_0',   idx: 0, icon: '👩', name: '갈릴리 자매',    desc: '코랄 베일과 로브' },
+  { id: 'female_1',   preset: 'female_1',   idx: 1, icon: '🌸', name: '베다니 자매',    desc: '청록빛 숄' },
+  { id: 'female_2',   preset: 'female_2',   idx: 2, icon: '🧺', name: '나사렛 자매',    desc: '황금빛 베일' },
+  { id: 'child_0',    preset: 'child',      idx: 0, icon: '👦', name: '꼬마 탐험가(남)', desc: '씩씩한 소년 대원' },
+  { id: 'child_1',    preset: 'child',      idx: 1, icon: '👧', name: '꼬마 탐험가(여)', desc: '활발한 소녀 대원' }
 ];
 window.MP_SELECTABLE_CHARACTERS = MP_SELECTABLE_CHARACTERS;
 window.MP_FORBIDDEN_PRESETS = MP_FORBIDDEN_PRESETS;
@@ -145,7 +147,7 @@ const MiracleMultiplayer = {
 
         <div class="text-left mb-3">
           <div class="flex items-center justify-between mb-1.5">
-            <span class="font-jua text-xs sm:text-sm text-amber-950">🎭 캐릭터 선택 (8종 · 예수님/천사 제외)</span>
+            <span class="font-jua text-xs sm:text-sm text-amber-950">🎭 캐릭터 선택 (10종 · 온라인 전용 대원 포함)</span>
             <span class="text-[10px] text-slate-500">미션 1: 반석 위의 집 확장형</span>
           </div>
           <div id="mp-char-grid" class="grid grid-cols-2 gap-2">${charCardsHtml}</div>
@@ -175,6 +177,28 @@ const MiracleMultiplayer = {
     if (tog) tog.textContent = this.questCollapsed ? '▾' : '▴';
   },
 
+  positionRightHud() {
+    const badge = document.getElementById('mp-online-badge');
+    const hud = document.getElementById('miracle-mp-hud');
+    const hudTopRight = document.getElementById('hud-top-right');
+    let safeTop = 48;
+    if (hudTopRight) {
+      const r = hudTopRight.getBoundingClientRect();
+      if (r && r.bottom > 0) safeTop = Math.max(44, Math.ceil(r.bottom) + 6);
+    }
+    if (badge) {
+      badge.style.top = `${safeTop}px`;
+    }
+    if (hud) {
+      let hudTopY = safeTop + 32;
+      if (badge && !badge.classList.contains('hidden')) {
+        const br = badge.getBoundingClientRect();
+        if (br && br.bottom > 0) hudTopY = Math.ceil(br.bottom) + 6;
+      }
+      hud.style.top = `${hudTopY}px`;
+    }
+  },
+
   ensureMultiplayerHUD() {
     // 1) 항상 화면에 고정되는 [접속자 수 · 방 이름] 전용 상단 배지 (퀘스트창을 접어도 항상 표시!)
     let badge = document.getElementById('mp-online-badge');
@@ -195,7 +219,10 @@ const MiracleMultiplayer = {
 
     // 2) 컴팩트 공동 퀘스트 미니창 (접기/펼치기 지원 · 향후 다중 공동 퀘스트 확장 대비 구조) + 초소형 감정표현/인사 바
     let hud = document.getElementById('miracle-mp-hud');
-    if (hud) return hud;
+    if (hud) {
+      this.positionRightHud();
+      return hud;
+    }
     hud = document.createElement('div');
     hud.id = 'miracle-mp-hud';
     hud.className = 'hidden fixed right-2 sm:right-3 z-20 flex flex-col items-end gap-1 pointer-events-auto';
@@ -257,6 +284,7 @@ const MiracleMultiplayer = {
       `;
       document.body.appendChild(actWrap);
     }
+    this.positionRightHud();
     return hud;
   },
 
@@ -276,6 +304,9 @@ const MiracleMultiplayer = {
   },
 
   enterMultiplayerWorld(forcedRoomId, forcedCharId) {
+    if (typeof discardPausedGameSession === 'function') discardPausedGameSession(true);
+    if (typeof setHudMenuOpen === 'function') setHudMenuOpen(false);
+    if (typeof hideMissionGuideBubbleImmediately === 'function') hideMissionGuideBubbleImmediately();
     if (forcedCharId) this.selectCharacter(forcedCharId);
     const roomInput = document.getElementById('mp-room-input');
     this.roomId = (forcedRoomId || (roomInput ? roomInput.value.trim() : '') || '광릉내1방').slice(0, 16);
@@ -304,6 +335,8 @@ const MiracleMultiplayer = {
 
     const hudTop = document.getElementById('hud-top');
     if (hudTop) { hudTop.classList.remove('hidden'); hudTop.classList.add('flex'); }
+    if (typeof syncHudMenuInfo === 'function') syncHudMenuInfo();
+    if (typeof updateMiracleGuideButtonVisibility === 'function') updateMiracleGuideButtonVisibility();
     const jz = document.getElementById('joystick-zone');
     const cb = document.getElementById('cam-bottom-bar');
     const az = document.getElementById('action-zone');
@@ -337,6 +370,7 @@ const MiracleMultiplayer = {
     const hud = document.getElementById('miracle-mp-hud');
     if (hud) hud.classList.remove('hidden');
     this.syncHUD();
+    this.positionRightHud();
 
     if (typeof playSfx === 'function') playSfx('clear');
     if (typeof showToast === 'function') {
@@ -345,6 +379,7 @@ const MiracleMultiplayer = {
   },
 
   exitToOpening() {
+    if (typeof discardPausedGameSession === 'function') discardPausedGameSession(true);
     this.leaveRoom();
     if (typeof openScreen === 'function') openScreen('screen-opening');
   },
@@ -996,6 +1031,7 @@ const MiracleMultiplayer = {
         ? '🏠✨ [완공] 반석 위에 세운 지혜로운 집!'
         : `🏗️ [협동] 반석 위의 집 (🪨${this.mission.stoneDeposited}/20 · 🪵${this.mission.woodDeposited}/20)`;
     }
+    this.positionRightHud();
   },
 
   updateHarvestButtonUI() {
@@ -1234,6 +1270,10 @@ const MiracleMultiplayer = {
 window.MiracleMultiplayer = MiracleMultiplayer;
 
 // PC 키보드 [E] / [F] 키로 채집·건축 즉시 실행 지원
+window.positionMultiplayerRightHud = function () {
+  MiracleMultiplayer.positionRightHud();
+};
+
 if (!window.__miracleMpKeyBound) {
   window.__miracleMpKeyBound = true;
   window.addEventListener('keydown', (e) => {

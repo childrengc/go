@@ -794,6 +794,7 @@ function runDavidBlackoutSequence(slides, onComplete) {
   const prevTimeAttack = isTimeAttackActive;
   isPlaying = false;
   isTimeAttackActive = false;
+  if (typeof setInGameHudControlsVisible === 'function') setInGameHudControlsVisible(false);
 
   overlay.classList.remove('hidden');
   overlay.classList.add('flex');
@@ -918,7 +919,7 @@ function ensureDavidCustomUI() {
   if (!uiRoot) {
     uiRoot = document.createElement('div');
     uiRoot.id = 'david-custom-ui';
-    uiRoot.className = 'fixed inset-0 pointer-events-none z-20 flex flex-col items-center';
+    uiRoot.className = 'fixed inset-0 pointer-events-none flex flex-col items-center';
     uiRoot.innerHTML = `
       <!-- [오프닝 & 엔딩 암전 내레이션 오버레이] -->
       <div id="david-cinematic-overlay" class="hidden pointer-events-auto fixed inset-0 bg-black z-50 flex-col items-center justify-center p-6 text-center transition-opacity duration-700" style="opacity:0;">
@@ -941,7 +942,7 @@ function ensureDavidCustomUI() {
           <span id="david-hunger-text" class="text-[11px] font-jua text-emerald-300 leading-none">0%</span>
         </div>
 
-        <div id="david-defense-row" class="hidden fixed top-24 sm:top-20 left-3 z-20 mc-panel px-3 py-1.5 rounded-xl bg-slate-900/85 border border-rose-400 text-white shadow-lg flex-col gap-0.5">
+        <div id="david-defense-row" class="hidden fixed left-2 z-20 mc-panel px-3 py-1.5 rounded-xl bg-slate-900/85 border border-rose-400 text-white shadow-lg flex-col gap-0.5" style="top: 46px;">
           <div class="flex items-center gap-2 text-xs font-jua text-rose-300">
             <span id="david-defense-title">🛡️ 디펜스</span>
             <span id="david-defense-timer" class="text-white">95.0초</span>
@@ -970,7 +971,7 @@ function ensureDavidCustomUI() {
       </div>
 
       <!-- 스테이지 2 & 3: 동물의 숲 스타일 말풍선 대화창 (가로형 화면 캐릭터 가림 방지: 하단 밀착·반투명·디바이스 가변 비율) -->
-      <div id="david-npc-dialog" class="hidden pointer-events-auto mt-auto mb-3 sm:mb-5 mc-panel bg-amber-50/80 backdrop-blur-sm border-[3px] border-amber-700/90 rounded-2xl sm:rounded-3xl p-3 sm:p-4 max-w-xl w-[92%] text-slate-900 shadow-2xl flex flex-col gap-1.5 sm:gap-2">
+      <div id="david-npc-dialog" class="hidden relative z-30 pointer-events-auto mt-auto mb-3 sm:mb-5 mc-panel bg-amber-50/80 backdrop-blur-sm border-[3px] border-amber-700/90 rounded-2xl sm:rounded-3xl p-3 sm:p-4 max-w-xl w-[92%] text-slate-900 shadow-2xl flex flex-col gap-1.5 sm:gap-2">
         <div class="flex items-center justify-between gap-2">
           <span id="david-npc-name" class="px-2.5 py-0.5 rounded-full bg-amber-700 text-amber-100 font-jua text-xs sm:text-sm">이름</span>
           <span class="david-dialog-sound-tag text-[10px] sm:text-[11px] font-bold text-amber-900/80">🔊 또로롱 말풍선 사운드</span>

@@ -810,35 +810,67 @@ function buildNoahEndingArkAndSteppingRocks(arkZ = 21.0) {
 // 에피소드 1 엔딩 전용 카메라 무빙 상태 및 방주 반투명 연동 머티리얼 배열
 let noahEndingCamCutscene = { active: false, timer: 0, duration: 4.4 };
 let noahEndingArkFadeMats = [];
+let noahEndingArkIsFaded = false;
+let noahEndingArkOpacity = 1.0;
+let noahEndingArkTransparentApplied = false;
 
-function checkAndFadeEndingArkIfBlocking() {
+function checkAndFadeEndingArkIfBlocking(dt = 0.016) {
   if (currentEpisode !== 'noah' || currentStage !== 4 || noahEndingArkFadeMats.length === 0 || !camera) return;
-  if (window.globalCameraViewMode === 'fps') return;
 
-  // 카메라와 노아(playerPos) 사이 시선이 방주 영역(x: -16.5~16.5, z: 15.2~26.8, y: 0~10.5)을 통과하는지 확인
-  const camX = camera.position.x, camY = camera.position.y, camZ = camera.position.z;
-  const px = playerPos.x, py = playerPos.y + 1.4, pz = playerPos.z;
+  // 노아가 바위 동산이나 방주 갑판·지붕 위로 올라갔거나 1인칭 시점일 때는 방주 투명화 원천 방지
+  const isNoahOnOrClimbingArk =
+    playerPos.y >= 2.1 &&
+    playerPos.x > -19.0 && playerPos.x < 19.0 &&
+    playerPos.z > 12.5 && playerPos.z < 29.5;
 
-  let isObstructedByArk = false;
-  for (let i = 1; i <= 18; i++) {
-    const t = i / 18;
-    const sx = camX + (px - camX) * t;
-    const sy = camY + (py - camY) * t;
-    const sz = camZ + (pz - camZ) * t;
-    if (sx > -16.5 && sx < 16.5 && sz > 15.2 && sz < 26.8 && sy >= -0.2 && sy <= 10.5) {
-      isObstructedByArk = true;
-      break;
+  let shouldFade = false;
+  if (window.globalCameraViewMode !== 'fps' && !isNoahOnOrClimbingArk && playerPos.y < 4.8) {
+    const camX = camera.position.x, camY = camera.position.y, camZ = camera.position.z;
+    const px = playerPos.x, py = playerPos.y + 1.4, pz = playerPos.z;
+    // 경계 떨림 방지를 위한 약간의 히스테리시스(진입/이탈 여유) 적용
+    const pad = noahEndingArkIsFaded ? 0.65 : 0.0;
+    const minX = -16.5 - pad, maxX = 16.5 + pad;
+    const minZ = 15.2 - pad, maxZ = 26.8 + pad;
+    const minY = -0.2 - pad * 0.5, maxY = 10.5 + pad;
+
+    for (let i = 0; i <= 16; i++) {
+      const t = i / 18;
+      const sx = camX + (px - camX) * t;
+      const sy = camY + (py - camY) * t;
+      const sz = camZ + (pz - camZ) * t;
+      if (sx > minX && sx < maxX && sz > minZ && sz < maxZ && sy >= minY && sy <= maxY) {
+        shouldFade = true;
+        break;
+      }
     }
   }
 
-  if (isObstructedByArk) {
-    noahEndingArkFadeMats.forEach(mat => {
-      if (!mat) return;
-      mat.transparent = true;
-      mat.opacity = 0.22;
-      if (!fadedMaterials.includes(mat)) fadedMaterials.push(mat);
-    });
+  noahEndingArkIsFaded = shouldFade;
+  const targetOpacity = shouldFade ? 0.22 : 1.0;
+  const step = Math.min(1, Math.max(0.008, Number.isFinite(dt) ? dt : 0.016) * 10.0);
+  const prevOpacity = noahEndingArkOpacity;
+  if (Math.abs(targetOpacity - noahEndingArkOpacity) <= 0.005) {
+    noahEndingArkOpacity = targetOpacity;
+  } else {
+    noahEndingArkOpacity += (targetOpacity - noahEndingArkOpacity) * step;
   }
+
+  const wantTransparent = noahEndingArkOpacity < 0.995;
+  const modeChanged = (wantTransparent !== noahEndingArkTransparentApplied);
+  const opacityChanged = Math.abs(noahEndingArkOpacity - prevOpacity) > 0.0005;
+  if (!modeChanged && !opacityChanged) return;
+
+  noahEndingArkTransparentApplied = wantTransparent;
+  noahEndingArkFadeMats.forEach(mat => {
+    if (!mat) return;
+    if (modeChanged) {
+      mat.transparent = wantTransparent;
+      mat.depthWrite = !wantTransparent;
+      mat.side = wantTransparent ? THREE.FrontSide : THREE.DoubleSide;
+      mat.needsUpdate = true;
+    }
+    mat.opacity = noahEndingArkOpacity;
+  });
 }
 
 // -------------------------------------------------------------------------
@@ -855,6 +887,9 @@ function buildNoahEndingArkAndSteppingRocks(arkZ = 21.0) {
   const backZ = arkZ + hullD / 2;  // 25.9 (남쪽 후면)
 
   noahEndingArkFadeMats = [];
+  noahEndingArkIsFaded = false;
+  noahEndingArkOpacity = 1.0;
+  noahEndingArkTransparentApplied = false;
   noahEndingCamCutscene = { active: true, timer: 0, duration: 4.4 };
 
   const regArkMat = (mat) => {
@@ -878,6 +913,7 @@ function buildNoahEndingArkAndSteppingRocks(arkZ = 21.0) {
 
   const addArkMesh = (mesh, registerRayHit = true) => {
     mesh.userData.linkedFadeMats = noahEndingArkFadeMats;
+    mesh.userData.isNoahEndingArk = true;
     worldGroup.add(mesh);
     if (registerRayHit) wallMeshes.push(mesh);
     return mesh;
@@ -921,14 +957,14 @@ function buildNoahEndingArkAndSteppingRocks(arkZ = 21.0) {
 
   // 2) 1층 상부 갑판(y = 6.62) + 2층 상층 선실(y = 7.75) + 2층 꼭대기 지붕(y = 9.48)
   const cabinW = 19.6, cabinH = 2.35, cabinD = 4.5, cabinZ = arkZ + 1.85;
-  addArkMesh(createBox(hullW + 2.4, 0.45, hullD + 0.8, deckWoodMat, 0, 6.4, arkZ));
+  addArkMesh(createBox(hullW + 2.4, 0.45, hullD + 0.8, deckWoodMat, 0, 6.4, arkZ), false);
   addArkMesh(createBox(hullW + 2.2, 0.55, 0.28, trimTimberMat, 0, 6.85, backZ + 0.2, false), false);
   addArkMesh(createBox(9.2, 0.55, 0.28, trimTimberMat, -8.6, 6.85, frontZ - 0.2, false), false);
   addArkMesh(createBox(9.2, 0.55, 0.28, trimTimberMat,  8.6, 6.85, frontZ - 0.2, false), false);
 
   addArkMesh(createBox(cabinW, cabinH, cabinD, cabinWoodMat, 0, 7.75, cabinZ));
-  addArkMesh(createBox(cabinW + 1.0, 0.38, cabinD + 0.9, roofTimberMat, 0, 9.1, cabinZ));
-  addArkMesh(createBox(cabinW + 0.3, 0.36, cabinD * 0.62, darkTimberMat, 0, 9.45, cabinZ));
+  addArkMesh(createBox(cabinW + 1.0, 0.38, cabinD + 0.9, roofTimberMat, 0, 9.1, cabinZ), false);
+  addArkMesh(createBox(cabinW + 0.3, 0.36, cabinD * 0.62, darkTimberMat, 0, 9.45, cabinZ), false);
   addArkMesh(createBox(cabinW + 0.6, 0.26, 0.55, trimTimberMat, 0, 9.74, cabinZ), false);
 
   const linkWindowMaterials = (winGroup) => {
@@ -1349,8 +1385,7 @@ function buildArkInteriorCeilingGroup(halfW, halfD, wallH) {
     ceilingGroup.add(createBox(0.7, 0.46, halfD * 2 + 1, beamMat, bx, wallH + 0.1, 0, false));
   });
 
-  ceilingGroup.visible =
-    window.globalCameraViewMode === 'fps' || window.globalCameraViewMode === 'lookup';
+  ceilingGroup.visible = window.globalCameraViewMode !== 'topdown';
   window.noahArkCeilingGroup = ceilingGroup;
   worldGroup.add(ceilingGroup);
 }
@@ -1364,6 +1399,9 @@ function buildNoahStage1World() {
   noahOuterSeaWaves = [];
   noahEndingCamCutscene.active = false;
   noahEndingArkFadeMats = [];
+  noahEndingArkIsFaded = false;
+  noahEndingArkOpacity = 1.0;
+  noahEndingArkTransparentApplied = false;
   window.noahArkCeilingGroup = null;
   scene.background = new THREE.Color(0x7dd3fc);
   scene.fog = new THREE.Fog(0x7dd3fc, 52, 135);
@@ -1469,6 +1507,9 @@ function buildNoahArkInteriorMaze(stageNum) {
   resetNoahArkRockingState();
   noahEndingCamCutscene.active = false;
   noahEndingArkFadeMats = [];
+  noahEndingArkIsFaded = false;
+  noahEndingArkOpacity = 1.0;
+  noahEndingArkTransparentApplied = false;
   noahStage3Trail = [];
   mazeRunCount++;
   scene.background = new THREE.Color(0x38bdf8);
@@ -1761,7 +1802,7 @@ function updateNoahCutsceneFrame(dt, now) {
     camera.lookAt(lookX, lookY, lookZ);
 
     updateWallTransparency();
-    checkAndFadeEndingArkIfBlocking();
+    checkAndFadeEndingArkIfBlocking(dt);
 
     if (p >= 1.0) {
       noahEndingCamCutscene.active = false;
@@ -1769,7 +1810,7 @@ function updateNoahCutsceneFrame(dt, now) {
       cameraTargetYaw = 0;
       snapCameraToPlayer();
       updateWallTransparency();
-      checkAndFadeEndingArkIfBlocking();
+      checkAndFadeEndingArkIfBlocking(dt);
     }
     return true;
   }
@@ -1836,9 +1877,6 @@ function updateNoahCutsceneFrame(dt, now) {
 function updateNoahStageFrame(dt, now) {
   if (currentStage !== 2) {
     resetNoahArkRockingState();
-  }
-  if (currentStage === 4) {
-    setTimeout(checkAndFadeEndingArkIfBlocking, 0);
   }
 
   if (currentStage === 1) {
@@ -2074,8 +2112,7 @@ function updateNoahStageFrame(dt, now) {
 
   if (currentStage === 2 || currentStage === 3) {
     if (window.noahArkCeilingGroup) {
-      window.noahArkCeilingGroup.visible =
-        window.globalCameraViewMode === 'fps' || window.globalCameraViewMode === 'lookup';
+      window.noahArkCeilingGroup.visible = window.globalCameraViewMode !== 'topdown';
     }
     if (noahOuterSeaWaves.length > 0) {
       noahOuterSeaWaves.forEach(w => {

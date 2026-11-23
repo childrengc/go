@@ -115,7 +115,7 @@ function buildDistantPlainAndRiverVista(houseZ) {
   const riverMat = new THREE.MeshLambertMaterial({ map: waterTex, transparent: true, opacity: 0.90 });
   const bridgeMat = matDavidCached('#94a3b8', '#64748b');
 
-  const plainFloor = createBox(280, 2.0, 160, plainMat, 0, -1.05, houseZ - 55, false);
+  const plainFloor = createBox(360, 2.0, 220, plainMat, 0, -1.05, houseZ - 72, false);
   plainFloor.receiveShadow = true;
   worldGroup.add(plainFloor);
 
@@ -130,7 +130,7 @@ function buildDistantPlainAndRiverVista(houseZ) {
   });
 
   const riverBaseZ = houseZ - 40;
-  for (let rx = -130; rx <= 130; rx += 6) {
+  for (let rx = -150; rx <= 150; rx += 6) {
     const curveZ = riverBaseZ + Math.sin(rx * 0.035) * 7.5;
     worldGroup.add(
       createBox(6.5, 0.18, 16.5, bankMat, rx, 0.02, curveZ, false),
@@ -150,24 +150,57 @@ function buildDistantPlainAndRiverVista(houseZ) {
     addDavidHillTree(tx, tz, 0.72 + (idx % 3) * 0.1, false, false, 0);
   });
 
-  for (let x = -120; x <= 120; x += 18) {
-    const moundZ = houseZ - 92 + (Math.abs(x) % 12);
-    worldGroup.add(createBox(22, 1.6, 16, lowMoundMat, x, 0.8, moundZ, false));
+  // [요청사항] 멀리 보이는 북쪽·동쪽·서쪽 맵 가장자리를 아기자기한 작은 언덕들과 나무 숲으로 가득 채우기
+  const smallHillMat1 = matDavidCached('#4ade80', '#22c55e');
+  const smallHillMat2 = matDavidCached('#22c55e', '#16a34a');
+  const smallHillMat3 = matDavidCached('#65a30d', '#4d7c0f');
+  const addDistantSmallHill = (hx, hz, w, h, d, baseY = 0, matIdx = 0, treeCount = 2) => {
+    const mA = matIdx % 3 === 0 ? smallHillMat1 : (matIdx % 3 === 1 ? smallHillMat2 : smallHillMat3);
+    const mB = matIdx % 2 === 0 ? smallHillMat2 : smallHillMat3;
+    worldGroup.add(
+      createBox(w, h, d, mA, hx, baseY + h * 0.5, hz, false),
+      createBox(w * 0.66, h * 0.62, d * 0.66, mB, hx + ((matIdx % 2) ? 1.2 : -1.2), baseY + h + h * 0.31, hz - 0.6, false)
+    );
+    const topY = baseY + h + h * 0.62;
+    for (let t = 0; t < treeCount; t++) {
+      const ox = (t - (treeCount - 1) * 0.5) * (w * 0.24);
+      const oz = ((t % 2 === 0) ? 1 : -1) * (d * 0.14);
+      const sc = 0.68 + ((Math.abs(Math.round(hx + hz)) + t) % 3) * 0.12;
+      addDavidHillTree(hx + ox, hz + oz, sc, false, false, t === 0 ? topY : baseY + h);
+    }
+  };
+
+  // 북쪽 원경 1·2·3열 작은 언덕과 나무 능선
+  for (let x = -154; x <= 154; x += 18) {
+    const idx = Math.abs(Math.round(x / 18));
+    const h1 = 2.4 + (idx % 3) * 0.85;
+    const z1 = houseZ - 88 + ((idx * 5) % 9) - 4;
+    addDistantSmallHill(x, z1, 20, h1, 16, 0, idx, 2);
+
+    const h2 = 4.0 + ((idx + 1) % 3) * 1.15;
+    const z2 = houseZ - 110 + ((idx * 7) % 10) - 5;
+    addDistantSmallHill(x + 8, z2, 24, h2, 18, 0, idx + 1, 2);
+
+    const h3 = 5.4 + ((idx + 2) % 3) * 1.3;
+    const z3 = houseZ - 134 + ((idx * 3) % 8) - 4;
+    addDistantSmallHill(x - 4, z3, 28, h3, 22, 0, idx + 2, 3);
   }
 
   for (let row = 0; row < 3; row++) {
     const baseZ = houseZ - 64 - row * 16;
-    for (let x = -116; x <= 116; x += 9) {
+    for (let x = -132; x <= 132; x += 10) {
       const jitterX = x + ((row * 3 + x) % 5) - 2;
       const jitterZ = baseZ + ((x * 7) % 6) - 3;
-      const smallScale = 0.55 + ((Math.abs(x + row * 11)) % 4) * 0.08;
+      const smallScale = 0.60 + ((Math.abs(x + row * 11)) % 4) * 0.09;
       addDavidHillTree(jitterX, jitterZ, smallScale, false, false, 0);
     }
   }
 
-  for (let z = houseZ - 56; z <= houseZ - 12; z += 10) {
-    [-96, -84, 84, 96].forEach((x, idx) => {
-      addDavidHillTree(x + (idx % 2) * 3, z, 0.65 + (idx % 2) * 0.12, false, false, 0);
+  // 북동·북서 외곽 계곡 가장자리 작은 언덕과 나무 숲
+  for (let z = houseZ - 74; z <= houseZ - 10; z += 16) {
+    [-112, -88, 88, 112].forEach((x, idx) => {
+      const h = 2.6 + ((Math.abs(z) + idx * 3) % 4) * 0.75;
+      addDistantSmallHill(x + (idx % 2) * 4, z, 20, h, 16, 0, idx + Math.abs(z), 2);
     });
   }
 
@@ -280,6 +313,28 @@ function buildHilltopAndWindingRoadTerrain(mapLimit, houseZ) {
     if (Math.abs(x) <= mapLimit - 4) {
       addDavidHillTree(x + 2.0, mapLimit - 1.5, 1.0, true, false);
     }
+  }
+
+  // [요청사항] 동·서·남쪽 멀리 보이는 맵 가장자리 외곽에도 완만한 작은 언덕과 나무 능선 추가
+  const outerHillMatA = matDavidCached('#4ade80', '#22c55e');
+  const outerHillMatB = matDavidCached('#16a34a', '#15803d');
+  for (let z = houseZ - 8; z <= mapLimit + 42; z += 14) {
+    [[-mapLimit - 26, -1], [mapLimit + 26, 1], [-mapLimit - 42, -1], [mapLimit + 42, 1]].forEach(([ox, side], idx) => {
+      const baseY = getDavidStage1GroundHeight(ox, z);
+      const h = 3.2 + ((Math.abs(z) + idx * 5) % 4) * 1.1;
+      const hill = createBox(18, h + baseY, 15, (idx % 2 === 0 ? outerHillMatA : outerHillMatB), ox, (h + baseY) * 0.5, z, false);
+      worldGroup.add(hill);
+      addDavidHillTree(ox - side * 2.5, z + ((idx % 2 === 0) ? 2.2 : -2.2), 0.85 + (idx % 3) * 0.12, false, false, h + baseY);
+      addDavidHillTree(ox + side * 2.2, z - ((idx % 2 === 0) ? 2.5 : -2.5), 0.78 + (idx % 2) * 0.14, false, false, h + baseY);
+    });
+  }
+  for (let x = -mapLimit - 34; x <= mapLimit + 34; x += 16) {
+    const idx = Math.abs(Math.round(x / 16));
+    const sz1 = mapLimit + 28 + (idx % 3) * 3;
+    const h1 = 4.5 + (idx % 4) * 1.2;
+    worldGroup.add(createBox(18, h1 + DAVID_HILL_TOP_Y, 16, (idx % 2 === 0 ? outerHillMatA : outerHillMatB), x, (h1 + DAVID_HILL_TOP_Y) * 0.5, sz1, false));
+    addDavidHillTree(x - 2.6, sz1 - 1.4, 0.90, false, false, h1 + DAVID_HILL_TOP_Y);
+    addDavidHillTree(x + 3.0, sz1 + 1.8, 0.82, false, false, h1 + DAVID_HILL_TOP_Y);
   }
 }
 
@@ -551,12 +606,17 @@ function buildDavidStage1World() {
   if (guideArrowGroup) guideArrowGroup.visible = (currentMode !== 'senior');
   snapCameraToPlayer();
   updateDavidStage1UI();
-  updateStageHUD();
+  if (!window.__isBuildingOpeningPreview) {
+    davidOpeningState.active = true;
+    updateStageHUD();
 
-  startDavidStage1Opening(() => {
-    playSheepBaaSound(1.05, 0.08);
-    showToast('🐑 언덕 위 초원에서 바위 뒤에 숨어 있는 양 5마리를 찾아 목초지로 데려오세요!');
-  });
+    startDavidStage1Opening(() => {
+      if (typeof setInGameHudControlsVisible === 'function') setInGameHudControlsVisible(true);
+      updateStageHUD();
+      playSheepBaaSound(1.05, 0.08);
+      showToast('🐑 언덕 위 초원에서 바위 뒤에 숨어 있는 양 5마리를 찾아 목초지로 데려오세요!');
+    });
+  }
 }
 
 // -------------------------------------------------------------------------
@@ -1053,6 +1113,11 @@ function updateDavidStage1UI() {
     if (hungerRow) hungerRow.classList.add('hidden');
     defRow.classList.remove('hidden');
     defRow.classList.add('flex');
+    const menuBtn = document.getElementById('hud-menu-btn');
+    if (menuBtn) {
+      const r = menuBtn.getBoundingClientRect();
+      if (r && r.bottom > 0) defRow.style.top = `${Math.max(42, Math.ceil(r.bottom) + 8)}px`;
+    }
     defTimer.textContent = `${Math.max(0, davidDefenseTimer).toFixed(1)}초`;
     if (lossBadge) {
       lossBadge.textContent = `🐑 사라진 양: ${davidLostSheepCount}/${davidMaxAllowedLost}마리`;
@@ -1777,6 +1842,7 @@ function startDavidStage1AnointCutscene() {
   document.getElementById('context-action-btn').classList.add('hidden');
   document.getElementById('puzzle-build-btn').classList.add('hidden');
   document.getElementById('hud-mission-box').classList.add('hidden');
+  if (typeof hideMissionGuideBubbleImmediately === 'function') hideMissionGuideBubbleImmediately();
   if (targetObject && targetObject.label) targetObject.label.style.opacity = '0';
   if (targetObject && targetObject.spotRing) targetObject.spotRing.visible = false;
 
@@ -2166,13 +2232,20 @@ window.advanceDavidStage2Dialogue = function () {
   if (davidStage2Dialogue.step === 1) {
     davidStage2Dialogue.step = 2;
     davidStage2Dialogue.timer = 0;
+    if (typeof setPlayerMeshVisibilityForCamera === 'function') setPlayerMeshVisibilityForCamera(false);
     playerFacing = Math.PI;
     if (playerGroup) {
+      playerGroup.visible = true;
       playerGroup.position.copy(playerPos);
       playerGroup.rotation.y = Math.PI;
     }
-    camera.position.set(playerPos.x + 1.9, playerPos.y + 2.35, playerPos.z - 3.6);
-    camera.lookAt(playerPos.x, playerPos.y + 1.95, playerPos.z);
+    const isLandscape = (typeof window !== 'undefined') && (window.innerWidth > window.innerHeight);
+    camera.position.set(
+      playerPos.x + (isLandscape ? 1.85 : 1.55),
+      playerPos.y + (isLandscape ? 1.92 : 2.08),
+      playerPos.z - (isLandscape ? 4.15 : 3.55)
+    );
+    camera.lookAt(playerPos.x - 0.1, playerPos.y + (isLandscape ? 1.38 : 1.68), playerPos.z);
 
     const davidLine =
       '"너는 나에게 칼과 큰 창과 작은 창을 가지고 나아오지만, 나는 만군의 여호와의 이름으로 너에게 간다. 여호와는 이스라엘 군대의 하나님이시다. 오늘 여호와께서는 너를 나에게 주실 것이다."';
@@ -2193,7 +2266,12 @@ window.advanceDavidStage2Dialogue = function () {
 
     isPlaying = true;
     if (currentMode === 'timeattack') isTimeAttackActive = true;
+    if (typeof setInGameHudControlsVisible === 'function') setInGameHudControlsVisible(true);
+    if (typeof setPlayerMeshVisibilityForCamera === 'function') {
+      setPlayerMeshVisibilityForCamera(window.globalCameraViewMode === 'fps');
+    }
     snapCameraToPlayer();
+    updateStageHUD();
     startStageBgm(2);
     showToast('🪨 시냇가에서 물맷돌 5개를 모두 모아야 조준창이 열립니다! 먼저 5개를 모아오세요!');
   }
@@ -2202,18 +2280,25 @@ window.advanceDavidStage2Dialogue = function () {
 function startDavidStage2PreBattleDialogue() {
   isPlaying = false;
   isTimeAttackActive = false;
+  if (typeof setInGameHudControlsVisible === 'function') setInGameHudControlsVisible(false);
+  if (typeof setPlayerMeshVisibilityForCamera === 'function') setPlayerMeshVisibilityForCamera(false);
   davidStage2Dialogue.active = true;
   davidStage2Dialogue.step = 1;
   davidStage2Dialogue.timer = 0;
 
   playerFacing = Math.PI;
   if (playerGroup) {
+    playerGroup.visible = true;
     playerGroup.position.copy(playerPos);
     playerGroup.rotation.y = Math.PI;
   }
+  if (davidGoliathObj) {
+    davidGoliathObj.rotation.y = 0;
+  }
 
-  camera.position.set(0, 7.2, -3.2);
-  camera.lookAt(0, 6.2, -17.5);
+  const isLandscape = (typeof window !== 'undefined') && (window.innerWidth > window.innerHeight);
+  camera.position.set(isLandscape ? 2.2 : 1.9, isLandscape ? 7.8 : 8.5, isLandscape ? -3.4 : -4.4);
+  camera.lookAt(0, isLandscape ? 7.6 : 8.6, -17.5);
 
   const goliathLine = '"이것이 이스라엘이 보낸 전사란 말이냐? 앳된 애송이 하나뿐이라니"';
   showStage2PreBattleLine('🗿 거인 전사 골리앗', goliathLine, 0.58, '다음 (다윗의 대답) ▶');
@@ -2624,6 +2709,7 @@ function buildDavidStage2World() {
   }
   if (guideArrowGroup) guideArrowGroup.visible = (currentMode !== 'senior');
   snapCameraToPlayer();
+  davidOpeningState.active = true;
   updateStageHUD();
 
   startDavidStage2OpeningAndDialogue();
@@ -3011,6 +3097,7 @@ function startDavidStage2VictoryCutscene() {
   document.getElementById('context-action-btn').classList.add('hidden');
   document.getElementById('puzzle-build-btn').classList.add('hidden');
   document.getElementById('hud-mission-box').classList.add('hidden');
+  if (typeof hideMissionGuideBubbleImmediately === 'function') hideMissionGuideBubbleImmediately();
   if (targetObject && targetObject.label) targetObject.label.style.opacity = '0';
 
   davidGoliathHazards.forEach(hz => {
@@ -3054,21 +3141,25 @@ function updateDavidStage2CutsceneFrame(dt, now) {
       playerGroup.rotation.y = Math.PI;
     }
 
-    // 가로형 화면에서는 하단 반투명 대화창 위쪽 상단 70% 영역에 캐릭터가 또렷이 담기도록 카메라 시선을 살짝 아래로 조정!
+    // 가로·세로형 모두 하단 반투명 대화창 위쪽에 골리앗(Step 1)과 다윗(Step 2)이 또렷이 담기도록 카메라를 고정·추적!
     const isLandscape = (typeof window !== 'undefined') && (window.innerWidth > window.innerHeight);
     if (davidStage2Dialogue.step === 1) {
-      const lookY = isLandscape ? 5.65 : 6.8;
-      const camZ = isLandscape ? -1.4 : -2.5;
-      camera.position.lerp(new THREE.Vector3(1.8, 7.2, camZ), 0.08);
+      const lookY = isLandscape ? 7.6 : 8.6;
+      const camX = (isLandscape ? 2.15 : 1.85) + Math.sin(davidStage2Dialogue.timer * 0.45) * 0.55;
+      const camY = isLandscape ? 7.8 : 8.5;
+      const camZ = isLandscape ? -3.4 : -4.4;
+      camera.position.lerp(new THREE.Vector3(camX, camY, camZ), 0.10);
       camera.lookAt(0, lookY, -17.5);
       if (davidGoliathObj && davidGoliathObj.userData.rArm) {
         davidGoliathObj.userData.rArm.rotation.x = -0.8 + Math.sin(now * 0.008) * 0.45;
       }
     } else if (davidStage2Dialogue.step === 2) {
-      const dLookY = isLandscape ? (playerPos.y + 1.38) : (playerPos.y + 1.95);
-      const dCamZ = isLandscape ? (playerPos.z - 4.25) : (playerPos.z - 3.6);
-      camera.position.lerp(new THREE.Vector3(playerPos.x + 1.9, playerPos.y + 2.35, dCamZ), 0.12);
-      camera.lookAt(playerPos.x - 0.2, dLookY, playerPos.z - 0.4);
+      const dLookY = isLandscape ? (playerPos.y + 1.38) : (playerPos.y + 1.68);
+      const dCamX = playerPos.x + (isLandscape ? 1.85 : 1.55) + Math.sin(davidStage2Dialogue.timer * 0.55) * 0.25;
+      const dCamY = playerPos.y + (isLandscape ? 1.92 : 2.08);
+      const dCamZ = playerPos.z - (isLandscape ? 4.15 : 3.55);
+      camera.position.lerp(new THREE.Vector3(dCamX, dCamY, dCamZ), 0.14);
+      camera.lookAt(playerPos.x - 0.1, dLookY, playerPos.z);
       if (playerLimbs && playerLimbs.rArm) {
         playerLimbs.rArm.rotation.x = -1.6 + Math.sin(now * 0.01) * 0.35;
       }
