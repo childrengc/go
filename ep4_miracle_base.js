@@ -5068,10 +5068,11 @@ window.playEp4OpeningVideoThen = function (onComplete) {
     skipBtn.onclick = () => finishOnce(true);
   }
   if (playFallbackBtn) playFallbackBtn.classList.add('hidden');
+  
+  // 오프닝 영상 재생 중 상단 텍스트 제거 및 숨김 처리
   if (statusTxt) {
-    statusTxt.textContent = canSkipNow
-      ? '🎬 에피소드 4 오프닝 영상'
-      : '🎬 에피소드 4 오프닝 영상이 재생 중입니다...';
+    statusTxt.textContent = '';
+    statusTxt.classList.add('hidden');
   }
 
   slot.innerHTML = '';
@@ -5100,7 +5101,11 @@ window.playEp4OpeningVideoThen = function (onComplete) {
     video.preload = 'auto';
     video.onended = () => finishOnce(true);
     video.onerror = () => {
-      if (statusTxt) statusTxt.textContent = '⚠️ 영상을 불러오지 못해 바로 오픈월드로 이동합니다.';
+      // 에러 시에만 문구 표시
+      if (statusTxt) {
+        statusTxt.textContent = '⚠️ 영상을 불러오지 못해 바로 오픈월드로 이동합니다.';
+        statusTxt.classList.remove('hidden');
+      }
       setTimeout(() => finishOnce(false), 900);
     };
     slot.appendChild(video);
@@ -5194,10 +5199,11 @@ window.playEp4EndingVideoThen = function (onComplete) {
     skipBtn.onclick = () => finishOnce(true);
   }
   if (playFallbackBtn) playFallbackBtn.classList.add('hidden');
+  
+  // 엔딩 영상 재생 중 상단 텍스트 제거 및 숨김 처리
   if (statusTxt) {
-    statusTxt.textContent = canSkipNow
-      ? '🎬 에피소드 4 엔딩 영상'
-      : '🎬 에피소드 4 엔딩 영상이 재생 중입니다...';
+    statusTxt.textContent = '';
+    statusTxt.classList.add('hidden');
   }
 
   slot.innerHTML = '';
@@ -5225,7 +5231,10 @@ window.playEp4EndingVideoThen = function (onComplete) {
     video.preload = 'auto';
     video.onended = () => finishOnce(true);
     video.onerror = () => {
-      if (statusTxt) statusTxt.textContent = '✨ 엔딩 여정을 마치고 오픈월드로 돌아갑니다...';
+      if (statusTxt) {
+        statusTxt.textContent = '✨ 엔딩 여정을 마치고 오픈월드로 돌아갑니다...';
+        statusTxt.classList.remove('hidden');
+      }
       setTimeout(() => finishOnce(true), 900);
     };
     slot.appendChild(video);
@@ -5366,14 +5375,14 @@ function ensureMiracleCustomUI() {
         </button>
       </div>
 
-      <!-- 에피소드 4 오프닝 영상 모달 (전체화면 꽉 채우기 + 건너뛰기 버튼 오버레이) -->
+      <!-- 에피소드 4 오프닝·엔딩 영상 모달 (전체화면 꽉 채우기 + 우측 상단 건너뛰기 버튼만 오버레이) -->
       <div id="ep4-opening-video-modal" class="hidden pointer-events-auto fixed inset-0 z-50 bg-black flex-col items-center justify-center">
         
-        <!-- 상단 오버레이 UI (상태 텍스트 & 건너뛰기 버튼) -->
-        <div class="absolute top-0 inset-x-0 p-4 sm:p-6 flex items-center justify-between z-20 bg-gradient-to-b from-black/80 to-transparent">
-          <span id="ep4-opening-video-status" class="font-jua text-xs sm:text-sm text-amber-200 drop-shadow-md">🎬 에피소드 4 오프닝 영상</span>
+        <!-- 상단 오버레이 UI (텍스트 숨김 & 우측 상단 건너뛰기 버튼 유지) -->
+        <div class="absolute top-0 inset-x-0 p-4 sm:p-6 flex items-center justify-end z-20 pointer-events-none bg-transparent">
+          <span id="ep4-opening-video-status" class="hidden font-jua text-xs sm:text-sm text-amber-200 drop-shadow-md mr-auto"></span>
           <button id="ep4-opening-video-skip-btn" type="button"
-                  class="hidden mc-btn px-5 py-2 rounded-full bg-amber-400 hover:bg-amber-300 text-slate-950 font-jua text-sm sm:text-base shadow-lg">
+                  class="hidden pointer-events-auto mc-btn px-5 py-2 rounded-full bg-amber-400 hover:bg-amber-300 text-slate-950 font-jua text-sm sm:text-base shadow-lg">
             ⏭️ 건너뛰기
           </button>
         </div>
