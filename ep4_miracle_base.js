@@ -4,7 +4,7 @@
 // - 확장된 오픈월드 지형 고도 계산기(넓어진 골고다 언덕 포함) 및 소프트 로우 폴리곤 자연물 팩토리
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_base = '20261123_v29';
+window.__GAME_BUILD_VERSIONS__.ep4_base = '20261123_v30';
 
 // =========================================================================
 // 🎬 [에피소드 4 오프닝 · 엔딩 영상 주소 설정]
@@ -219,20 +219,9 @@ function saveMiracleNotebookProgress() {
   updateMiracleNotebookHudBadge();
 }
 
-// 4개 메인 스테이지를 모두 해금(클리어)한 플레이어는 2회차부터 모든 스테이지에 자유 접근
+// 전체 잠금 해제 요청 반영: 에피소드 4 모든 스테이지 및 엔딩 자유 접근 허용
 function isMiracleAllStagesUnlocked() {
-  const allCleared = Boolean(
-    miracleMainStagesCleared[1] &&
-    miracleMainStagesCleared[2] &&
-    miracleMainStagesCleared[3] &&
-    miracleMainStagesCleared[4]
-  );
-  if (allCleared || miracleAscensionSeen) return true;
-  if (typeof playerProgressData !== 'undefined' && playerProgressData.miracle) {
-    const mp = playerProgressData.miracle;
-    if (mp.completed || (mp.maxClearedStage || 0) >= 4) return true;
-  }
-  return false;
+  return true;
 }
 window.isMiracleAllStagesUnlocked = isMiracleAllStagesUnlocked;
 
@@ -5338,28 +5327,6 @@ function ensureMiracleCustomUI() {
           </span>
         </button>
 
-        <!-- [낮/밤 순환 HUD] 현재 시간대 표시 + 디버그 시간 점프·배속 제어 (오픈월드) -->
-        <div id="miracle-time-row" class="hidden flex flex-col gap-1 bg-slate-900/82 border border-slate-500/70 rounded-xl px-2 py-1.5 shadow-lg backdrop-blur-sm text-white w-[142px]">
-          <div class="flex items-center justify-between gap-1 text-[11px] font-jua">
-            <span id="miracle-time-pill" class="text-amber-200 truncate">☀️ 낮</span>
-            <span id="miracle-time-pct" class="text-[10px] text-slate-300 font-sans">24%</span>
-          </div>
-          <div class="w-full h-1.5 rounded-full bg-slate-700 overflow-hidden relative">
-            <div class="absolute top-0 bottom-0 w-[1px] bg-amber-300/70 z-10" style="left:60%;" title="낮 60% / 밤 40% 경계"></div>
-            <div id="miracle-time-bar" class="h-full bg-sky-400 transition-all duration-100" style="width:24%;"></div>
-          </div>
-          <div id="miracle-time-ctrl-btns" class="flex items-center gap-1 pt-0.5">
-            <button id="miracle-time-jump-btn" type="button" onclick="if(window.MiracleDayNight){const info=window.MiracleDayNight.cyclePhase(); if(typeof showToast==='function') showToast(info.icon+' 시간대 전환: '+info.label);}"
-                    class="flex-1 px-1.5 py-0.5 rounded-md bg-indigo-500/80 hover:bg-indigo-400 text-[10px] font-jua text-white whitespace-nowrap" title="시간대 전환 (단축키 T)">
-              ⏩ 시간
-            </button>
-            <button id="miracle-time-speed-btn" type="button" onclick="if(window.MiracleDayNight){const sp=window.MiracleDayNight.cycleSpeed(1); if(typeof showToast==='function') showToast('⏱️ 시간 속도: '+(sp===0?'일시정지':sp+'x'));}"
-                    class="px-1.5 py-0.5 rounded-md bg-slate-700 hover:bg-slate-600 text-[10px] font-jua text-amber-200 whitespace-nowrap" title="시간 흐름 속도 ([ / ])">
-              1x
-            </button>
-          </div>
-        </div>
-
         <div id="miracle-parable-banner" class="hidden px-2.5 py-1 rounded-xl bg-emerald-900/90 border border-emerald-300 text-emerald-100 font-jua text-[11px] shadow">
           🌱 예수님이 들려주신 비유 체험
         </div>
@@ -5990,42 +5957,29 @@ function hideAllMiracleCustomUI() {
 
 window.syncMiracleTimeHUD = function () {
   const row = document.getElementById('miracle-time-row');
-  const pill = document.getElementById('miracle-time-pill');
-  const pct = document.getElementById('miracle-time-pct');
   const bar = document.getElementById('miracle-time-bar');
-  const ctrlBtns = document.getElementById('miracle-time-ctrl-btns');
-  const speedBtn = document.getElementById('miracle-time-speed-btn');
+  const dot = document.getElementById('miracle-time-dot');
+  const speedVal = document.getElementById('miracle-time-speed-val');
   if (!row || !window.MiracleDayNight) return;
 
-  const sub = (typeof miracleSubMode !== 'undefined') ? miracleSubMode : '';
   const epOk = (typeof currentEpisode !== 'undefined' && currentEpisode === 'miracle');
-  const showRow = epOk && (sub === 'openworld' || (sub === 'main1_galilee' && window.MiracleDayNight.stageControlled));
-  if (!showRow) {
+  const introHidden = (typeof isMiracleIntroHidingHud === 'function') ? isMiracleIntroHidingHud() : false;
+  if (!epOk || introHidden) {
     row.classList.add('hidden');
     return;
   }
   row.classList.remove('hidden');
-  if (ctrlBtns) {
-    ctrlBtns.classList.toggle('hidden', sub !== 'openworld');
-  }
 
-  const info = window.MiracleDayNight.getPhaseInfo();
-  if (pill) {
-    const freezeTag = (window.MiracleDayNight.freezeForNightMission && sub === 'openworld') ? ' 🔒' : '';
-    pill.textContent = `${info.icon} ${info.label}${freezeTag}`;
-    pill.className = info.key === 'night'
-      ? 'text-indigo-200 truncate'
-      : (info.key === 'sunset' ? 'text-orange-300 truncate' : 'text-amber-200 truncate');
-  }
-  if (pct) pct.textContent = `${info.percent}%`;
+  const tPct = Math.max(0, Math.min(100, (Number(window.MiracleDayNight.time) || 0) * 100));
   if (bar) {
-    bar.style.width = `${info.percent}%`;
-    bar.className = info.key === 'night'
-      ? 'h-full bg-indigo-400 transition-all duration-100'
-      : (info.key === 'sunset' ? 'h-full bg-orange-400 transition-all duration-100' : 'h-full bg-sky-400 transition-all duration-100');
+    bar.style.width = `${tPct.toFixed(1)}%`;
   }
-  if (speedBtn) {
-    speedBtn.textContent = info.speedMultiplier === 0 ? '⏸️ 0x' : `${info.speedMultiplier}x`;
+  if (dot) {
+    dot.style.left = `${tPct.toFixed(1)}%`;
+  }
+  if (speedVal) {
+    const sp = window.MiracleDayNight.paused ? 0 : (window.MiracleDayNight.speedMultiplier || 1);
+    speedVal.textContent = `${sp}x`;
   }
 };
 
@@ -6038,36 +5992,50 @@ if (!window.__ep4DayNightKeysBound) {
     if (!window.MiracleDayNight) return;
 
     const sub = (typeof miracleSubMode !== 'undefined') ? miracleSubMode : '';
-    if (sub === 'openworld') {
-      if (e.code === 'KeyT' && !e.ctrlKey && !e.metaKey) {
-        const info = window.MiracleDayNight.cyclePhase();
-        if (typeof showToast === 'function') showToast(`${info.icon} 시간대 점프: ${info.label} (${info.percent}%)`);
-      } else if (e.code === 'BracketLeft') {
-        const sp = window.MiracleDayNight.cycleSpeed(-1);
-        if (typeof showToast === 'function') showToast(`⏱️ 시간 속도: ${sp === 0 ? '일시정지' : sp + 'x'}`);
-      } else if (e.code === 'BracketRight') {
-        const sp = window.MiracleDayNight.cycleSpeed(1);
-        if (typeof showToast === 'function') showToast(`⏱️ 시간 속도: ${sp === 0 ? '일시정지' : sp + 'x'}`);
-      } else if (e.shiftKey && (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3' || e.code === 'Digit4')) {
-        const phaseMap = { Digit1: 'morning', Digit2: 'noon', Digit3: 'sunset', Digit4: 'night' };
-        const info = window.MiracleDayNight.jumpToPhase(phaseMap[e.code]);
-        if (typeof showToast === 'function') showToast(`${info.icon} 시간대 이동: ${info.label} (${info.percent}%)`);
-      } else if (e.shiftKey && e.code === 'KeyG') {
-        const safePt = (typeof window.findSafeOpenWorldOutdoorPoint === 'function')
-          ? window.findSafeOpenWorldOutdoorPoint(16.5, 37.5, 1.0)
-          : { x: 16.5, z: 37.5 };
-        const gy = (typeof getMiracleOpenWorldGroundHeight === 'function')
-          ? getMiracleOpenWorldGroundHeight(safePt.x, safePt.z)
-          : 0;
-        if (typeof playerPos !== 'undefined' && playerPos) {
-          playerPos.set(safePt.x, gy, safePt.z);
-          if (typeof lastGroundedY !== 'undefined') lastGroundedY = gy;
-          if (typeof playerVelY !== 'undefined') playerVelY = 0;
-          if (typeof isGrounded !== 'undefined') isGrounded = true;
-          if (typeof cameraYaw !== 'undefined') cameraYaw = Math.PI;
-          if (typeof cameraTargetYaw !== 'undefined') cameraTargetYaw = Math.PI;
-          if (typeof snapCameraToPlayer === 'function') snapCameraToPlayer();
-        }
+    if (e.code === 'KeyT' && !e.ctrlKey && !e.metaKey) {
+      const info = window.MiracleDayNight.cyclePhase();
+      if (typeof showToast === 'function') showToast(`${info.icon} 시간대 전환: ${info.label} (${info.percent}%)`);
+    } else if (e.code === 'BracketLeft') {
+      const sp = window.MiracleDayNight.cycleSpeed(-1);
+      if (typeof showToast === 'function') showToast(`⏱️ 시간 속도: ${sp}x`);
+    } else if (e.code === 'BracketRight') {
+      const sp = window.MiracleDayNight.cycleSpeed(1);
+      if (typeof showToast === 'function') showToast(`⏱️ 시간 속도: ${sp}x`);
+    } else if (e.shiftKey && (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3' || e.code === 'Digit4')) {
+      const phaseMap = { Digit1: 'sunrise', Digit2: 'day', Digit3: 'sunset', Digit4: 'night' };
+      const info = window.MiracleDayNight.jumpToPhase(phaseMap[e.code]);
+      if (typeof showToast === 'function') showToast(`${info.icon} 시간대 이동: ${info.label} (${info.percent}%)`);
+    } else if (sub === 'openworld' && e.shiftKey && e.code === 'KeyG') {
+      const safePt = (typeof window.findSafeOpenWorldOutdoorPoint === 'function')
+        ? window.findSafeOpenWorldOutdoorPoint(16.5, 37.5, 1.0)
+        : { x: 16.5, z: 37.5 };
+      const gy = (typeof getMiracleOpenWorldGroundHeight === 'function')
+        ? getMiracleOpenWorldGroundHeight(safePt.x, safePt.z)
+        : 0;
+      if (typeof playerPos !== 'undefined' && playerPos) {
+        playerPos.set(safePt.x, gy, safePt.z);
+        if (typeof lastGroundedY !== 'undefined') lastGroundedY = gy;
+        if (typeof playerVelY !== 'undefined') playerVelY = 0;
+        if (typeof isGrounded !== 'undefined') isGrounded = true;
+        if (typeof cameraYaw !== 'undefined') cameraYaw = Math.PI;
+        if (typeof cameraTargetYaw !== 'undefined') cameraTargetYaw = Math.PI;
+        if (typeof snapCameraToPlayer === 'function') snapCameraToPlayer();
+      }
+    } else if (sub === 'openworld' && e.shiftKey && e.code === 'KeyW') {
+      const safePt = (typeof window.findSafeOpenWorldOutdoorPoint === 'function')
+        ? window.findSafeOpenWorldOutdoorPoint(-19.5, -10.5, 1.0)
+        : { x: -19.5, z: -10.5 };
+      const gy = (typeof getMiracleOpenWorldGroundHeight === 'function')
+        ? getMiracleOpenWorldGroundHeight(safePt.x, safePt.z)
+        : 0;
+      if (typeof playerPos !== 'undefined' && playerPos) {
+        playerPos.set(safePt.x, gy, safePt.z);
+        if (typeof lastGroundedY !== 'undefined') lastGroundedY = gy;
+        if (typeof playerVelY !== 'undefined') playerVelY = 0;
+        if (typeof isGrounded !== 'undefined') isGrounded = true;
+        if (typeof cameraYaw !== 'undefined') cameraYaw = Math.PI * 0.5;
+        if (typeof cameraTargetYaw !== 'undefined') cameraTargetYaw = Math.PI * 0.5;
+        if (typeof snapCameraToPlayer === 'function') snapCameraToPlayer();
       }
     } else if (sub === 'main1_galilee' && e.shiftKey && e.code === 'KeyN') {
       if (typeof window.debugJumpStage1ToNightStorm === 'function') {
@@ -6078,20 +6046,33 @@ if (!window.__ep4DayNightKeysBound) {
     if (e.shiftKey && e.code === 'KeyD') {
       const fe = (typeof miracleActiveFieldEvent !== 'undefined') ? miracleActiveFieldEvent : null;
       const ms = (typeof miracleActiveMiniState !== 'undefined') ? miracleActiveMiniState : null;
+      const asc = (typeof miracleAscensionState !== 'undefined') ? miracleAscensionState : null;
       const pool = (window.MiracleDayNight && Array.isArray(window.MiracleDayNight.pointLightPool)) ? window.MiracleDayNight.pointLightPool : [];
       const sunSys = (typeof miracleSunSystem !== 'undefined') ? miracleSunSystem : {};
+      const skyBirds = Array.isArray(window.miracleSkyBirds) ? window.miracleSkyBirds : [];
+      const seaBirds = (ms && Array.isArray(ms.seaBirds)) ? ms.seaBirds : [];
+      const allBirds = skyBirds.length > 0 ? skyBirds : seaBirds;
+      const visibleBirds = allBirds.filter(b => b && b.mesh && b.mesh.visible).length;
+      const sleepingDisciples = (asc && Array.isArray(asc.disciples))
+        ? asc.disciples.filter(d => d && d.mesh && Math.abs(d.mesh.rotation.x + Math.PI * 0.5) < 0.25).length
+        : 0;
       const payload = {
         versions: window.__GAME_BUILD_VERSIONS__ || {},
         subMode: sub,
         anim: window.ep4CharacterAnimator ? window.ep4CharacterAnimator.debugState : null,
         time: window.MiracleDayNight.getPhaseInfo(),
+        birdRatio: window.MiracleDayNight.getBirdActivityRatio(),
+        visibleBirds,
+        totalBirds: allBirds.length,
         activePointLights: pool.filter(l => l && l.intensity > 0.01).length,
         stars: Array.isArray(sunSys.starLayers) ? sunSys.starLayers.length : 0,
+        skyDomeRadius: (sunSys.skyDomeMesh && sunSys.skyDomeMesh.geometry && sunSys.skyDomeMesh.geometry.parameters) ? sunSys.skyDomeMesh.geometry.parameters.radius : 0,
         meteors: Array.isArray(sunSys.meteors) ? sunSys.meteors.length : 0,
         moonVisible: Boolean(sunSys.moonVisualGroup && sunSys.moonVisualGroup.visible),
         fireProps: Array.isArray(window.miracleNightFireProps) ? window.miracleNightFireProps.length : 0,
         patrols: Array.isArray(window.miracleNightPatrolSoldiers) ? window.miracleNightPatrolSoldiers.length : 0,
-        mission: fe ? { type: fe.type, collected: fe.collected || 0, required: fe.required || 0, carried: (typeof carriedBlockGroup !== 'undefined' && carriedBlockGroup) ? carriedBlockGroup.children.length : 0 } : null,
+        sleepingDisciples,
+        mission: fe ? { type: fe.type, id: fe.spot ? fe.spot.id : '', collected: fe.collected || 0, carrying: fe.carrying || 0, required: fe.required || 0, carried: (typeof carriedBlockGroup !== 'undefined' && carriedBlockGroup) ? carriedBlockGroup.children.length : 0 } : null,
         stage1: (sub === 'main1_galilee' && ms) ? { phase: ms.phase, haulProgress: +(ms.haulProgress || 0).toFixed(2), netTension: +(ms.netTension || 0).toFixed(2), tearingFish: Array.isArray(ms.tearingNetFishes) ? ms.tearingNetFishes.length : 0, sternLightPower: +(ms.sternLightPower || 0).toFixed(2) } : null
       };
       const jsonStr = JSON.stringify(payload);

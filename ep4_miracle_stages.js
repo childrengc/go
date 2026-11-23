@@ -4,7 +4,7 @@
 // - 스테이지 3(십자가 사건): 넓어진 골고다 언덕 정상 고원과 세 십자가 등장 연출 적용
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_stages = '20261123_v29';
+window.__GAME_BUILD_VERSIONS__.ep4_stages = '20261123_v30';
 
 // 스테이지 3: 십자가를 지고 힘겹게 오르시는 예수님 보행 속도(더 천천히) 및 플레이어 대신 짊어졌을 때의 보행 속도
 const MIRACLE_STAGE3_JESUS_WALK_SPEED = 1.05;
@@ -718,12 +718,16 @@ function buildMiracleMainStage1Galilee() {
   miracleSubMode = 'main1_galilee';
   miracleStageObjects = [];
 
-  if (window.MiracleDayNight) {
-    window.MiracleDayNight.clearNightLightSources();
-    window.MiracleDayNight.stageControlled = true;
-    window.MiracleDayNight.freezeForNightMission = false;
-    window.MiracleDayNight.stormDarkness = 0;
-    window.MiracleDayNight.setTime(0.24);
+  const dn1 = window.MiracleDayNight;
+  const s1EnteredAtNight = Boolean(dn1 && (dn1.isNight() || (typeof dn1.getNightFactor === 'function' && dn1.getNightFactor() > 0.25)));
+  if (dn1) {
+    dn1.clearNightLightSources();
+    dn1.stageControlled = true;
+    dn1.freezeForNightMission = false;
+    dn1.stormDarkness = 0;
+    if (!s1EnteredAtNight) {
+      dn1.setTime(0.28);
+    }
   }
   if (typeof setupMiracleDynamicSunAndShadows === 'function') {
     setupMiracleDynamicSunAndShadows();
@@ -759,7 +763,9 @@ function buildMiracleMainStage1Galilee() {
     netTension: 0.25,
     haulTapImpulse: 0,
     sunsetTimer: 0,
-    sternLightPower: 0,
+    sunsetStartTime: null,
+    enteredAtNight: s1EnteredAtNight,
+    sternLightPower: s1EnteredAtNight ? Math.max(0.85, dn1.getNightFactor()) : 0,
     // 2단계 풍랑 균형 잡기 상태
     boatTilt: 0,
     waveGustForce: 0.48,
@@ -949,6 +955,10 @@ function buildMiracleMainStage1Galilee() {
   miracleActiveMiniState.sternGlow = sternGlow;
   miracleActiveMiniState.sternGlowMat = sternGlowMat;
   miracleActiveMiniState.lanternLampMat = lanternLampMat;
+  if (miracleActiveMiniState.enteredAtNight) {
+    if (sternGlow) sternGlow.visible = true;
+    if (sternGlowMat) sternGlowMat.opacity = 0.22;
+  }
 
   const _s1SternLightPos = new THREE.Vector3(-1.3, 2.2, 9.6);
   if (window.MiracleDayNight && typeof window.MiracleDayNight.registerNightLightSource === 'function') {
@@ -1137,10 +1147,26 @@ function buildMiracleMainStage1Galilee() {
   cameraTargetYaw = -Math.PI * 0.5;
   snapCameraToPlayer();
 
+  if (typeof updateMiracleDynamicSun === 'function') {
+    updateMiracleDynamicSun(0, performance.now());
+  }
+  if (Array.isArray(miracleActiveMiniState.seaBirds) && window.MiracleDayNight && typeof window.MiracleDayNight.getBirdActivityRatio === 'function') {
+    const ratio = window.MiracleDayNight.getBirdActivityRatio();
+    const total = miracleActiveMiniState.seaBirds.length;
+    for (let i = 0; i < total; i++) {
+      const sb = miracleActiveMiniState.seaBirds[i];
+      if (!sb || !sb.mesh) continue;
+      if (sb.baseScale == null) sb.baseScale = sb.mesh.scale.x || 1;
+      sb.mesh.visible = ratio > (i + 0.5) / total;
+    }
+  }
+
   pickNextGalileeFishSchoolTarget();
   syncMiracleStage1UI();
   if (typeof window.syncMiracleTimeHUD === 'function') window.syncMiracleTimeHUD();
-  showToast('🎣 [1단계 낮] 예수님 말씀대로 배 오른편 황금 물고기 떼를 향해 그물을 던지세요!');
+  showToast(miracleActiveMiniState.enteredAtNight
+    ? '🌙 [1단계 밤] 밤바다에서 예수님 말씀대로 배 오른편 물고기 떼를 향해 그물을 던지세요!'
+    : '🎣 [1단계 낮] 예수님 말씀대로 배 오른편 황금 물고기 떼를 향해 그물을 던지세요!');
 }
 
 function startGalileeStormPhase() {
@@ -1172,7 +1198,7 @@ function startGalileeStormPhase() {
   if (window.MiracleDayNight) {
     window.MiracleDayNight.stageControlled = true;
     window.MiracleDayNight.stormDarkness = 0.68;
-    window.MiracleDayNight.setTime(0.76);
+    window.MiracleDayNight.setTime(0.83);
   }
   if (st.sternGlow) st.sternGlow.visible = true;
   if (st.sternGlowMat) st.sternGlowMat.opacity = 0.36;
@@ -1258,7 +1284,7 @@ function triggerGalileeCalmStormCutscene() {
     if (window.MiracleDayNight) {
       window.MiracleDayNight.stageControlled = true;
       window.MiracleDayNight.stormDarkness = 0;
-      window.MiracleDayNight.setTime(0.78);
+      window.MiracleDayNight.setTime(0.85);
     }
     if (st.seaMesh && typeof tintIrregularLowPolyWater === 'function') {
       tintIrregularLowPolyWater(st.seaMesh, false);
@@ -1300,7 +1326,20 @@ function updateMiracleMainStage1Frame(dt, now) {
   }
   if (st.seaBirds) {
     const tSec = now * 0.001;
-    st.seaBirds.forEach(b => {
+    const dn = window.MiracleDayNight;
+    const birdRatio = isStorming ? 0 : ((dn && typeof dn.getBirdActivityRatio === 'function') ? dn.getBirdActivityRatio() : 1.0);
+    const totalSeaBirds = st.seaBirds.length;
+    st.seaBirds.forEach((b, idx) => {
+      if (!b || !b.mesh) return;
+      if (b.baseScale == null) b.baseScale = b.mesh.scale.x || 1;
+      const threshold = (idx + 0.5) / Math.max(1, totalSeaBirds);
+      if (birdRatio <= threshold || birdRatio <= 0.001) {
+        b.mesh.visible = false;
+        return;
+      }
+      b.mesh.visible = true;
+      const bScale = b.baseScale * Math.min(1.0, Math.max(0.28, (birdRatio - threshold) / 0.08));
+      b.mesh.scale.setScalar(bScale);
       b.angle += dt * b.speed;
       const nx = Math.cos(b.angle) * b.rad;
       const nz = Math.sin(b.angle) * b.rad;
@@ -1576,14 +1615,20 @@ function updateMiracleMainStage1Frame(dt, now) {
 
   // 3-3) [노을 -> 밤 전환 연출 (4.2초): 해가 지고 달과 별이 뜨며 예수님 곁 등불이 켜짐]
   if (st.phase === 'sunset_to_night') {
+    if (st.sunsetStartTime == null) {
+      st.sunsetStartTime = (window.MiracleDayNight && typeof window.MiracleDayNight.time === 'number')
+        ? window.MiracleDayNight.time
+        : 0.64;
+    }
     st.sunsetTimer = (st.sunsetTimer || 0) + dt;
     const u = Math.min(1.0, st.sunsetTimer / 4.2);
     if (window.MiracleDayNight) {
       window.MiracleDayNight.stageControlled = true;
-      window.MiracleDayNight.setTime(THREE.MathUtils.lerp(0.38, 0.76, u));
+      const startT = st.enteredAtNight ? Math.max(0.74, st.sunsetStartTime) : 0.64;
+      window.MiracleDayNight.setTime(THREE.MathUtils.lerp(startT, 0.83, u));
       window.MiracleDayNight.stormDarkness = Math.max(0, (u - 0.55) / 0.45) * 0.65;
     }
-    st.sternLightPower = Math.max(0, (u - 0.35) / 0.65);
+    st.sternLightPower = Math.max(st.enteredAtNight ? 0.85 : 0, (u - 0.35) / 0.65);
     if (st.sternGlow) st.sternGlow.visible = (st.sternLightPower > 0.05);
     if (st.sternGlowMat) st.sternGlowMat.opacity = st.sternLightPower * 0.18;
     if (st.boatRootGroup) {
@@ -1737,6 +1782,12 @@ function buildMiracleMainStage2Loaves() {
   miracleSubMode = 'main2_loaves';
   miracleStageObjects = [];
 
+  if (window.MiracleDayNight) {
+    window.MiracleDayNight.clearNightLightSources();
+    window.MiracleDayNight.stageControlled = false;
+    window.MiracleDayNight.freezeForNightMission = false;
+    window.MiracleDayNight.stormDarkness = 0;
+  }
   if (typeof setupMiracleDynamicSunAndShadows === 'function') {
     setupMiracleDynamicSunAndShadows();
   }
@@ -1755,6 +1806,8 @@ function buildMiracleMainStage2Loaves() {
     jesusPos: new THREE.Vector3(0, getMiracleGroundHeight(0, -24, 2), -24),
     jesusLabel: null,
     crowdList: [],
+    skyClouds: [],
+    campfires: [],
     introFlyover: { active: true, timer: 0, duration: 3.4 }
   };
   if (typeof setInGameHudControlsVisible === 'function') setInGameHudControlsVisible(false);
@@ -1916,7 +1969,31 @@ function buildMiracleMainStage2Loaves() {
     const cl = createLowPolyCloudGroup(sc, false);
     cl.position.set(cx, cy, cz);
     worldGroup.add(cl);
+    miracleActiveMiniState.skyClouds.push(cl);
   });
+
+  if (typeof window.createVillageCampfireProp === 'function') {
+    const s2Nf = (window.MiracleDayNight && typeof window.MiracleDayNight.getNightFactor === 'function') ? window.MiracleDayNight.getNightFactor() : 0;
+    [[-5.2, -22.2], [5.2, -22.2]].forEach(([fx, fz], idx) => {
+      const cf = window.createVillageCampfireProp(1.0);
+      const fy = getMiracleGroundHeight(fx, fz, 2);
+      cf.group.position.set(fx, fy, fz);
+      worldGroup.add(cf.group);
+      cf.setLit(s2Nf > 0.15, performance.now(), idx * 1.3);
+      miracleActiveMiniState.campfires.push(cf);
+      if (window.MiracleDayNight && typeof window.MiracleDayNight.registerNightLightSource === 'function') {
+        window.MiracleDayNight.registerNightLightSource({
+          pos: new THREE.Vector3(fx, fy + 1.0, fz),
+          yOffset: 0,
+          color: 0xff9238,
+          intensity: 3.4,
+          distance: 18,
+          phase: idx * 1.4,
+          isActive: () => Boolean(miracleSubMode === 'main2_loaves')
+        });
+      }
+    });
+  }
 
   const jY = getMiracleGroundHeight(0, -24, 2);
   const jesusMesh = createLowPolyPersonMesh('jesus', 0);
@@ -2059,6 +2136,13 @@ function buildMiracleMainStage2Loaves() {
   cameraTargetYaw = 0;
   snapCameraToPlayer();
 
+  if (typeof updateMiracleDynamicSun === 'function') {
+    updateMiracleDynamicSun(0, performance.now());
+  }
+  if (typeof window.syncMiracleTimeHUD === 'function') {
+    window.syncMiracleTimeHUD();
+  }
+
   showToast('🦅 벳새다 언덕에 모인 수많은 인파를 둘러본 뒤, 보리떡 5개와 물고기 2마리 도시락을 가진 소년을 찾아보세요!');
 }
 
@@ -2102,6 +2186,15 @@ function updateMiracleMainStage2Frame(dt, now) {
   }
   const st = miracleActiveMiniState;
   let nextGuidePos = null;
+  if (Array.isArray(st.campfires)) {
+    const nf = (window.MiracleDayNight && typeof window.MiracleDayNight.getNightFactor === 'function') ? window.MiracleDayNight.getNightFactor() : 0;
+    const isLit = nf > 0.15;
+    for (let i = 0; i < st.campfires.length; i++) {
+      if (st.campfires[i] && typeof st.campfires[i].setLit === 'function') {
+        st.campfires[i].setLit(isLit, now, i * 1.3);
+      }
+    }
+  }
 
   // 시작 버드뷰 언덕 스윕 인트로 진행 (끝나면 자동으로 캐릭터 기본 시점으로 착륙!)
   if (st.introFlyover && st.introFlyover.active) {
@@ -2448,6 +2541,12 @@ function buildMiracleMainStage3Cross() {
   miracleSubMode = 'main3_cross';
   miracleStageObjects = [];
 
+  if (window.MiracleDayNight) {
+    window.MiracleDayNight.clearNightLightSources();
+    window.MiracleDayNight.stageControlled = false;
+    window.MiracleDayNight.freezeForNightMission = false;
+    window.MiracleDayNight.stormDarkness = 0;
+  }
   if (typeof setupMiracleDynamicSunAndShadows === 'function') {
     setupMiracleDynamicSunAndShadows();
   }
@@ -2463,6 +2562,8 @@ function buildMiracleMainStage3Cross() {
     jesusLabel: null,
     crossProp: null,
     escortSoldiers: [],
+    skyClouds: [],
+    campfires: [],
     goalRing: null,
     goalPos: new THREE.Vector3(0, getMiracleGroundHeight(0, -50, 3), -50),
     goalLabel: null,
@@ -2719,7 +2820,31 @@ function buildMiracleMainStage3Cross() {
     const cl = createLowPolyCloudGroup(sc, false);
     cl.position.set(cx, cy, cz);
     worldGroup.add(cl);
+    miracleActiveMiniState.skyClouds.push(cl);
   });
+
+  if (typeof window.createVillageCampfireProp === 'function') {
+    const s3Nf = (window.MiracleDayNight && typeof window.MiracleDayNight.getNightFactor === 'function') ? window.MiracleDayNight.getNightFactor() : 0;
+    [[-10.5, 22.0], [10.5, 22.0]].forEach(([fx, fz], idx) => {
+      const cf = window.createVillageCampfireProp(1.0);
+      const fy = getMiracleGroundHeight(fx, fz, 3);
+      cf.group.position.set(fx, fy, fz);
+      worldGroup.add(cf.group);
+      cf.setLit(s3Nf > 0.15, performance.now(), idx * 1.5);
+      miracleActiveMiniState.campfires.push(cf);
+      if (window.MiracleDayNight && typeof window.MiracleDayNight.registerNightLightSource === 'function') {
+        window.MiracleDayNight.registerNightLightSource({
+          pos: new THREE.Vector3(fx, fy + 1.0, fz),
+          yOffset: 0,
+          color: 0xff9238,
+          intensity: 3.4,
+          distance: 18,
+          phase: idx * 1.4,
+          isActive: () => Boolean(miracleSubMode === 'main3_cross')
+        });
+      }
+    });
+  }
 
   // 단서 NPC 2명 (중앙 차단 건물 남쪽 거리 z = 22, 14.5에 배치)
   const clueSpecs = [
@@ -2797,6 +2922,17 @@ function buildMiracleMainStage3Cross() {
       carryOffZ: sp.carryOffZ,
       phase: si * 1.15
     });
+    if (window.MiracleDayNight && typeof window.MiracleDayNight.registerNightLightSource === 'function') {
+      window.MiracleDayNight.registerNightLightSource({
+        getPos: () => sMesh.position,
+        yOffset: 1.9,
+        color: 0xff943d,
+        intensity: 2.6,
+        distance: 13.5,
+        phase: si * 1.2,
+        isActive: () => Boolean(miracleSubMode === 'main3_cross' && sMesh && sMesh.visible)
+      });
+    }
   });
 
   miracleActiveMiniState.jesusMesh = jGrp;
@@ -2835,6 +2971,13 @@ function buildMiracleMainStage3Cross() {
   cameraYaw = 0;
   cameraTargetYaw = 0;
   snapCameraToPlayer();
+
+  if (typeof updateMiracleDynamicSun === 'function') {
+    updateMiracleDynamicSun(0, performance.now());
+  }
+  if (typeof window.syncMiracleTimeHUD === 'function') {
+    window.syncMiracleTimeHUD();
+  }
 
   showToast('😢 [1단계] 예루살렘 거리에서 사람들의 단서(2곳)를 듣고, 앞쪽 건물 뒤 광장으로 돌아가 예수님을 찾으세요!');
 }
@@ -3000,6 +3143,15 @@ function updateMiracleMainStage3Frame(dt, now) {
   const st = miracleActiveMiniState;
   if (!st || st.phase === 'failed') return;
   let nextGuidePos = null;
+  if (Array.isArray(st.campfires)) {
+    const nf = (window.MiracleDayNight && typeof window.MiracleDayNight.getNightFactor === 'function') ? window.MiracleDayNight.getNightFactor() : 0;
+    const isLit = nf > 0.15;
+    for (let i = 0; i < st.campfires.length; i++) {
+      if (st.campfires[i] && typeof st.campfires[i].setLit === 'function') {
+        st.campfires[i].setLit(isLit, now, i * 1.5);
+      }
+    }
+  }
 
   if (st.carryPromptCooldown > 0) st.carryPromptCooldown -= dt;
 
@@ -3618,6 +3770,12 @@ function buildMiracleMainStage4Tomb() {
   miracleSubMode = 'main4_tomb';
   miracleStageObjects = [];
 
+  if (window.MiracleDayNight) {
+    window.MiracleDayNight.clearNightLightSources();
+    window.MiracleDayNight.stageControlled = false;
+    window.MiracleDayNight.freezeForNightMission = false;
+    window.MiracleDayNight.stormDarkness = 0;
+  }
   if (typeof setupMiracleDynamicSunAndShadows === 'function') {
     setupMiracleDynamicSunAndShadows();
   }
@@ -3639,6 +3797,7 @@ function buildMiracleMainStage4Tomb() {
     tombLabel: null,
     houseRects: [],
     romanSoldiers: [],
+    skyClouds: [],
     romanHintNpc: null,
     spottedCooldown: 0,
     spottedCount: 0
@@ -3893,6 +4052,17 @@ function buildMiracleMainStage4Tomb() {
       pauseTimer: 0,
       phase: idx * 1.4
     });
+    if (window.MiracleDayNight && typeof window.MiracleDayNight.registerNightLightSource === 'function') {
+      window.MiracleDayNight.registerNightLightSource({
+        getPos: () => sGrp.position,
+        yOffset: 1.9,
+        color: 0xff943d,
+        intensity: 2.6,
+        distance: 13.5,
+        phase: idx * 1.4,
+        isActive: () => Boolean(miracleSubMode === 'main4_tomb')
+      });
+    }
   });
 
   // 2) 골목길 은신처 구석구석에서 무덤의 단서를 알려주는 NPC 3명 (무릎 높이 불규칙 빛의 원 적용)
@@ -4019,7 +4189,20 @@ function buildMiracleMainStage4Tomb() {
     const cl = createLowPolyCloudGroup(sc, false);
     cl.position.set(cx, cy, cz);
     worldGroup.add(cl);
+    miracleActiveMiniState.skyClouds.push(cl);
   });
+
+  if (window.MiracleDayNight && typeof window.MiracleDayNight.registerNightLightSource === 'function') {
+    window.MiracleDayNight.registerNightLightSource({
+      pos: new THREE.Vector3(0, 1.8, -38.0),
+      yOffset: 0,
+      color: 0xfef08a,
+      intensity: 3.0,
+      distance: 16.0,
+      phase: 0.9,
+      isActive: () => Boolean(miracleSubMode === 'main4_tomb')
+    });
+  }
 
   playerPos.set(0, 0, 40);
   lastGroundedY = 0;
@@ -4029,6 +4212,13 @@ function buildMiracleMainStage4Tomb() {
   cameraYaw = 0;
   cameraTargetYaw = 0;
   snapCameraToPlayer();
+
+  if (typeof updateMiracleDynamicSun === 'function') {
+    updateMiracleDynamicSun(0, performance.now());
+  }
+  if (typeof window.syncMiracleTimeHUD === 'function') {
+    window.syncMiracleTimeHUD();
+  }
 
   showToast(`🌅 [1단계] 로마 병사의 눈을 피해 촘촘한 마을 골목길에서 단서 ${reqClues}개를 모아 빈 무덤으로 나아가세요!`);
 }
@@ -4186,8 +4376,6 @@ function updateMiracleMainStage4Frame(dt, now) {
           if (st.gateBlockerMesh) st.gateBlockerMesh.visible = false;
           if (st.gateCollider) { st.gateCollider.minX = 9999; st.gateCollider.maxX = 9999; }
           if (st.tombLabel) st.tombLabel.innerHTML = '✨ 돌문이 굴러간 빈 무덤! (천사에게 가기)';
-          scene.background = new THREE.Color(0x38bdf8);
-          scene.fog = new THREE.Fog(0xbae6fd, 55, 200);
           updateStageHUD();
           showToast('🌅 단서를 모두 모아 북쪽 동산 문이 열렸어요! 빛나는 천사가 있는 빈 무덤 앞으로 달려가세요!');
         } else {
@@ -4242,6 +4430,14 @@ function buildMiracleEndingWorld() {
   hideAllMiracleCustomUI();
   miracleSubMode = 'ascension';
   targetObject = null;
+  miracleAmbientProps = [];
+
+  if (window.MiracleDayNight) {
+    window.MiracleDayNight.clearNightLightSources();
+    window.MiracleDayNight.stageControlled = false;
+    window.MiracleDayNight.freezeForNightMission = false;
+    window.MiracleDayNight.stormDarkness = 0;
+  }
 
   const isPostAscension = Boolean(typeof miracleAscensionSeen !== 'undefined' && miracleAscensionSeen);
 
@@ -4332,6 +4528,7 @@ function buildMiracleEndingWorld() {
     const cl = createLowPolyCloudGroup(sc, false);
     cl.position.set(cx, cy, cz);
     worldGroup.add(cl);
+    miracleAmbientProps.push({ kind: 'cloud', mesh: cl });
   });
 
   const jesusBaseY = summitPadY + 0.30;
@@ -4463,9 +4660,40 @@ function buildMiracleEndingWorld() {
     highCloud.scale.set(1.55, 0.85, 1.0);
     highCloud.position.set(0, summitPadY + 21.0, -8.5);
     worldGroup.add(skyBeam, highCloud);
+    miracleAmbientProps.push({ kind: 'cloud', mesh: highCloud });
   }
 
-  // 제자 11명 배치 — 뛰지 않고 제자리에 가만히 서서 하늘을 우러러보는 고요한 경외 자세!
+  // 감람산 들판 야간 모닥불 2개 (밤 시간대 제자들이 곁에 누워 잠들 때 따뜻하게 비춤)
+  const endingCampfires = [];
+  if (typeof window.createVillageCampfireProp === 'function') {
+    const endNf = (window.MiracleDayNight && typeof window.MiracleDayNight.getNightFactor === 'function') ? window.MiracleDayNight.getNightFactor() : 0;
+    [[-6.8, 1.8], [6.8, 1.8]].forEach(([fx, fz], idx) => {
+      const cf = window.createVillageCampfireProp(1.05);
+      const fy = getMiracleGroundHeight(fx, fz, 4);
+      cf.group.position.set(fx, fy, fz);
+      worldGroup.add(cf.group);
+      cf.setLit(endNf > 0.15, performance.now(), idx * 1.4);
+      endingCampfires.push(cf);
+      if (window.MiracleDayNight && typeof window.MiracleDayNight.registerNightLightSource === 'function') {
+        window.MiracleDayNight.registerNightLightSource({
+          pos: new THREE.Vector3(fx, fy + 1.0, fz),
+          yOffset: 0,
+          color: 0xff9238,
+          intensity: 3.6,
+          distance: 19.0,
+          phase: idx * 1.4,
+          isActive: () => Boolean(miracleSubMode === 'ascension')
+        });
+      }
+    });
+  }
+
+  // 제자 11명 배치 — 낮에는 서서 하늘을 우러러보고, 밤에는 모닥불 주변 들판 위 돗자리에 편안히 누워 잠듦!
+  const discipleSleepSpots = [
+    [-4.8, 3.6, 2.35], [-7.4, 4.4, 2.95], [-9.2, 2.2, 1.65], [-8.4, -0.4, 0.95], [-5.2, -0.1, 0.35],
+    [ 4.8, 3.6, -2.35], [ 7.4, 4.4, -2.95], [ 9.2, 2.2, -1.65], [ 8.4, -0.4, -0.95], [ 5.2, -0.1, -0.35],
+    [ 3.6, 5.2, -2.65]
+  ];
   for (let i = 0; i < 11; i++) {
     const ang = (i / 10) * Math.PI - Math.PI;
     const dx = Math.cos(ang) * 6.5;
@@ -4481,7 +4709,37 @@ function buildMiracleEndingWorld() {
       dMesh.userData.head.rotation.x = isPostAscension ? -0.46 : 0.0;
     }
     worldGroup.add(dMesh);
-    ascensionDisciples.push({ mesh: dMesh, baseY });
+
+    const sp = discipleSleepSpots[ascensionDisciples.length % discipleSleepSpots.length];
+    const sx = sp[0];
+    const sz = sp[1];
+    const yaw = sp[2];
+    const sleepGroundY = getMiracleGroundHeight(sx, sz, 4);
+    const sleepMat = createLowPolyMesh(
+      new THREE.BoxGeometry(0.95, 0.08, 1.95),
+      i % 2 === 0 ? '#8b6f4e' : '#7c6348',
+      sx,
+      sleepGroundY + 0.04,
+      sz,
+      false
+    );
+    sleepMat.rotation.y = yaw;
+    sleepMat.visible = false;
+    worldGroup.add(sleepMat);
+
+    ascensionDisciples.push({
+      mesh: dMesh,
+      baseY,
+      standPos: new THREE.Vector3(dx, baseY, dz),
+      sleepPos: new THREE.Vector3(sx, sleepGroundY + 0.24, sz),
+      sleepYaw: yaw,
+      sleepHeadTurn: (i % 2 === 0 ? 0.24 : -0.24),
+      sleepPhase: i * 0.77,
+      baseScale: dMesh.scale.clone(),
+      sleepMat,
+      isSleeping: false,
+      isPostAscension
+    });
   }
 
   // 감람산 하늘에 평화롭게 선회하는 흰 비둘기 6마리
@@ -4544,6 +4802,7 @@ function buildMiracleEndingWorld() {
     footCloudGroup,
     footCloudPuffs,
     surroundingClouds,
+    campfires: endingCampfires,
     angelsStarted: false,
     camLookCurrent: new THREE.Vector3(0, jesusBaseY + 1.4, -8.5),
     spotObj,
@@ -4558,6 +4817,37 @@ function buildMiracleEndingWorld() {
   cameraTargetYaw = 0;
   rebuildPlayerAppearance();
   snapCameraToPlayer();
+
+  const initNow = performance.now();
+  if (typeof updateMiracleDynamicSun === 'function') {
+    updateMiracleDynamicSun(0, initNow);
+  }
+  if (typeof window.syncMiracleTimeHUD === 'function') {
+    window.syncMiracleTimeHUD();
+  }
+  if (Array.isArray(window.miracleSkyBirds) && window.MiracleDayNight && typeof window.MiracleDayNight.getBirdActivityRatio === 'function') {
+    const ratio = window.MiracleDayNight.getBirdActivityRatio();
+    const total = window.miracleSkyBirds.length;
+    for (let i = 0; i < total; i++) {
+      const db = window.miracleSkyBirds[i];
+      if (!db || !db.mesh) continue;
+      if (db.baseScale == null) db.baseScale = db.mesh.scale.x || 1;
+      db.mesh.visible = ratio > (i + 0.5) / Math.max(1, total);
+    }
+  }
+  const initNightFactor = (window.MiracleDayNight && typeof window.MiracleDayNight.getNightFactor === 'function')
+    ? window.MiracleDayNight.getNightFactor()
+    : 0;
+  const initNightSleep = initNightFactor > 0.25;
+  for (let i = 0; i < endingCampfires.length; i++) {
+    if (endingCampfires[i] && typeof endingCampfires[i].setLit === 'function') {
+      endingCampfires[i].setLit(initNightFactor > 0.15, initNow, i * 1.4);
+    }
+  }
+  for (let i = 0; i < ascensionDisciples.length; i++) {
+    applyEndingDisciplePose(ascensionDisciples[i], initNightSleep, initNow);
+  }
+
   // 엔딩 세상에서도 좌측 HUD([나의 복음서 수첩] & [오픈월드로 돌아가기])를 즉시 표시!
   updateMiracleNotebookHudBadge();
 
@@ -4565,6 +4855,46 @@ function buildMiracleEndingWorld() {
     const certBtn = document.getElementById('cert-open-btn');
     if (certBtn) certBtn.classList.add('hidden');
   }, 0);
+}
+
+function applyEndingDisciplePose(d, sleeping, now) {
+  if (!d || !d.mesh) return;
+  const u = d.mesh.userData;
+  if (sleeping) {
+    d.isSleeping = true;
+    if (d.sleepMat) d.sleepMat.visible = true;
+    const breath = Math.sin(now * 0.0022 + d.sleepPhase);
+    d.mesh.position.set(d.sleepPos.x, d.sleepPos.y + breath * 0.014, d.sleepPos.z);
+    d.mesh.rotation.order = 'YXZ';
+    d.mesh.rotation.set(-Math.PI * 0.5, d.sleepYaw, 0);
+    d.mesh.scale.set(
+      d.baseScale.x * (1.0 + breath * 0.016),
+      d.baseScale.y,
+      d.baseScale.z * (1.0 + breath * 0.055)
+    );
+    if (u) {
+      if (u.head) u.head.rotation.set(0.08 + breath * 0.03, d.sleepHeadTurn, 0);
+      if (u.lArm) u.lArm.rotation.set(-0.08 + breath * 0.03, 0, -0.18);
+      if (u.rArm) u.rArm.rotation.set(-0.08 + breath * 0.03, 0, 0.18);
+      if (u.lLeg) u.lLeg.rotation.set(0, 0, 0.05);
+      if (u.rLeg) u.rLeg.rotation.set(0, 0, -0.05);
+    }
+  } else if (d.isSleeping) {
+    d.isSleeping = false;
+    if (d.sleepMat) d.sleepMat.visible = false;
+    d.mesh.position.copy(d.standPos);
+    d.mesh.rotation.order = 'XYZ';
+    d.mesh.rotation.set(0, 0, 0);
+    d.mesh.lookAt(0, d.standPos.y, -8.5);
+    d.mesh.scale.copy(d.baseScale);
+    if (u) {
+      if (u.head) u.head.rotation.set(d.isPostAscension ? -0.46 : 0.0, 0, 0);
+      if (u.lArm) u.lArm.rotation.set(0, 0, 0);
+      if (u.rArm) u.rArm.rotation.set(0, 0, 0);
+      if (u.lLeg) u.lLeg.rotation.set(0, 0, 0);
+      if (u.rLeg) u.rLeg.rotation.set(0, 0, 0);
+    }
+  }
 }
 
 function triggerMiracleAscensionSequence() {
@@ -4598,10 +4928,22 @@ function updateMiracleEndingFrame(dt, now) {
   if (typeof updateMiracleDynamicSun === 'function') {
     updateMiracleDynamicSun(dt, now);
   }
+  const dn = window.MiracleDayNight;
   if (Array.isArray(window.miracleSkyBirds) && window.miracleSkyBirds.length > 0) {
     const tSec = now * 0.001;
-    window.miracleSkyBirds.forEach(b => {
+    const birdRatio = (dn && typeof dn.getBirdActivityRatio === 'function') ? dn.getBirdActivityRatio() : 1.0;
+    const totalDoves = window.miracleSkyBirds.length;
+    window.miracleSkyBirds.forEach((b, idx) => {
       if (!b || !b.mesh) return;
+      if (b.baseScale == null) b.baseScale = b.mesh.scale.x || 1;
+      const threshold = (idx + 0.5) / Math.max(1, totalDoves);
+      if (birdRatio <= threshold || birdRatio <= 0.001) {
+        b.mesh.visible = false;
+        return;
+      }
+      b.mesh.visible = true;
+      const bScale = b.baseScale * Math.min(1.0, Math.max(0.28, (birdRatio - threshold) / 0.08));
+      b.mesh.scale.setScalar(bScale);
       b.angle += dt * b.speed;
       const nx = b.cx + Math.cos(b.angle) * b.radX;
       const nz = b.cz + Math.sin(b.angle) * b.radZ;
@@ -4619,8 +4961,23 @@ function updateMiracleEndingFrame(dt, now) {
   }
   const st = miracleAscensionState;
   const sp = st.spotObj;
+  const nf = (dn && typeof dn.getNightFactor === 'function') ? dn.getNightFactor() : 0;
+  if (Array.isArray(st.campfires)) {
+    const isLit = nf > 0.15;
+    for (let i = 0; i < st.campfires.length; i++) {
+      if (st.campfires[i] && typeof st.campfires[i].setLit === 'function') {
+        st.campfires[i].setLit(isLit, now, i * 1.4);
+      }
+    }
+  }
 
   if (!st.active) {
+    const isNightSleep = nf > 0.25;
+    if (Array.isArray(st.disciples)) {
+      for (let i = 0; i < st.disciples.length; i++) {
+        applyEndingDisciplePose(st.disciples[i], isNightSleep, now);
+      }
+    }
     if (sp) {
       const tdRing = Math.hypot(playerPos.x - sp.pos.x, playerPos.z - sp.pos.z);
       const tdJesus = sp.jesusPos
@@ -4646,13 +5003,14 @@ function updateMiracleEndingFrame(dt, now) {
   const t = st.timer;
   const padY = (typeof st.summitPadY === 'number') ? st.summitPadY : 2.0;
 
-  // 제자들은 제자리에 가만히 서서 고개만 서서히 들어 하늘을 우러러봄!
+  // 제자들은 승천 시 제자리에 일어서서 고개를 들어 하늘을 우러러봄!
   if (Array.isArray(st.disciples)) {
     const gazeT = Math.min(1, t / 4.2);
     const gazeSmooth = gazeT * gazeT * (3 - 2 * gazeT);
     const headTilt = -0.56 * gazeSmooth;
     st.disciples.forEach(d => {
       if (!d || !d.mesh) return;
+      if (d.isSleeping) applyEndingDisciplePose(d, false, now);
       d.mesh.position.y = d.baseY;
       if (d.mesh.userData && d.mesh.userData.head) {
         d.mesh.userData.head.rotation.x = headTilt;
@@ -5022,6 +5380,8 @@ REGISTER_EPISODE('miracle', {
       miracleSunSystem.moonCoreMat = null;
       miracleSunSystem.moonHaloMats = [];
       miracleSunSystem.nightSkyGroup = null;
+      miracleSunSystem.skyDomeMesh = null;
+      miracleSunSystem.skyDomeMat = null;
       miracleSunSystem.starLayers = [];
       miracleSunSystem.meteors = [];
       miracleSunSystem.cullEntries = [];

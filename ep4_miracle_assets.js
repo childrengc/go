@@ -6,7 +6,7 @@
 // =========================================================================
 
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_assets = '20261123_v29';
+window.__GAME_BUILD_VERSIONS__.ep4_assets = '20261123_v30';
 
 const _miracleDoubleSideMatCache = {};
 function matLowPolyDouble(hexColor) {
@@ -59,39 +59,48 @@ function buildBufferGeoFromTriangles(verts) {
 //    - FULL_DAY_SECONDS: 1일 전체 길이(초) / DAY_RATIO: 0.60 (낮 60% : 밤 40%)
 // -------------------------------------------------------------------------
 const EP4_DAY_NIGHT_CONFIG = {
-  FULL_DAY_SECONDS: 240,
-  DAY_RATIO: 0.60,
-  INITIAL_TIME: 0.24,
-  SUNSET_START: 0.44,
-  NIGHT_START: 0.60,
-  DAWN_START: 0.94,
-  SPEED_PRESETS: [1, 3, 10, 25, 0],
-  STAR_COUNT_DESKTOP: 960,
-  STAR_COUNT_MOBILE: 460,
-  METEOR_COUNT: 3,
+  FULL_DAY_SECONDS: 1800,           // 30분(1,800초) 전체 1일 순환
+  DAY_END: 20 / 30,                 // 0.0000 ~ 0.6667 (20분 낮)
+  SUNSET_END: 22 / 30,              // 0.6667 ~ 0.7333 (2분 일몰)
+  NIGHT_END: 28 / 30,               // 0.7333 ~ 0.9333 (6분 밤)
+  SUNRISE_END: 1.0,                 // 0.9333 ~ 1.0000 (2분 일출)
+  DAY_RATIO: 20 / 30,
+  INITIAL_TIME: 0.28,
+  SPEED_PRESETS: [1, 10, 60, 180],
+  STAR_COUNT_DESKTOP: 3400,
+  STAR_COUNT_MOBILE: 1700,
+  METEOR_COUNT: 4,
+  SKY_DOME_RADIUS: 650,
+  STAR_RADIUS_MIN: 560,
+  STAR_RADIUS_MAX: 625,
   POINT_LIGHT_POOL_DESKTOP: 6,
   POINT_LIGHT_POOL_MOBILE: 4
 };
 window.EP4_DAY_NIGHT_CONFIG = EP4_DAY_NIGHT_CONFIG;
 
+// 20분(낮) -> 2분(일몰) -> 6분(밤) -> 2분(일출) 하늘·안개·구름 색상 키프레임
 const EP4_SKY_KEYFRAMES = [
-  { t: 0.00, bg: new THREE.Color('#f59e6c'), fog: new THREE.Color('#fed7aa'), cloud: new THREE.Color('#ffedd5') },
-  { t: 0.08, bg: new THREE.Color('#7dd3fc'), fog: new THREE.Color('#bae6fd'), cloud: new THREE.Color('#ffffff') },
-  { t: 0.42, bg: new THREE.Color('#7dd3fc'), fog: new THREE.Color('#bae6fd'), cloud: new THREE.Color('#ffffff') },
-  { t: 0.52, bg: new THREE.Color('#ea580c'), fog: new THREE.Color('#fb923c'), cloud: new THREE.Color('#fdba74') },
-  { t: 0.59, bg: new THREE.Color('#1e2447'), fog: new THREE.Color('#312e59'), cloud: new THREE.Color('#475569') },
-  { t: 0.66, bg: new THREE.Color('#080d22'), fog: new THREE.Color('#101733'), cloud: new THREE.Color('#1e293b') },
-  { t: 0.90, bg: new THREE.Color('#080d22'), fog: new THREE.Color('#101733'), cloud: new THREE.Color('#1e293b') },
-  { t: 0.96, bg: new THREE.Color('#312e59'), fog: new THREE.Color('#6b4c6e'), cloud: new THREE.Color('#94a3b8') },
-  { t: 1.00, bg: new THREE.Color('#f59e6c'), fog: new THREE.Color('#fed7aa'), cloud: new THREE.Color('#ffedd5') }
+  { t: 0.0000, bg: new THREE.Color('#7dd3fc'), fog: new THREE.Color('#bae6fd'), cloud: new THREE.Color('#ffffff') },
+  { t: 0.6200, bg: new THREE.Color('#7dd3fc'), fog: new THREE.Color('#bae6fd'), cloud: new THREE.Color('#ffffff') },
+  { t: 0.6667, bg: new THREE.Color('#f59e0b'), fog: new THREE.Color('#fed7aa'), cloud: new THREE.Color('#ffedd5') },
+  { t: 0.7000, bg: new THREE.Color('#dc531e'), fog: new THREE.Color('#fb923c'), cloud: new THREE.Color('#fdba74') },
+  { t: 0.7333, bg: new THREE.Color('#0d1c42'), fog: new THREE.Color('#1b325c'), cloud: new THREE.Color('#283a5c') },
+  { t: 0.7600, bg: new THREE.Color('#081432'), fog: new THREE.Color('#1a315e'), cloud: new THREE.Color('#1e2d4d') },
+  { t: 0.9050, bg: new THREE.Color('#081432'), fog: new THREE.Color('#1a315e'), cloud: new THREE.Color('#1e2d4d') },
+  { t: 0.9333, bg: new THREE.Color('#1c2a56'), fog: new THREE.Color('#4a3c66'), cloud: new THREE.Color('#64748b') },
+  { t: 0.9667, bg: new THREE.Color('#f97316'), fog: new THREE.Color('#fdba74'), cloud: new THREE.Color('#fed7aa') },
+  { t: 1.0000, bg: new THREE.Color('#7dd3fc'), fog: new THREE.Color('#bae6fd'), cloud: new THREE.Color('#ffffff') }
 ];
 
 const _dnColorTmpA = new THREE.Color();
 const _dnColorTmpB = new THREE.Color();
 const _dnColorTmpC = new THREE.Color();
+const _dnStormBgCol = new THREE.Color('#060c1f');
+const _dnStormFogCol = new THREE.Color('#0f1a36');
+const _dnStormCloudCol = new THREE.Color('#334155');
 const _dnMeteorDir = new THREE.Vector3();
 const _dnMeteorQuat = new THREE.Quaternion();
-const _dnUpVec = new THREE.Vector3(0, 1, 0);
+const _dnZAxis = new THREE.Vector3(0, 0, 1);
 
 function ep4Smoothstep(edge0, edge1, x) {
   const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0 || 1e-6)));
@@ -118,23 +127,47 @@ function sampleEp4SkyGradient(t, outBg, outFog, outCloud) {
 
 function computeEp4TimeFactors(t) {
   const ct = ((t % 1) + 1) % 1;
+  const dayEnd = EP4_DAY_NIGHT_CONFIG.DAY_END;       // 20/30 = 0.6667
+  const sunsetEnd = EP4_DAY_NIGHT_CONFIG.SUNSET_END; // 22/30 = 0.7333
+  const nightEnd = EP4_DAY_NIGHT_CONFIG.NIGHT_END;   // 28/30 = 0.9333
+
   let nightFactor = 0;
-  if (ct >= 0.55 && ct < 0.64) {
-    nightFactor = ep4Smoothstep(0.55, 0.64, ct);
-  } else if (ct >= 0.64 && ct < 0.93) {
+  if (ct >= 0.690 && ct < 0.742) {
+    nightFactor = ep4Smoothstep(0.690, 0.742, ct);
+  } else if (ct >= 0.742 && ct <= 0.925) {
     nightFactor = 1.0;
-  } else if (ct >= 0.93) {
-    nightFactor = 1.0 - ep4Smoothstep(0.93, 1.00, ct) * 0.65;
-  } else if (ct < 0.05) {
-    nightFactor = 0.35 * (1.0 - ep4Smoothstep(0.00, 0.05, ct));
+  } else if (ct > 0.925 && ct <= 0.975) {
+    nightFactor = 1.0 - ep4Smoothstep(0.925, 0.975, ct);
   }
+
   let sunsetFactor = 0;
-  if (ct >= 0.42 && ct <= 0.62) {
-    const peak = 0.52;
-    const span = ct <= peak ? (ct - 0.42) / 0.10 : 1.0 - (ct - peak) / 0.10;
+  if (ct >= 0.640 && ct <= 0.750) {
+    const peak = (dayEnd + sunsetEnd) * 0.5; // 0.7000
+    const span = ct <= peak ? (ct - 0.640) / (peak - 0.640) : 1.0 - (ct - peak) / (0.750 - peak);
     sunsetFactor = Math.max(0, Math.min(1, span));
   }
-  return { nightFactor, sunsetFactor };
+
+  let sunriseFactor = 0;
+  if (ct >= 0.920) {
+    const peak = (nightEnd + 1.0) * 0.5; // 0.9667
+    const span = ct <= peak ? (ct - 0.920) / (peak - 0.920) : 1.0 - (ct - peak) / (1.015 - peak);
+    sunriseFactor = Math.max(0, Math.min(1, span));
+  } else if (ct <= 0.015) {
+    sunriseFactor = Math.max(0, 1.0 - ct / 0.015) * 0.45;
+  }
+
+  // 새 활동 비율: 낮=1.0, 일몰(20~22분)=1->0 점점 감소, 밤(22~28분)=0.0, 일출(28~30분)=0->1 점점 증가
+  let birdRatio = 1.0;
+  if (ct >= dayEnd && ct < sunsetEnd) {
+    birdRatio = 1.0 - (ct - dayEnd) / (sunsetEnd - dayEnd);
+  } else if (ct >= sunsetEnd && ct < nightEnd) {
+    birdRatio = 0.0;
+  } else if (ct >= nightEnd) {
+    birdRatio = (ct - nightEnd) / (1.0 - nightEnd);
+  }
+  birdRatio = Math.max(0, Math.min(1, birdRatio));
+
+  return { nightFactor, sunsetFactor, sunriseFactor, birdRatio };
 }
 
 const MiracleDayNight = {
@@ -146,20 +179,25 @@ const MiracleDayNight = {
   stormDarkness: 0,
   nightFactor: 0,
   sunsetFactor: 0,
+  sunriseFactor: 0,
+  birdRatio: 1,
   lightSources: [],
   pointLightPool: [],
   _hudSyncTimer: 0,
   isNight() {
-    return this.nightFactor > 0.25 || this.time >= EP4_DAY_NIGHT_CONFIG.NIGHT_START || this.time < 0.025;
+    return (this.time >= EP4_DAY_NIGHT_CONFIG.SUNSET_END - 0.008 && this.time <= EP4_DAY_NIGHT_CONFIG.NIGHT_END + 0.012) || this.nightFactor > 0.35;
+  },
+  getBirdActivityRatio() {
+    return this.birdRatio;
   },
   getPhaseInfo() {
     const t = ((this.time % 1) + 1) % 1;
     let key = 'day', label = '낮', icon = '☀️';
-    if (t >= 0.93 || t < 0.09) {
-      key = 'dawn'; label = '새벽'; icon = '🌄';
-    } else if (t >= 0.44 && t < 0.60) {
-      key = 'sunset'; label = '노을'; icon = '🌅';
-    } else if (t >= 0.60 && t < 0.93) {
+    if (t >= EP4_DAY_NIGHT_CONFIG.NIGHT_END) {
+      key = 'dawn'; label = '일출'; icon = '🌄';
+    } else if (t >= EP4_DAY_NIGHT_CONFIG.DAY_END && t < EP4_DAY_NIGHT_CONFIG.SUNSET_END) {
+      key = 'sunset'; label = '일몰'; icon = '🌅';
+    } else if (t >= EP4_DAY_NIGHT_CONFIG.SUNSET_END && t < EP4_DAY_NIGHT_CONFIG.NIGHT_END) {
       key = 'night'; label = '밤'; icon = '🌙';
     }
     return {
@@ -169,46 +207,48 @@ const MiracleDayNight = {
       percent: Math.round(t * 100),
       nightFactor: this.nightFactor,
       sunsetFactor: this.sunsetFactor,
+      sunriseFactor: this.sunriseFactor,
+      birdRatio: +this.birdRatio.toFixed(3),
       speedMultiplier: this.paused ? 0 : this.speedMultiplier
     };
+  },
+  getNightFactor() {
+    return computeEp4TimeFactors(this.time).nightFactor;
   },
   setTime(newTime) {
     this.time = ((Number(newTime) || 0) % 1 + 1) % 1;
     const f = computeEp4TimeFactors(this.time);
     this.nightFactor = f.nightFactor;
     this.sunsetFactor = f.sunsetFactor;
+    this.sunriseFactor = f.sunriseFactor;
+    this.birdRatio = f.birdRatio;
     if (typeof updateMiracleDynamicSun === 'function' && miracleSunSystem && miracleSunSystem.light) {
       updateMiracleDynamicSun(0, typeof performance !== 'undefined' ? performance.now() : 0);
     }
     if (typeof window.syncMiracleTimeHUD === 'function') window.syncMiracleTimeHUD();
   },
   jumpToPhase(phase) {
-    const map = { morning: 0.08, dawn: 0.98, noon: 0.25, day: 0.25, sunset: 0.515, night: 0.76 };
-    this.setTime(map[phase] !== undefined ? map[phase] : 0.25);
+    const map = { morning: 0.9667, sunrise: 0.9667, dawn: 0.9667, noon: 0.28, day: 0.28, sunset: 0.70, night: 0.83 };
+    this.setTime(map[phase] !== undefined ? map[phase] : 0.28);
     return this.getPhaseInfo();
   },
   cyclePhase() {
     const t = ((this.time % 1) + 1) % 1;
-    if (t < 0.43) return this.jumpToPhase('sunset');
-    if (t < 0.59) return this.jumpToPhase('night');
-    if (t < 0.92) return this.jumpToPhase('morning');
-    return this.jumpToPhase('noon');
+    if (t < EP4_DAY_NIGHT_CONFIG.DAY_END - 0.02) return this.jumpToPhase('sunset');
+    if (t < EP4_DAY_NIGHT_CONFIG.SUNSET_END - 0.01) return this.jumpToPhase('night');
+    if (t < EP4_DAY_NIGHT_CONFIG.NIGHT_END - 0.01) return this.jumpToPhase('sunrise');
+    return this.jumpToPhase('day');
   },
   cycleSpeed(step = 1) {
     const presets = EP4_DAY_NIGHT_CONFIG.SPEED_PRESETS;
-    const curVal = this.paused ? 0 : this.speedMultiplier;
+    const curVal = this.paused ? 1 : this.speedMultiplier;
     let idx = presets.indexOf(curVal);
     if (idx < 0) idx = 0;
     const nextIdx = (idx + step + presets.length) % presets.length;
-    const nextVal = presets[nextIdx];
-    if (nextVal === 0) {
-      this.paused = true;
-    } else {
-      this.paused = false;
-      this.speedMultiplier = nextVal;
-    }
+    this.paused = false;
+    this.speedMultiplier = presets[nextIdx];
     if (typeof window.syncMiracleTimeHUD === 'function') window.syncMiracleTimeHUD();
-    return nextVal;
+    return this.speedMultiplier;
   },
   clearNightLightSources() {
     this.lightSources = [];
@@ -364,19 +404,23 @@ function createMiracleMoonVisualGroup() {
     vertexColors: true,
     transparent: true,
     opacity: 1.0,
+    depthTest: true,
+    depthWrite: false,
     fog: false
   });
   const moonMesh = new THREE.Mesh(geo, moonMat);
+  moonMesh.renderOrder = -6;
   const haloMats = [];
   const haloSpecs = [
-    { r: 10.6, col: 0xbae6fd, op: 0.25, z: -1.5 },
-    { r: 15.8, col: 0x93c5fd, op: 0.11, z: -3.0 }
+    { r: 10.6, col: 0xbae6fd, op: 0.24, z: -1.5 },
+    { r: 15.8, col: 0x93c5fd, op: 0.10, z: -3.0 }
   ];
   haloSpecs.forEach(hs => {
     const hMat = new THREE.MeshBasicMaterial({
       color: hs.col,
       transparent: true,
       opacity: hs.op,
+      depthTest: true,
       depthWrite: false,
       fog: false,
       side: THREE.DoubleSide,
@@ -384,46 +428,112 @@ function createMiracleMoonVisualGroup() {
     });
     const hMesh = new THREE.Mesh(new THREE.CircleGeometry(hs.r, 12), hMat);
     hMesh.position.z = hs.z;
+    hMesh.renderOrder = -6;
     moonGrp.add(hMesh);
     haloMats.push({ mat: hMat, baseOp: hs.op });
   });
 
   moonGrp.add(moonMesh);
+  moonGrp.scale.setScalar(2.45);
+  moonGrp.renderOrder = -6;
   moonGrp.visible = false;
   miracleSunSystem.moonCoreMat = moonMat;
   miracleSunSystem.moonHaloMats = haloMats;
   return moonGrp;
 }
 
+let _ep4CrispStarTex = null;
+function getEp4CrispStarTexture() {
+  if (_ep4CrispStarTex) return _ep4CrispStarTex;
+  const c = document.createElement('canvas');
+  c.width = 32;
+  c.height = 32;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+  g.addColorStop(0.0, 'rgba(255,255,255,1.0)');
+  g.addColorStop(0.28, 'rgba(255,255,255,0.92)');
+  g.addColorStop(0.62, 'rgba(255,255,255,0.28)');
+  g.addColorStop(1.0, 'rgba(255,255,255,0.0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 32, 32);
+  _ep4CrispStarTex = new THREE.CanvasTexture(c);
+  return _ep4CrispStarTex;
+}
+
 function createMiracleNightSkyGroup(isMob) {
   const skyGrp = new THREE.Group();
+
+  // 1) 레퍼런스 스타일 깊은 남색 밤하늘 그라데이션 돔 (반지름 650m > 맵 외곽 산맥, depthTest: true로 산 뒤로 완전 가림)
+  const domeRadius = EP4_DAY_NIGHT_CONFIG.SKY_DOME_RADIUS || 650;
+  const domeGeo = new THREE.SphereGeometry(domeRadius, 30, 18);
+  const dPos = domeGeo.attributes.position;
+  const dCols = new Float32Array(dPos.count * 3);
+  const cHorizon = new THREE.Color('#1f457a'); // 지평선·산맥 뒤 은은한 깊은 로열 네이비
+  const cMidSky  = new THREE.Color('#0a1b42'); // 중천 사파이어 네이비
+  const cZenith  = new THREE.Color('#03091c'); // 천정 짙은 밤하늘
+  const cDomeTmp = new THREE.Color();
+  for (let i = 0; i < dPos.count; i++) {
+    const ny = Math.max(0, dPos.getY(i) / domeRadius);
+    if (ny < 0.28) {
+      cDomeTmp.copy(cHorizon).lerp(cMidSky, ep4Smoothstep(0.0, 0.28, ny));
+    } else {
+      cDomeTmp.copy(cMidSky).lerp(cZenith, ep4Smoothstep(0.28, 0.65, ny));
+    }
+    dCols[i * 3] = cDomeTmp.r;
+    dCols[i * 3 + 1] = cDomeTmp.g;
+    dCols[i * 3 + 2] = cDomeTmp.b;
+  }
+  domeGeo.setAttribute('color', new THREE.Float32BufferAttribute(dCols, 3));
+  const domeMat = new THREE.MeshBasicMaterial({
+    vertexColors: true,
+    side: THREE.BackSide,
+    transparent: true,
+    opacity: 0,
+    depthTest: true,
+    depthWrite: false,
+    fog: false
+  });
+  const skyDomeMesh = new THREE.Mesh(domeGeo, domeMat);
+  skyDomeMesh.renderOrder = -10;
+  skyGrp.add(skyDomeMesh);
+
+  // 2) 작고 촘촘한 4색 별하늘 (흰색 #FFFFFF, 노란색 #FFE89E, 붉은색 #FF9E80, 푸른색 #A6D1FF)
+  //    반지름 r = 560..625m (맵 최외곽 산맥 뒤편) + depthTest: true 로 원경 산/건물 앞쪽으로 절대 뚫고 보이지 않음!
   const totalStars = isMob ? EP4_DAY_NIGHT_CONFIG.STAR_COUNT_MOBILE : EP4_DAY_NIGHT_CONFIG.STAR_COUNT_DESKTOP;
   const starLayers = [];
-  const layerColors = [
-    [new THREE.Color('#ffffff'), new THREE.Color('#e0f2fe')],
-    [new THREE.Color('#fef3c7'), new THREE.Color('#bae6fd')],
-    [new THREE.Color('#f8fafc'), new THREE.Color('#ddd6fe')]
+  const paletteCols = [
+    new THREE.Color('#FFFFFF'), // 흰색 (55%)
+    new THREE.Color('#FFE89E'), // 노란색 (20%)
+    new THREE.Color('#FF9E80'), // 붉은색 (10%)
+    new THREE.Color('#A6D1FF')  // 푸른색 (15%)
   ];
-  const layerSizes = [isMob ? 3.1 : 3.4, isMob ? 4.0 : 4.4, isMob ? 4.9 : 5.4];
-  const perLayer = Math.max(80, Math.floor(totalStars / 3));
+  const layerSizes = [isMob ? 1.8 : 1.6, isMob ? 2.6 : 2.3, isMob ? 3.5 : 3.2];
+  const perLayer = Math.max(250, Math.floor(totalStars / 3));
+  const starTex = getEp4CrispStarTexture();
+  const rMin = EP4_DAY_NIGHT_CONFIG.STAR_RADIUS_MIN || 560;
+  const rSpan = (EP4_DAY_NIGHT_CONFIG.STAR_RADIUS_MAX || 625) - rMin;
 
   for (let l = 0; l < 3; l++) {
     const positions = new Float32Array(perLayer * 3);
     const colors = new Float32Array(perLayer * 3);
     const colTmp = new THREE.Color();
     for (let i = 0; i < perLayer; i++) {
-      const seed = (l * 1337 + i * 7919) % 10000;
-      const u = ((seed * 0.6180339887) % 1 + 1) % 1;
-      const v = Math.random();
-      const theta = u * Math.PI * 2;
-      const phi = Math.acos(1 - v * 0.94);
-      const r = 185 + (i % 11) * 3.8;
-      positions[i * 3] = Math.sin(phi) * Math.cos(theta) * r;
-      positions[i * 3 + 1] = Math.max(6, Math.cos(phi) * r);
-      positions[i * 3 + 2] = Math.sin(phi) * Math.sin(theta) * r;
+      const theta = Math.random() * Math.PI * 2;
+      const upU = 0.012 + Math.pow(Math.random(), 1.15) * 0.988; // 지평선~천정 전체 고르게
+      const sinPhi = Math.sqrt(Math.max(0, 1 - upU * upU));
+      const r = rMin + ((i * 7 + l * 3) % 13) / 12 * rSpan;
+      positions[i * 3] = sinPhi * Math.cos(theta) * r;
+      positions[i * 3 + 1] = upU * r;
+      positions[i * 3 + 2] = sinPhi * Math.sin(theta) * r;
 
-      const mix = (i % 9) / 8;
-      colTmp.copy(layerColors[l][0]).lerp(layerColors[l][1], mix);
+      const roll = Math.random();
+      let baseCol = paletteCols[0];
+      if (roll >= 0.55 && roll < 0.75) baseCol = paletteCols[1];
+      else if (roll >= 0.75 && roll < 0.85) baseCol = paletteCols[2];
+      else if (roll >= 0.85) baseCol = paletteCols[3];
+
+      const lum = (l === 2 ? 0.85 : 0.68) + Math.random() * 0.30;
+      colTmp.copy(baseCol).multiplyScalar(Math.min(1.0, lum));
       colors[i * 3] = colTmp.r;
       colors[i * 3 + 1] = colTmp.g;
       colors[i * 3 + 2] = colTmp.b;
@@ -432,20 +542,25 @@ function createMiracleNightSkyGroup(isMob) {
     geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     const mat = new THREE.PointsMaterial({
+      map: starTex,
       size: layerSizes[l],
-      sizeAttenuation: true,
+      sizeAttenuation: false,
       vertexColors: true,
       transparent: true,
       opacity: 0,
+      alphaTest: 0.02,
+      depthTest: true,
       depthWrite: false,
       fog: false,
       blending: THREE.AdditiveBlending
     });
     const pts = new THREE.Points(geo, mat);
+    pts.renderOrder = -8;
     skyGrp.add(pts);
-    starLayers.push({ pts, mat, speed: 1.5 + l * 0.9, phase: l * 2.15 });
+    starLayers.push({ pts, mat, speed: 1.4 + l * 0.85, phase: l * 2.15 });
   }
 
+  // 3) 밤하늘 원경 별똥별 (유성 4기, 산맥 뒤 r=495~545m)
   const meteors = [];
   for (let m = 0; m < EP4_DAY_NIGHT_CONFIG.METEOR_COUNT; m++) {
     const mGrp = new THREE.Group();
@@ -453,26 +568,29 @@ function createMiracleNightSkyGroup(isMob) {
       color: 0xffffff,
       transparent: true,
       opacity: 0,
+      depthTest: true,
       depthWrite: false,
       fog: false,
       blending: THREE.AdditiveBlending
     });
-    const head = new THREE.Mesh(new THREE.OctahedronGeometry(0.55, 0), headMat);
+    const head = new THREE.Mesh(new THREE.OctahedronGeometry(1.45, 0), headMat);
 
     const tailMat = new THREE.MeshBasicMaterial({
-      color: 0xbae6fd,
+      color: 0xa6d1ff,
       transparent: true,
       opacity: 0,
+      depthTest: true,
       depthWrite: false,
       fog: false,
       blending: THREE.AdditiveBlending
     });
-    const tailGeo = new THREE.ConeGeometry(0.32, 13.5, 5);
-    tailGeo.translate(0, -6.75, 0);
+    const tailGeo = new THREE.ConeGeometry(0.85, 34.0, 5);
+    tailGeo.translate(0, -17.0, 0);
     tailGeo.rotateX(Math.PI * 0.5);
     const tail = new THREE.Mesh(tailGeo, tailMat);
 
     mGrp.add(tail, head);
+    mGrp.renderOrder = -7;
     mGrp.visible = false;
     skyGrp.add(mGrp);
     meteors.push({
@@ -480,15 +598,17 @@ function createMiracleNightSkyGroup(isMob) {
       headMat,
       tailMat,
       active: false,
-      timer: 1.2 + m * 1.9,
+      timer: 0.9 + m * 1.4,
       age: 0,
-      maxDur: 1.1,
+      maxDur: 1.15,
       pos: new THREE.Vector3(),
       vel: new THREE.Vector3()
     });
   }
 
   skyGrp.visible = false;
+  miracleSunSystem.skyDomeMesh = skyDomeMesh;
+  miracleSunSystem.skyDomeMat = domeMat;
   miracleSunSystem.starLayers = starLayers;
   miracleSunSystem.meteors = meteors;
   return skyGrp;
@@ -596,10 +716,13 @@ function setupMiracleDynamicSunAndShadows() {
       vertexColors: true,
       transparent: true,
       opacity: 1.0,
+      depthTest: true,
+      depthWrite: false,
       fog: false
     });
     const core = new THREE.Mesh(coreGeo, coreMat);
     core.userData.sunStyle = 'radial_polygonal_core';
+    core.renderOrder = -6;
 
     const flareGrp = new THREE.Group();
     const sunHaloMats = [];
@@ -612,6 +735,7 @@ function setupMiracleDynamicSunAndShadows() {
         color: hs.col,
         transparent: true,
         opacity: hs.op,
+        depthTest: true,
         depthWrite: false,
         fog: false,
         side: THREE.DoubleSide
@@ -619,11 +743,14 @@ function setupMiracleDynamicSunAndShadows() {
       const hMesh = new THREE.Mesh(new THREE.CircleGeometry(hs.r, 10), hMat);
       hMesh.rotation.z = Math.PI / 10;
       hMesh.position.z = hs.z;
+      hMesh.renderOrder = -6;
       flareGrp.add(hMesh);
       sunHaloMats.push({ mat: hMat, baseCol: new THREE.Color(hs.col), sunsetCol: new THREE.Color(hs.sunsetCol), baseOp: hs.op });
     });
 
     sunGrp.add(core, flareGrp);
+    sunGrp.scale.setScalar(2.45);
+    sunGrp.renderOrder = -6;
     worldGroup.add(sunGrp);
     miracleSunSystem.sunVisualGroup = sunGrp;
     miracleSunSystem.sunCoreMat = coreMat;
@@ -697,6 +824,33 @@ function updateMiraclePooledNightLights(focusX, focusZ, nightFactor, now) {
   }
 }
 
+function tintMiracleCloudCollection(list, targetCol, isRawMeshList = false) {
+  if (!Array.isArray(list)) return;
+  for (let i = 0; i < list.length; i++) {
+    const item = list[i];
+    const mesh = isRawMeshList ? item : (item && item.kind === 'cloud' ? item.mesh : null);
+    if (!mesh) continue;
+    const holder = isRawMeshList ? mesh : item;
+    if (!holder._cloudMats) {
+      const cMats = [];
+      mesh.traverse(ch => {
+        if (ch.isMesh && ch.material) {
+          if (!ch.material._isCloudMatCloned) {
+            const clonedMat = ch.material.clone();
+            clonedMat._isCloudMatCloned = true;
+            ch.material = clonedMat;
+          }
+          cMats.push(ch.material);
+        }
+      });
+      holder._cloudMats = cMats;
+    }
+    for (let j = 0; j < holder._cloudMats.length; j++) {
+      holder._cloudMats[j].color.copy(targetCol);
+    }
+  }
+}
+
 function updateMiracleDynamicSun(rawDt, now) {
   if (!miracleSunSystem.light) {
     setupMiracleDynamicSunAndShadows();
@@ -710,13 +864,15 @@ function updateMiracleDynamicSun(rawDt, now) {
   const focusZ = playerPos ? playerPos.z : 0;
 
   const sub = (typeof miracleSubMode !== 'undefined') ? miracleSubMode : '';
+  const isEp4 = (typeof currentEpisode !== 'undefined' && currentEpisode === 'miracle') || Boolean(sub);
   const isOpenWorld = (sub === 'openworld');
-  const isDayNightActive = isOpenWorld || MiracleDayNight.stageControlled;
+  const isDayNightActive = isEp4 || isOpenWorld || MiracleDayNight.stageControlled;
 
   if (!isDayNightActive) {
-    // 스테이지 2~5 등 기존 낮 씬은 원래 태양 궤도·조명 그대로 보존
     MiracleDayNight.nightFactor = 0;
     MiracleDayNight.sunsetFactor = 0;
+    MiracleDayNight.sunriseFactor = 0;
+    MiracleDayNight.birdRatio = 1;
     if (typeof window.updateHeroClayEmissiveForNight === 'function') window.updateHeroClayEmissiveForNight(0);
     if (miracleSunSystem.moonVisualGroup) miracleSunSystem.moonVisualGroup.visible = false;
     if (miracleSunSystem.nightSkyGroup) miracleSunSystem.nightSkyGroup.visible = false;
@@ -750,9 +906,11 @@ function updateMiracleDynamicSun(rawDt, now) {
       if (camera) miracleSunSystem.sunVisualGroup.lookAt(camera.position);
     }
   } else {
-    // 오픈월드 / 스테이지 1 실시간 낮(60%) · 밤(40%) 순환
+    // 30분(1,800초) 에피소드 4 전역 낮/일몰/밤/일출 순환 (20 : 2 : 6 : 2)
+    const stMini = (typeof miracleActiveMiniState !== 'undefined') ? miracleActiveMiniState : null;
+    const isScriptedSunset = (sub === 'main1_galilee' && stMini && stMini.phase === 'sunset_to_night');
     const freezeTime = Boolean(isOpenWorld && MiracleDayNight.freezeForNightMission);
-    if (isOpenWorld && !MiracleDayNight.paused && !freezeTime && MiracleDayNight.speedMultiplier > 0 && dt > 0) {
+    if (!MiracleDayNight.paused && !freezeTime && !isScriptedSunset && MiracleDayNight.speedMultiplier > 0 && dt > 0) {
       MiracleDayNight.time = (MiracleDayNight.time + (dt * MiracleDayNight.speedMultiplier) / EP4_DAY_NIGHT_CONFIG.FULL_DAY_SECONDS) % 1.0;
     }
 
@@ -760,43 +918,55 @@ function updateMiracleDynamicSun(rawDt, now) {
     const factors = computeEp4TimeFactors(t);
     MiracleDayNight.nightFactor = factors.nightFactor;
     MiracleDayNight.sunsetFactor = factors.sunsetFactor;
+    MiracleDayNight.sunriseFactor = factors.sunriseFactor;
+    MiracleDayNight.birdRatio = factors.birdRatio;
     const nf = factors.nightFactor;
     const sf = factors.sunsetFactor;
+    const rf = factors.sunriseFactor;
+    const warmFactor = Math.max(sf, rf);
 
-    // 1) 해 궤도 (0.00 ~ 0.60 동 -> 서)
-    const dayRatio = EP4_DAY_NIGHT_CONFIG.DAY_RATIO;
-    const uDay = Math.max(0, Math.min(1, t / dayRatio));
-    const sunElev = Math.sin(uDay * Math.PI) * 1.08 - 0.14;
-    const sunAzim = (1.0 - uDay * 2.0) * 1.18; // +1.18(동) -> -1.18(서)
+    // 1) 해 궤도 (일출 28분 -> 낮 0~20분 -> 일몰 22분 동->서 연속 호)
+    const riseStart = EP4_DAY_NIGHT_CONFIG.NIGHT_END; // 0.9333
+    const setEnd = EP4_DAY_NIGHT_CONFIG.SUNSET_END;   // 0.7333
+    const sunSpan = (1.0 - riseStart) + setEnd;       // 0.8000
+    let uSun = -1;
+    if (t >= riseStart) uSun = (t - riseStart) / sunSpan;
+    else if (t <= setEnd) uSun = (t + (1.0 - riseStart)) / sunSpan;
+    const uSunClamped = Math.max(0, Math.min(1, uSun < 0 ? 0.5 : uSun));
+    const sunElev = Math.sin(uSunClamped * Math.PI) * 1.10 - 0.10;
+    const sunAzim = (1.0 - uSunClamped * 2.0) * 1.18;
 
-    // 2) 달 궤도 (0.60 ~ 1.00 동 -> 서)
-    const vNight = t >= dayRatio ? (t - dayRatio) / (1.0 - dayRatio) : 1.0;
-    const moonElev = Math.sin(Math.max(0, Math.min(1, vNight)) * Math.PI) * 0.96 - 0.12;
-    const moonAzim = (1.0 - vNight * 2.0) * 1.15;
+    // 2) 달 궤도 (일몰 끝 0.72 -> 밤 6분 -> 일출 중 0.96)
+    const moonStart = 0.715;
+    const moonSpan = 0.245;
+    const vMoon = THREE.MathUtils.clamp((t - moonStart) / moonSpan, 0, 1);
+    const moonElev = Math.sin(vMoon * Math.PI) * 0.88 + 0.12;
+    const moonAzim = (1.0 - vMoon * 2.0) * 1.15;
 
-    const visDist = 190.0;
+    // 해/달은 산맥보다 뒤쪽(r = 470m)에 배치해 원경 지형을 가리지 않도록 처리
+    const visDist = 470.0;
     const sunVisY = Math.sin(sunElev) * visDist;
     if (miracleSunSystem.sunVisualGroup) {
-      const sunVisible = (t <= dayRatio + 0.025) && (sunVisY > -18);
+      const sunVisible = (uSun >= 0 && uSun <= 1.0) && (sunVisY > -36);
       miracleSunSystem.sunVisualGroup.visible = sunVisible;
       if (sunVisible) {
         miracleSunSystem.sunVisualGroup.position.set(
           focusX + Math.sin(sunAzim) * Math.cos(sunElev) * visDist,
           focusY + sunVisY,
-          focusZ - Math.abs(Math.cos(sunAzim)) * 45.0 - 95.0
+          focusZ - Math.abs(Math.cos(sunAzim)) * 110.0 - 235.0
         );
         if (camera) miracleSunSystem.sunVisualGroup.lookAt(camera.position);
         if (miracleSunSystem.sunCoreMat) {
           _dnColorTmpA.setHex(0xffffff);
           _dnColorTmpB.setHex(0xff8c42);
-          miracleSunSystem.sunCoreMat.color.copy(_dnColorTmpA).lerp(_dnColorTmpB, sf);
-          miracleSunSystem.sunCoreMat.opacity = Math.max(0, Math.min(1, (sunVisY + 12) / 28));
+          miracleSunSystem.sunCoreMat.color.copy(_dnColorTmpA).lerp(_dnColorTmpB, warmFactor);
+          miracleSunSystem.sunCoreMat.opacity = Math.max(0, Math.min(1, (sunVisY + 26) / 60)) * (1.0 - nf * 0.85);
         }
         if (miracleSunSystem.sunHaloMats) {
-          const opScale = Math.max(0, Math.min(1, (sunVisY + 12) / 30));
+          const opScale = Math.max(0, Math.min(1, (sunVisY + 26) / 60)) * (1.0 - nf * 0.85);
           miracleSunSystem.sunHaloMats.forEach(hm => {
-            hm.mat.color.copy(hm.baseCol).lerp(hm.sunsetCol, sf);
-            hm.mat.opacity = hm.baseOp * opScale * (1.0 + sf * 0.45);
+            hm.mat.color.copy(hm.baseCol).lerp(hm.sunsetCol, warmFactor);
+            hm.mat.opacity = hm.baseOp * opScale * (1.0 + warmFactor * 0.45);
           });
         }
       }
@@ -804,16 +974,16 @@ function updateMiracleDynamicSun(rawDt, now) {
 
     const moonVisY = Math.sin(moonElev) * visDist;
     if (miracleSunSystem.moonVisualGroup) {
-      const moonVisible = (t >= dayRatio - 0.025 || t <= 0.03) && (moonVisY > -16);
+      const moonVisible = (t >= moonStart && t <= moonStart + moonSpan) && (moonVisY > -20);
       miracleSunSystem.moonVisualGroup.visible = moonVisible;
       if (moonVisible) {
         miracleSunSystem.moonVisualGroup.position.set(
           focusX + Math.sin(moonAzim) * Math.cos(moonElev) * visDist,
           focusY + moonVisY,
-          focusZ - Math.abs(Math.cos(moonAzim)) * 40.0 - 92.0
+          focusZ - Math.abs(Math.cos(moonAzim)) * 105.0 - 230.0
         );
         if (camera) miracleSunSystem.moonVisualGroup.lookAt(camera.position);
-        const moonFade = Math.max(0, Math.min(1, nf * 1.15)) * Math.max(0, Math.min(1, (moonVisY + 12) / 24));
+        const moonFade = Math.max(0, Math.min(1, nf * 1.15)) * Math.max(0, Math.min(1, (moonVisY + 20) / 48));
         if (miracleSunSystem.moonCoreMat) miracleSunSystem.moonCoreMat.opacity = moonFade;
         if (miracleSunSystem.moonHaloMats) {
           miracleSunSystem.moonHaloMats.forEach(hm => {
@@ -823,7 +993,7 @@ function updateMiracleDynamicSun(rawDt, now) {
       }
     }
 
-    // 3) 주 DirectionalLight & AmbientLight 보간
+    // 3) DirectionalLight + AmbientLight + HemisphereLight 부드러운 전환
     const sunDist = 88.0;
     const useMoonLight = nf > 0.55;
     const activeAzim = useMoonLight ? moonAzim : sunAzim;
@@ -840,29 +1010,47 @@ function updateMiracleDynamicSun(rawDt, now) {
 
     _dnColorTmpA.setHex(0xfff8dc);
     _dnColorTmpB.setHex(0xfb923c);
-    _dnColorTmpA.lerp(_dnColorTmpB, sf);
+    _dnColorTmpA.lerp(_dnColorTmpB, warmFactor * 0.90);
     _dnColorTmpC.setHex(0x93c5fd);
     light.color.copy(_dnColorTmpA).lerp(_dnColorTmpC, nf);
-    const baseDirInt = THREE.MathUtils.lerp(0.88, 0.72, sf);
-    light.intensity = THREE.MathUtils.lerp(baseDirInt, 0.34, nf) * (1.0 - (MiracleDayNight.stormDarkness || 0) * 0.45);
+    const stormScale = 1.0 - (MiracleDayNight.stormDarkness || 0) * 0.45;
+    const baseDirInt = THREE.MathUtils.lerp(0.88, 0.70, warmFactor);
+    light.intensity = THREE.MathUtils.lerp(baseDirInt, 0.34, nf) * stormScale;
 
     if (window.coreAmbientLight) {
       _dnColorTmpA.setHex(0xffffff);
       _dnColorTmpB.setHex(0xfed7aa);
-      _dnColorTmpA.lerp(_dnColorTmpB, sf);
-      _dnColorTmpC.setHex(0x3b4f7d);
+      _dnColorTmpA.lerp(_dnColorTmpB, warmFactor * 0.75);
+      _dnColorTmpC.setHex(0x2e426e);
       window.coreAmbientLight.color.copy(_dnColorTmpA).lerp(_dnColorTmpC, nf);
-      const dayAmb = THREE.MathUtils.lerp(0.62, 0.52, sf);
-      window.coreAmbientLight.intensity = THREE.MathUtils.lerp(dayAmb, 0.34, nf) * (1.0 - (MiracleDayNight.stormDarkness || 0) * 0.25);
+      const dayAmb = THREE.MathUtils.lerp(0.38, 0.34, warmFactor);
+      window.coreAmbientLight.intensity = THREE.MathUtils.lerp(dayAmb, 0.24, nf) * (1.0 - (MiracleDayNight.stormDarkness || 0) * 0.25);
     }
 
-    // 4) 하늘 배경, 안개, 구름 색조 보간
+    if (window.coreHemiLight) {
+      _dnColorTmpA.setHex(0x87ceeb);
+      _dnColorTmpB.setHex(0xfb923c);
+      _dnColorTmpA.lerp(_dnColorTmpB, warmFactor * 0.80);
+      _dnColorTmpC.setHex(0x1e3b6e);
+      window.coreHemiLight.color.copy(_dnColorTmpA).lerp(_dnColorTmpC, nf);
+
+      _dnColorTmpA.setHex(0xc9b372);
+      _dnColorTmpB.setHex(0x9a5a32);
+      _dnColorTmpA.lerp(_dnColorTmpB, warmFactor * 0.75);
+      _dnColorTmpC.setHex(0x162033);
+      window.coreHemiLight.groundColor.copy(_dnColorTmpA).lerp(_dnColorTmpC, nf);
+
+      const dayHemi = THREE.MathUtils.lerp(0.42, 0.38, warmFactor);
+      window.coreHemiLight.intensity = THREE.MathUtils.lerp(dayHemi, 0.32, nf) * (1.0 - (MiracleDayNight.stormDarkness || 0) * 0.28);
+    }
+
+    // 4) 하늘 배경, 안개, 구름 색조 보간 (오픈월드·모든 스테이지 공용)
     sampleEp4SkyGradient(t, _dnColorTmpA, _dnColorTmpB, _dnColorTmpC);
     if (MiracleDayNight.stormDarkness > 0.01) {
       const sd = Math.min(1, MiracleDayNight.stormDarkness);
-      _dnColorTmpA.lerp(new THREE.Color('#0c1428'), sd * 0.65);
-      _dnColorTmpB.lerp(new THREE.Color('#131d36'), sd * 0.65);
-      _dnColorTmpC.lerp(new THREE.Color('#334155'), sd * 0.70);
+      _dnColorTmpA.lerp(_dnStormBgCol, sd * 0.65);
+      _dnColorTmpB.lerp(_dnStormFogCol, sd * 0.65);
+      _dnColorTmpC.lerp(_dnStormCloudCol, sd * 0.70);
     }
     if (scene.background && scene.background.isColor) {
       scene.background.copy(_dnColorTmpA);
@@ -873,63 +1061,47 @@ function updateMiracleDynamicSun(rawDt, now) {
       scene.fog.color.copy(_dnColorTmpB);
     }
 
-    // 구름 틴트(공유 캐시 재질 오염 없이 구름 전용 재질만 한 번 복제 후 색조 보간)
-    if (Array.isArray(miracleAmbientProps)) {
-      for (let i = 0; i < miracleAmbientProps.length; i++) {
-        const p = miracleAmbientProps[i];
-        if (!p || p.kind !== 'cloud' || !p.mesh) continue;
-        if (!p._cloudMats) {
-          const cMats = [];
-          p.mesh.traverse(ch => {
-            if (ch.isMesh && ch.material) {
-              if (!ch.material._isCloudMatCloned) {
-                const clonedMat = ch.material.clone();
-                clonedMat._isCloudMatCloned = true;
-                ch.material = clonedMat;
-              }
-              cMats.push(ch.material);
-            }
-          });
-          p._cloudMats = cMats;
-        }
-        for (let j = 0; j < p._cloudMats.length; j++) {
-          p._cloudMats[j].color.copy(_dnColorTmpC);
-        }
-      }
+    tintMiracleCloudCollection(miracleAmbientProps, _dnColorTmpC, false);
+    if (stMini && Array.isArray(stMini.skyClouds)) {
+      tintMiracleCloudCollection(stMini.skyClouds, _dnColorTmpC, true);
     }
 
-    // 5) 밤하늘 별 반짝임 & 별똥별(유성) 애니메이션
+    // 5) 밤하늘 그라데이션 돔 + 4색 촘촘한 별 반짝임 + 별똥별(유성) (산/맵 외곽 뒤 r=560..650)
     if (miracleSunSystem.nightSkyGroup) {
-      const showStars = nf > 0.14;
-      miracleSunSystem.nightSkyGroup.visible = showStars;
-      miracleSunSystem.nightSkyGroup.position.set(focusX, 0, focusZ);
-      if (showStars) {
-        const starVis = ep4Smoothstep(0.14, 0.65, nf);
+      const showSky = nf > 0.08;
+      miracleSunSystem.nightSkyGroup.visible = showSky;
+      miracleSunSystem.nightSkyGroup.position.set(focusX, focusY * 0.2, focusZ);
+      if (showSky) {
+        if (miracleSunSystem.skyDomeMat) {
+          const domeOp = ep4Smoothstep(0.08, 0.56, nf) * (1.0 - (MiracleDayNight.stormDarkness || 0) * 0.35);
+          miracleSunSystem.skyDomeMat.opacity = Math.max(0, Math.min(1, domeOp));
+        }
+        const starVis = ep4Smoothstep(0.12, 0.52, nf) * (1.0 - (MiracleDayNight.stormDarkness || 0) * 0.45);
         const layers = miracleSunSystem.starLayers || [];
         for (let l = 0; l < layers.length; l++) {
           const ly = layers[l];
-          const twinkle = 0.68 + 0.32 * Math.sin(now * 0.0022 * ly.speed + ly.phase);
-          ly.mat.opacity = Math.min(1, starVis * twinkle);
+          const twinkle = 0.72 + 0.28 * Math.sin(now * 0.0022 * ly.speed + ly.phase);
+          ly.mat.opacity = Math.max(0, Math.min(1, starVis * twinkle));
         }
-        miracleSunSystem.nightSkyGroup.rotation.y = (now * 0.000012) % (Math.PI * 2);
+        miracleSunSystem.nightSkyGroup.rotation.y = (now * 0.000010) % (Math.PI * 2);
 
         const meteors = miracleSunSystem.meteors || [];
         for (let m = 0; m < meteors.length; m++) {
           const mt = meteors[m];
           if (!mt.active) {
-            if (nf > 0.35) {
+            if (nf > 0.32) {
               mt.timer -= dt;
               if (mt.timer <= 0) {
                 mt.active = true;
                 mt.age = 0;
-                mt.maxDur = 0.85 + Math.random() * 0.55;
+                mt.maxDur = 0.90 + Math.random() * 0.55;
                 const ang = Math.random() * Math.PI * 2;
-                const rad = 110 + Math.random() * 65;
-                mt.pos.set(Math.cos(ang) * rad, 88 + Math.random() * 44, Math.sin(ang) * rad);
+                const rad = 485 + Math.random() * 55;
+                mt.pos.set(Math.cos(ang) * rad, 155 + Math.random() * 145, Math.sin(ang) * rad);
                 const dirAng = ang + (Math.random() > 0.5 ? 1.85 : -1.85);
-                mt.vel.set(Math.cos(dirAng) * 78, -(28 + Math.random() * 20), Math.sin(dirAng) * 78);
+                mt.vel.set(Math.cos(dirAng) * 215, -(72 + Math.random() * 55), Math.sin(dirAng) * 215);
                 _dnMeteorDir.copy(mt.vel).normalize();
-                _dnMeteorQuat.setFromUnitVectors(new THREE.Vector3(0, 0, 1), _dnMeteorDir);
+                _dnMeteorQuat.setFromUnitVectors(_dnZAxis, _dnMeteorDir);
                 mt.grp.quaternion.copy(_dnMeteorQuat);
                 mt.grp.position.copy(mt.pos);
                 mt.grp.visible = true;
@@ -942,11 +1114,11 @@ function updateMiracleDynamicSun(rawDt, now) {
               mt.grp.visible = false;
               mt.headMat.opacity = 0;
               mt.tailMat.opacity = 0;
-              mt.timer = 2.2 + Math.random() * 3.8;
+              mt.timer = 1.6 + Math.random() * 3.0;
             } else {
               mt.pos.addScaledVector(mt.vel, dt);
               mt.grp.position.copy(mt.pos);
-              const lifeFade = Math.sin((mt.age / mt.maxDur) * Math.PI) * starVis;
+              const lifeFade = Math.sin((mt.age / mt.maxDur) * Math.PI) * Math.max(0.2, starVis);
               mt.headMat.opacity = lifeFade;
               mt.tailMat.opacity = lifeFade * 0.82;
             }
@@ -967,7 +1139,6 @@ function updateMiracleDynamicSun(rawDt, now) {
     }
   }
 
-  // 시야 밖 그림자 거리 컬링
   if (!miracleSunSystem.cullBuilt) {
     updateMiracleShadowDistanceCulling(focusX, focusZ);
   } else {

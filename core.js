@@ -5,7 +5,7 @@
 // =========================================================================
 
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.core = '20261123_v29';
+window.__GAME_BUILD_VERSIONS__.core = '20261123_v30';
 
 // 퀴즈 선택지 순서 무작위 셔플 공용 헬퍼 (정답이 항상 1번에 고정되지 않도록 보장)
 function shuffleQuizOptions(opts, ansIdx = 0) {
@@ -39,10 +39,10 @@ let enteredFromMapStageSelect = false;
 //   (에피소드1 클리어 -> 에피소드2 해금 -> 에피소드3 해금 -> 에피소드4 해금) 자동으로 열립니다!
 // =========================================================================
 const EPISODE_MASTER_ADMIN_LOCK = {
-  noah: false,    // 에피소드 1: 항상 오픈
-  exodus: true,   // 에피소드 2: 현재 잠금 (false로 변경 시 에피소드 1 클리어자에게 자동 오픈)
-  david: true,    // 에피소드 3: 현재 잠금 (false로 변경 시 에피소드 2 클리어자에게 자동 오픈)
-  miracle: true   // 에피소드 4: 현재 잠금 (false로 변경 시 에피소드 3 클리어자에게 자동 오픈)
+  noah: false,    // 에피소드 1: 오픈
+  exodus: false,  // 에피소드 2: 전체 잠금 해제
+  david: false,   // 에피소드 3: 전체 잠금 해제
+  miracle: false  // 에피소드 4: 전체 잠금 해제
 };
 
 const EPISODE_ORDER = ['noah', 'exodus', 'david', 'miracle'];
@@ -2143,39 +2143,6 @@ async function syncPlayerProgressFromSheet() {
 }
 
 function getEpisodeLockState(epKey) {
-  const plugin = EPISODE_REGISTRY[epKey];
-
-  if (EPISODE_MASTER_ADMIN_LOCK[epKey] || (plugin && plugin.locked)) {
-    return {
-      locked: true,
-      reason: 'admin_locked',
-      message: (plugin && plugin.lockedMessage) || '🔒 해당 에피소드는 추후 오픈 예정입니다!'
-    };
-  }
-
-  if (epKey !== 'noah' && epKey !== 'exodus' && !plugin) {
-    return {
-      locked: true,
-      reason: 'not_implemented',
-      message: '🔒 해당 에피소드는 추후 오픈 예정입니다!'
-    };
-  }
-
-  const orderIdx = EPISODE_ORDER.indexOf(epKey);
-  if (orderIdx > 0) {
-    const prevEpKey = EPISODE_ORDER[orderIdx - 1];
-    const prevProg = playerProgressData[prevEpKey];
-    const prevCleared = prevProg && (prevProg.completed || prevProg.maxClearedStage >= 3);
-    if (!prevCleared) {
-      const prevMeta = EPISODE_META_INFO[prevEpKey];
-      return {
-        locked: true,
-        reason: 'prev_not_cleared',
-        message: `🔒 먼저 [에피소드 ${prevMeta.num}: ${prevMeta.title}]을(를) 클리어하면 열립니다!`
-      };
-    }
-  }
-
   return { locked: false, reason: 'unlocked', message: '' };
 }
 
@@ -2237,11 +2204,8 @@ function openEpisodeStageSelectModal(epKey) {
 
   const meta = EPISODE_META_INFO[epKey] || { num: 1, title: '성경 탐험', icon: '🛶' };
   const prog = playerProgressData[epKey] || { maxClearedStage: 0, completed: false };
-  const allMiracleUnlocked = (epKey === 'miracle') && (
-    prog.completed || (prog.maxClearedStage || 0) >= 4 ||
-    (typeof isMiracleAllStagesUnlocked === 'function' && isMiracleAllStagesUnlocked())
-  );
-  const maxSelectableStage = Math.min(4, (prog.maxClearedStage || 0) + 1);
+  const allMiracleUnlocked = (epKey === 'miracle');
+  const maxSelectableStage = 4;
 
   if (iconEl) iconEl.textContent = meta.icon;
   if (titleEl) titleEl.textContent = `에피소드 ${meta.num} : ${meta.title}`;
@@ -2316,7 +2280,7 @@ function openEpisodeStageSelectModal(epKey) {
   };
 
   for (let st = 1; st <= 4; st++) {
-    const isUnlocked = prog.completed || (st <= maxSelectableStage) || (st === 4 && prog.completed);
+    const isUnlocked = true;
     const isCleared = (st <= prog.maxClearedStage) || (st === 4 && prog.completed);
 
     const btn = document.createElement('button');
@@ -2727,17 +2691,8 @@ function launchEpisode(ep) {
     return;
   }
 
-  const prog = playerProgressData[ep];
-  const miracleUnlockedLocally = (ep === 'miracle' && typeof isMiracleAllStagesUnlocked === 'function' && isMiracleAllStagesUnlocked());
-  if (miracleUnlockedLocally || (prog && (prog.maxClearedStage >= 1 || prog.completed))) {
-    playSfx('switch');
-    openEpisodeStageSelectModal(ep);
-    return;
-  }
-
-  currentEpisode = ep;
-  openScreen(null);
-  startVoxelGame(currentMode, 1, false);
+  playSfx('switch');
+  openEpisodeStageSelectModal(ep);
 }
 
 // =========================================================================
@@ -6328,9 +6283,12 @@ function initEngine(skipInitialPreview = false) {
     if (typeof showToast === 'function') showToast('✅ 화면이 정상적으로 복구되었습니다!');
   }, false);
 
-  const ambLight = new THREE.AmbientLight(0xffffff, 0.62);
+  const ambLight = new THREE.AmbientLight(0xffffff, 0.38);
   scene.add(ambLight);
   window.coreAmbientLight = ambLight;
+  const hemiLight = new THREE.HemisphereLight(0x87ceeb, 0xb89c6e, 0.42);
+  scene.add(hemiLight);
+  window.coreHemiLight = hemiLight;
   const dirLight = new THREE.DirectionalLight(0xfffbeb, 0.72);
   dirLight.position.set(25, 45, 25); dirLight.castShadow = true;
   scene.add(dirLight);

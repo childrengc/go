@@ -649,6 +649,23 @@
       .miracle-mini-nav .nav-arrow { width: 11px; height: 11px; }
     }
 
+    /* [에피소드 4 낮/밤 30분 순환 한 줄 미니멀 게이지] 내비게이터 바로 아래 배치 */
+    .miracle-time-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 8px;
+      border-radius: 9999px;
+      background: rgba(15, 23, 42, 0.80);
+      border: 1.5px solid rgba(148, 163, 184, 0.72);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      color: #f8fafc;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+      white-space: nowrap;
+    }
+    .miracle-time-row.hidden { display: none !important; }
+
     /* ================================================================
        [최상위 레이어 보장] 탐험수첩·모든 퀴즈·인증서·모험의 증표가
        조이스틱·점프·카메라 전환 버튼에 절대 가려지지 않도록 강제
@@ -987,6 +1004,21 @@
         </div>
         <span id="miracle-nav-target" class="font-jua text-[10px] sm:text-[11px] text-amber-100 truncate flex-1">목표 탐색</span>
         <span id="miracle-nav-dist" class="font-jua text-[10px] sm:text-[11px] text-emerald-300 shrink-0">0m</span>
+      </div>
+
+      <!-- 내비게이터 바로 아래 한 줄 미니멀 시간 순환 게이지 ([해] ──바── [달] [⏩] [1x]) -->
+      <div id="miracle-time-row" class="hidden miracle-time-row pointer-events-auto" title="하루 시간 순환">
+        <span class="text-xs leading-none shrink-0" aria-hidden="true">☀️</span>
+        <div class="relative w-20 sm:w-28 h-2 rounded-full bg-slate-700/90 overflow-hidden shrink-0 border border-slate-500/60">
+          <div id="miracle-time-bar" class="h-full bg-gradient-to-r from-amber-300 via-orange-400 to-indigo-400 transition-all duration-100" style="width: 28%;"></div>
+          <div id="miracle-time-dot" class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-white shadow" style="left: 28%;"></div>
+        </div>
+        <span class="text-xs leading-none shrink-0" aria-hidden="true">🌙</span>
+        <button id="miracle-time-speed-btn" type="button" onclick="if(window.MiracleDayNight){window.MiracleDayNight.cycleSpeed(1);}"
+                class="px-1.5 py-0.5 rounded-full bg-indigo-500/85 hover:bg-indigo-400 text-[10px] font-jua text-white leading-none shrink-0 cursor-pointer" title="빨리감기 배속">
+          ⏩
+        </button>
+        <span id="miracle-time-speed-val" class="font-jua text-[10px] sm:text-[11px] text-amber-200 leading-none shrink-0 min-w-[24px] text-right">1x</span>
       </div>
     </div>
 
@@ -1470,22 +1502,22 @@
     </div>
   </div>
 
-<!-- 게임 스크립트 로드 (전체 스크립트 캐시 강제 갱신 ?v=29 및 버전 일관성 자동 검증 적용) -->
-  <script src="core.js?v=29"></script>
-  <script src="ep1_noah.js?v=29"></script>
-  <script src="ep2_exodus.js?v=29"></script>
-  <script src="ep3_david_base.js?v=29"></script>
-  <script src="ep3_david_st1_2.js?v=29"></script>
-  <script src="ep3_david_st3_end.js?v=29"></script>
-  <script src="ep4_miracle_base.js?v=29"></script>
-  <script src="ep4_miracle_assets.js?v=29"></script>
-  <script src="ep4_miracle_world.js?v=29"></script>
-  <script src="ep4_miracle_stages.js?v=29"></script>
-  <script src="ep4_multiplayer.js?v=29"></script>
+<!-- 게임 스크립트 로드 (전체 스크립트 캐시 강제 갱신 ?v=30 및 버전 일관성 자동 검증 적용) -->
+  <script src="core.js?v=30"></script>
+  <script src="ep1_noah.js?v=30"></script>
+  <script src="ep2_exodus.js?v=30"></script>
+  <script src="ep3_david_base.js?v=30"></script>
+  <script src="ep3_david_st1_2.js?v=30"></script>
+  <script src="ep3_david_st3_end.js?v=30"></script>
+  <script src="ep4_miracle_base.js?v=30"></script>
+  <script src="ep4_miracle_assets.js?v=30"></script>
+  <script src="ep4_miracle_world.js?v=30"></script>
+  <script src="ep4_miracle_stages.js?v=30"></script>
+  <script src="ep4_multiplayer.js?v=30"></script>
   <script>
     // GitHub Pages CDN·브라우저 부분 캐시로 신·구버전 스크립트가 뒤섞여 로드되는 현상을 자동 감지해 1회 강제 새로고침
     (function verifyScriptBuildConsistency() {
-      const EXPECTED = '20261123_v29';
+      const EXPECTED = '20261123_v30';
       const vers = window.__GAME_BUILD_VERSIONS__ || {};
       const keys = ['core', 'ep4_base', 'ep4_assets', 'ep4_world', 'ep4_stages', 'ep4_mp'];
       const mismatch = keys.some(k => vers[k] !== EXPECTED);

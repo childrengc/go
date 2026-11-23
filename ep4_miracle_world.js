@@ -4,7 +4,7 @@
 // - 계단으로 건물 2층 등반 후 인접한 옆 건물 옥상·2층으로 점프 이동할 수 있는 근접 마을 배치
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_world = '20261123_v29';
+window.__GAME_BUILD_VERSIONS__.ep4_world = '20261123_v30';
 
 window.miracleOpenWorldIntroFlyover = {
   active: false,
@@ -6779,13 +6779,34 @@ function buildMiracleNightPatrolSoldiers() {
       ]
     },
     {
-      post: { x: -12.0, z: 24.0 },
-      speed: 3.40,
+      post: { x: 0.5, z: 24.0 },
+      speed: 3.45,
       waypoints: [
-        { x: -18.0, z: 22.0 },
-        { x: -2.0, z: 22.0 },
-        { x: 10.5, z: 25.0 },
-        { x: -3.5, z: 26.0 }
+        { x: 0.5, z: 26.0 },
+        { x: 0.0, z: 10.0 },
+        { x: -4.0, z: -6.0 },
+        { x: 2.0, z: 10.0 }
+      ]
+    },
+    {
+      post: { x: -16.0, z: -10.0 },
+      speed: 3.50,
+      waypoints: [
+        { x: -4.0, z: -10.0 },
+        { x: -16.0, z: -11.0 },
+        { x: -26.0, z: -11.0 },
+        { x: -24.5, z: -4.0 },
+        { x: -11.0, z: -5.0 }
+      ]
+    },
+    {
+      post: { x: -12.0, z: 14.0 },
+      speed: 3.35,
+      waypoints: [
+        { x: -18.0, z: 14.0 },
+        { x: -2.0, z: 14.0 },
+        { x: 10.0, z: 16.0 },
+        { x: -3.0, z: 4.0 }
       ]
     }
   ];
@@ -6852,7 +6873,7 @@ function showStealthDetectionAlertFlash() {
     el.id = 'miracle-stealth-alert';
     el.className = 'fixed inset-0 pointer-events-none z-50 flex items-start justify-center pt-20 transition-opacity duration-300';
     el.style.background = 'radial-gradient(circle, rgba(239,68,68,0.08) 25%, rgba(185,28,28,0.48) 100%)';
-    el.innerHTML = `<div class="px-5 py-3 rounded-2xl bg-rose-950/92 border-2 border-rose-400 text-rose-100 font-jua text-sm sm:text-base shadow-2xl text-center">🚨 로마 군인 순찰에 발각되었습니다!<br><span class="text-xs text-amber-200">모은 두루마리를 압수당하고 미션이 처음부터 초기화됩니다!</span></div>`;
+    el.innerHTML = `<div class="px-5 py-3 rounded-2xl bg-rose-950/92 border-2 border-rose-400 text-rose-100 font-jua text-sm sm:text-base shadow-2xl text-center">🚨 로마 군인 순찰에 발각되었습니다!<br><span class="text-xs text-amber-200">획득한 미션 아이템을 모두 압수당하고 미션이 처음부터 초기화됩니다!</span></div>`;
     document.body.appendChild(el);
   }
   el.style.opacity = '1';
@@ -6867,15 +6888,15 @@ function resetActiveNightMissionOnDetection(evSpot, now) {
   playSfx('crumble');
   showStealthDetectionAlertFlash();
   if (typeof showToast === 'function') {
-    showToast('🚨 로마 군인에게 발각! 모은 두루마리를 압수당하고 미션이 처음부터 다시 시작됩니다!');
+    showToast('🚨 로마 군인에게 발각! 획득한 미션 아이템을 모두 압수당하고 미션이 처음부터 초기화됩니다!');
   }
 
-  // 모든 수집/운반 아이템 압수 및 미션 오브젝트 정리
+  // 모든 진행 중 미션의 수집/운반 아이템 압수 및 미션 오브젝트 정리
   clearMiracleFieldEventObjects();
 
-  // 시작 지점(니고데모 곁 안전한 야외)으로 플레이어 복귀
+  // 시작 지점(의뢰 NPC 곁 안전한 야외)으로 플레이어 복귀 후 0부터 미션 재시작
   if (evSpot) {
-    const startPt = findSafeOpenWorldOutdoorPoint(evSpot.x, evSpot.z + 3.0, 1.0);
+    const startPt = findSafeOpenWorldOutdoorPoint(evSpot.x, evSpot.z + 3.2, 1.0);
     const gy = getMiracleOpenWorldGroundHeight(startPt.x, startPt.z);
     playerPos.set(startPt.x, gy, startPt.z);
     lastGroundedY = gy;
@@ -6884,7 +6905,6 @@ function resetActiveNightMissionOnDetection(evSpot, now) {
       playerGroup.position.copy(playerPos);
     }
     if (typeof snapCameraToPlayer === 'function') snapCameraToPlayer();
-    // 미션 상태(0/3)로 깨끗하게 재시작
     startMiracleFieldEvent(evSpot);
   }
 }
@@ -6895,11 +6915,12 @@ function updateMiracleNightPatrolSoldiers(dt, now) {
 
   const nf = (window.MiracleDayNight) ? window.MiracleDayNight.nightFactor : 0;
   const isNight = nf > 0.15;
+  // 밤 시간대에 진행 중인 모든 필드 미션에 대해 로마 군인 순찰 발각·압수 판정 적용!
   const activeNightEv = (
     miracleActiveFieldEvent &&
     miracleActiveFieldEvent.spot &&
-    miracleActiveFieldEvent.spot.isNightOnly &&
-    !miracleDialogState.active
+    !miracleDialogState.active &&
+    !miracleActiveFieldEvent.cutsceneActive
   ) ? miracleActiveFieldEvent.spot : null;
 
   for (let i = 0; i < list.length; i++) {
@@ -7120,6 +7141,19 @@ function buildMiracleOpenWorld(restoreSavedPos = false) {
   playerFacing = Math.PI;
   rebuildPlayerAppearance();
   snapCameraToPlayer();
+  if (typeof updateMiracleDynamicSun === 'function') {
+    updateMiracleDynamicSun(0, performance.now());
+  }
+  if (Array.isArray(window.miracleSkyBirds) && window.MiracleDayNight && typeof window.MiracleDayNight.getBirdActivityRatio === 'function') {
+    const ratio = window.MiracleDayNight.getBirdActivityRatio();
+    const total = window.miracleSkyBirds.length;
+    for (let i = 0; i < total; i++) {
+      const b = window.miracleSkyBirds[i];
+      if (!b || !b.mesh) continue;
+      if (b.baseScale == null) b.baseScale = b.mesh.scale.x || 1;
+      b.mesh.visible = ratio > (i + 0.5) / total;
+    }
+  }
   updateMiracleNotebookHudBadge();
   updateStageHUD();
 
@@ -7228,12 +7262,25 @@ function updateMiracleOpenWorldFrame(dt, now) {
     });
   }
 
-  // 하늘을 날아다니는 소프트 로우 폴리곤 새 비행 & 날갯짓 시뮬레이션
+  // 하늘을 날아다니는 소프트 로우 폴리곤 새 비행 & 날갯짓 시뮬레이션 (낮 100%, 일몰 점진 감소, 밤 0%, 새벽 점진 증가)
   if (Array.isArray(window.miracleSkyBirds) && window.miracleSkyBirds.length > 0) {
     const tSec = now * 0.001;
-    for (let i = 0; i < window.miracleSkyBirds.length; i++) {
+    const dn = window.MiracleDayNight;
+    const birdRatio = (dn && typeof dn.getBirdActivityRatio === 'function') ? dn.getBirdActivityRatio() : 1.0;
+    const totalBirds = window.miracleSkyBirds.length;
+    for (let i = 0; i < totalBirds; i++) {
       const b = window.miracleSkyBirds[i];
       if (!b || !b.mesh) continue;
+      if (b.baseScale == null) b.baseScale = b.mesh.scale.x || 1;
+      const threshold = (i + 0.5) / totalBirds;
+      if (birdRatio <= threshold || birdRatio <= 0.001) {
+        b.mesh.visible = false;
+        continue;
+      }
+      b.mesh.visible = true;
+      const birdScale = b.baseScale * Math.min(1.0, Math.max(0.28, (birdRatio - threshold) / 0.08));
+      b.mesh.scale.setScalar(birdScale);
+
       b.angle += dt * b.speed;
       const nx = b.cx + Math.cos(b.angle) * b.radX;
       const nz = b.cz + Math.sin(b.angle) * b.radZ;
