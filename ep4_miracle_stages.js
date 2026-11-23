@@ -5233,7 +5233,7 @@ function updateMiracleEndingFrame(dt, now) {
     };
 
     if (bf) {
-      document.getElementById('black-fade-icon').textContent = '👼☁️';
+      document.getElementById('black-fade-icon').textContent = '☁️';
       document.getElementById('black-fade-title').textContent = `"${angelPromiseLine}"`;
       document.getElementById('black-fade-sub').textContent = '사도행전 1장 11절';
       bf.style.opacity = '1';

@@ -5049,6 +5049,12 @@ window.playEp4OpeningVideoThen = function (onComplete) {
     return;
   }
 
+  // [핵심 해결] 모달창을 3D 라벨 밑에 갇히지 않도록 강제로 body 최상단으로 꺼내고, z-index를 CSS 최대치로 고정
+  if (modal.parentElement !== document.body) {
+    document.body.appendChild(modal);
+  }
+  modal.style.zIndex = '2147483647';
+
   window.__ep4OpeningVideoActive = true;
   if (typeof setInGameHudControlsVisible === 'function') setInGameHudControlsVisible(false);
   if (typeof stopStageBgm === 'function') stopStageBgm();
@@ -5177,6 +5183,12 @@ window.playEp4EndingVideoThen = function (onComplete) {
     done();
     return;
   }
+
+  // [핵심 해결] 모달창을 3D 라벨 밑에 갇히지 않도록 강제로 body 최상단으로 꺼내고, z-index를 CSS 최대치로 고정
+  if (modal.parentElement !== document.body) {
+    document.body.appendChild(modal);
+  }
+  modal.style.zIndex = '2147483647';
 
   window.__ep4EndingVideoActive = true;
   if (typeof setInGameHudControlsVisible === 'function') setInGameHudControlsVisible(false);
@@ -5370,7 +5382,7 @@ function ensureMiracleCustomUI() {
       <!-- 오픈월드 하늘 조망 건너뛰기 버튼 -->
       <div id="ep4-flyover-skip-wrap" class="hidden fixed top-4 right-4 sm:top-6 sm:right-6 z-50 pointer-events-auto">
         <button type="button" onclick="if(window.skipMiracleOpenWorldFlyover) window.skipMiracleOpenWorldFlyover();"
-                class="mc-btn px-4 py-2 rounded-full bg-slate-900/80 border border-amber-300 text-amber-200 font-jua text-xs sm:text-sm shadow-lg backdrop-blur-sm">
+                class="mc-btn px-4 py-2 rounded-full bg-black/30 hover:bg-black/40 backdrop-blur-md border border-white/30 text-white font-jua text-xs sm:text-sm shadow-lg transition-all">
           ⏭️ 건너뛰기
         </button>
       </div>
@@ -5379,10 +5391,10 @@ function ensureMiracleCustomUI() {
       <div id="ep4-opening-video-modal" class="hidden pointer-events-auto fixed inset-0 z-50 bg-black flex-col items-center justify-center">
         
         <!-- 상단 오버레이 UI (텍스트 숨김 & 우측 상단 건너뛰기 버튼 유지) -->
-        <div class="absolute top-0 inset-x-0 p-4 sm:p-6 flex items-center justify-end z-20 pointer-events-none bg-transparent">
-          <span id="ep4-opening-video-status" class="hidden font-jua text-xs sm:text-sm text-amber-200 drop-shadow-md mr-auto"></span>
+        <div class="absolute top-0 inset-x-0 p-4 sm:p-6 flex items-center justify-end z-20">
+          <span id="ep4-opening-video-status" class="font-jua text-xs sm:text-sm text-amber-200 drop-shadow-md">🎬 에피소드 4 오프닝 영상</span>
           <button id="ep4-opening-video-skip-btn" type="button"
-                  class="hidden pointer-events-auto mc-btn px-5 py-2 rounded-full bg-amber-400 hover:bg-amber-300 text-slate-950 font-jua text-sm sm:text-base shadow-lg">
+                  class="hidden mc-btn px-4 py-2 rounded-full bg-black/30 hover:bg-black/40 backdrop-blur-md border border-white/30 text-white font-jua text-xs sm:text-sm shadow-lg transition-all">
             ⏭️ 건너뛰기
           </button>
         </div>
