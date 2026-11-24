@@ -1860,6 +1860,7 @@ function openDavidNpcDialog(npc) {
 
   davidDialogTargetNpc = npc;
   npc.autoPromptedInZone = true;
+  dlg.classList.remove('david-stage2-intro');
   dlg.classList.remove('hidden');
   nameEl.textContent = npc.roleTitle;
 
@@ -2640,6 +2641,7 @@ function startDavidStage3CovenantCutscene() {
   const nathanMsg = '"다윗 왕이시여! 여호와께서 말씀하시기를 \'네 집과 네 나라가 내 앞에서 영원히 보전되고 네 왕위가 영원히 견고하리라!\' 하셨나이다!" (사무엘하 7:16)';
 
   if (dlg && nameEl && textEl && btnEl) {
+    dlg.classList.remove('david-stage2-intro');
     dlg.classList.remove('hidden');
     nameEl.textContent = '✨ 나단 선지자 (하나님의 언약 메시지)';
     btnEl.textContent = '아멘';

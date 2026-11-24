@@ -6,7 +6,7 @@
 // =========================================================================
 
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_assets = '20261123_v30';
+window.__GAME_BUILD_VERSIONS__.ep4_assets = '20261124_v32';
 
 const _miracleDoubleSideMatCache = {};
 function matLowPolyDouble(hexColor) {

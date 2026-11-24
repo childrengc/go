@@ -919,7 +919,7 @@ function ensureDavidCustomUI() {
   if (!uiRoot) {
     uiRoot = document.createElement('div');
     uiRoot.id = 'david-custom-ui';
-    uiRoot.className = 'fixed inset-0 pointer-events-none flex flex-col items-center';
+    uiRoot.className = 'pointer-events-none';
     uiRoot.innerHTML = `
       <!-- [오프닝 & 엔딩 암전 내레이션 오버레이] -->
       <div id="david-cinematic-overlay" class="hidden pointer-events-auto fixed inset-0 bg-black z-50 flex-col items-center justify-center p-6 text-center transition-opacity duration-700" style="opacity:0;">
@@ -970,20 +970,26 @@ function ensureDavidCustomUI() {
         </div>
       </div>
 
-      <!-- 스테이지 2 & 3: 동물의 숲 스타일 말풍선 대화창 (가로형 화면 캐릭터 가림 방지: 하단 밀착·반투명·디바이스 가변 비율) -->
-      <div id="david-npc-dialog" class="hidden relative z-30 pointer-events-auto mt-auto mb-3 sm:mb-5 mc-panel bg-amber-50/80 backdrop-blur-sm border-[3px] border-amber-700/90 rounded-2xl sm:rounded-3xl p-3 sm:p-4 max-w-xl w-[92%] text-slate-900 shadow-2xl flex flex-col gap-1.5 sm:gap-2">
-        <div class="flex items-center justify-between gap-2">
-          <span id="david-npc-name" class="px-2.5 py-0.5 rounded-full bg-amber-700 text-amber-100 font-jua text-xs sm:text-sm">이름</span>
-          <span class="david-dialog-sound-tag text-[10px] sm:text-[11px] font-bold text-amber-900/80">🔊 또로롱 말풍선 사운드</span>
-        </div>
-        <p id="david-npc-text" class="font-bold text-xs sm:text-sm leading-snug sm:leading-relaxed min-h-[28px] sm:min-h-[38px] text-slate-900"></p>
-        <div class="flex justify-end gap-2">
-          <button id="david-npc-action-btn" type="button" onclick="confirmDavidNpcDialog()" class="mc-btn px-4 sm:px-5 py-1 sm:py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white font-jua text-xs sm:text-sm">알겠습니다!</button>
+      <!-- 스테이지 2 & 3: 동물의 숲 스타일 말풍선 대화창 (조이스틱·시점·점프 버튼보다 항상 앞 레이어 보장) -->
+      <div id="david-npc-dialog-layer" class="fixed inset-0 pointer-events-none flex flex-col items-center justify-end" style="z-index: 135;">
+        <div id="david-npc-dialog"
+             onpointerdown="event.stopPropagation()"
+             ontouchstart="event.stopPropagation()"
+             class="hidden relative pointer-events-auto mb-3 sm:mb-5 mc-panel bg-amber-50/95 backdrop-blur-md border-[3px] border-amber-700/90 rounded-2xl sm:rounded-3xl p-3 sm:p-4 max-w-xl w-[92%] text-slate-900 shadow-2xl flex flex-col gap-1.5 sm:gap-2">
+          <div class="flex items-center justify-between gap-2">
+            <span id="david-npc-name" class="px-2.5 py-0.5 rounded-full bg-amber-700 text-amber-100 font-jua text-xs sm:text-sm">이름</span>
+            <span class="david-dialog-sound-tag text-[10px] sm:text-[11px] font-bold text-amber-900/80">🔊 또로롱 말풍선 사운드</span>
+          </div>
+          <p id="david-npc-text" class="font-bold text-xs sm:text-sm leading-snug sm:leading-relaxed min-h-[28px] sm:min-h-[38px] text-slate-900"></p>
+          <div class="flex justify-end gap-2">
+            <button id="david-npc-action-btn" type="button" onclick="confirmDavidNpcDialog()" class="mc-btn px-4 sm:px-5 py-1 sm:py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white font-jua text-xs sm:text-sm">알겠습니다!</button>
+          </div>
         </div>
       </div>
     `;
     document.body.appendChild(uiRoot);
   }
+  uiRoot.classList.remove('hidden');
   return uiRoot;
 }
 

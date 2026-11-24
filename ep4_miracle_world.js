@@ -4,7 +4,7 @@
 // - 계단으로 건물 2층 등반 후 인접한 옆 건물 옥상·2층으로 점프 이동할 수 있는 근접 마을 배치
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_world = '20261123_v30';
+window.__GAME_BUILD_VERSIONS__.ep4_world = '20261124_v32';
 
 window.miracleOpenWorldIntroFlyover = {
   active: false,
@@ -2581,7 +2581,9 @@ function spawnMiracleOptionalEventSpots() {
   allCatalog.forEach(ev => {
     // 멀티플레이 맵에서는 확장형 반석 위의 집 협동 미션(mp_rock_house)이 해당 구역을 담당하므로 개인용 par_builder 마커는 중복 배치 제외
     if (window.isMiracleMultiplayerMode && ev.id === 'par_builder') return;
-    const isCompleted = ev.unlockNotebookIds && ev.unlockNotebookIds.every(id => miracleCollectedIds.has(id));
+    const isCompleted =
+      (typeof miracleCompletedMissionIds !== 'undefined' && miracleCompletedMissionIds.has(ev.id)) ||
+      (ev.id !== 'ev_palm' && ev.unlockNotebookIds && ev.unlockNotebookIds.every(id => miracleCollectedIds.has(id)));
     // useTallBeam = false 로 설정하여 긴 빛기둥 대신 무릎 높이의 불규칙 빛의 원(kneeAura) 적용
     const marker = createMiracleSpotMarker(
       ev.x,
@@ -5283,6 +5285,9 @@ function finishMiracleFieldEvent(evSpot) {
   if (Array.isArray(evSpot.unlockNotebookIds)) {
     evSpot.unlockNotebookIds.forEach(id => unlockMiracleNotebookEntry(id, false));
   }
+  if (typeof window.recordMiracleMissionCompleted === 'function') {
+    window.recordMiracleMissionCompleted(evSpot.id, { deferPopup: true });
+  }
 
   if (evSpot.id === 'par_mustard' && !evSpot._treeGrown) {
     evSpot._treeGrown = true;
@@ -5296,7 +5301,13 @@ function finishMiracleFieldEvent(evSpot) {
     category: evSpot.category || 'story',
     text: evSpot.completeText,
     quiz: (currentMode === 'kinder') ? null : evSpot.quiz,
-    btnText: '📖 탐험수첩에 기록 완료!'
+    btnText: '📖 탐험수첩에 기록 완료!',
+    hideCancel: true,
+    onConfirm: () => {
+      if (typeof window.flushPendingFootstepsCardAward === 'function') {
+        setTimeout(() => window.flushPendingFootstepsCardAward(), 220);
+      }
+    }
   });
 }
 

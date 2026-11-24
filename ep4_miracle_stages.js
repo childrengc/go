@@ -4,7 +4,7 @@
 // - 스테이지 3(십자가 사건): 넓어진 골고다 언덕 정상 고원과 세 십자가 등장 연출 적용
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_stages = '20261123_v30';
+window.__GAME_BUILD_VERSIONS__.ep4_stages = '20261124_v32';
 
 // 스테이지 3: 십자가를 지고 힘겹게 오르시는 예수님 보행 속도(더 천천히) 및 플레이어 대신 짊어졌을 때의 보행 속도
 const MIRACLE_STAGE3_JESUS_WALK_SPEED = 1.05;
@@ -68,7 +68,8 @@ window.startMiracleDirectSubStage = function (subId) {
   const stNum = stageMap[subId] || 1;
   currentStage = stNum;
   enteredFromMapStageSelect = true;
-  currentRunCanIssueCert = false;
+  enteredEndingDirectlyFromMap = false;
+  currentRunCanIssueCert = true;
   isPlaying = true;
   isTimeAttackActive = false;
   const timerBox = document.getElementById('hud-timer-box');
@@ -1432,6 +1433,9 @@ function updateMiracleMainStage1Frame(dt, now) {
       unlockMiracleNotebookEntry('mir_storm', true);
       unlockMiracleNotebookEntry('mir_fish', true);
       saveMiracleNotebookProgress();
+      if (typeof window.recordMiracleMissionCompleted === 'function') {
+        window.recordMiracleMissionCompleted('main_1', { deferPopup: true });
+      }
       openStageClearModal(1);
     }
     return;
@@ -2299,6 +2303,9 @@ function updateMiracleMainStage2Frame(dt, now) {
           miracleMainStagesCleared[2] = true;
           unlockMiracleNotebookEntry('mir_loaves', true);
           saveMiracleNotebookProgress();
+          if (typeof window.recordMiracleMissionCompleted === 'function') {
+            window.recordMiracleMissionCompleted('main_2', { deferPopup: true });
+          }
           openStageClearModal(2);
           return;
         } else {
@@ -3745,6 +3752,9 @@ function updateMiracleMainStage3Frame(dt, now) {
       st.phase = 'golgotha_arrived';
       miracleMainStagesCleared[3] = true;
       saveMiracleNotebookProgress();
+      if (typeof window.recordMiracleMissionCompleted === 'function') {
+        window.recordMiracleMissionCompleted('main_3', { deferPopup: true });
+      }
       openStageClearModal(3);
       return;
     }
@@ -4397,6 +4407,9 @@ function updateMiracleMainStage4Frame(dt, now) {
       miracleIsPostResurrection = true;
       unlockMiracleNotebookEntry('mir_resurrect', true);
       saveMiracleNotebookProgress();
+      if (typeof window.recordMiracleMissionCompleted === 'function') {
+        window.recordMiracleMissionCompleted('main_4', { deferPopup: true });
+      }
       openStageClearModal(4);
       return;
     }
@@ -4900,8 +4913,12 @@ function applyEndingDisciplePose(d, sleeping, now) {
 function triggerMiracleAscensionSequence() {
   if (miracleAscensionState.active) return;
   const sp = miracleAscensionState.spotObj;
-  // 이미 승천을 본 뒤 다시 승천 장소로 온 경우 → [오픈월드로 돌아가기 / 월드맵으로 이동하기 / 엔딩 세상 계속 둘러보기] 메뉴 출력!
+  // 이미 승천을 본 뒤 다시 승천 장소로 온 경우 → 새 레벨 누적 인증서 가능 시 발급, 아니면 이동 선택창 출력!
   if (miracleAscensionState.modalShown || (typeof miracleAscensionSeen !== 'undefined' && miracleAscensionSeen)) {
+    if (typeof canShowCertificateForCurrentRun === 'function' && canShowCertificateForCurrentRun() && typeof showEndingCertificate === 'function') {
+      showEndingCertificate();
+      return;
+    }
     if (typeof showEndingWorldMapChoiceModal === 'function') {
       showEndingWorldMapChoiceModal();
     } else if (typeof showEndingCertificate === 'function') {
@@ -5167,7 +5184,7 @@ function updateMiracleEndingFrame(dt, now) {
     miracleMainStagesCleared[4] = true;
     miracleIsPostResurrection = true;
     if (typeof saveMiracleNotebookProgress === 'function') saveMiracleNotebookProgress();
-    if (typeof recordStageClearProgress === 'function') recordStageClearProgress('miracle', 4);
+    if (typeof recordPlayerStageClear === 'function') recordPlayerStageClear('miracle', 4);
 
     const angelPromiseLine = '하늘로 올라가신 예수께서는, 여러분이 지금 하늘로 올라가신 것을 본 것과 똑같은 방식으로 다시 내려오실 것입니다';
     const bf = document.getElementById('black-fade');
@@ -5197,6 +5214,9 @@ function updateMiracleEndingFrame(dt, now) {
       if (st.angelR) st.angelR.visible = false;
 
       const afterEndingVideo = () => {
+        if (typeof window.markEp4EndingCompletedForLogo === 'function') {
+          window.markEp4EndingCompletedForLogo(typeof explorerName !== 'undefined' ? explorerName : '');
+        }
         if (typeof returnToMiracleOpenWorld === 'function') {
           returnToMiracleOpenWorld();
         }
@@ -5513,6 +5533,11 @@ REGISTER_EPISODE('miracle', {
       syncMiracleMainStageSequentialBeams();
     }
     startStageBgm(st);
+    setTimeout(() => {
+      if (typeof window.flushPendingFootstepsCardAward === 'function') {
+        window.flushPendingFootstepsCardAward();
+      }
+    }, 460);
   },
   updateStageFrame: function (dt, now, st) {
     if (miracleSubMode === 'openworld') updateMiracleOpenWorldFrame(dt, now);

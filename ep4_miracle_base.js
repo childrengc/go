@@ -4,7 +4,7 @@
 // - 확장된 오픈월드 지형 고도 계산기(넓어진 골고다 언덕 포함) 및 소프트 로우 폴리곤 자연물 팩토리
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_base = '20261123_v30';
+window.__GAME_BUILD_VERSIONS__.ep4_base = '20261124_v32';
 
 // =========================================================================
 // 🎬 [에피소드 4 오프닝 · 엔딩 영상 주소 설정]
@@ -157,6 +157,45 @@ const MIRACLE_NOTEBOOK_DB = {
 };
 
 let miracleCollectedIds = new Set();
+let miracleCompletedMissionIds = new Set();
+
+const MIRACLE_TRACKED_MISSION_IDS = [
+  'main_1', 'main_2', 'main_3', 'main_4',
+  'ev_cana', 'ev_paralytic', 'ev_children', 'ev_well', 'ev_zacchaeus',
+  'ev_samaritan', 'ev_lepers', 'ev_palm', 'ev_washfeet', 'ev_widow',
+  'par_sower', 'par_sheep', 'par_builder', 'par_mustard', 'ev_nicodemus',
+  'post_emmaus', 'post_thomas', 'post_breakfast'
+];
+
+const MIRACLE_LEGACY_MISSION_NOTEBOOK_MAP = {
+  ev_cana: 'mir_cana',
+  ev_paralytic: 'mir_paralytic',
+  ev_children: 'wd_mark1014',
+  ev_well: 'wd_john414',
+  ev_zacchaeus: 'wd_luke1910',
+  ev_samaritan: 'wd_luke1037',
+  ev_lepers: 'mir_lepers',
+  ev_washfeet: 'wd_john1314',
+  ev_widow: 'wd_mark1243',
+  par_sower: 'par_sower',
+  par_sheep: 'par_sheep',
+  par_builder: 'par_builder',
+  par_mustard: 'par_mustard',
+  ev_nicodemus: 'mir_nicodemus',
+  post_emmaus: 'test_emmaus',
+  post_thomas: 'test_thomas',
+  post_breakfast: 'test_breakfast'
+};
+
+function getMiracleTotalMissionCount() {
+  return MIRACLE_TRACKED_MISSION_IDS.length;
+}
+window.getMiracleTotalMissionCount = getMiracleTotalMissionCount;
+
+function getMiracleCompletedMissionCount() {
+  return miracleCompletedMissionIds.size;
+}
+window.getMiracleCompletedMissionCount = getMiracleCompletedMissionCount;
 
 function getMiracleNotebookStorageKey() {
   return 'bible_ep4_notebook_' + (explorerName || 'guest');
@@ -164,6 +203,7 @@ function getMiracleNotebookStorageKey() {
 
 function loadMiracleNotebookProgress() {
   miracleCollectedIds = new Set();
+  miracleCompletedMissionIds = new Set();
   miracleMainStagesCleared = { 1: false, 2: false, 3: false, 4: false };
   miracleIsPostResurrection = false;
   miracleAscensionSeen = false;
@@ -176,6 +216,13 @@ function loadMiracleNotebookProgress() {
       } else if (parsed && typeof parsed === 'object') {
         if (Array.isArray(parsed.collected)) {
           parsed.collected.forEach(id => miracleCollectedIds.add(id));
+        }
+        if (Array.isArray(parsed.completedMissions)) {
+          parsed.completedMissions.forEach(id => {
+            if (MIRACLE_TRACKED_MISSION_IDS.includes(id)) {
+              miracleCompletedMissionIds.add(id);
+            }
+          });
         }
         if (parsed.clearedStages && typeof parsed.clearedStages === 'object') {
           [1, 2, 3, 4].forEach(n => {
@@ -194,14 +241,28 @@ function loadMiracleNotebookProgress() {
     if (mc >= 1) miracleMainStagesCleared[1] = true;
     if (mc >= 2) miracleMainStagesCleared[2] = true;
     if (mc >= 3) miracleMainStagesCleared[3] = true;
-    if (mc >= 4 || mp.completed) {
+    if (mc >= 4) miracleMainStagesCleared[4] = true;
+    if (mp.completed || mp.certIssued) {
       miracleMainStagesCleared[1] = true;
       miracleMainStagesCleared[2] = true;
       miracleMainStagesCleared[3] = true;
       miracleMainStagesCleared[4] = true;
       miracleIsPostResurrection = true;
+      miracleAscensionSeen = true;
     }
-    if (mp.completed) miracleAscensionSeen = true;
+  }
+  // 기존 기록 하위 호환 백필 (소문 NPC와 겹치는 ev_palm 제외)
+  [1, 2, 3, 4].forEach(n => {
+    if (miracleMainStagesCleared[n]) miracleCompletedMissionIds.add(`main_${n}`);
+  });
+  Object.keys(MIRACLE_LEGACY_MISSION_NOTEBOOK_MAP).forEach(evId => {
+    const nbId = MIRACLE_LEGACY_MISSION_NOTEBOOK_MAP[evId];
+    if (miracleCollectedIds.has(nbId)) {
+      miracleCompletedMissionIds.add(evId);
+    }
+  });
+  if (typeof window.syncFootstepsMilestonesFromCount === 'function') {
+    window.syncFootstepsMilestonesFromCount(miracleCompletedMissionIds.size, MIRACLE_TRACKED_MISSION_IDS.length, { silent: true });
   }
   updateMiracleNotebookHudBadge();
 }
@@ -210,6 +271,7 @@ function saveMiracleNotebookProgress() {
   try {
     const payload = {
       collected: Array.from(miracleCollectedIds),
+      completedMissions: Array.from(miracleCompletedMissionIds),
       clearedStages: miracleMainStagesCleared,
       postResurrection: miracleIsPostResurrection,
       ascensionSeen: miracleAscensionSeen
@@ -219,9 +281,27 @@ function saveMiracleNotebookProgress() {
   updateMiracleNotebookHudBadge();
 }
 
-// 전체 잠금 해제 요청 반영: 에피소드 4 모든 스테이지 및 엔딩 자유 접근 허용
+function recordMiracleMissionCompleted(missionId, opts = {}) {
+  if (!missionId || !MIRACLE_TRACKED_MISSION_IDS.includes(missionId)) return false;
+  const isNew = !miracleCompletedMissionIds.has(missionId);
+  miracleCompletedMissionIds.add(missionId);
+  saveMiracleNotebookProgress();
+  if (typeof window.checkAndQueueFootstepsAwards === 'function') {
+    window.checkAndQueueFootstepsAwards(miracleCompletedMissionIds.size, MIRACLE_TRACKED_MISSION_IDS.length, opts);
+  }
+  return isNew;
+}
+window.recordMiracleMissionCompleted = recordMiracleMissionCompleted;
+
+// 에피소드 4 완주자(또는 멀티플레이)에게만 전체 스테이지·승천 자유 해금 허용
 function isMiracleAllStagesUnlocked() {
-  return true;
+  if (window.__mpAdminBypassUnlock === true || window.isMiracleMultiplayerMode === true) return true;
+  if (typeof miracleAscensionSeen !== 'undefined' && miracleAscensionSeen) return true;
+  if (typeof playerProgressData !== 'undefined' && playerProgressData.miracle) {
+    const mp = playerProgressData.miracle;
+    if (mp.completed || mp.certIssued) return true;
+  }
+  return false;
 }
 window.isMiracleAllStagesUnlocked = isMiracleAllStagesUnlocked;
 
@@ -266,11 +346,8 @@ function getMiracleNotebookTotalCount() {
 // -------------------------------------------------------------------------
 // 3. [자동 폴백 & 화면 진단 포함] 오픈월드 BGM 오디오 시스템
 // -------------------------------------------------------------------------
-let _miracleOpenWorldOgg = null;
-let _miracleOggUnlockBound = false;
-let _miracleOggCandidateIdx = 0;
 
-// 숨겨진 이중 확장자나 대소문자, 대체 포맷까지 자동으로 순서대로 시도
+// 낮(기본) BGM 후보
 const MIRACLE_BGM_CANDIDATES = [
   'assets/music/miracle01.ogg',
   'assets/music/miracle01.ogg.mp3',
@@ -279,12 +356,30 @@ const MIRACLE_BGM_CANDIDATES = [
   'assets/music/Miracle01.ogg'
 ];
 
+// 🌙 밤 전용 BGM 후보 추가
+const MIRACLE_NIGHT_BGM_CANDIDATES = [
+  'assets/music/miracle02.ogg',
+  'assets/music/miracle02.mp3',
+  'assets/music/miracle02.wav'
+];
+
+// 변수 중복 선언(Syntax Error) 해결 및 깔끔한 정리
+let _miracleOpenWorldOgg = null;
+let _miracleOggCandidateIdx = 0;
+let _miracleOggUnlockBound = false;
 let _miracleOggBackgroundPaused = false;
 let _miracleOggVisibilityBound = false;
 
+let _miracleNightOgg = null;
+let _miracleNightOggCandidateIdx = 0;
+
+// 오디오 페이드 전환 상태를 관리할 변수 추가
+let _audioFadeInterval = null;
+let _currentBgmType = null;
+
 function canPlayMiracleOpenWorldOgg() {
   if (typeof document !== 'undefined' && document.hidden) return false;
-  if (window.__ep4OpeningVideoActive || window.__ep4EndingVideoActive) return false; // 영상 재생 중에는 터치해도 BGM 켜짐 원천 차단
+  if (window.__ep4OpeningVideoActive || window.__ep4EndingVideoActive) return false;
   if (typeof currentEpisode !== 'undefined' && currentEpisode !== 'miracle') return false;
   if (miracleSubMode !== 'openworld') return false;
   if (typeof isPlaying !== 'undefined' && !isPlaying) return false;
@@ -293,6 +388,7 @@ function canPlayMiracleOpenWorldOgg() {
   return true;
 }
 
+// ☀️ 낮 BGM 오디오 인스턴스 생성 함수
 function getMiracleOpenWorldOgg() {
   if (!_miracleOpenWorldOgg) {
     _miracleOggCandidateIdx = 0;
@@ -302,30 +398,113 @@ function getMiracleOpenWorldOgg() {
     _miracleOpenWorldOgg.volume = 0.65;
 
     _miracleOpenWorldOgg.addEventListener('error', () => {
-      const failedPath = MIRACLE_BGM_CANDIDATES[_miracleOggCandidateIdx];
-      const errCode = _miracleOpenWorldOgg.error ? _miracleOpenWorldOgg.error.code : 0;
-      console.warn(`[EP4 BGM] 로드 실패 (${failedPath}), 에러코드: ${errCode}`);
-
-      // 다음 후보 파일 경로가 있으면 자동으로 재시도
       if (_miracleOggCandidateIdx + 1 < MIRACLE_BGM_CANDIDATES.length) {
         _miracleOggCandidateIdx++;
         _miracleOpenWorldOgg.src = MIRACLE_BGM_CANDIDATES[_miracleOggCandidateIdx];
         _miracleOpenWorldOgg.load();
-        if (canPlayMiracleOpenWorldOgg()) {
+        if (canPlayMiracleOpenWorldOgg() && _currentBgmType === 'day') {
+          _miracleOpenWorldOgg.volume = 0.65; // ⚠️ 에러 복구 시 볼륨 0 고정 방지
           _miracleOpenWorldOgg.play().catch(() => {});
-        }
-      } else {
-        // 모든 후보 경로가 실패했을 때 인게임 화면에 정확한 원인 표시
-        const reason = (errCode === 3 || errCode === 4)
-          ? '파일이 없거나(404) 정식 Ogg 코덱이 아닙니다(확장자만 바꾼 파일인지 확인)'
-          : `오디오 에러코드 ${errCode}`;
-        if (typeof showToast === 'function' && canPlayMiracleOpenWorldOgg()) {
-          showToast(`⚠️ BGM 재생 실패: ${reason} [assets/music/miracle01.ogg]`);
         }
       }
     });
   }
   return _miracleOpenWorldOgg;
+}
+
+// 🌙 밤 BGM 오디오 인스턴스 생성 함수
+function getMiracleNightOgg() {
+  if (!_miracleNightOgg) {
+    _miracleNightOggCandidateIdx = 0;
+    _miracleNightOgg = new Audio(MIRACLE_NIGHT_BGM_CANDIDATES[0]);
+    _miracleNightOgg.loop = true;
+    _miracleNightOgg.preload = 'auto';
+    _miracleNightOgg.volume = 0.65;
+
+    _miracleNightOgg.addEventListener('error', () => {
+      if (_miracleNightOggCandidateIdx + 1 < MIRACLE_NIGHT_BGM_CANDIDATES.length) {
+        _miracleNightOggCandidateIdx++;
+        _miracleNightOgg.src = MIRACLE_NIGHT_BGM_CANDIDATES[_miracleNightOggCandidateIdx];
+        _miracleNightOgg.load();
+        if (canPlayMiracleOpenWorldOgg() && _currentBgmType === 'night') {
+          _miracleNightOgg.volume = 0.65; // ⚠️ 에러 복구 시 볼륨 0 고정 방지
+          _miracleNightOgg.play().catch(() => {});
+        }
+      }
+    });
+  }
+  return _miracleNightOgg;
+}
+
+function playMiracleOpenWorldOgg() {
+  bindMiracleOggUserGestureUnlock();
+
+  if (!canPlayMiracleOpenWorldOgg()) {
+    stopMiracleOpenWorldOgg(false);
+    return;
+  }
+
+  const isNightTime = window.MiracleDayNight && typeof window.MiracleDayNight.isNight === 'function' 
+                      ? window.MiracleDayNight.isNight() 
+                      : false;
+
+  const targetType = isNightTime ? 'night' : 'day';
+  const targetAudio = isNightTime ? getMiracleNightOgg() : getMiracleOpenWorldOgg();
+  const fadingAudio = isNightTime ? getMiracleOpenWorldOgg() : getMiracleNightOgg();
+
+  // 이미 목표 음악이 재생 중이거나 전환 중이면 무시
+  if (_currentBgmType === targetType && !targetAudio.paused) {
+    return;
+  }
+  _currentBgmType = targetType;
+
+  const MAX_VOLUME = 0.65;
+  const FADE_DURATION = 2000;
+  const FADE_STEPS = 50;
+  const totalSteps = FADE_DURATION / FADE_STEPS;
+  const volStep = MAX_VOLUME / totalSteps;
+
+  if (_audioFadeInterval) {
+    clearInterval(_audioFadeInterval);
+    _audioFadeInterval = null;
+  }
+
+  // 목표 음악은 0부터 재생 시작
+  if (targetAudio.paused) {
+    targetAudio.volume = 0;
+    targetAudio.play().catch(err => console.debug('[EP4 BGM] 터치 후 재생 대기:', err.name));
+  }
+
+  let step = 0;
+  _audioFadeInterval = setInterval(() => {
+    step++;
+    
+    // 1) 기존 음악 서서히 줄이기 (재생 중일 때만 작동)
+    if (!fadingAudio.paused) {
+      let nextOut = fadingAudio.volume - volStep;
+      if (nextOut <= 0 || step >= totalSteps) {
+        fadingAudio.pause();
+        fadingAudio.volume = MAX_VOLUME; // 다음번을 위해 볼륨 0.65로 원복
+      } else {
+        fadingAudio.volume = nextOut;
+      }
+    }
+
+    // 2) 목표 음악 서서히 키우기 
+    // ⚠️ 핵심: play() 비동기 딜레이로 인해 paused가 일시적으로 true일 수 있으므로 조건문 없이 무조건 볼륨 상승!
+    let nextIn = targetAudio.volume + volStep;
+    if (nextIn >= MAX_VOLUME || step >= totalSteps) {
+      targetAudio.volume = MAX_VOLUME;
+    } else {
+      targetAudio.volume = nextIn;
+    }
+
+    // 페이드 종료
+    if (step >= totalSteps) {
+      clearInterval(_audioFadeInterval);
+      _audioFadeInterval = null;
+    }
+  }, FADE_STEPS);
 }
 
 function bindMiracleOggVisibilityHandlers() {
@@ -336,7 +515,12 @@ function bindMiracleOggVisibilityHandlers() {
     if (_miracleOpenWorldOgg && !_miracleOpenWorldOgg.paused) {
       _miracleOggBackgroundPaused = true;
       _miracleOpenWorldOgg.pause();
-    } else if (canPlayMiracleOpenWorldOgg()) {
+    }
+    if (_miracleNightOgg && !_miracleNightOgg.paused) {
+      _miracleOggBackgroundPaused = true;
+      _miracleNightOgg.pause();
+    }
+    if (canPlayMiracleOpenWorldOgg()) {
       _miracleOggBackgroundPaused = true;
     }
   };
@@ -394,26 +578,92 @@ function playMiracleOpenWorldOgg() {
     return;
   }
 
-  const audio = getMiracleOpenWorldOgg();
-  if (audio.paused) {
-    const playPromise = audio.play();
-    if (playPromise !== undefined) {
-      playPromise.catch((err) => {
-        console.debug('[EP4 BGM] 터치 후 재생 대기:', err.name);
-      });
-    }
+  // 현재 밤인지 판별
+  const isNightTime = window.MiracleDayNight && typeof window.MiracleDayNight.isNight === 'function' 
+                      ? window.MiracleDayNight.isNight() 
+                      : false;
+
+  const targetType = isNightTime ? 'night' : 'day';
+  const targetAudio = isNightTime ? getMiracleNightOgg() : getMiracleOpenWorldOgg();
+  const fadingAudio = isNightTime ? getMiracleOpenWorldOgg() : getMiracleNightOgg();
+
+  // 이미 목표 음악이 재생 중이거나 전환 중이면 중복 실행 방지
+  if (_currentBgmType === targetType && !targetAudio.paused) {
+    return;
   }
+  _currentBgmType = targetType;
+
+  // 크로스페이드(서서히 전환) 설정 값
+  const MAX_VOLUME = 0.65;
+  const FADE_DURATION = 2000; // 2초 동안 전환
+  const FADE_STEPS = 50;      // 50ms마다 볼륨 조정
+  const totalSteps = FADE_DURATION / FADE_STEPS;
+  
+  const fadeOutAmount = fadingAudio.volume / totalSteps;
+  const fadeInAmount = MAX_VOLUME / totalSteps;
+
+  if (_audioFadeInterval) {
+    clearInterval(_audioFadeInterval);
+    _audioFadeInterval = null;
+  }
+
+  // 목표 음악 재생 시작
+  if (targetAudio.paused) {
+    targetAudio.volume = 0;
+    targetAudio.play().catch(err => console.debug('[EP4 BGM] 터치 후 재생 대기:', err.name));
+  }
+
+  let step = 0;
+  _audioFadeInterval = setInterval(() => {
+    step++;
+    
+    if (!fadingAudio.paused) {
+      let nextVol = fadingAudio.volume - fadeOutAmount;
+      if (nextVol <= 0 || step >= totalSteps) {
+        fadingAudio.pause();
+        fadingAudio.volume = MAX_VOLUME; // 복원
+      } else {
+        fadingAudio.volume = nextVol;
+      }
+    }
+
+    if (!targetAudio.paused) {
+      let nextVol = targetAudio.volume + fadeInAmount;
+      if (nextVol >= MAX_VOLUME || step >= totalSteps) {
+        targetAudio.volume = MAX_VOLUME;
+      } else {
+        targetAudio.volume = nextVol;
+      }
+    }
+
+    if (step >= totalSteps) {
+      clearInterval(_audioFadeInterval);
+      _audioFadeInterval = null;
+    }
+  }, FADE_STEPS);
 }
 
 function stopMiracleOpenWorldOgg(resetTime = false) {
   if (resetTime) _miracleOggBackgroundPaused = false;
-  if (!_miracleOpenWorldOgg) return;
-  if (!_miracleOpenWorldOgg.paused) {
+  
+  if (_audioFadeInterval) {
+    clearInterval(_audioFadeInterval);
+    _audioFadeInterval = null;
+  }
+  
+  if (_miracleOpenWorldOgg && !_miracleOpenWorldOgg.paused) {
     _miracleOpenWorldOgg.pause();
+    _miracleOpenWorldOgg.volume = 0.65;
+    if (resetTime) _miracleOpenWorldOgg.currentTime = 0;
   }
-  if (resetTime) {
-    _miracleOpenWorldOgg.currentTime = 0;
+  
+  if (_miracleNightOgg && !_miracleNightOgg.paused) {
+    _miracleNightOgg.pause();
+    _miracleNightOgg.volume = 0.65;
+    if (resetTime) _miracleNightOgg.currentTime = 0;
   }
+  
+  _currentBgmType = null;
 }
 window.playMiracleOpenWorldOgg = playMiracleOpenWorldOgg;
 window.stopMiracleOpenWorldOgg = stopMiracleOpenWorldOgg;
@@ -5152,6 +5402,9 @@ window.markEp4EndingVideoWatched = function () {
     const prev = window.getEp4EndingVideoWatchCount();
     localStorage.setItem(EP4_ENDING_WATCHED_STORAGE_KEY, String(prev + 1));
   } catch (e) {}
+  if (typeof window.markEp4EndingCompletedForLogo === 'function') {
+    window.markEp4EndingCompletedForLogo(typeof explorerName !== 'undefined' ? explorerName : '');
+  }
 };
 
 window.playEp4EndingVideoThen = function (onComplete) {
@@ -5828,9 +6081,9 @@ function openMiracleDialog(options) {
     }
   }
 
-  // 신규 미션/스테이지 수락 창일 때 [거절 (나중에 하기)] 버튼 표시
+  // 신규 미션/스테이지 수락 창일 때 [거절 (나중에 하기)] 버튼 표시 (완료 다이얼로그는 hideCancel로 숨김)
   if (cancelBtn) {
-    if (typeof options.onConfirm === 'function' || options.showCancel) {
+    if ((typeof options.onConfirm === 'function' || options.showCancel) && !options.hideCancel) {
       cancelBtn.classList.remove('hidden');
       cancelBtn.textContent = options.cancelText || '거절 (나중에 하기) ✕';
     } else {
