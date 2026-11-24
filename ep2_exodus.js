@@ -2350,7 +2350,6 @@ function buildExodusStage3World() {
   if (guideArrowGroup) guideArrowGroup.visible = (currentMode !== 'senior');
   snapCameraToPlayer();
   updateStageHUD();
-  showToast('⛰️ 앞쪽 위층은 높아서 바로 못 올라가요! 옆으로 점프해 계단 바위를 따라 올라가세요!');
 }
 
 function updateStage3Sinai(dt, now) {

@@ -5,7 +5,7 @@
 // =========================================================================
 
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.core = '20261124_v34';
+window.__GAME_BUILD_VERSIONS__.core = '20261124_v36';
 
 // 퀴즈 선택지 순서 무작위 셔플 공용 헬퍼 (정답이 항상 1번에 고정되지 않도록 보장)
 function shuffleQuizOptions(opts, ansIdx = 0) {
@@ -783,7 +783,7 @@ function setInGameHudControlsVisible(visible) {
     if (joy) joy.style.display = 'none';
     if (camBar) camBar.style.display = 'none';
     if (actZone) actZone.style.display = 'none';
-    ['miracle-hud-left', 'miracle-mini-nav', 'miracle-guide-btn', 'david-st1-panel', 'david-st3-quest-tracker'].forEach(id => {
+    ['miracle-hud-left', 'miracle-mini-nav', 'miracle-guide-btn', 'miracle-return-openworld-btn', 'david-st1-panel', 'david-st3-quest-tracker'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.classList.add('hidden');
     });
@@ -797,6 +797,9 @@ function setInGameHudControlsVisible(visible) {
     updateMiracleGuideButtonVisibility();
     if (currentEpisode === 'miracle' && typeof updateMiracleNotebookHudBadge === 'function') {
       updateMiracleNotebookHudBadge();
+    } else {
+      const retBtn = document.getElementById('miracle-return-openworld-btn');
+      if (retBtn) retBtn.classList.add('hidden');
     }
     if (currentEpisode === 'david') {
       if (currentStage === 1 && typeof updateDavidStage1UI === 'function') updateDavidStage1UI();
@@ -895,6 +898,14 @@ window.showMiracleGuideBubble = function (opts = {}) {
 
   const title = opts.title || '✨ 탐험 안내';
   const text = String(opts.text || '').trim() || '목표를 향해 모험을 시작해 보세요!';
+  const toastBox = document.getElementById('toast-box');
+  if (
+    toastBox &&
+    toastBox.style.opacity === '1' &&
+    ((performance.now() - _lastToastAt) < 400 || _isToastDuplicateOfGuideBubble(_lastToastText, text))
+  ) {
+    hideToastImmediately();
+  }
   const progressText = opts.progressText || '';
   const extraText = opts.extraText || '';
   const canCancel = Boolean(opts.canCancel);
@@ -1187,7 +1198,7 @@ function _getStageProgressTutorialDesc() {
   }
   if (currentEpisode === 'miracle') {
     if (typeof miracleSubMode !== 'undefined' && miracleSubMode === 'openworld') {
-      return '클리어한 주요사건(0/4)과 모은 탐험수첩 기록(0/36)을 실시간으로 보여줘요!';
+      return '클리어한 주요사건(0/4) 진행 현황을 실시간으로 보여줘요!';
     }
     return '현재 진행 중인 복음서 스테이지의 목표 달성 현황을 보여줘요!';
   }
@@ -1234,10 +1245,11 @@ function buildUiTutorialSteps(isManual = false) {
   }
 
   if (_isTutorialTargetVisible('miracle-notebook-btn')) {
+    const nbTotal = (typeof getMiracleNotebookTotalCount === 'function') ? getMiracleNotebookTotalCount() : 37;
     steps.push({
       id: 'miracle-notebook-btn',
       title: '📖 탐험 수첩',
-      desc: '오픈월드를 걸으며 들은 소문, 직접 목격한 기적과 비유, 예수님의 말씀을 모아 읽어볼 수 있는 수첩이에요!',
+      desc: `오픈월드를 걸으며 들은 소문, 직접 목격한 기적과 비유, 예수님의 말씀을 모아 읽어보고 수집 개수(0/${nbTotal})도 바로 확인할 수 있어요!`,
       shape: 'box'
     });
   }
@@ -1733,9 +1745,58 @@ function speakCurrentMission() {
   if (el) speakText(el.textContent);
 }
 
-function showToast(msg) {
+let _lastToastText = '';
+let _lastToastAt = 0;
+
+function _normalizeGuideDedupText(str) {
+  return String(str || '')
+    .replace(/\[[^\]]*단계[^\]]*\]/g, ' ')
+    .replace(/[^\uAC00-\uD7A3a-zA-Z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function _isToastDuplicateOfGuideBubble(toastMsg, bubbleText) {
+  const a = _normalizeGuideDedupText(toastMsg);
+  const b = _normalizeGuideDedupText(bubbleText);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  if (a.length >= 6 && b.length >= 6 && (a.includes(b) || b.includes(a))) return true;
+  const aTokens = new Set(a.split(' ').filter(w => w.length >= 2));
+  const bTokens = new Set(b.split(' ').filter(w => w.length >= 2));
+  if (aTokens.size === 0 || bTokens.size === 0) return false;
+  let overlap = 0;
+  aTokens.forEach(w => { if (bTokens.has(w)) overlap++; });
+  return overlap >= 2 && (overlap / Math.min(aTokens.size, bTokens.size)) >= 0.45;
+}
+
+function hideToastImmediately() {
   const box = document.getElementById('toast-box');
-  document.getElementById('toast-text').textContent = msg;
+  if (box) {
+    clearTimeout(box._t);
+    box.style.opacity = '0';
+  }
+  _lastToastText = '';
+  _lastToastAt = 0;
+}
+window.hideToastImmediately = hideToastImmediately;
+
+function showToast(msg) {
+  if (
+    typeof MiracleGuideUI !== 'undefined' &&
+    MiracleGuideUI &&
+    (MiracleGuideUI.isBubbleOpen || (MiracleGuideUI.openedAt > 0 && (performance.now() - MiracleGuideUI.openedAt) < 900)) &&
+    _isToastDuplicateOfGuideBubble(msg, MiracleGuideUI.fullText)
+  ) {
+    return;
+  }
+  const box = document.getElementById('toast-box');
+  const textEl = document.getElementById('toast-text');
+  if (!box || !textEl) return;
+  _lastToastText = String(msg || '');
+  _lastToastAt = performance.now();
+  textEl.textContent = _lastToastText;
   box.style.opacity = '1';
   clearTimeout(box._t);
   box._t = setTimeout(() => { box.style.opacity = '0'; }, 2300);
@@ -2946,6 +3007,8 @@ function resumeGameFromWorldMap() {
       }
     }
   } else if (snap.episode === 'david') {
+    const retBtn = document.getElementById('miracle-return-openworld-btn');
+    if (retBtn) retBtn.classList.add('hidden');
     if (snap.stage === 1 && typeof updateDavidStage1UI === 'function') {
       updateDavidStage1UI();
     } else {
@@ -2956,6 +3019,9 @@ function resumeGameFromWorldMap() {
     } else {
       restoreVis('david-st3-quest-tracker', v.davidSt3Tracker);
     }
+  } else {
+    const retBtn = document.getElementById('miracle-return-openworld-btn');
+    if (retBtn) retBtn.classList.add('hidden');
   }
 
   syncHudMenuInfo();
@@ -4209,7 +4275,6 @@ function buildEndingWorld() {
       if (allowCert && currentEpisode !== 'david') certBtn.classList.remove('hidden');
       else certBtn.classList.add('hidden');
     }
-    if (epPlugin.endingToast) showToast(epPlugin.endingToast);
     return;
   }
   if (currentEpisode === 'david' && typeof buildDavidEndingWorld === 'function') {
@@ -4358,16 +4423,6 @@ function buildEndingWorld() {
   if (certBtn) {
     if (allowCert) certBtn.classList.remove('hidden');
     else certBtn.classList.add('hidden');
-  }
-
-  if (isExodus) {
-    showToast('🌴 홍해와 시내산을 모두 통과했어요! 기뻐 뛰는 백성들 가운데 십계명으로 가보세요!');
-  } else {
-    showToast(
-      allowCert
-        ? '🌈 엔딩 세상에 도착했어요! 방주를 둘러보거나 무지개 언약의 제단으로 가보세요!'
-        : '🌈 무지개 언약의 엔딩 세상이에요! 방주를 둘러보거나 제단으로 가보세요!'
-    );
   }
 }
 
@@ -5005,6 +5060,8 @@ function startVoxelGame(mode, targetStage = 1, fromMapSelect = false) {
   MiracleGuideUI.suppressedDuringIntro = false;
   const miniNavEl = document.getElementById('miracle-mini-nav');
   if (miniNavEl) miniNavEl.classList.add('hidden');
+  const retOwBtn = document.getElementById('miracle-return-openworld-btn');
+  if (retOwBtn) retOwBtn.classList.add('hidden');
 
   isMenuBgmActive = false;
   currentMode = mode; currentStage = targetStage; isPlaying = true;
@@ -7580,7 +7637,6 @@ window.closeAdventureBadgesModal = closeAdventureBadgesModal;
 
 function showEp4PostCertificateNewMeetingMessage() {
   const msg = '새로운 만남을 찾아보세요!';
-  showToast(`✨ ${msg}`);
   if (typeof window.showMiracleGuideBubble === 'function') {
     window.showMiracleGuideBubble({
       title: '🌿 복음서 오픈월드',
@@ -7589,6 +7645,8 @@ function showEp4PostCertificateNewMeetingMessage() {
       canCancel: false,
       autoCloseMs: 4200
     });
+  } else {
+    showToast(`✨ ${msg}`);
   }
 }
 

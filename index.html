@@ -251,6 +251,25 @@
       margin-bottom: clamp(0.45rem, 1.4dvh, 0.75rem);
       color: #573616;
     }
+    .opening-landscape-hint {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.28rem;
+      align-self: center;
+      margin: 0 auto clamp(0.35rem, 1.1dvh, 0.55rem);
+      padding: 0.22rem 0.72rem;
+      border-radius: 9999px;
+      background: rgba(254, 243, 199, 0.92);
+      border: 1.5px solid #f59e0b;
+      color: #92400e;
+      font-size: clamp(0.68rem, 1.85vw, 0.8rem);
+      line-height: 1.25;
+      box-shadow: 0 1px 4px rgba(146, 64, 14, 0.12);
+    }
+    @media (orientation: landscape) {
+      #opening-landscape-hint { display: none !important; }
+    }
     #screen-opening .opening-form-box {
       margin-bottom: clamp(0.55rem, 1.6dvh, 0.85rem);
       text-align: left;
@@ -329,6 +348,7 @@
       .opening-logo-img { max-height: 18dvh; }
       #screen-opening .opening-card { margin-top: 0.35rem; padding: 0.8rem 0.75rem 0.45rem; }
       #screen-opening .opening-sub { margin-bottom: 0.3rem; font-size: 0.7rem; }
+      .opening-landscape-hint { margin-bottom: 0.25rem; padding: 0.14rem 0.55rem; font-size: 0.66rem; }
       #screen-opening .opening-form-box { margin-bottom: 0.4rem; }
       #screen-opening .opening-input { padding: 0.34rem 0.5rem; font-size: 0.78rem; }
       #screen-opening .opening-start-btn { padding: 0.44rem 0.4rem; font-size: 0.82rem; }
@@ -481,7 +501,7 @@
     }
 
     /* ================================================================
-       [에피소드 4 인터페이스] 정사각 가죽 책 모양 탐험수첩 버튼 (2줄 배치, 숫자 제외)
+       [에피소드 4 인터페이스] 가죽 책 모양 탐험수첩 버튼 (2줄 배치 + 아래 n/37 수치)
        ================================================================ */
     .miracle-book-btn {
       position: relative;
@@ -489,11 +509,11 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      width: clamp(54px, 12vw, 66px);
-      height: clamp(54px, 12vw, 66px);
-      aspect-ratio: 1 / 1;
-      gap: 2px;
-      padding: 4px 5px 5px 11px;
+      width: clamp(58px, 12.5vw, 68px);
+      min-height: clamp(66px, 14vw, 78px);
+      height: auto;
+      gap: 1.5px;
+      padding: 4px 5px 6px 11px;
       background: linear-gradient(145deg, #9a4718 0%, #78350f 65%, #5c2808 100%);
       border: 2px solid #f59e0b;
       border-left: none;
@@ -542,19 +562,36 @@
       letter-spacing: 0.02em;
       white-space: nowrap;
     }
+    .miracle-book-btn .book-count-badge {
+      display: inline-block;
+      margin-top: 1px;
+      padding: 1px 5px;
+      border-radius: 9999px;
+      background: rgba(69, 26, 3, 0.62);
+      border: 1px solid rgba(251, 191, 36, 0.58);
+      color: #fde047;
+      font-size: clamp(9.5px, 1.55vw, 11px);
+      line-height: 1.1;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+    }
     @media (max-width: 640px) and (orientation: portrait) {
       .miracle-book-btn {
-        width: 54px;
-        height: 54px;
-        padding: 4px 4px 5px 10px;
+        width: 58px;
+        min-height: 66px;
+        height: auto;
+        padding: 4px 4px 6px 10px;
       }
       .miracle-book-btn .book-title-lines { font-size: 11px; }
+      .miracle-book-btn .book-count-badge { font-size: 9.5px; padding: 0.5px 4.5px; }
     }
     @media (orientation: landscape) and (max-height: 500px) {
       .miracle-book-btn {
-        width: 48px;
-        height: 48px;
-        padding: 3px 4px 4px 9px;
+        width: 52px;
+        min-height: 58px;
+        height: auto;
+        padding: 3px 4px 5px 9px;
+        gap: 1px;
         box-shadow:
           inset 7px 0 0 #451a03,
           inset 9px 0 0 rgba(251, 191, 36, 0.42),
@@ -563,8 +600,9 @@
           0 3px 8px rgba(15, 23, 42, 0.42);
       }
       .miracle-book-btn::after { height: 7px; bottom: -6px; width: 7px; right: 7px; }
-      .miracle-book-btn .book-emblem { width: 12px; height: 12px; }
-      .miracle-book-btn .book-title-lines { font-size: 10px; }
+      .miracle-book-btn .book-emblem { width: 11px; height: 11px; }
+      .miracle-book-btn .book-title-lines { font-size: 9.5px; }
+      .miracle-book-btn .book-count-badge { font-size: 8.5px; padding: 0.5px 4px; }
     }
 
     /* [에피소드 4 인터페이스] 우측 상단 발광 안내 버튼 & 중앙 타이핑 말풍선(버튼 흡수 애니메이션) */
@@ -1559,6 +1597,12 @@
         </button>
       </div>
 
+      <!-- 에피소드 4 스테이지 진입 시 우측 '미션 안내' 버튼 바로 아래에 표시되는 오픈월드 복귀 버튼 -->
+      <button id="miracle-return-openworld-btn" type="button" onclick="returnToMiracleOpenWorld()"
+              class="hidden pointer-events-auto mc-btn px-2.5 sm:px-3 py-1 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-jua text-[11px] sm:text-xs shadow whitespace-nowrap">
+        🗺️ 오픈월드로 돌아가기
+      </button>
+
       <!-- '미션 안내' 버튼 바로 아래로 이동한 초슬림 미니 나침반/거리 내비게이터 -->
       <div id="miracle-mini-nav" class="hidden miracle-mini-nav pointer-events-auto" title="목표 방향과 거리 안내">
         <div class="nav-dial">
@@ -1731,6 +1775,10 @@
 
         <p id="opening-sub" class="opening-sub font-bold">
           말씀 속 주인공이 되어 믿음의 모험을 떠나요!
+        </p>
+
+        <p id="opening-landscape-hint" class="opening-landscape-hint font-jua">
+          📱 화면을 가로로 돌리면 더 넓게 나와요!
         </p>
 
         <div class="opening-form-box">
@@ -2149,22 +2197,22 @@
     </div>
   </div>
 
-<!-- 게임 스크립트 로드 (전체 스크립트 캐시 강제 갱신 ?v=34 및 버전 일관성 자동 검증 적용) -->
-  <script src="core.js?v=34"></script>
-  <script src="ep1_noah.js?v=34"></script>
-  <script src="ep2_exodus.js?v=34"></script>
-  <script src="ep3_david_base.js?v=34"></script>
-  <script src="ep3_david_st1_2.js?v=34"></script>
-  <script src="ep3_david_st3_end.js?v=34"></script>
-  <script src="ep4_miracle_base.js?v=34"></script>
-  <script src="ep4_miracle_assets.js?v=34"></script>
-  <script src="ep4_miracle_world.js?v=34"></script>
-  <script src="ep4_miracle_stages.js?v=34"></script>
-  <script src="ep4_multiplayer.js?v=34"></script>
+<!-- 게임 스크립트 로드 (전체 스크립트 캐시 강제 갱신 ?v=36 및 버전 일관성 자동 검증 적용) -->
+  <script src="core.js?v=36"></script>
+  <script src="ep1_noah.js?v=36"></script>
+  <script src="ep2_exodus.js?v=36"></script>
+  <script src="ep3_david_base.js?v=36"></script>
+  <script src="ep3_david_st1_2.js?v=36"></script>
+  <script src="ep3_david_st3_end.js?v=36"></script>
+  <script src="ep4_miracle_base.js?v=36"></script>
+  <script src="ep4_miracle_assets.js?v=36"></script>
+  <script src="ep4_miracle_world.js?v=36"></script>
+  <script src="ep4_miracle_stages.js?v=36"></script>
+  <script src="ep4_multiplayer.js?v=36"></script>
   <script>
     // GitHub Pages CDN·브라우저 부분 캐시로 신·구버전 스크립트가 뒤섞여 로드되는 현상을 자동 감지해 1회 강제 새로고침
     (function verifyScriptBuildConsistency() {
-      const EXPECTED = '20261124_v34';
+      const EXPECTED = '20261124_v36';
       const vers = window.__GAME_BUILD_VERSIONS__ || {};
       const keys = ['core', 'ep4_base', 'ep4_assets', 'ep4_world', 'ep4_stages', 'ep4_mp'];
       const mismatch = keys.some(k => vers[k] !== EXPECTED);

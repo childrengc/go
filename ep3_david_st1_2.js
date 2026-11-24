@@ -614,7 +614,6 @@ function buildDavidStage1World() {
       if (typeof setInGameHudControlsVisible === 'function') setInGameHudControlsVisible(true);
       updateStageHUD();
       playSheepBaaSound(1.05, 0.08);
-      showToast('🐑 언덕 위 초원에서 바위 뒤에 숨어 있는 양 5마리를 찾아 목초지로 데려오세요!');
     });
   }
 }
@@ -1172,7 +1171,6 @@ function startDavidStage1FeedPhase() {
   updateDavidStage1UI();
   updateStageHUD();
   playSheepBaaSound(1.12, 0.09);
-  showToast('🌿 주변에서 먹이를 찾아 양을 배부르게 해주세요!');
 }
 
 function startDavidStage1DefensePhase() {
@@ -1238,7 +1236,6 @@ function startDavidStage1DefensePhase() {
 
   updateDavidStage1UI();
   updateStageHUD();
-  showToast('🐺 맹수가 천천히 번갈아 습격합니다! 지팡이로 쫓아내며 자원 7개를 모아 사각형 담장을 쌓으세요!');
 }
 
 function advancePredatorTurn() {
@@ -2273,7 +2270,6 @@ window.advanceDavidStage2Dialogue = function () {
     snapCameraToPlayer();
     updateStageHUD();
     startStageBgm(2);
-    showToast('🪨 시냇가에서 물맷돌 5개를 모두 모아야 조준창이 열립니다! 먼저 5개를 모아오세요!');
   }
 };
 
@@ -2992,9 +2988,7 @@ function updateDavidStage2Frame(dt, now) {
       playSfx('rescue');
       if (currentMode === 'timeattack') timeRemaining += 3.0;
 
-      if (davidHeldStones >= davidMaxStones) {
-        showToast('🎯 물맷돌 5개 수집 완료! 이제 골리앗 앞 노란 조준 영역으로 들어가면 조준창이 열립니다!');
-      } else {
+      if (davidHeldStones < davidMaxStones) {
         showToast(`🪨 매끄러운 물맷돌 획득! (${davidHeldStones}/5개 · ${5 - davidHeldStones}개 더 모아야 조준창이 열려요!)`);
       }
     }

@@ -4,7 +4,7 @@
 // - 확장된 오픈월드 지형 고도 계산기(넓어진 골고다 언덕 포함) 및 소프트 로우 폴리곤 자연물 팩토리
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_base = '20261124_v34';
+window.__GAME_BUILD_VERSIONS__.ep4_base = '20261124_v36';
 
 // =========================================================================
 // 🎬 [에피소드 4 오프닝 · 엔딩 영상 주소 설정]
@@ -3885,7 +3885,17 @@ function addCapernaumParalyticHouse(cx, cz) {
     insideJesus,
     insideCrowd,
     roofTopY: by + h + 0.05,
-    doorWorldPos: new THREE.Vector3(cx + doorX, by, cz + d * 0.5 + 1.2)
+    doorWorldPos: new THREE.Vector3(cx + doorX, by, cz + d * 0.5 + 1.2),
+    stairBounds: {
+      minX: cx + stairLocalX - stairW * 0.5 - 0.55,
+      maxX: cx + stairLocalX + stairW * 0.5 + 0.55,
+      minZ: cz - d * 0.5 - 0.65,
+      maxZ: cz + d * 0.5 + 1.05,
+      centerX: cx + stairLocalX,
+      baseY: by,
+      topY: by + h + 0.05,
+      stairW
+    }
   };
 }
 
@@ -5555,18 +5565,6 @@ window.runEp4OpeningSequence = function () {
       ? window.maybeStartAutoInterfaceTutorial('miracle', { resumePlaying: true })
       : false;
 
-    if (typeof showToast === 'function' && !startedTutorial) {
-      if (typeof currentMode !== 'undefined' && currentMode === 'timeattack') {
-        showToast('🌿 이곳은 자유롭게 탐험하는 오픈월드입니다! 제한 시간 없이 예수님의 발자취를 마음껏 둘러보세요.');
-      } else {
-        showToast(
-          miracleIsPostResurrection
-            ? '✨ 부활 이후의 갈릴리와 예루살렘 오픈월드입니다! 엠마오·도마·바닷가 아침식사를 체험하고 감람산으로 오르세요!'
-            : '🗺️ 성경 오픈월드에 오신 것을 환영합니다! 빛기둥이 켜진 순서(1→2→3→4)대로 메인 스테이지를 진행해 보세요!'
-        );
-      }
-    }
-
     // HUD 수치 동기화 (튜토리얼 진행 중이면 말풍선·음성은 튜토리얼 종료 직후 자동 출력!)
     if (typeof updateStageHUD === 'function') updateStageHUD();
 
@@ -5613,6 +5611,7 @@ function ensureMiracleCustomUI() {
             <span>탐험</span>
             <span>수첩</span>
           </span>
+          <span id="miracle-notebook-count" class="book-count-badge">0/37</span>
         </button>
 
         <div id="miracle-parable-banner" class="hidden px-2.5 py-1 rounded-xl bg-emerald-900/90 border border-emerald-300 text-emerald-100 font-jua text-[11px] shadow">
@@ -5639,11 +5638,6 @@ function ensureMiracleCustomUI() {
             </div>
           </div>
         </div>
-
-        <button id="miracle-return-openworld-btn" type="button" onclick="returnToMiracleOpenWorld()"
-                class="hidden mc-btn px-3 py-1 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-jua text-xs shadow">
-          🗺️ 오픈월드로 돌아가기
-        </button>
       </div>
       
       <!-- 오픈월드 하늘 조망 건너뛰기 버튼 -->
@@ -5837,6 +5831,7 @@ function updateMiracleNotebookHudBadge() {
 
   if (currentEpisode !== 'miracle' || isMiracleIntroHidingHud()) {
     if (leftHud) leftHud.classList.add('hidden');
+    if (retBtn) retBtn.classList.add('hidden');
     updateMiracleGuideButtonVisibility();
     return;
   }
@@ -5846,6 +5841,10 @@ function updateMiracleNotebookHudBadge() {
   updateMiracleGuideButtonVisibility();
 
   const total = getMiracleNotebookTotalCount();
+  const btnCountEl = document.getElementById('miracle-notebook-count');
+  if (btnCountEl) {
+    btnCountEl.textContent = `${miracleCollectedIds.size}/${total}`;
+  }
   if (modalCountEl) {
     modalCountEl.textContent = `${miracleCollectedIds.size} / ${total}`;
   }
@@ -5864,7 +5863,7 @@ function updateMiracleNotebookHudBadge() {
   }
   if (retBtn) {
     // 엔딩 세상(ascension)에서도 오픈월드로 돌아가 남은 미션·수첩을 채울 수 있도록 버튼 표시!
-    retBtn.classList.toggle('hidden', miracleSubMode === 'openworld');
+    retBtn.classList.toggle('hidden', miracleSubMode === 'openworld' || Boolean(window.isMiracleMultiplayerMode));
     retBtn.textContent = (miracleSubMode === 'ascension')
       ? '🌿 오픈월드로 돌아가기 (미션·수첩)'
       : '🗺️ 오픈월드로 돌아가기';
@@ -6207,6 +6206,7 @@ function hideAllMiracleCustomUI() {
   }
 
   const leftHud = document.getElementById('miracle-hud-left');
+  const retBtn = document.getElementById('miracle-return-openworld-btn');
   const timeRow = document.getElementById('miracle-time-row');
   const msBox = document.getElementById('miracle-mission-status-box');
   const vidModal = document.getElementById('ep4-opening-video-modal');
@@ -6220,6 +6220,7 @@ function hideAllMiracleCustomUI() {
   const flySkip = document.getElementById('ep4-flyover-skip-wrap');
   if (flySkip) flySkip.classList.add('hidden');
   if (leftHud) leftHud.classList.add('hidden');
+  if (retBtn) retBtn.classList.add('hidden');
   if (timeRow) timeRow.classList.add('hidden');
   if (msBox) msBox.classList.add('hidden');
   if (vidSlot) vidSlot.innerHTML = '';
@@ -6377,3 +6378,119 @@ if (!window.__ep4DayNightKeysBound) {
     }
   });
 }
+
+// =========================================================================
+// [NPC 공통 지면/플랫폼 접지 및 THREE.MathUtils.damp 기반 관절 애니메이션]
+// =========================================================================
+window.getMiracleNpcSupportY = function (x, z, refY, stepAllow = 1.25) {
+  let h = (typeof getMiracleOpenWorldGroundHeight === 'function')
+    ? getMiracleOpenWorldGroundHeight(x, z)
+    : ((typeof getBaseGroundHeight === 'function') ? getBaseGroundHeight(x, z) : 0);
+  const safeRef = Number.isFinite(refY) ? refY : h;
+  if (typeof platforms !== 'undefined' && Array.isArray(platforms)) {
+    const pad = 0.32;
+    for (let i = 0; i < platforms.length; i++) {
+      const p = platforms[i];
+      if (!p || p.topY < -100 || p.wallOnly) continue;
+      if (p.passUnderY !== undefined && safeRef < p.passUnderY) continue;
+      if (x >= p.minX - pad && x <= p.maxX + pad && z >= p.minZ - pad && z <= p.maxZ + pad) {
+        if (p.topY <= safeRef + stepAllow && p.topY > h) {
+          h = p.topY;
+        }
+      }
+    }
+  }
+  return h;
+};
+
+window.applyMiracleNpcLimbAnimation = function (mesh, opts = {}, dt = 0.016) {
+  if (!mesh || !mesh.userData) return { bobY: 0, moveBlend: 0 };
+  const u = mesh.userData;
+  const safeDt = Math.min(0.06, Math.max(0.001, dt || 0.016));
+  const speed = Number.isFinite(opts.speed) ? opts.speed : 0;
+  const isMoving = Boolean(opts.isMoving && speed > 0.12);
+  const strideFactor = opts.strideFactor || 1.65;
+  const legAmp = opts.legAmp || 0.62;
+  const armAmp = opts.armAmp || 0.54;
+  const dampRate = opts.dampRate || 14;
+
+  if (!u._limbAnim) {
+    u._limbAnim = {
+      walkPhase: u.walkPhase || 0,
+      idlePhase: (u.walkPhase || 0) * 0.7,
+      moveBlend: 0,
+      lLegX: (u.lLeg ? u.lLeg.rotation.x : 0),
+      rLegX: (u.rLeg ? u.rLeg.rotation.x : 0),
+      lArmX: (u.lArm ? u.lArm.rotation.x : 0),
+      rArmX: (u.rArm ? u.rArm.rotation.x : 0),
+      lArmZ: (u.lArm ? u.lArm.rotation.z : 0),
+      rArmZ: (u.rArm ? u.rArm.rotation.z : 0),
+      headX: (u.head ? u.head.rotation.x : 0)
+    };
+  }
+  const st = u._limbAnim;
+  const targetBlend = isMoving ? THREE.MathUtils.clamp((speed - 0.08) / 1.8, 0.28, 1.0) : 0;
+  st.moveBlend = THREE.MathUtils.damp(st.moveBlend, targetBlend, isMoving ? 14 : 11, safeDt);
+  st.idlePhase += safeDt * 2.2;
+  if (isMoving || st.moveBlend > 0.03) {
+    const effSpeed = isMoving ? Math.max(speed, 1.1) : 2.2 * st.moveBlend;
+    st.walkPhase += safeDt * effSpeed * strideFactor;
+  }
+
+  const sw = Math.sin(st.walkPhase);
+  const breath = Math.sin(st.idlePhase);
+  const mb = st.moveBlend;
+
+  if (u.flLeg && u.frLeg && u.blLeg && u.brLeg) {
+    const qSw = sw * 0.72 * mb;
+    st.lLegX = THREE.MathUtils.damp(st.lLegX, qSw, dampRate, safeDt);
+    st.rLegX = THREE.MathUtils.damp(st.rLegX, -qSw, dampRate, safeDt);
+    u.flLeg.rotation.x = st.lLegX;
+    u.brLeg.rotation.x = st.lLegX;
+    u.frLeg.rotation.x = st.rLegX;
+    u.blLeg.rotation.x = st.rLegX;
+    if (u.isPackDonkey) {
+      if (u.headGroup) u.headGroup.rotation.x = THREE.MathUtils.damp(u.headGroup.rotation.x, sw * 0.10 * mb, dampRate, safeDt);
+      if (u.packL) u.packL.rotation.z = THREE.MathUtils.damp(u.packL.rotation.z, sw * 0.08 * mb, dampRate, safeDt);
+      if (u.packR) u.packR.rotation.z = THREE.MathUtils.damp(u.packR.rotation.z, -sw * 0.08 * mb, dampRate, safeDt);
+    }
+    return { bobY: Math.abs(sw) * 0.024 * mb, moveBlend: mb };
+  }
+
+  const targetLLegX = sw * legAmp * mb;
+  const targetRLegX = -sw * legAmp * mb;
+  const defaultLArmX = (-sw * armAmp * mb) + (breath * 0.035 * (1 - mb));
+  const defaultRArmX = (sw * armAmp * mb) + (-breath * 0.035 * (1 - mb));
+  const targetLArmX = (opts.lArmX !== undefined) ? opts.lArmX : defaultLArmX;
+  const targetRArmX = (opts.rArmX !== undefined) ? opts.rArmX : defaultRArmX;
+  const targetLArmZ = (opts.lArmZ !== undefined) ? opts.lArmZ : 0;
+  const targetRArmZ = (opts.rArmZ !== undefined) ? opts.rArmZ : 0;
+  const targetHeadX = (0.025 * mb) + (breath * 0.022 * (1 - mb));
+
+  st.lLegX = THREE.MathUtils.damp(st.lLegX, targetLLegX, dampRate, safeDt);
+  st.rLegX = THREE.MathUtils.damp(st.rLegX, targetRLegX, dampRate, safeDt);
+  st.lArmX = THREE.MathUtils.damp(st.lArmX, targetLArmX, dampRate, safeDt);
+  st.rArmX = THREE.MathUtils.damp(st.rArmX, targetRArmX, dampRate, safeDt);
+  st.lArmZ = THREE.MathUtils.damp(st.lArmZ, targetLArmZ, dampRate, safeDt);
+  st.rArmZ = THREE.MathUtils.damp(st.rArmZ, targetRArmZ, dampRate, safeDt);
+  st.headX = THREE.MathUtils.damp(st.headX, targetHeadX, 10, safeDt);
+
+  if (u.lLeg && u.rLeg) {
+    u.lLeg.rotation.x = st.lLegX;
+    u.rLeg.rotation.x = st.rLegX;
+  }
+  if (u.lArm && u.rArm) {
+    u.lArm.rotation.x = st.lArmX;
+    u.rArm.rotation.x = st.rArmX;
+    u.lArm.rotation.z = st.lArmZ;
+    u.rArm.rotation.z = st.rArmZ;
+  }
+  if (u.head) {
+    u.head.rotation.x = st.headX;
+  }
+
+  return {
+    bobY: Math.abs(Math.cos(st.walkPhase)) * 0.042 * mb,
+    moveBlend: mb
+  };
+};

@@ -1821,7 +1821,6 @@ function buildDavidStage3World() {
   snapCameraToPlayer();
   updateStageHUD();
   updateDavidStage3QuestTrackerUI();
-  showToast('👑 빛기둥 아래 백성에게 다가가 퀘스트를 받으세요! (각도 버튼 사이에서 시점도 전환할 수 있어요)');
 }
 // =========================================================================
 // [ep3_david_st3_end.js - 후반부 (2/2)] 에피소드 3 : 스테이지 3 진행 로직, 암전 성경절 엔딩 및 플러그인 등록
@@ -1982,7 +1981,6 @@ window.confirmDavidNpcDialog = function () {
     updateStageHUD();
 
     playSfx('switch');
-    showToast(`📜 [${npc.roleTitle}] 퀘스트 시작! 보유 자원이 0으로 초기화되었으니 지금부터 새로 수집하세요!`);
     return;
   }
 
@@ -2007,11 +2005,6 @@ window.confirmDavidNpcDialog = function () {
       updateDavidStage3QuestTrackerUI();
       playSfx('clear');
       updateStageHUD();
-      showToast(
-        currentMode === 'timeattack'
-          ? '✨ 북쪽 성막 위로 푸른 빛기둥이 솟아올랐어요! (+7초 연장! 나단 선지자님께 가세요!)'
-          : '✨ 북쪽 언약의 성막 위로 푸른 빛기둥이 솟아올랐어요! 나단 선지자님께 나아가세요!'
-      );
       return;
     }
 
@@ -2062,7 +2055,6 @@ window.confirmDavidNpcDialog = function () {
         herald.label.innerHTML = '📯 왕궁 전령 (선지자님 위치를 알려드려요!)';
       }
       syncCityNpcBeaconsForActiveQuest();
-      showToast(`🎉 백성들의 3가지 요청을 모두 해결했어요!${bonusMsg} 중앙 궁전 앞 [왕궁 전령]에게 가보세요!`);
     }
     updateStageHUD();
   }

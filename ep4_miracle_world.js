@@ -4,7 +4,7 @@
 // - 계단으로 건물 2층 등반 후 인접한 옆 건물 옥상·2층으로 점프 이동할 수 있는 근접 마을 배치
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_world = '20261124_v34';
+window.__GAME_BUILD_VERSIONS__.ep4_world = '20261124_v36';
 
 window.miracleOpenWorldIntroFlyover = {
   active: false,
@@ -3475,7 +3475,6 @@ window.triggerMiracleSowerPlant = function () {
   sf.phase = 'sowing';
   sf.sowTimer = 0;
   playSfx('clear');
-  showToast('🌱✨ 정성껏 가꾼 좋은 땅에 말씀의 씨앗을 흩뿌렸어요! 시간이 지나면 곡식이 자라나요!');
 
   // 밭 위로 흩뿌려지는 황금 씨앗 파티클 28개 생성
   sf.seedParticles = [];
@@ -3951,20 +3950,24 @@ function stepMiracleNpcTowardTarget(state, targetX, targetZ, dt, now) {
   }
 
   if (chosenAng !== null && moveStep > 0.001) {
-    const nx = m.position.x + Math.sin(chosenAng) * moveStep;
-    const nz = m.position.z + Math.cos(chosenAng) * moveStep;
-    const ny = getMiracleOpenWorldGroundHeight(nx, nz);
-    m.position.set(nx, ny, nz);
-    state.curHeading = lerpAngle(state.curHeading, chosenAng, Math.min(1, dt * 10.0));
+    const prevX = m.position.x, prevZ = m.position.z;
+    const nx = prevX + Math.sin(chosenAng) * moveStep;
+    const nz = prevZ + Math.cos(chosenAng) * moveStep;
+    const ny = (typeof window.getMiracleNpcSupportY === 'function')
+      ? window.getMiracleNpcSupportY(nx, nz, m.position.y, 1.35)
+      : getMiracleOpenWorldGroundHeight(nx, nz);
+    const safeDt = Math.min(0.06, Math.max(0.001, dt || 0.016));
+    const smoothY = (Math.abs(ny - m.position.y) > 2.2) ? ny : THREE.MathUtils.damp(m.position.y, ny, 16, safeDt);
+    m.position.set(nx, smoothY, nz);
+    state.curHeading = lerpAngle(state.curHeading, chosenAng, Math.min(1, safeDt * 10.0));
     m.rotation.y = state.curHeading;
+    const actualSpd = Math.hypot(nx - prevX, nz - prevZ) / safeDt;
+    if (typeof window.applyMiracleNpcLimbAnimation === 'function') {
+      window.applyMiracleNpcLimbAnimation(m, { speed: actualSpd, isMoving: actualSpd > 0.16, strideFactor: 1.65 }, dt);
+    }
+  } else if (typeof window.applyMiracleNpcLimbAnimation === 'function') {
+    window.applyMiracleNpcLimbAnimation(m, { speed: 0, isMoving: false }, dt);
   }
-
-  // 속도에 비례한 자연스러운 보행/달리기 팔다리 모션
-  const u = m.userData || {};
-  const animRate = 0.011 + Math.min(0.012, spd * 0.0014);
-  const sw = Math.sin(now * animRate + (state.phase || 0)) * Math.min(0.82, 0.42 + spd * 0.055);
-  if (u.lLeg && u.rLeg) { u.lLeg.rotation.x = sw; u.rLeg.rotation.x = -sw; }
-  if (u.lArm && u.rArm) { u.lArm.rotation.x = -sw * 0.58; u.rArm.rotation.x = sw * 0.58; }
   return Math.hypot(targetX - m.position.x, targetZ - m.position.z);
 }
 
@@ -4007,7 +4010,12 @@ function reclaimReturningNpc(mesh) {
       }
       const u = mesh.userData || {};
       if (u.lLeg && u.rLeg) { u.lLeg.rotation.x = 0; u.rLeg.rotation.x = 0; }
-      if (u.lArm && u.rArm) { u.lArm.rotation.x = 0; u.rArm.rotation.x = 0; }
+      if (u.lArm && u.rArm) {
+        u.lArm.rotation.x = 0; u.rArm.rotation.x = 0;
+        u.lArm.rotation.z = 0; u.rArm.rotation.z = 0;
+      }
+      if (u.head) u.head.rotation.x = 0;
+      u._limbAnim = null;
       window.miracleReturningNpcs.splice(i, 1);
     }
   }
@@ -4030,7 +4038,12 @@ function updateMiracleReturningNpcs(dt, now) {
       }
       const u = rn.mesh.userData || {};
       if (u.lLeg && u.rLeg) { u.lLeg.rotation.x = 0; u.rLeg.rotation.x = 0; }
-      if (u.lArm && u.rArm) { u.lArm.rotation.x = 0; u.rArm.rotation.x = 0; }
+      if (u.lArm && u.rArm) {
+        u.lArm.rotation.x = 0; u.rArm.rotation.x = 0;
+        u.lArm.rotation.z = 0; u.rArm.rotation.z = 0;
+      }
+      if (u.head) u.head.rotation.x = 0;
+      u._limbAnim = null;
       window.miracleReturningNpcs.splice(i, 1);
     }
   }
@@ -4053,7 +4066,12 @@ function clearMiracleFieldEventObjects() {
         }
         const u = npc.userData || {};
         if (u.lLeg && u.rLeg) { u.lLeg.rotation.x = 0; u.rLeg.rotation.x = 0; }
-        if (u.lArm && u.rArm) { u.lArm.rotation.x = 0; u.rArm.rotation.x = 0; }
+        if (u.lArm && u.rArm) {
+          u.lArm.rotation.x = 0; u.rArm.rotation.x = 0;
+          u.lArm.rotation.z = 0; u.rArm.rotation.z = 0;
+        }
+        if (u.head) u.head.rotation.x = 0;
+        u._limbAnim = null;
       }
     }
   }
@@ -4074,7 +4092,12 @@ function clearMiracleFieldEventObjects() {
         }
         const u = npc.userData || {};
         if (u.lLeg && u.rLeg) { u.lLeg.rotation.x = 0; u.rLeg.rotation.x = 0; }
-        if (u.lArm && u.rArm) { u.lArm.rotation.x = 0; u.rArm.rotation.x = 0; }
+        if (u.lArm && u.rArm) {
+          u.lArm.rotation.x = 0; u.rArm.rotation.x = 0;
+          u.lArm.rotation.z = 0; u.rArm.rotation.z = 0;
+        }
+        if (u.head) u.head.rotation.x = 0;
+        u._limbAnim = null;
       }
     });
   }
@@ -4186,6 +4209,7 @@ function startMiracleFieldEvent(evSpot) {
     laySpots: [],
     targetZone: null,
     escortGroup: null,
+    escortFollowers: [],
     crowdGroup: null,
     auraGroup: null,
     messenger: null,
@@ -4275,9 +4299,6 @@ function startMiracleFieldEvent(evSpot) {
     miracleWorldMissionObjects.push({ mesh: goalGrp, label: goalLbl });
 
     syncMiracleMissionStatusPanel();
-    if (typeof showToast === 'function') {
-      showToast('🌙 밤 순찰 미션 시작! 로마 군인의 횃불과 시야를 피해 두루마리 3개를 모아 예수님께 가세요!');
-    }
     return;
   }
 
@@ -4412,8 +4433,6 @@ function startMiracleFieldEvent(evSpot) {
       miracleWorldMissionObjects.push(targetObj);
       miracleActiveFieldEvent.targetZone = targetObj;
     }
-
-    showToast(`🎯 [${evSpot.itemLabel}] ${count}개를 찾아 목표 장소로 옮겨 주세요!`);
   } else if (evSpot.missionType === 'sower_farm') {
     // [씨 뿌리기 미니게임: 좋은 땅 만들기]
     // 미션을 다시 시작할 때는 이전에 다 자란 곡식 밭을 모두 초기화하여 처음부터 새로 가꾸도록 처리!
@@ -4604,9 +4623,14 @@ function startMiracleFieldEvent(evSpot) {
       seedParticles: []
     };
     miracleActiveFieldEvent.targetZone = plotObj;
-    showToast(`⛰️ ${pickedPlot.areaName} 근처에 있는 거친 밭 구역을 먼저 찾아가 보세요!`);
   } else if (evSpot.missionType === 'escort_guide') {
     const eGrp = new THREE.Group();
+    const startZ = cz + 1.5;
+    const startY = (typeof window.getMiracleNpcSupportY === 'function')
+      ? window.getMiracleNpcSupportY(cx, startZ, getMiracleOpenWorldGroundHeight(cx, startZ) + 0.6, 1.35)
+      : getMiracleOpenWorldGroundHeight(cx, startZ);
+    miracleActiveFieldEvent.escortFollowers = [];
+
     if (evSpot.escortType === 'stretcher') {
       // 들것 손잡이 막대 2개 + 나무 틀 + 베개 + 들것 영역(z ∈ [-1.2, +1.2]) 안에 정확히 누워 있는 중풍병자!
       const poleL = createLowPolyMesh(new THREE.CylinderGeometry(0.055, 0.055, 3.05, 6), '#78350f', -0.68, 0.66, 0, false);
@@ -4618,10 +4642,10 @@ function startMiracleFieldEvent(evSpot) {
       const pillow = createLowPolyMesh(new THREE.DodecahedronGeometry(0.22, 0), '#fffbeb', 0, 0.82, -0.82, false);
       pillow.scale.set(1.55, 0.45, 0.85);
 
-      const f1 = createLowPolyPersonMesh('disciple', 1); f1.position.set(-0.78, 0, -1.05);
-      const f2 = createLowPolyPersonMesh('disciple', 2); f2.position.set( 0.78, 0, -1.05);
-      const f3 = createLowPolyPersonMesh('disciple', 3); f3.position.set(-0.78, 0,  1.05);
-      const f4 = createLowPolyPersonMesh('disciple', 4); f4.position.set( 0.78, 0,  1.05);
+      const f1 = createLowPolyPersonMesh('disciple', 1); f1.position.set(-0.76, 0, -1.05);
+      const f2 = createLowPolyPersonMesh('disciple', 2); f2.position.set( 0.76, 0, -1.05);
+      const f3 = createLowPolyPersonMesh('disciple', 3); f3.position.set(-0.76, 0,  1.05);
+      const f4 = createLowPolyPersonMesh('disciple', 4); f4.position.set( 0.76, 0,  1.05);
 
       // 발바닥 원점(y=0) → rotation.x = -PI/2 시 머리가 -Z(-1.68)로 가므로 z=+0.86으로 중앙 정렬 (z ∈ [-0.82, +0.86] ⊂ [-1.2, +1.2]!)
       const patient = createLowPolyPersonMesh('villager', 5);
@@ -4631,16 +4655,63 @@ function startMiracleFieldEvent(evSpot) {
 
       const stretcherOnly = new THREE.Group();
       stretcherOnly.add(poleL, poleR, bedPad, sheet, pillow, patient);
+      stretcherOnly.position.y = 0.22;
       eGrp.add(stretcherOnly, f1, f2, f3, f4);
-      eGrp.userData = { stretcherOnly, friends: [f1, f2, f3, f4], patient };
+
+      const friendSpecs = [
+        { mesh: f1, side: -1, fb: -1 },
+        { mesh: f2, side:  1, fb: -1 },
+        { mesh: f3, side: -1, fb:  1 },
+        { mesh: f4, side:  1, fb:  1 }
+      ];
+      friendSpecs.forEach(sp => {
+        if (sp.mesh && sp.mesh.userData) {
+          if (sp.mesh.userData.lArm) sp.mesh.userData.lArm.rotation.x = -0.45;
+          if (sp.mesh.userData.rArm) sp.mesh.userData.rArm.rotation.x = -0.45;
+        }
+      });
+
+      eGrp.userData = {
+        stretcherOnly,
+        friends: [f1, f2, f3, f4],
+        friendSpecs,
+        patient,
+        raiseBlend: 0,
+        curHeading: 0,
+        curStretchY: 0.22,
+        curStretchPitch: 0,
+        isMoving: false
+      };
     } else if (evSpot.escortType === 'children') {
-      const c1 = createLowPolyPersonMesh('child', 1); c1.position.set(-0.6, 0, 0);
-      const c2 = createLowPolyPersonMesh('child', 2); c2.position.set( 0.6, 0, 0.2);
-      eGrp.add(c1, c2);
+      const addChildFollower = (idx, sideOff, backOff, startDist, stopDist) => {
+        const ch = createLowPolyPersonMesh('child', idx);
+        const fx = cx + sideOff;
+        const fz = startZ + (idx === 1 ? 0 : 0.2);
+        const fy = (typeof window.getMiracleNpcSupportY === 'function')
+          ? window.getMiracleNpcSupportY(fx, fz, startY + 0.6, 1.35)
+          : getMiracleOpenWorldGroundHeight(fx, fz);
+        ch.position.set(fx, fy, fz);
+        worldGroup.add(ch);
+        miracleWorldMissionObjects.push({ mesh: ch });
+        miracleActiveFieldEvent.escortFollowers.push({
+          mesh: ch,
+          sideOff,
+          backOff,
+          strideFactor: 2.05,
+          legAmp: 0.68,
+          armAmp: 0.60,
+          startDist,
+          stopDist,
+          curHeading: 0,
+          isWalking: false
+        });
+      };
+      addChildFollower(1, -0.74, 1.72, 1.00, 0.42);
+      addChildFollower(2,  0.74, 2.22, 1.05, 0.45);
     } else if (evSpot.escortType === 'emmaus' && evSpot.npcMesh) {
-      // [엠마오 제자 미션] 원래 서 있던 두 제자(글로바 + 친구) 본인이 직접 움직여 동행하고 완료 후 제자리로 걸어 귀가!
+      // [엠마오 제자 미션] 원래 서 있던 두 제자(글로바 + 친구) 본인이 독립 접지·보행으로 동행하고 완료 후 제자리로 걸어 귀가!
       const reusedList = [];
-      const attachOriginal = (npcMesh, localX, localZ, homeX, homeZ) => {
+      const attachOriginal = (npcMesh, fx, fz, sideOff, backOff, homeX, homeZ) => {
         if (!npcMesh) return;
         reclaimReturningNpc(npcMesh);
         reusedList.push({
@@ -4651,26 +4722,77 @@ function startMiracleFieldEvent(evSpot) {
           homeWorldX: homeX,
           homeWorldZ: homeZ
         });
-        eGrp.add(npcMesh);
-        npcMesh.position.set(localX, 0, localZ);
+        const fy = (typeof window.getMiracleNpcSupportY === 'function')
+          ? window.getMiracleNpcSupportY(fx, fz, startY + 0.6, 1.35)
+          : getMiracleOpenWorldGroundHeight(fx, fz);
+        worldGroup.add(npcMesh);
+        npcMesh.position.set(fx, fy, fz);
         npcMesh.rotation.y = 0;
+        miracleActiveFieldEvent.escortFollowers.push({
+          mesh: npcMesh,
+          sideOff,
+          backOff,
+          strideFactor: 1.65,
+          legAmp: 0.60,
+          armAmp: 0.52,
+          startDist: 1.15,
+          stopDist: 0.50,
+          curHeading: 0,
+          isWalking: false
+        });
       };
-      attachOriginal(evSpot.npcMesh, -0.62, 0, cx, cz);
+      attachOriginal(evSpot.npcMesh, cx - 0.65, startZ, -0.78, 1.85, cx, cz);
       if (evSpot.companionNpc) {
-        attachOriginal(evSpot.companionNpc, 0.62, -0.15, cx + 1.05, cz - 0.25);
+        attachOriginal(evSpot.companionNpc, cx + 0.65, startZ - 0.15, 0.78, 2.35, cx + 1.05, cz - 0.25);
       } else {
-        const d2 = createLowPolyPersonMesh('disciple', 4); d2.position.set(0.62, 0, 0);
-        eGrp.add(d2);
+        const d2 = createLowPolyPersonMesh('disciple', 4);
+        const fx = cx + 0.65;
+        const fy = (typeof window.getMiracleNpcSupportY === 'function')
+          ? window.getMiracleNpcSupportY(fx, startZ, startY + 0.6, 1.35)
+          : getMiracleOpenWorldGroundHeight(fx, startZ);
+        d2.position.set(fx, fy, startZ);
+        worldGroup.add(d2);
+        miracleWorldMissionObjects.push({ mesh: d2 });
+        miracleActiveFieldEvent.escortFollowers.push({
+          mesh: d2,
+          sideOff: 0.78,
+          backOff: 2.35,
+          strideFactor: 1.65,
+          legAmp: 0.60,
+          armAmp: 0.52,
+          startDist: 1.15,
+          stopDist: 0.50,
+          curHeading: 0,
+          isWalking: false
+        });
       }
       miracleActiveFieldEvent.reusedEscortNpcs = reusedList;
     } else {
-      const d1 = createLowPolyPersonMesh('disciple', 3); d1.position.set(-0.65, 0, 0);
-      const d2 = createLowPolyPersonMesh('disciple', 4); d2.position.set( 0.65, 0, 0);
-      eGrp.add(d1, d2);
+      [-0.74, 0.74].forEach((sideOff, idx) => {
+        const d = createLowPolyPersonMesh('disciple', 3 + idx);
+        const fx = cx + sideOff;
+        const fy = (typeof window.getMiracleNpcSupportY === 'function')
+          ? window.getMiracleNpcSupportY(fx, startZ, startY + 0.6, 1.35)
+          : getMiracleOpenWorldGroundHeight(fx, startZ);
+        d.position.set(fx, fy, startZ);
+        worldGroup.add(d);
+        miracleWorldMissionObjects.push({ mesh: d });
+        miracleActiveFieldEvent.escortFollowers.push({
+          mesh: d,
+          sideOff,
+          backOff: idx === 0 ? 1.85 : 2.35,
+          strideFactor: 1.65,
+          legAmp: 0.60,
+          armAmp: 0.52,
+          startDist: 1.10,
+          stopDist: 0.45,
+          curHeading: 0,
+          isWalking: false
+        });
+      });
     }
 
-    const startY = getMiracleOpenWorldGroundHeight(cx, cz);
-    eGrp.position.set(cx, startY, cz + 1.5);
+    eGrp.position.set(cx, startY, startZ);
     worldGroup.add(eGrp);
     const eLbl = createWorldLabel('👣 동행 중 (목적지까지 함께 걸어가세요!)');
     miracleWorldMissionObjects.push({ mesh: eGrp, label: eLbl });
@@ -4755,12 +4877,6 @@ function startMiracleFieldEvent(evSpot) {
     const targetObj = { mesh: gGrp, pos: new THREE.Vector3(gx, gy + 0.5, gz), label: gLbl, goalY: gy };
     miracleWorldMissionObjects.push(targetObj);
     miracleActiveFieldEvent.targetZone = targetObj;
-
-    showToast(evSpot.randomTreeGoal
-      ? '✨ 멀리 있는 나무 아래 계신 예수님께 어린이들을 인도하세요!'
-      : (evSpot.randomEmmausGoal
-        ? '🍞 엠마오 두 제자와 함께 마을 어딘가의 식탁에서 기다리시는 예수님을 찾아 동행하세요!'
-        : `👣 일행과 함께 [${evSpot.goalLabel}] 위치까지 걸어가세요!`));
   } else if (evSpot.missionType === 'follow_messenger') {
     // [우물가의 여인] 마을 캐릭터 3명을 매번 랜덤 선택 → 여인이 3명에게 소식을 전하러 걸어갈 때 따라가기!
     const allHumanCandidates = [];
@@ -4895,7 +5011,6 @@ function startMiracleFieldEvent(evSpot) {
       phase: 0
     };
     miracleActiveFieldEvent.targetZone = { pos: wMesh.position };
-    showToast('🏃‍♀️ 수가성 여인이 주민 3명에게 달려가요! 15m 이상 멀어지지 않게 따라가세요!');
   } else if (evSpot.missionType === 'chase_sheep') {
     // [잃어버린 어린양] 언덕 아래(낮은 지형 maxY <= 2.2) 야외 랜덤 위치 스폰!
     const sPos = findSafeOpenWorldOutdoorPos({
@@ -4931,7 +5046,6 @@ function startMiracleFieldEvent(evSpot) {
       wanderAng: Math.random() * Math.PI * 2
     };
     miracleActiveFieldEvent.targetZone = { mesh: sGrp, pos: sGrp.position, label: sLbl };
-    showToast('🐑 언덕 아래 광야에 잃어버린 어린양이 있어요! 가까이 가면 빠르게 도망치니 잘 쫓아가 보세요!');
   } else if (evSpot.missionType === 'find_observe') {
     let fx = evSpot.findTargetPos.x;
     let fz = evSpot.findTargetPos.z;
@@ -5065,7 +5179,6 @@ function startMiracleFieldEvent(evSpot) {
       };
       miracleWorldMissionObjects.push(targetObj);
       miracleActiveFieldEvent.targetZone = targetObj;
-      showToast('🌳 예수님과 군중이 여리고 숲길에 모였어요! 무화과나무 숲 가까이 다가가 위쪽 나뭇잎 사이를 올려다보세요!');
     } else if (evSpot.alleyRandomAura) {
       // [10명 중 돌아온 1명] 마을 건물 사이 랜덤 골목 + 빛나는 오라!
       const aPos = findSafeOpenWorldOutdoorPos({
@@ -5088,7 +5201,6 @@ function startMiracleFieldEvent(evSpot) {
       const targetObj = { mesh: fGrp, pos: new THREE.Vector3(fx, fy + 0.5, fz), label: fLbl };
       miracleWorldMissionObjects.push(targetObj);
       miracleActiveFieldEvent.targetZone = targetObj;
-      showToast('🙏 마을 건물 사이 어딘가에서 하나님께 감사드리는 사마리아인을 찾아보세요!');
     } else if (evSpot.widowCutscene) {
       // [두 렙돈 과부] 성전 청동 헌금함 + 가난한 과부 배치 (접근 시 동전 2개 넣는 컷신 실행!)
       const fGrp = new THREE.Group();
@@ -5123,7 +5235,6 @@ function startMiracleFieldEvent(evSpot) {
       };
       miracleWorldMissionObjects.push(targetObj);
       miracleActiveFieldEvent.targetZone = targetObj;
-      showToast('🪙 성전 헌금함 앞에 있는 가난한 과부에게 다가가 보세요!');
     } else if (evSpot.thomasCutscene) {
       // [부활 이후 도마 미션] 사도 도마 본인이 플레이어를 따라 걸어오고, 미션 완료 후 제자리로 걸어 귀가!
       if (evSpot.npcMesh) {
@@ -5223,7 +5334,6 @@ function startMiracleFieldEvent(evSpot) {
       };
       miracleWorldMissionObjects.push(targetObj);
       miracleActiveFieldEvent.targetZone = targetObj;
-      showToast('✨ 도마가 뒤를 따라옵니다! 마을 어딘가에 나타나신 부활의 예수님을 찾아 손의 못자국을 확인해 보세요!');
     } else {
       const fGrp = new THREE.Group();
       const targetPerson = createLowPolyPersonMesh(evSpot.targetPreset || evSpot.npcPreset || 'disciple', 5);
@@ -5242,7 +5352,6 @@ function startMiracleFieldEvent(evSpot) {
       const targetObj = { mesh: fGrp, pos: new THREE.Vector3(fx, fy + 0.5, fz), label: fLbl };
       miracleWorldMissionObjects.push(targetObj);
       miracleActiveFieldEvent.targetZone = targetObj;
-      showToast(`🔍 주변을 살펴 [${evSpot.findTargetLabel}] 가까이 다가가 보세요!`);
     }
   } else if (evSpot.missionType === 'breakfast_fish_cook') {
     // =========================================================================
@@ -5430,7 +5539,6 @@ function startMiracleFieldEvent(evSpot) {
     };
     miracleActiveFieldEvent.targetZone = { pos: new THREE.Vector3(fireX, fireY, fireZ) };
     syncMiracleBreakfastUI();
-    showToast(`🎣 갈릴리 바닷가에서 장대 낚시줄을 멀리 던져 물고기 ${reqFish}마리를 잡아 보세요!`);
   }
 
   syncMiracleMissionStatusPanel();
@@ -5532,9 +5640,7 @@ function updateMiracleFieldEventFrame(dt, now) {
           }
           playSfx('clock');
           syncMiracleMissionStatusPanel();
-          if (fe.collected >= fe.required) {
-            showToast('📜 성경 두루마리 3개 모두 수집 완료! 로마 군인을 피해 서쪽 비밀 집의 예수님께 가세요!');
-          } else {
+          if (fe.collected < fe.required) {
             showToast(`📜 성경 두루마리 획득! (${fe.collected} / ${fe.required}) — 로마 군인 순찰을 주의하세요!`);
           }
         }
@@ -5577,6 +5683,23 @@ function updateMiracleFieldEventFrame(dt, now) {
       if (eg) {
         eg.position.lerp(new THREE.Vector3(holeX, roofY, holeZ), dt * 3.5);
         eg.rotation.y = lerpAngle(eg.rotation.y, 0, dt * 3.5);
+        const eud = eg.userData || {};
+        if (eud.stretcherOnly) {
+          eud.stretcherOnly.position.y = THREE.MathUtils.damp(eud.stretcherOnly.position.y, 0, 8, dt);
+          eud.stretcherOnly.rotation.x = THREE.MathUtils.damp(eud.stretcherOnly.rotation.x, 0, 8, dt);
+        }
+        if (Array.isArray(eud.friendSpecs)) {
+          eud.friendSpecs.forEach(sp => {
+            if (!sp.mesh) return;
+            sp.mesh.position.x = THREE.MathUtils.damp(sp.mesh.position.x, sp.side * 0.76, 8, dt);
+            sp.mesh.position.y = THREE.MathUtils.damp(sp.mesh.position.y, 0, 8, dt);
+            if (typeof window.applyMiracleNpcLimbAnimation === 'function') {
+              window.applyMiracleNpcLimbAnimation(sp.mesh, {
+                speed: 0, isMoving: false, lArmX: -0.45, rArmX: -0.45, lArmZ: 0, rArmZ: 0, dampRate: 10
+              }, dt);
+            }
+          });
+        }
       }
 
       if (typeof playerChopAnimTimer !== 'undefined') playerChopAnimTimer = 0.2;
@@ -5907,9 +6030,12 @@ function updateMiracleFieldEventFrame(dt, now) {
         it.done = true;
         it.mesh.visible = false;
         it.label.style.opacity = '0';
+        const wasCarrying = fe.carrying;
         fe.carrying++;
         playSfx('rescue');
-        showToast(`✨ ${evSpot.itemLabel} 획득! (${fe.collected + fe.carrying}/${fe.required}) · 목표 지점으로 가져가세요!`);
+        if (wasCarrying > 0) {
+          showToast(`✨ ${evSpot.itemLabel} 획득! (${fe.collected + fe.carrying}/${fe.required}) · 목표 지점으로 가져가세요!`);
+        }
         syncMiracleMissionStatusPanel();
       }
     });
@@ -5988,7 +6114,6 @@ function updateMiracleFieldEventFrame(dt, now) {
         if (sf.beaconRing && sf.beaconRing.material) sf.beaconRing.material.color.setHex(0x38bdf8);
         sf.plotLbl.innerHTML = `🧺 씨앗 바구니를 모은 뒤 돌아오세요! (0/${sf.seedTotal})`;
         playSfx('rescue');
-        showToast(`🌾 ${sf.areaName} 밭 구역을 찾았어요! 주변과 건물 2층 옥상에서 씨앗 바구니 ${sf.seedTotal}개를 찾아오세요!`);
       }
     } else if (sf.phase === 'collect_seeds') {
       sf.seedBaskets.forEach(b => {
@@ -6004,7 +6129,9 @@ function updateMiracleFieldEventFrame(dt, now) {
           sf.seedsCollected++;
           playSfx('rescue');
           sf.plotLbl.innerHTML = `🧺 씨앗 바구니 수집 (${sf.seedsCollected}/${sf.seedTotal})`;
-          showToast(`🧺 씨앗 바구니 획득! (${sf.seedsCollected}/${sf.seedTotal})`);
+          if (sf.seedsCollected < sf.seedTotal) {
+            showToast(`🧺 씨앗 바구니 획득! (${sf.seedsCollected}/${sf.seedTotal})`);
+          }
         }
       });
       if (sf.seedsCollected >= sf.seedTotal) {
@@ -6012,7 +6139,6 @@ function updateMiracleFieldEventFrame(dt, now) {
         if (sf.beaconRing && sf.beaconRing.material) sf.beaconRing.material.color.setHex(0xf97316);
         sf.plotLbl.innerHTML = `🪨 밭의 돌을 모두 치우세요! (0/${sf.rocks.length})`;
         playSfx('build');
-        showToast(`🪨 씨앗 바구니 ${sf.seedTotal}개를 모두 모았어요! 밭으로 돌아가 돌 ${sf.rocks.length}개를 모두 치워 주세요!`);
       }
     } else if (sf.phase === 'clear_rocks') {
       sf.rocks.forEach(r => {
@@ -6024,7 +6150,9 @@ function updateMiracleFieldEventFrame(dt, now) {
           sf.rocksCleared++;
           playSfx('hammer');
           sf.plotLbl.innerHTML = `🪨 밭의 돌 제거 중 (${sf.rocksCleared}/${sf.rocks.length})`;
-          showToast(`🪨 돌을 치웠어요! (${sf.rocksCleared}/${sf.rocks.length})`);
+          if (sf.rocksCleared < sf.rocks.length) {
+            showToast(`🪨 돌을 치웠어요! (${sf.rocksCleared}/${sf.rocks.length})`);
+          }
         }
       });
       if (sf.rocksCleared >= sf.rocks.length) {
@@ -6032,7 +6160,6 @@ function updateMiracleFieldEventFrame(dt, now) {
         if (sf.beaconRing && sf.beaconRing.material) sf.beaconRing.material.color.setHex(0x84cc16);
         sf.plotLbl.innerHTML = `🌿 가시덤불과 잡초 제거 (0/${sf.thorns.length})`;
         playSfx('rescue');
-        showToast(`🌿 돌을 모두 치웠어요! 이제 밭 안의 가시덤불과 잡초 ${sf.thorns.length}개를 모두 제거해 주세요!`);
       }
     } else if (sf.phase === 'clear_thorns') {
       sf.thorns.forEach(th => {
@@ -6044,7 +6171,9 @@ function updateMiracleFieldEventFrame(dt, now) {
           sf.thornsCleared++;
           playSfx('step');
           sf.plotLbl.innerHTML = `🌿 가시·잡초 제거 중 (${sf.thornsCleared}/${sf.thorns.length})`;
-          showToast(`🌿 가시덤불·잡초 제거! (${sf.thornsCleared}/${sf.thorns.length})`);
+          if (sf.thornsCleared < sf.thorns.length) {
+            showToast(`🌿 가시덤불·잡초 제거! (${sf.thornsCleared}/${sf.thorns.length})`);
+          }
         }
       });
       if (sf.thornsCleared >= sf.thorns.length) {
@@ -6052,7 +6181,6 @@ function updateMiracleFieldEventFrame(dt, now) {
         if (sf.beaconRing && sf.beaconRing.material) sf.beaconRing.material.color.setHex(0x4ade80);
         sf.plotLbl.innerHTML = `🪴 울퉁불퉁한 흙을 고르게 정돈하세요! (0/${sf.mounds.length})`;
         playSfx('rescue');
-        showToast(`🪴 가시덤불과 잡초를 다 뽑았어요! 이제 밭의 울퉁불퉁한 흙 ${sf.mounds.length}줄을 밟아 고르게 정돈해 주세요!`);
       }
     } else if (sf.phase === 'level_soil') {
       sf.mounds.forEach(m => {
@@ -6068,7 +6196,9 @@ function updateMiracleFieldEventFrame(dt, now) {
           const ratio = sf.moundsLeveled / sf.mounds.length;
           sf.soilMat.color.copy(new THREE.Color('#a68a64')).lerp(new THREE.Color('#5c3a1e'), ratio);
           sf.plotLbl.innerHTML = `🪴 땅 고르기 정돈 중 (${sf.moundsLeveled}/${sf.mounds.length})`;
-          showToast(`🪴 좋은 땅 이랑 완성! (${sf.moundsLeveled}/${sf.mounds.length})`);
+          if (sf.moundsLeveled < sf.mounds.length) {
+            showToast(`🪴 좋은 땅 이랑 완성! (${sf.moundsLeveled}/${sf.mounds.length})`);
+          }
         }
       });
       if (sf.moundsLeveled >= sf.mounds.length) {
@@ -6077,7 +6207,6 @@ function updateMiracleFieldEventFrame(dt, now) {
         const btnWrap = document.getElementById('miracle-sower-btn-wrap');
         if (btnWrap) btnWrap.classList.remove('hidden');
         playSfx('rescue');
-        showToast('🌱✨ 부드러운 좋은 땅(옥토)이 완성되었어요! 아래 [좋은 땅에 씨앗 뿌리기!] 버튼을 눌러 주세요!');
       }
     } else if (sf.phase === 'sowing') {
       sf.sowTimer += dt;
@@ -6103,25 +6232,218 @@ function updateMiracleFieldEventFrame(dt, now) {
       }
     }
   } else if (fe.type === 'escort_guide') {
-    if (fe.escortGroup) {
-      const eg = fe.escortGroup.mesh;
-      const prevX = eg.position.x, prevZ = eg.position.z;
-      const targetX = playerPos.x - Math.sin(playerFacing) * 1.9;
-      const targetZ = playerPos.z - Math.cos(playerFacing) * 1.9;
-      eg.position.x = THREE.MathUtils.lerp(eg.position.x, targetX, dt * 6.5);
-      eg.position.z = THREE.MathUtils.lerp(eg.position.z, targetZ, dt * 6.5);
-      eg.position.y = THREE.MathUtils.lerp(eg.position.y, playerPos.y, dt * 8.0);
-      eg.rotation.y = playerFacing;
-      const moveSpeed = Math.hypot(eg.position.x - prevX, eg.position.z - prevZ) / Math.max(0.001, dt);
-      // 동행하는 원래 엠마오 두 제자의 보행 팔다리 애니메이션
-      if (Array.isArray(fe.reusedEscortNpcs)) {
-        fe.reusedEscortNpcs.forEach((entry, idx) => {
-          const u = (entry.mesh && entry.mesh.userData) ? entry.mesh.userData : {};
-          const sw = moveSpeed > 0.35 ? Math.sin(now * 0.014 + idx * 1.4) * 0.58 : 0;
-          if (u.lLeg && u.rLeg) { u.lLeg.rotation.x = sw; u.rLeg.rotation.x = -sw; }
-          if (u.lArm && u.rArm) { u.lArm.rotation.x = -sw * 0.52; u.rArm.rotation.x = sw * 0.52; }
-        });
+    const safeDt = Math.min(0.06, Math.max(0.001, dt || 0.016));
+
+    if (Array.isArray(fe.escortFollowers) && fe.escortFollowers.length > 0) {
+      // [어린이 인도 · 엠마오 제자 등 동행 NPC] 개별 지면/계단 접지 + 이동 속도 비례 팔·다리 보행/대기 보간
+      const playerTerrainY = getMiracleOpenWorldGroundHeight(playerPos.x, playerPos.z);
+      const playerOnRaised = playerPos.y > playerTerrainY + 0.35;
+      let sumX = 0, sumY = 0, sumZ = 0, cnt = 0;
+
+      fe.escortFollowers.forEach(fl => {
+        const m = fl.mesh;
+        if (!m) return;
+        const prevX = m.position.x, prevZ = m.position.z;
+        const tx = playerPos.x - Math.sin(playerFacing) * fl.backOff + Math.cos(playerFacing) * fl.sideOff;
+        const tz = playerPos.z - Math.cos(playerFacing) * fl.backOff - Math.sin(playerFacing) * fl.sideOff;
+        const dx = tx - prevX;
+        const dz = tz - prevZ;
+        const distSlot = Math.hypot(dx, dz);
+        const distPlayer = Math.hypot(playerPos.x - prevX, playerPos.z - prevZ);
+
+        if (!fl.isWalking && (distSlot > fl.startDist || distPlayer > 4.1)) fl.isWalking = true;
+        if (fl.isWalking && distSlot < fl.stopDist && distPlayer < 3.5) fl.isWalking = false;
+
+        let actualSpd = 0;
+        if (fl.isWalking && distSlot > 0.04) {
+          const desiredSpd = distSlot > 10.0 ? 8.2 : Math.min(7.2, 4.4 + distSlot * 0.55);
+          const step = Math.min(distSlot, desiredSpd * safeDt);
+          const dirAng = Math.atan2(dx, dz);
+          let moveAng = dirAng;
+
+          if (!playerOnRaised && typeof isMiracleNpcPointClear === 'function') {
+            const offsets = [0, 0.36, -0.36, 0.72, -0.72, 1.08, -1.08];
+            let found = null;
+            for (let oi = 0; oi < offsets.length; oi++) {
+              const candA = dirAng + offsets[oi];
+              const cxCand = prevX + Math.sin(candA) * step;
+              const czCand = prevZ + Math.cos(candA) * step;
+              if (isMiracleNpcPointClear(cxCand, czCand, 0.42)) {
+                found = candA;
+                break;
+              }
+            }
+            if (found !== null) moveAng = found;
+          }
+
+          const nx = prevX + Math.sin(moveAng) * step;
+          const nz = prevZ + Math.cos(moveAng) * step;
+          const ny = (typeof window.getMiracleNpcSupportY === 'function')
+            ? window.getMiracleNpcSupportY(nx, nz, m.position.y, 1.45)
+            : getMiracleOpenWorldGroundHeight(nx, nz);
+          const smoothY = (Math.abs(ny - m.position.y) > 2.2) ? ny : THREE.MathUtils.damp(m.position.y, ny, 16, safeDt);
+          m.position.set(nx, smoothY, nz);
+          actualSpd = Math.hypot(nx - prevX, nz - prevZ) / safeDt;
+
+          if (actualSpd > 0.12) {
+            const walkFace = Math.atan2(nx - prevX, nz - prevZ);
+            fl.curHeading = lerpAngle(fl.curHeading || 0, walkFace, Math.min(1, safeDt * 11.0));
+            m.rotation.y = fl.curHeading;
+          }
+        } else {
+          const ny = (typeof window.getMiracleNpcSupportY === 'function')
+            ? window.getMiracleNpcSupportY(prevX, prevZ, m.position.y, 1.45)
+            : getMiracleOpenWorldGroundHeight(prevX, prevZ);
+          m.position.y = (Math.abs(ny - m.position.y) > 2.2) ? ny : THREE.MathUtils.damp(m.position.y, ny, 16, safeDt);
+          const facePlayerAng = Math.atan2(playerPos.x - prevX, playerPos.z - prevZ);
+          fl.curHeading = lerpAngle(fl.curHeading || 0, facePlayerAng, Math.min(1, safeDt * 8.0));
+          m.rotation.y = fl.curHeading;
+        }
+
+        if (typeof window.applyMiracleNpcLimbAnimation === 'function') {
+          window.applyMiracleNpcLimbAnimation(m, {
+            speed: actualSpd,
+            isMoving: actualSpd > 0.20,
+            strideFactor: fl.strideFactor || 1.65,
+            legAmp: fl.legAmp || 0.62,
+            armAmp: fl.armAmp || 0.54,
+            dampRate: 14
+          }, safeDt);
+        }
+
+        sumX += m.position.x; sumY += m.position.y; sumZ += m.position.z; cnt++;
+      });
+
+      if (fe.escortGroup && cnt > 0) {
+        const eg = fe.escortGroup.mesh;
+        if (eg) eg.position.set(sumX / cnt, sumY / cnt, sumZ / cnt);
+        const ed = Math.hypot(playerPos.x - sumX / cnt, playerPos.z - sumZ / cnt);
+        updateWorldLabelPos(fe.escortGroup.label, new THREE.Vector3(sumX / cnt, sumY / cnt, sumZ / cnt), ed < MIRACLE_TAG_DIST_NPC);
       }
+    } else if (fe.escortGroup) {
+      // [중풍병자 4인 들것 운반] 4명 개별 계단/지면 접지 · 보행 다리 모션 · 좁은 계단 두 팔 들어 올리기 · 병상 수평 유지
+      const eg = fe.escortGroup.mesh;
+      const ud = eg.userData || {};
+      const prevX = eg.position.x, prevZ = eg.position.z;
+      let targetX = playerPos.x - Math.sin(playerFacing) * 2.05;
+      let targetZ = playerPos.z - Math.cos(playerFacing) * 2.05;
+
+      const sb = (window.miracleParalyticHouseInfo && window.miracleParalyticHouseInfo.stairBounds)
+        ? window.miracleParalyticHouseInfo.stairBounds
+        : null;
+      const inSbRect = (px, pz) => Boolean(sb && px >= sb.minX && px <= sb.maxX && pz >= sb.minZ && pz <= sb.maxZ);
+      const onStairCorridor = Boolean(
+        sb && (inSbRect(prevX, prevZ) || inSbRect(playerPos.x, playerPos.z) || inSbRect(targetX, targetZ))
+        && (playerPos.y > sb.baseY + 0.14 || eg.position.y > sb.baseY + 0.14)
+      );
+
+      if (onStairCorridor && sb) {
+        targetX = THREE.MathUtils.lerp(targetX, sb.centerX, 0.78);
+      }
+
+      const dxT = targetX - prevX;
+      const dzT = targetZ - prevZ;
+      const dTarget = Math.hypot(dxT, dzT);
+      if (!ud.isMoving && dTarget > 0.75) ud.isMoving = true;
+      if (ud.isMoving && dTarget < 0.28) ud.isMoving = false;
+
+      if (ud.isMoving && dTarget > 0.02) {
+        const moveSpd = Math.min(7.4, 4.8 + dTarget * 0.65);
+        const step = Math.min(dTarget, moveSpd * safeDt);
+        eg.position.x = prevX + (dxT / dTarget) * step;
+        eg.position.z = prevZ + (dzT / dTarget) * step;
+      }
+
+      const rawBaseY = (typeof window.getMiracleNpcSupportY === 'function')
+        ? window.getMiracleNpcSupportY(eg.position.x, eg.position.z, eg.position.y, 1.50)
+        : getMiracleOpenWorldGroundHeight(eg.position.x, eg.position.z);
+      eg.position.y = (Math.abs(rawBaseY - eg.position.y) > 2.2) ? rawBaseY : THREE.MathUtils.damp(eg.position.y, rawBaseY, 16, safeDt);
+
+      const actualSpd = Math.hypot(eg.position.x - prevX, eg.position.z - prevZ) / safeDt;
+      let targetYaw = playerFacing;
+      if (onStairCorridor && sb && (eg.position.y < sb.topY - 0.35 || inSbRect(eg.position.x, eg.position.z))) {
+        // 동쪽 좁은 돌계단 오르내릴 때 들것 방향을 계단 통로(-Z/+Z)와 나란히 유지해 벽면 관통 방지
+        const dzDir = (playerPos.z - prevZ);
+        targetYaw = (dzDir <= 0.15) ? Math.PI : 0;
+      } else if (actualSpd > 0.25) {
+        targetYaw = Math.atan2(eg.position.x - prevX, eg.position.z - prevZ);
+      }
+      ud.curHeading = lerpAngle(ud.curHeading || 0, targetYaw, Math.min(1, safeDt * 7.5));
+      eg.rotation.y = ud.curHeading;
+
+      if (Array.isArray(ud.friendSpecs) && ud.stretcherOnly) {
+        const cosH = Math.cos(ud.curHeading);
+        const sinH = Math.sin(ud.curHeading);
+        const preSideX = THREE.MathUtils.lerp(0.76, 0.48, ud.raiseBlend || 0);
+        const friendYs = [];
+        let minFY = Infinity, maxFY = -Infinity, avgFY = 0, frontSum = 0, backSum = 0;
+
+        for (let fi = 0; fi < ud.friendSpecs.length; fi++) {
+          const sp = ud.friendSpecs[fi];
+          const lx = sp.side * preSideX;
+          const lz = sp.fb * 1.05;
+          const wx = eg.position.x + lx * cosH + lz * sinH;
+          const wz = eg.position.z - lx * sinH + lz * cosH;
+          const fy = (typeof window.getMiracleNpcSupportY === 'function')
+            ? window.getMiracleNpcSupportY(wx, wz, eg.position.y + 0.70, 1.65)
+            : getMiracleOpenWorldGroundHeight(wx, wz);
+          friendYs.push(fy);
+          if (fy < minFY) minFY = fy;
+          if (fy > maxFY) maxFY = fy;
+          avgFY += fy;
+          if (sp.fb > 0) frontSum += fy; else backSum += fy;
+        }
+        avgFY /= ud.friendSpecs.length;
+        const heightSpread = maxFY - minFY;
+        const slopeDiff = Math.abs((frontSum * 0.5) - (backSum * 0.5));
+        const shouldRaise = onStairCorridor || heightSpread > 0.28 || slopeDiff > 0.26;
+        ud.raiseBlend = THREE.MathUtils.damp(ud.raiseBlend || 0, shouldRaise ? 1.0 : 0.0, 6.2, safeDt);
+
+        const sideX = THREE.MathUtils.lerp(0.76, 0.48, ud.raiseBlend);
+        const lowPoleY = avgFY + 0.86;
+        const highPoleY = Math.max(maxFY + 1.05, Math.min(minFY + 2.05, avgFY + 1.88));
+        const desiredPoleWorldY = THREE.MathUtils.lerp(lowPoleY, highPoleY, ud.raiseBlend);
+        const desiredPitch = THREE.MathUtils.clamp(-Math.atan2((frontSum * 0.5) - (backSum * 0.5), 2.1) * 0.10, -0.10, 0.10);
+
+        ud.curStretchY = THREE.MathUtils.damp(ud.curStretchY !== undefined ? ud.curStretchY : 0.22, desiredPoleWorldY - eg.position.y - 0.66, 10, safeDt);
+        ud.curStretchPitch = THREE.MathUtils.damp(ud.curStretchPitch || 0, desiredPitch, 10, safeDt);
+
+        let avgBob = 0;
+        for (let fi = 0; fi < ud.friendSpecs.length; fi++) {
+          const sp = ud.friendSpecs[fi];
+          const fr = sp.mesh;
+          if (!fr) continue;
+          fr.position.x = THREE.MathUtils.damp(fr.position.x, sp.side * sideX, 12, safeDt);
+          const localY = friendYs[fi] - eg.position.y;
+          fr.position.y = (Math.abs(localY - fr.position.y) > 2.0) ? localY : THREE.MathUtils.damp(fr.position.y, localY, 16, safeDt);
+
+          const poleYAtFriend = (ud.curStretchY + 0.66) - Math.sin(ud.curStretchPitch) * (sp.fb * 1.05);
+          const dyShoulder = (poleYAtFriend - fr.position.y) - 1.46;
+          const cosArm = THREE.MathUtils.clamp(-dyShoulder / 0.61, -0.97, 0.92);
+          const armAngle = -Math.max(0.45, Math.acos(cosArm));
+          const inwardBias = -sp.side * THREE.MathUtils.lerp(0.14, 0.08, ud.raiseBlend);
+          const spreadOut = THREE.MathUtils.lerp(0.10, 0.16, ud.raiseBlend);
+
+          if (typeof window.applyMiracleNpcLimbAnimation === 'function') {
+            const animRes = window.applyMiracleNpcLimbAnimation(fr, {
+              speed: actualSpd,
+              isMoving: actualSpd > 0.18,
+              strideFactor: 1.55,
+              legAmp: 0.56,
+              lArmX: armAngle,
+              rArmX: armAngle,
+              lArmZ: -spreadOut + inwardBias,
+              rArmZ: spreadOut + inwardBias,
+              dampRate: 12
+            }, safeDt);
+            avgBob += animRes.bobY;
+          }
+        }
+        avgBob /= ud.friendSpecs.length;
+        ud.stretcherOnly.position.y = ud.curStretchY + avgBob * 0.45;
+        ud.stretcherOnly.rotation.x = ud.curStretchPitch;
+      }
+
       const ed = Math.hypot(playerPos.x - eg.position.x, playerPos.z - eg.position.z);
       updateWorldLabelPos(fe.escortGroup.label, eg.position, ed < MIRACLE_TAG_DIST_NPC);
     }
@@ -6191,9 +6513,13 @@ function updateMiracleFieldEventFrame(dt, now) {
 
     if (ms.pauseTimer > 0) {
       ms.pauseTimer -= dt;
-      const u = wm.userData || {};
-      if (u.lLeg && u.rLeg) { u.lLeg.rotation.x = 0; u.rLeg.rotation.x = 0; }
-      if (u.lArm && u.rArm) { u.lArm.rotation.x = 0; u.rArm.rotation.x = 0; }
+      if (typeof window.applyMiracleNpcLimbAnimation === 'function') {
+        window.applyMiracleNpcLimbAnimation(wm, { speed: 0, isMoving: false }, dt);
+      } else {
+        const u = wm.userData || {};
+        if (u.lLeg && u.rLeg) { u.lLeg.rotation.x = 0; u.rLeg.rotation.x = 0; }
+        if (u.lArm && u.rArm) { u.lArm.rotation.x = 0; u.rArm.rotation.x = 0; }
+      }
     } else {
       // 랜덤 가변 보행 속도(갑자기 신나서 빠르게 걷기·뛰기 포함!)
       ms.speedTimer = (ms.speedTimer || 0) - dt;
@@ -6316,22 +6642,30 @@ function updateMiracleFieldEventFrame(dt, now) {
       u.frLeg.rotation.x = -sw; u.blLeg.rotation.x = -sw;
     }
   } else if (fe.type === 'find_observe') {
-    // [부활 이후 도마 미션] 사도 도마가 플레이어를 따라 이동 (가까이 있으면 멈춰서 플레이어를 바라봄)
+    // [부활 이후 도마 미션] 사도 도마가 플레이어를 따라 이동 (히스테리시스로 떨림 방지 + damp 대기/보행 보간 + 플랫폼 접지)
     if (fe.thomasFollower && fe.thomasFollower.mesh && !fe.cutsceneActive) {
       const tf = fe.thomasFollower;
       const tm = tf.mesh;
       tm.visible = true;
       const distToPlayer = Math.hypot(playerPos.x - tm.position.x, playerPos.z - tm.position.z);
-      if (distToPlayer > 2.25) {
+      if (!tf.isFollowing && distToPlayer > 2.55) tf.isFollowing = true;
+      if (tf.isFollowing && distToPlayer < 1.85) tf.isFollowing = false;
+
+      if (tf.isFollowing) {
         tf.speed = distToPlayer > 7.0 ? 8.2 : 6.4;
         stepMiracleNpcTowardTarget(tf, playerPos.x, playerPos.z, dt, now);
       } else {
+        const ny = (typeof window.getMiracleNpcSupportY === 'function')
+          ? window.getMiracleNpcSupportY(tm.position.x, tm.position.z, tm.position.y, 1.35)
+          : getMiracleOpenWorldGroundHeight(tm.position.x, tm.position.z);
+        const safeDt = Math.min(0.06, Math.max(0.001, dt || 0.016));
+        tm.position.y = (Math.abs(ny - tm.position.y) > 2.2) ? ny : THREE.MathUtils.damp(tm.position.y, ny, 16, safeDt);
         const faceAng = Math.atan2(playerPos.x - tm.position.x, playerPos.z - tm.position.z);
-        tf.curHeading = lerpAngle(tf.curHeading || 0, faceAng, Math.min(1, dt * 8.0));
+        tf.curHeading = lerpAngle(tf.curHeading || 0, faceAng, Math.min(1, safeDt * 8.0));
         tm.rotation.y = tf.curHeading;
-        const tu = tm.userData || {};
-        if (tu.lLeg && tu.rLeg) { tu.lLeg.rotation.x = 0; tu.rLeg.rotation.x = 0; }
-        if (tu.lArm && tu.rArm) { tu.lArm.rotation.x = 0; tu.rArm.rotation.x = 0; }
+        if (typeof window.applyMiracleNpcLimbAnimation === 'function') {
+          window.applyMiracleNpcLimbAnimation(tm, { speed: 0, isMoving: false }, dt);
+        }
       }
     }
 
@@ -6632,7 +6966,6 @@ function updateMiracleFieldEventFrame(dt, now) {
               if (playerLimbs.rArm) playerLimbs.rArm.rotation.x = -0.35;
             }
             playSfx('rescue');
-            showToast('🔥 물고기를 모두 잡았어요! 이제 예수님과 모닥불 옆에 앉아 물고기를 구워 먹어요!');
           } else {
             bs.phase = 'cast_ready';
             bs.power = 0;
@@ -6722,16 +7055,6 @@ function updateMiracleActorWalkAI(actor, dt, now, stopNearPlayerDist = 3.2) {
   const curZ = m.position.z;
   const dToPlayer = Math.hypot(playerPos.x - curX, playerPos.z - curZ);
 
-  if (dToPlayer < stopNearPlayerDist) {
-    const facePlayerAng = Math.atan2(playerPos.x - curX, playerPos.z - curZ);
-    actor.heading = lerpAngle(actor.heading || 0, facePlayerAng, dt * 8.0);
-    m.rotation.y = actor.heading;
-    if (u.lLeg && u.rLeg) { u.lLeg.rotation.x = 0; u.rLeg.rotation.x = 0; }
-    if (u.lArm && u.rArm) { u.lArm.rotation.x = 0; u.rArm.rotation.x = 0; }
-    if (u.flLeg && u.frLeg) { u.flLeg.rotation.x = 0; u.frLeg.rotation.x = 0; u.blLeg.rotation.x = 0; u.brLeg.rotation.x = 0; }
-    return;
-  }
-
   const nf = (window.MiracleDayNight) ? window.MiracleDayNight.nightFactor : 0;
   const lampLit = Boolean(actor.oilLamp && nf > 0.15);
   if (actor.oilLamp) {
@@ -6739,14 +7062,25 @@ function updateMiracleActorWalkAI(actor, dt, now, stopNearPlayerDist = 3.2) {
     if (lampLit) actor.oilLamp.setLit(true, now, actor.phase || 0);
   }
 
+  if (dToPlayer < stopNearPlayerDist) {
+    const facePlayerAng = Math.atan2(playerPos.x - curX, playerPos.z - curZ);
+    actor.heading = lerpAngle(actor.heading || 0, facePlayerAng, dt * 8.0);
+    m.rotation.y = actor.heading;
+    if (typeof window.applyMiracleNpcLimbAnimation === 'function') {
+      window.applyMiracleNpcLimbAnimation(m, {
+        speed: 0, isMoving: false, rArmX: lampLit ? -0.76 : undefined
+      }, dt);
+    }
+    return;
+  }
+
   if (actor.waitTimer > 0) {
     actor.waitTimer -= dt;
-    if (u.lLeg && u.rLeg) { u.lLeg.rotation.x = 0; u.rLeg.rotation.x = 0; }
-    if (u.lArm && u.rArm) {
-      u.lArm.rotation.x = 0;
-      u.rArm.rotation.x = lampLit ? -0.76 : 0;
+    if (typeof window.applyMiracleNpcLimbAnimation === 'function') {
+      window.applyMiracleNpcLimbAnimation(m, {
+        speed: 0, isMoving: false, rArmX: lampLit ? -0.76 : undefined
+      }, dt);
     }
-    if (u.flLeg && u.frLeg) { u.flLeg.rotation.x = 0; u.frLeg.rotation.x = 0; u.blLeg.rotation.x = 0; u.brLeg.rotation.x = 0; }
     if (u.headGroup) u.headGroup.rotation.y = Math.sin(now * 0.003 + actor.phase) * 0.25;
     return;
   }
@@ -6783,26 +7117,14 @@ function updateMiracleActorWalkAI(actor, dt, now, stopNearPlayerDist = 3.2) {
   actor.heading = lerpAngle(actor.heading || desiredAng, desiredAng, dt * 8.5);
   m.rotation.y = actor.heading;
 
-  const walkSwing = Math.sin(now * 0.012 + (actor.phase || 0)) * 0.55;
-  if (u.lLeg && u.rLeg) {
-    u.lLeg.rotation.x = walkSwing;
-    u.rLeg.rotation.x = -walkSwing;
-  }
-  if (u.lArm && u.rArm) {
-    u.lArm.rotation.x = -walkSwing * 0.55;
-    u.rArm.rotation.x = lampLit ? (-0.76 + Math.sin(now * 0.012 + (actor.phase || 0)) * 0.08) : (walkSwing * 0.55);
-  }
-  if (u.flLeg && u.frLeg && u.blLeg && u.brLeg) {
-    u.flLeg.rotation.x = walkSwing * 0.8;
-    u.brLeg.rotation.x = walkSwing * 0.8;
-    u.frLeg.rotation.x = -walkSwing * 0.8;
-    u.blLeg.rotation.x = -walkSwing * 0.8;
-  }
-  // 짐을 실은 당나귀는 걸을 때 머리 끄덕임과 양옆 짐보따리 흔들림 애니메이션 추가!
-  if (u.isPackDonkey) {
-    if (u.headGroup) u.headGroup.rotation.x = Math.sin(now * 0.012 + (actor.phase || 0)) * 0.10;
-    if (u.packL) u.packL.rotation.z = Math.sin(now * 0.012 + (actor.phase || 0)) * 0.08;
-    if (u.packR) u.packR.rotation.z = -Math.sin(now * 0.012 + (actor.phase || 0)) * 0.08;
+  const actualSpd = Math.hypot(nx - curX, nz - curZ) / Math.max(0.001, dt);
+  if (typeof window.applyMiracleNpcLimbAnimation === 'function') {
+    window.applyMiracleNpcLimbAnimation(m, {
+      speed: actualSpd,
+      isMoving: actualSpd > 0.12,
+      strideFactor: 1.65,
+      rArmX: lampLit ? (-0.76 + Math.sin(now * 0.012 + (actor.phase || 0)) * 0.08) : undefined
+    }, dt);
   }
 }
 
@@ -7359,20 +7681,6 @@ function buildMiracleOpenWorld(restoreSavedPos = false) {
   isTimeAttackActive = false;
   const owTimerBox = document.getElementById('hud-timer-box');
   if (owTimerBox) { owTimerBox.classList.add('hidden'); owTimerBox.classList.remove('flex'); }
-
-  // 인트로 연출(영상+플라이오버)이 예정된 처음 시작 시점에는 토스트 출력을 생략 (연출이 모두 끝난 후 출력!)
-  const isIntroPending = (window.MiracleGuideUI && window.MiracleGuideUI.suppressedDuringIntro);
-  if (!isIntroPending) {
-    if (typeof currentMode !== 'undefined' && currentMode === 'timeattack') {
-      showToast('🌿 이곳은 자유롭게 탐험하는 오픈월드입니다! 제한 시간 없이 예수님의 발자취를 마음껏 둘러보세요.');
-    } else {
-      showToast(
-        miracleIsPostResurrection
-          ? '✨ 부활 이후의 갈릴리와 예루살렘 오픈월드입니다! 엠마오·도마·바닷가 아침식사를 체험하고 감람산으로 오르세요!'
-          : '🗺️ 성경 오픈월드에 오신 것을 환영합니다! 빛기둥이 켜진 순서(1→2→3→4)대로 메인 스테이지를 진행해 보세요!'
-      );
-    }
-  }
 
   if (typeof playMiracleOpenWorldOgg === 'function') {
     playMiracleOpenWorldOgg();
