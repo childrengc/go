@@ -4,7 +4,7 @@
 // - 계단으로 건물 2층 등반 후 인접한 옆 건물 옥상·2층으로 점프 이동할 수 있는 근접 마을 배치
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_world = '20261124_v32';
+window.__GAME_BUILD_VERSIONS__.ep4_world = '20261124_v34';
 
 window.miracleOpenWorldIntroFlyover = {
   active: false,
@@ -629,6 +629,14 @@ function buildSoftLowPolyWorldTerrain() {
   const vA = new THREE.Vector3(), vB = new THREE.Vector3(), vC = new THREE.Vector3();
   const e1 = new THREE.Vector3(), e2 = new THREE.Vector3(), nrm = new THREE.Vector3();
   const fCol = new THREE.Color();
+  const cTmpMeadow = new THREE.Color();
+  const cTmpHill = new THREE.Color();
+  const cTmpSlope = new THREE.Color();
+  const cTmpTop = new THREE.Color();
+  const smoothBlend01 = (v) => {
+    const c = Math.max(0, Math.min(1, v));
+    return c * c * (3 - 2 * c);
+  };
 
   for (let i = 0; i + 2 < posAttr.count; i += 3) {
     vA.set(posAttr.getX(i),     posAttr.getY(i),     posAttr.getZ(i));
@@ -689,22 +697,56 @@ function buildSoftLowPolyWorldTerrain() {
       fCol.copy(cDirtRoad);
     } else if (distFromMainRoad < 6.4) {
       fCol.copy(cRoadEdge);
-    } else if (mx < -34 && mz > 48 && my > 1.8) {
-      fCol.copy(cGolgotha);
-    } else if (my > 2.0 && slopeFlat < 0.945) {
-      // 산·언덕 경사면: 기존 사암/황토색과 초록색을 삼각형 패치 단위로 자연스럽게 혼합!
-      const mtnMix = hash2(Math.floor(mx * 0.16) + 3.1, Math.floor(mz * 0.16) - 1.7);
-      fCol.copy(cSlopeOchre).lerp(cSlopeGreen, 0.34 + mtnMix * 0.42);
-    } else if (my > 6.8) {
-      const topMix = hash2(Math.floor(mx * 0.18), Math.floor(mz * 0.18));
-      fCol.copy(cHillTopGrass).lerp(cHillGreen, 0.25 + topMix * 0.50);
-    } else if (my > 2.2) {
-      const midMix = hash2(Math.floor(mx * 0.15) + 7.3, Math.floor(mz * 0.15));
-      fCol.copy(cHillOlive).lerp(cHillGreen, 0.20 + midMix * 0.42);
     } else {
-      // 평원은 따뜻한 황토와 지중해 연두색이 로우 폴리곤 면 단위로 자연스럽게 어우러지도록 패치 배색
-      const patch = hash2(Math.floor(mx * 0.14), Math.floor(mz * 0.14));
-      fCol.copy(cWarmMeadow).lerp(cSunlitOchre, 0.28 + patch * 0.56);
+      // [자연스러운 외곽 경계 블렌딩] 직선/계단식 경계선 없이 삼각형 단위 도메인 워프·랜덤 혼합 적용
+      const nCoarse = hash2(Math.floor(mx * 0.11) + 1.9, Math.floor(mz * 0.11) - 2.3);
+      const nFine   = hash2(Math.floor(mx * 0.31) + i * 0.03, Math.floor(mz * 0.31) - i * 0.02);
+      const patch   = hash2(Math.floor(mx * 0.14), Math.floor(mz * 0.14));
+      const mtnMix  = hash2(Math.floor(mx * 0.16) + 3.1, Math.floor(mz * 0.16) - 1.7);
+      const midMix  = hash2(Math.floor(mx * 0.15) + 7.3, Math.floor(mz * 0.15));
+      const topMix  = hash2(Math.floor(mx * 0.18) - 2.1, Math.floor(mz * 0.18) + 4.7);
+
+      const elevNoise = (nCoarse - 0.5) * 2.1 + (nFine - 0.5) * 1.15;
+      const effH = my + elevNoise;
+
+      // 평원 기본 황토·연두 혼합색
+      cTmpMeadow.copy(cWarmMeadow).lerp(cSunlitOchre, 0.24 + patch * 0.54);
+      // 산기슭/능선 올리브-초록 혼합색
+      cTmpHill.copy(cHillOlive).lerp(cHillGreen, 0.18 + midMix * 0.44);
+      // 고지대 능선 혼합색
+      cTmpTop.copy(cHillTopGrass).lerp(cHillGreen, 0.25 + topMix * 0.48);
+      // 사면 사암/황토-초록 혼합색
+      cTmpSlope.copy(cSlopeOchre).lerp(cSlopeGreen, 0.30 + mtnMix * 0.48);
+
+      // 외곽 산맥 가장자리 거리도 굴곡/랜덤 오프셋으로 서서히 혼합 (직선 경계 차단)
+      const rimWave = Math.sin(mx * 0.075 + mz * 0.065) * 5.5 + (nCoarse - 0.5) * 9.0;
+      const rimDist = Math.max(mx - (96 + rimWave), (-96 + rimWave) - mz, mz - (96 + rimWave));
+      const rimFactor = smoothBlend01(rimDist / 26.0);
+
+      const hillT = smoothBlend01((effH - 1.1) / 3.8);
+      const topT  = smoothBlend01((effH - 5.6) / 4.0);
+      const slopeT = smoothBlend01((0.96 - slopeFlat) / 0.11) * smoothBlend01((effH - 0.8) / 2.6);
+
+      fCol.copy(cTmpMeadow).lerp(cTmpHill, Math.max(hillT, rimFactor * (0.45 + nFine * 0.45)));
+      fCol.lerp(cTmpTop, topT * 0.82);
+      fCol.lerp(cTmpSlope, slopeT * 0.72);
+
+      // 외곽 산 영역의 단조로움을 없애는 삼각형 단위 이스라엘 석회암·세이지 랜덤 블렌딩
+      if (rimFactor > 0.05) {
+        const scrubRoll = hash2(mx * 0.43 + 11.7, mz * 0.43 - 5.9);
+        if (scrubRoll < 0.28) {
+          fCol.lerp(cSunlitOchre, rimFactor * (0.20 + scrubRoll));
+        } else if (scrubRoll > 0.72) {
+          fCol.lerp(cSlopeOchre, rimFactor * 0.26);
+        }
+      }
+
+      // 서남부 골고다 바위 언덕도 사각형 직선 경계 없이 원형/노이즈 감쇠로 자연스럽게 혼합
+      const golgD = Math.hypot((mx + 62) / 38, (mz - 78) / 34) + (nCoarse - 0.5) * 0.24;
+      const golgT = (1.0 - smoothBlend01((golgD - 0.35) / 0.65)) * smoothBlend01((effH - 1.5) / 2.5);
+      if (golgT > 0.02) {
+        fCol.lerp(cGolgotha, golgT * 0.86);
+      }
     }
 
     // 삼각형 면마다 고유한 명도 차이를 부여해 각진 폴리곤 실루엣을 선명하게 살림
@@ -990,13 +1032,15 @@ function buildMiracleRoadsideVillagesAndForests() {
 
   const rockSpots = [
     [66, -88, 1.7], [96, -68, 2.0], [-36, -48, 1.5], [34, -26, 1.6],
-    [-44, -16, 1.8], [-58,  8, 2.1], [-74, 18, 1.9], [ 6,  18, 2.0],
+    [-44, -16, 1.8], [-58,  8, 2.1], [-74, 18, 1.9], [88, -14, 2.0],
     [12,  14, 1.6], [48,  18, 1.8], [-48, 72, 2.2], [-76, 74, 2.0],
     [72,  62, 1.7], [94,  68, 1.9], [-30, 88, 1.8]
   ];
   rockSpots.forEach(([rx, rz, rad], idx) => {
     if (isNearSowerFarmPlot(rx, rz, 8.0)) return;
     if (Math.hypot(rx - 63, rz - 18) < 12.0) return;
+    if (Math.abs(rx - getMiracleMainRoadCenterX(rz)) < 7.2) return;
+    if (Math.hypot(rx - 10.0, rz - 19.0) < 6.0 || Math.hypot(rx + 9.6, rz - 2.5) < 5.5) return;
     const m = addLowPolyRock(rx, rz, rad, 0.78, idx % 2 === 0 ? '#94a3b8' : '#8c8275', true);
     registerMiracleHarvestNode('stone', rx, rz, m, rad);
   });
@@ -1115,6 +1159,150 @@ function buildMiracleRoadsideVillagesAndForests() {
       phase: idx * 0.9
     });
   });
+
+  if (typeof buildMiracleOuterMountainIsraelFlora === 'function') {
+    buildMiracleOuterMountainIsraelFlora();
+  }
+}
+
+// -------------------------------------------------------------------------
+// 4-B. [외곽 산 경계 자연화] 북·동·남 외곽 산맥 및 전이 구릉에 1세기 이스라엘 식생 6종 식재
+//      (올리브나무 · 무화과나무 · 대추야자 · 우슬초 · 아네모네 · 케이퍼/거친 풀)
+// -------------------------------------------------------------------------
+function buildMiracleOuterMountainIsraelFlora() {
+  if (typeof window.createIsraelOliveTreeGroup !== 'function') return;
+
+  const floraGrp = new THREE.Group();
+  const hashF = (a, b) => {
+    const v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453;
+    return v - Math.floor(v);
+  };
+
+  const canPlaceFlora = (x, z) => {
+    const shoreX = (typeof window.getMiracleWestShoreLineX === 'function') ? window.getMiracleWestShoreLineX(z) : -92.0;
+    if (x < shoreX + 8.5) return false;
+    if (Math.abs(x - getMiracleMainRoadCenterX(z)) < 8.5) return false;
+    if (Math.abs(x) < 26 && z > 42 && z < 92) return false; // 예루살렘 성전 광장
+    if (Math.hypot(x + 22, z - 92) < 15.0) return false;   // 빈 무덤
+    if (Math.hypot(x - 88, z + 82) < 8.0) return false;    // 벳새다 언덕 정상 비움
+    if (Math.hypot(x - 88, z - 74) < 8.5) return false;    // 감람산 승천 정상 비움
+    if (Math.hypot(x + 62, z - 78) < 11.5) return false;   // 골고다 세 십자가 주변
+    if (Math.hypot(x - 63, z - 18) < 13.5) return false;   // 반석 건축지
+    if (typeof isNearSowerFarmPlot === 'function' && isNearSowerFarmPlot(x, z, 10.5)) return false;
+    const bethZ = -52 - Math.max(0, Math.min(1, (x - 6) / 82)) * 30 + Math.sin(x * 0.08) * 3.2;
+    if (x >= 2 && x <= 92 && Math.abs(z - bethZ) < 5.2) return false;
+    if (x >= 10 && x <= 92 && Math.abs(z - (58 + (x - 10) * 0.2)) < 5.2) return false;
+    return true;
+  };
+
+  const spawnSpecimen = (kind, fx, fz, sc, seed) => {
+    if (!canPlaceFlora(fx, fz)) return;
+    const fy = getMiracleOpenWorldGroundHeight(fx, fz);
+    if (fy < 0.25) return;
+
+    let item = null;
+    if (kind === 'olive') item = window.createIsraelOliveTreeGroup(sc, seed);
+    else if (kind === 'fig') item = window.createIsraelFigTreeGroup(sc, seed);
+    else if (kind === 'palm' && typeof window.createIsraelDatePalmGroup === 'function') item = window.createIsraelDatePalmGroup(sc, seed);
+    else if (kind === 'hyssop' && typeof window.createIsraelHyssopShrubGroup === 'function') item = window.createIsraelHyssopShrubGroup(sc, seed);
+    else if (kind === 'anemone' && typeof window.createIsraelAnemoneClusterGroup === 'function') item = window.createIsraelAnemoneClusterGroup(sc, seed);
+    else if (typeof window.createIsraelCaperAndGrassGroup === 'function') item = window.createIsraelCaperAndGrassGroup(sc, seed);
+
+    if (!item) return;
+    item.position.set(fx, fy - 0.08, fz);
+    item.rotation.y = hashF(seed, 19.3) * Math.PI * 2;
+    floraGrp.add(item);
+
+    // 플레이어가 걸어 들어갈 수 있는 경계(±104.5) 안쪽 큰 나무만 충돌체 등록
+    const isTree = (kind === 'olive' || kind === 'fig' || kind === 'palm');
+    if (isTree && Math.abs(fx) <= 104.5 && Math.abs(fz) <= 104.5) {
+      colliders.push({ minX: fx - 0.55 * sc, maxX: fx + 0.55 * sc, minZ: fz - 0.55 * sc, maxZ: fz + 0.55 * sc });
+    }
+  };
+
+  let seedCounter = 700;
+  const pickEdgeKind = (r) => {
+    if (r < 0.24) return 'olive';
+    if (r < 0.40) return 'fig';
+    if (r < 0.50) return 'palm';
+    if (r < 0.68) return 'hyssop';
+    if (r < 0.82) return 'anemone';
+    return 'caper';
+  };
+  const pickTransitionUnderstory = (r) => {
+    if (r < 0.36) return 'hyssop';
+    if (r < 0.66) return 'anemone';
+    if (r < 0.90) return 'caper';
+    return 'olive';
+  };
+
+  // 1) 동쪽 외곽 산맥 및 전이 능선 (x: 94 ~ 142, z: -132 ~ +132)
+  for (let i = 0; i < 64; i++) {
+    seedCounter += 13;
+    const t = i / 63;
+    const fz = -128 + t * 256 + (hashF(i, 3.1) - 0.5) * 9.0;
+    const band = (i % 3);
+    const fx = (band === 0 ? 96 : band === 1 ? 112 : 128) + (hashF(i, 7.7) - 0.5) * 14.0;
+    const kind = (band === 0 && hashF(i, 11.2) > 0.35)
+      ? pickTransitionUnderstory(hashF(i, 13.7))
+      : pickEdgeKind(hashF(i, 17.9));
+    const sc = (kind === 'olive' || kind === 'fig' || kind === 'palm')
+      ? 0.92 + hashF(i, 21.1) * 0.42
+      : 0.90 + hashF(i, 23.3) * 0.45;
+    spawnSpecimen(kind, fx, fz, sc, seedCounter);
+  }
+
+  // 2) 북쪽 외곽 산맥 및 전이 능선 (x: -74 ~ +118, z: -96 ~ -142)
+  for (let i = 0; i < 52; i++) {
+    seedCounter += 17;
+    const t = i / 51;
+    const fx = -72 + t * 188 + (hashF(i, 4.3) - 0.5) * 8.5;
+    const band = (i % 3);
+    const fz = (band === 0 ? -97 : band === 1 ? -113 : -130) - (hashF(i, 8.9) - 0.5) * 12.0;
+    const kind = (band === 0 && hashF(i, 12.4) > 0.35)
+      ? pickTransitionUnderstory(hashF(i, 15.1))
+      : pickEdgeKind(hashF(i, 19.7));
+    const sc = (kind === 'olive' || kind === 'fig' || kind === 'palm')
+      ? 0.92 + hashF(i, 25.3) * 0.42
+      : 0.90 + hashF(i, 27.1) * 0.45;
+    spawnSpecimen(kind, fx, fz, sc, seedCounter);
+  }
+
+  // 3) 남쪽 외곽 산맥 및 전이 능선 (x: -98 ~ +118, z: +96 ~ +142)
+  for (let i = 0; i < 54; i++) {
+    seedCounter += 19;
+    const t = i / 53;
+    const fx = -96 + t * 212 + (hashF(i, 5.7) - 0.5) * 8.5;
+    const band = (i % 3);
+    const fz = (band === 0 ? 97 : band === 1 ? 113 : 130) + (hashF(i, 9.3) - 0.5) * 12.0;
+    const kind = (band === 0 && hashF(i, 14.2) > 0.35)
+      ? pickTransitionUnderstory(hashF(i, 16.5))
+      : pickEdgeKind(hashF(i, 22.9));
+    const sc = (kind === 'olive' || kind === 'fig' || kind === 'palm')
+      ? 0.92 + hashF(i, 29.1) * 0.42
+      : 0.90 + hashF(i, 31.7) * 0.45;
+    spawnSpecimen(kind, fx, fz, sc, seedCounter);
+  }
+
+  // 4) 내륙 산기슭 경계 언덕 사면 관목·야생화 포켓 보강 (자연스러운 연결감)
+  const foothillPockets = [
+    [78, -62], [68, -74], [84, -42], [86, 48], [72, 68], [58, 84],
+    [-46, 52], [-42, 72], [-76, 56], [-32, -88], [32, -88], [46, -86]
+  ];
+  foothillPockets.forEach(([px, pz], idx) => {
+    for (let k = 0; k < 3; k++) {
+      seedCounter += 23;
+      const ox = (hashF(idx * 3 + k, 1.7) - 0.5) * 10.5;
+      const oz = (hashF(idx * 3 + k, 6.1) - 0.5) * 10.5;
+      const kind = pickTransitionUnderstory(hashF(idx + k, 9.8));
+      spawnSpecimen(kind, px + ox, pz + oz, 0.88 + hashF(k, idx) * 0.36, seedCounter);
+    }
+  });
+
+  if (typeof mergeStaticLowPolyGroupToVertexColor === 'function') {
+    mergeStaticLowPolyGroupToVertexColor(floraGrp, { registerWall: false, castShadow: true });
+  }
+  worldGroup.add(floraGrp);
 }
 // =========================================================================
 // [ep4_miracle_world.js - 파트 2/3] 랜드마크(새 예루살렘 성전 단지 통합) · 순차 빛기둥(1→2→3) · 무릎 높이 빛의 원 · 17종 이벤트
@@ -4870,14 +5058,14 @@ function startMiracleFieldEvent(evSpot) {
       fLbl.style.opacity = '0';
       const targetObj = {
         mesh: fGrp,
-        pos: new THREE.Vector3(fx, fy + 1.15, fz),
+        pos: new THREE.Vector3(fx, fy + 1.25, fz),
         label: fLbl,
         treePos: { x: treeX, z: treeZ },
         perchTree
       };
       miracleWorldMissionObjects.push(targetObj);
       miracleActiveFieldEvent.targetZone = targetObj;
-      showToast('🌳 예수님과 군중이 여리고 숲길에 모였어요! 삭개오가 올라가 앉아 있는 전용 나무를 찾아보세요!');
+      showToast('🌳 예수님과 군중이 여리고 숲길에 모였어요! 무화과나무 숲 가까이 다가가 위쪽 나뭇잎 사이를 올려다보세요!');
     } else if (evSpot.alleyRandomAura) {
       // [10명 중 돌아온 1명] 마을 건물 사이 랜덤 골목 + 빛나는 오라!
       const aPos = findSafeOpenWorldOutdoorPos({
@@ -6154,9 +6342,9 @@ function updateMiracleFieldEventFrame(dt, now) {
         ? Math.hypot(playerPos.x - tz.treePos.x, playerPos.z - tz.treePos.z)
         : distPerch;
       const horizD = Math.min(distPerch, distTree);
-      updateWorldLabelPos(tz.label, tz.pos, horizD < (evSpot.zacchaeusGrove ? 8.5 : MIRACLE_TAG_DIST_SPOT));
+      updateWorldLabelPos(tz.label, tz.pos, horizD < (evSpot.zacchaeusGrove ? 5.6 : MIRACLE_TAG_DIST_SPOT));
 
-      const triggerDist = evSpot.widowCutscene ? 4.2 : (evSpot.zacchaeusGrove ? 4.0 : 3.7);
+      const triggerDist = evSpot.widowCutscene ? 4.2 : (evSpot.zacchaeusGrove ? 3.6 : 3.7);
       if (horizD < triggerDist) {
         if (evSpot.widowCutscene && !fe.cutsceneActive) {
           // 두 렙돈 넣은 과부 전용 컷신 시작!

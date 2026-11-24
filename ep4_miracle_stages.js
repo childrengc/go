@@ -4,7 +4,7 @@
 // - 스테이지 3(십자가 사건): 넓어진 골고다 언덕 정상 고원과 세 십자가 등장 연출 적용
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_stages = '20261124_v32';
+window.__GAME_BUILD_VERSIONS__.ep4_stages = '20261124_v34';
 
 // 스테이지 3: 십자가를 지고 힘겹게 오르시는 예수님 보행 속도(더 천천히) 및 플레이어 대신 짊어졌을 때의 보행 속도
 const MIRACLE_STAGE3_JESUS_WALK_SPEED = 1.05;
@@ -296,6 +296,7 @@ function ensureMiracleStage1UI() {
     const castBtn = root.querySelector('#ms1-cast-btn');
     const startCastCharge = (e) => {
       if (e) e.preventDefault();
+      if (typeof window.isMissionGuideBubbleBlockingAction === 'function' && window.isMissionGuideBubbleBlockingAction()) return;
       if (miracleSubMode !== 'main1_galilee' || !miracleActiveMiniState) return;
       const st = miracleActiveMiniState;
       if (st.phase !== 'cast_net' || st.netInFlight) return;
@@ -320,6 +321,7 @@ function ensureMiracleStage1UI() {
     const haulBtn = root.querySelector('#ms1-haul-btn');
     const onHaulTrigger = (e) => {
       if (e) e.preventDefault();
+      if (typeof window.isMissionGuideBubbleBlockingAction === 'function' && window.isMissionGuideBubbleBlockingAction()) return;
       if (miracleSubMode !== 'main1_galilee' || !miracleActiveMiniState) return;
       if (miracleActiveMiniState.phase === 'haul_net' && typeof window.pulseGalileeHaulNet === 'function') {
         window.pulseGalileeHaulNet();
@@ -333,6 +335,7 @@ function ensureMiracleStage1UI() {
     const rightBtn = root.querySelector('#ms1-bal-right');
     const pressBalance = (side) => (e) => {
       if (e) e.preventDefault();
+      if (typeof window.isMissionGuideBubbleBlockingAction === 'function' && window.isMissionGuideBubbleBlockingAction()) return;
       if (miracleSubMode !== 'main1_galilee' || !miracleActiveMiniState) return;
       const st = miracleActiveMiniState;
       if (st.phase !== 'storm_balance') return;
@@ -358,6 +361,7 @@ function ensureMiracleStage1UI() {
     // 3단계 예수님 깨우기 버튼
     const wakeBtn = root.querySelector('#ms1-wake-btn');
     wakeBtn.addEventListener('click', () => {
+      if (typeof window.isMissionGuideBubbleBlockingAction === 'function' && window.isMissionGuideBubbleBlockingAction()) return;
       if (miracleSubMode === 'main1_galilee' && miracleActiveMiniState && miracleActiveMiniState.phase === 'wake_jesus') {
         triggerGalileeCalmStormCutscene();
       }
@@ -367,6 +371,7 @@ function ensureMiracleStage1UI() {
   if (!_miracleS1KeyBound) {
     _miracleS1KeyBound = true;
     window.addEventListener('keydown', (e) => {
+      if (typeof window.isMissionGuideBubbleBlockingAction === 'function' && window.isMissionGuideBubbleBlockingAction()) return;
       if (miracleSubMode !== 'main1_galilee' || !miracleActiveMiniState || typeof isPlaying === 'undefined' || !isPlaying) return;
       const st = miracleActiveMiniState;
       if (st.phase === 'cast_net' && (e.code === 'Space' || e.code === 'Enter') && !e.repeat && !st.netInFlight) {
@@ -3077,7 +3082,8 @@ function beginCrossPickupAnimation(st) {
   const jPos = st.jesusMesh ? st.jesusMesh.position.clone() : (st.handoffPos ? st.handoffPos.clone() : playerPos.clone());
   st.phase = 'pickup_cross';
   st.pickupTimer = 0;
-  st.pickupDuration = 1.15;
+  st.pickupDuration = 1.45;
+  st.pickupStartSfxPlayed = false;
   st.pickupStartPlayerPos = playerPos.clone();
   st.pickupStartFacing = playerFacing;
   st.pickupTargetPlayerPos = new THREE.Vector3(jPos.x, getMiracleGroundHeight(jPos.x, jPos.z, 3), jPos.z);
@@ -3098,7 +3104,6 @@ function beginCrossPickupAnimation(st) {
   st.handoffCrossProp = handoffCross;
 
   if (st.jesusLabel) st.jesusLabel.innerHTML = '✝️ 십자가를 넘겨주시는 예수님';
-  playSfx('build');
   updateStageHUD();
   showToast('✝️ 예수님의 무거운 십자가를 내 어깨로 들어 올리고 있어요!');
 }
@@ -3149,6 +3154,7 @@ function updateMiracleMainStage3Frame(dt, now) {
   }
   const st = miracleActiveMiniState;
   if (!st || st.phase === 'failed') return;
+  if (typeof window.isMissionGuideBubbleBlockingAction === 'function' && window.isMissionGuideBubbleBlockingAction()) return;
   let nextGuidePos = null;
   if (Array.isArray(st.campfires)) {
     const nf = (window.MiracleDayNight && typeof window.MiracleDayNight.getNightFactor === 'function') ? window.MiracleDayNight.getNightFactor() : 0;
@@ -3337,8 +3343,12 @@ function updateMiracleMainStage3Frame(dt, now) {
     }
   } else if (st.phase === 'pickup_cross') {
     // [십자가 들어 올리는 모션] 예수님 자리로 다가온 플레이어가 몸을 숙여 십자가를 넘겨받아 어깨에 메고, 예수님은 옆으로 비켜섬
+    if (!st.pickupStartSfxPlayed) {
+      st.pickupStartSfxPlayed = true;
+      playSfx('build');
+    }
     st.pickupTimer = (st.pickupTimer || 0) + dt;
-    const dur = st.pickupDuration || 1.15;
+    const dur = st.pickupDuration || 1.45;
     const p = Math.min(1, st.pickupTimer / dur);
     const sm = (t) => t * t * (3 - 2 * t);
 
@@ -3654,6 +3664,7 @@ function updateMiracleMainStage3Frame(dt, now) {
       st.phase = 'raise_cross';
       st.raiseTimer = 0;
       st.raiseDuration = 2.55;
+      st.raiseStartSfxPlayed = false;
       st.raiseUprightSfxPlayed = false;
       st.stumbleState = 'none';
       st.stumbleTimer = 0;
@@ -3681,13 +3692,16 @@ function updateMiracleMainStage3Frame(dt, now) {
         st.centerCrossBeam.visible = true;
         if (st.centerCrossBeam.material) st.centerCrossBeam.material.opacity = 0;
       }
-      playSfx('build');
       showToast('✝️ 골고다 언덕 가운데 빈 자리에 예수님의 십자가를 세우고 있어요...');
       updateStageHUD();
       return;
     }
   } else if (st.phase === 'raise_cross') {
     // [골고다 가운데 십자가 세우기 연출] 눕혀진 가운데 십자가가 서서히 하늘을 향해 우뚝 세워짐!
+    if (!st.raiseStartSfxPlayed) {
+      st.raiseStartSfxPlayed = true;
+      playSfx('build');
+    }
     st.raiseTimer = (st.raiseTimer || 0) + dt;
     const t = st.raiseTimer;
     const liftDur = 1.60;

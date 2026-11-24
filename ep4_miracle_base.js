@@ -4,7 +4,7 @@
 // - 확장된 오픈월드 지형 고도 계산기(넓어진 골고다 언덕 포함) 및 소프트 로우 폴리곤 자연물 팩토리
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_base = '20261124_v32';
+window.__GAME_BUILD_VERSIONS__.ep4_base = '20261124_v34';
 
 // =========================================================================
 // 🎬 [에피소드 4 오프닝 · 엔딩 영상 주소 설정]
@@ -938,14 +938,19 @@ function getMiracleOpenWorldGroundHeight(x, z) {
     h += (t * t * (3 - 2 * t) * 9.6 + t * bump) * inlandHillBlend;
   }
 
-  // 6) 북·동·남 3면 가장자리 낮은 구릉 융기
-  const eastEdge = Math.max(0, (x - 108) / 28);
-  const northEdge = Math.max(0, (-108 - z) / 28);
-  const southEdge = Math.max(0, (z - 108) / 28);
+  // 6) 북·동·남 3면 가장자리 자연스러운 곡선 능선 융기 (직선 경계선 제거)
+  const eastStart = 102.5 + Math.sin(z * 0.085 + 0.6) * 5.0 + Math.cos(z * 0.21) * 2.2;
+  const northStart = -102.5 + Math.sin(x * 0.082 - 0.9) * 5.0 + Math.cos(x * 0.19) * 2.2;
+  const southStart = 102.5 + Math.sin(x * 0.088 + 1.4) * 4.8 + Math.cos(x * 0.22) * 2.1;
+  const eastEdge = Math.max(0, (x - eastStart) / 34);
+  const northEdge = Math.max(0, (northStart - z) / 34);
+  const southEdge = Math.max(0, (z - southStart) / 34);
   const edgeFactor = Math.max(eastEdge, northEdge, southEdge);
   if (edgeFactor > 0) {
-    const edgeBump = Math.sin(x * 0.10) * Math.cos(z * 0.10) * 0.75;
-    h += (edgeFactor * edgeFactor * 4.5 + edgeFactor * edgeBump) * inlandHillBlend;
+    const efClamp = Math.min(1.6, edgeFactor);
+    const efSmooth = efClamp * efClamp * (3 - 2 * Math.min(1, efClamp));
+    const edgeBump = Math.sin(x * 0.11 + z * 0.07) * 0.85 + Math.cos(z * 0.14 - x * 0.06) * 0.55;
+    h += (efSmooth * 5.2 + Math.min(1.2, edgeFactor) * edgeBump) * inlandHillBlend;
   }
 
   // 7) 마을 도로 주변 평탄화 및 초원 잔물결
@@ -1486,17 +1491,17 @@ function createZacchaeusPerchSycamoreTree(x, z, scale = 1.38, faceTargetX = 36.2
   const by = getBaseGroundHeight(x, z);
   const grp = new THREE.Group();
   const seed = Math.abs(Math.round(x * 23 + z * 41)) + 97;
-  const trunkH = 4.25 * scale;
+  const trunkH = 3.85 * scale;
 
-  // 1) 땅에 깊게 뿌리내린 굵고 자연스러운 비정형 줄기 (사선으로 살짝 기울어 오르기 좋은 형태)
+  // 1) 땅에 깊게 뿌리내린 굵고 자연스러운 비정형 줄기
   const trunkGeo = createOrganicWoodTrunkGeo(
     [
-      [0, -0.06 * scale, 0],
-      [-0.08 * scale, trunkH * 0.28, -0.06 * scale],
-      [-0.14 * scale, trunkH * 0.62, -0.10 * scale],
-      [-0.06 * scale, trunkH, -0.08 * scale]
+      [0, -0.08 * scale, 0],
+      [-0.08 * scale, trunkH * 0.30, -0.06 * scale],
+      [-0.14 * scale, trunkH * 0.65, -0.10 * scale],
+      [-0.05 * scale, trunkH, -0.08 * scale]
     ],
-    [0.64 * scale, 0.50 * scale, 0.42 * scale, 0.32 * scale],
+    [0.68 * scale, 0.52 * scale, 0.44 * scale, 0.34 * scale],
     7,
     seed,
     true
@@ -1504,63 +1509,72 @@ function createZacchaeusPerchSycamoreTree(x, z, scale = 1.38, faceTargetX = 36.2
   const trunk = createLowPolyMesh(trunkGeo, '#5c2d0c', 0, 0, 0, true);
   grp.add(trunk);
 
-  // 키 작은 삭개오가 밟고 올라간 듯한 낮은 나무 옹이·뿌리 발판 2개
+  // 키 작은 삭개오가 밟고 나뭇잎 높이까지 올라간 나무 옹이·뿌리 발판 3개
   const stepRoot1 = createLowPolyMesh(new THREE.DodecahedronGeometry(0.32 * scale, 0), '#6b3612', 0.42 * scale, 0.28 * scale, 0.22 * scale, true);
   stepRoot1.scale.set(1.25, 0.65, 1.0);
-  const stepKnot2 = createLowPolyMesh(new THREE.DodecahedronGeometry(0.24 * scale, 0), '#7c4728', 0.36 * scale, 1.08 * scale, 0.28 * scale, true);
+  const stepKnot2 = createLowPolyMesh(new THREE.DodecahedronGeometry(0.24 * scale, 0), '#7c4728', 0.34 * scale, 1.25 * scale, 0.28 * scale, true);
   stepKnot2.scale.set(1.1, 0.72, 1.1);
-  grp.add(stepRoot1, stepKnot2);
+  const stepKnot3 = createLowPolyMesh(new THREE.DodecahedronGeometry(0.21 * scale, 0), '#6b3612', 0.22 * scale, 2.30 * scale, 0.36 * scale, true);
+  stepKnot3.scale.set(1.05, 0.68, 1.05);
+  grp.add(stepRoot1, stepKnot2, stepKnot3);
 
-  // 2) 삭개오가 걸터앉는 넓고 시야가 완전히 트인 전용 수평 주 가지 (+Z 로컬 방향으로 뻗어 Jesus 쪽을 향함)
-  const perchLocalY = 2.02 * scale; // 지면 위 약 2.75m — 아래에서도 삭개오 전신이 한눈에 또렷!
-  const perchLocalZ = 1.62 * scale;
+  // 2) 일반 돌무화과나무 나뭇잎 영역 높이(3.48 * scale)로 올린 삭개오 전용 수평 주 가지
+  const perchLocalY = 3.48 * scale;
+  const perchLocalZ = 1.48 * scale;
   const perchBranch = createOrganicWoodSegmentMesh(
-    new THREE.Vector3(-0.04 * scale, 1.56 * scale, 0.02 * scale),
-    new THREE.Vector3(0.0, perchLocalY, perchLocalZ + 0.52 * scale),
-    0.30 * scale, 0.16 * scale, '#6b3612', seed + 13, 0.08, false
+    new THREE.Vector3(-0.04 * scale, 2.75 * scale, 0.04 * scale),
+    new THREE.Vector3(0.0, perchLocalY, perchLocalZ + 0.56 * scale),
+    0.29 * scale, 0.15 * scale, '#6b3612', seed + 13, 0.08, false
   );
-  // 삭개오가 앉는 가지 위 안정감 있는 나무 껍질 받침(시각적 굵기 보강)
-  const perchBoughRest = createLowPolyMesh(new THREE.CylinderGeometry(0.20 * scale, 0.23 * scale, 0.85 * scale, 6), '#5c2d0c', 0, perchLocalY - 0.04 * scale, perchLocalZ * 0.92, true);
+  const perchBoughRest = createLowPolyMesh(new THREE.CylinderGeometry(0.19 * scale, 0.22 * scale, 0.85 * scale, 6), '#5c2d0c', 0, perchLocalY - 0.04 * scale, perchLocalZ * 0.92, true);
   perchBoughRest.rotation.x = Math.PI * 0.48;
   grp.add(perchBranch, perchBoughRest);
 
-  // 3) 삭개오 머리 위쪽·뒤쪽으로 높이 솟아오른 상부 가지들 (앞·좌·우 시야를 전혀 가리지 않음!)
+  // 3) 좌·우·뒤쪽 나뭇잎 수관을 받쳐주는 상부 가지들 (정면 중앙 시야만 깔끔하게 열어둠)
   const upperB1 = createOrganicWoodSegmentMesh(
-    new THREE.Vector3(-0.10 * scale, trunkH * 0.76, -0.08 * scale),
-    new THREE.Vector3(-1.65 * scale, trunkH + 0.45 * scale, -0.45 * scale),
+    new THREE.Vector3(-0.10 * scale, trunkH * 0.74, -0.06 * scale),
+    new THREE.Vector3(-1.85 * scale, trunkH + 0.22 * scale, 0.35 * scale),
     0.22 * scale, 0.10 * scale, '#6b3612', seed + 29, 0.14, false
   );
   const upperB2 = createOrganicWoodSegmentMesh(
-    new THREE.Vector3(-0.04 * scale, trunkH * 0.78, -0.06 * scale),
-    new THREE.Vector3(1.55 * scale, trunkH + 0.50 * scale, -0.35 * scale),
+    new THREE.Vector3(-0.04 * scale, trunkH * 0.76, -0.06 * scale),
+    new THREE.Vector3(1.85 * scale, trunkH + 0.25 * scale, 0.35 * scale),
     0.21 * scale, 0.10 * scale, '#5c2d0c', seed + 43, 0.14, false
   );
   const upperB3 = createOrganicWoodSegmentMesh(
-    new THREE.Vector3(-0.05 * scale, trunkH * 0.84, -0.08 * scale),
-    new THREE.Vector3(0.10 * scale, trunkH + 0.62 * scale, 0.95 * scale),
-    0.18 * scale, 0.09 * scale, '#6b3612', seed + 61, 0.12, false
+    new THREE.Vector3(-0.05 * scale, trunkH * 0.82, -0.08 * scale),
+    new THREE.Vector3(0.08 * scale, trunkH + 0.55 * scale, -1.05 * scale),
+    0.19 * scale, 0.09 * scale, '#6b3612', seed + 61, 0.12, false
   );
   grp.add(upperB1, upperB2, upperB3);
 
-  // 4) 높은 우산형 수관 (perchLocalY + 2.5m 이상 높이에 배치해 삭개오의 머리 위로 시원한 그늘만 형성!)
-  const canopyBaseY = trunkH + 0.92 * scale;
-  const mainCrown = createLowPolyMesh(new THREE.IcosahedronGeometry(2.05 * scale, 0), '#3f6212', -0.05 * scale, canopyBaseY + 0.35 * scale, -0.15 * scale, true);
-  mainCrown.scale.set(1.28, 0.62, 1.22);
-  const subCrownL = createLowPolyMesh(new THREE.IcosahedronGeometry(1.42 * scale, 0), '#4d7c0f', -1.55 * scale, canopyBaseY - 0.05 * scale, -0.45 * scale, true);
-  subCrownL.scale.set(1.18, 0.60, 1.12);
-  const subCrownR = createLowPolyMesh(new THREE.IcosahedronGeometry(1.38 * scale, 0), '#65a30d', 1.48 * scale, canopyBaseY, -0.35 * scale, true);
-  subCrownR.scale.set(1.16, 0.60, 1.12);
-  const subCrownFrontHigh = createLowPolyMesh(new THREE.IcosahedronGeometry(1.22 * scale, 0), '#558b2f', 0.12 * scale, canopyBaseY + 0.18 * scale, 1.05 * scale, true);
-  subCrownFrontHigh.scale.set(1.20, 0.54, 1.05);
-  grp.add(mainCrown, subCrownL, subCrownR, subCrownFrontHigh);
+  // 4) 일반 나무와 동일한 나뭇잎 높이대 수관 (삭개오가 앉아 있는 정면 중앙 영역만 나뭇잎 메쉬를 부분 제거하여 포켓 개방!)
+  const topCrown = createLowPolyMesh(new THREE.IcosahedronGeometry(1.82 * scale, 0), '#3f6212', 0, trunkH + 1.48 * scale, -0.45 * scale, true);
+  topCrown.scale.set(1.25, 0.54, 1.05);
+  const subCrownL1 = createLowPolyMesh(new THREE.IcosahedronGeometry(1.32 * scale, 0), '#4d7c0f', -2.05 * scale, trunkH - 0.08 * scale, 0.65 * scale, true);
+  subCrownL1.scale.set(1.08, 0.72, 1.08);
+  const subCrownL2 = createLowPolyMesh(new THREE.IcosahedronGeometry(1.42 * scale, 0), '#558b2f', -1.45 * scale, trunkH + 0.35 * scale, -0.75 * scale, true);
+  subCrownL2.scale.set(1.12, 0.74, 1.10);
+  const subCrownR1 = createLowPolyMesh(new THREE.IcosahedronGeometry(1.32 * scale, 0), '#65a30d', 2.05 * scale, trunkH - 0.06 * scale, 0.65 * scale, true);
+  subCrownR1.scale.set(1.08, 0.72, 1.08);
+  const subCrownR2 = createLowPolyMesh(new THREE.IcosahedronGeometry(1.40 * scale, 0), '#4d7c0f', 1.45 * scale, trunkH + 0.38 * scale, -0.72 * scale, true);
+  subCrownR2.scale.set(1.12, 0.74, 1.10);
+  const subCrownBack = createLowPolyMesh(new THREE.IcosahedronGeometry(1.52 * scale, 0), '#3f6212', 0, trunkH + 0.32 * scale, -1.25 * scale, true);
+  subCrownBack.scale.set(1.24, 0.74, 1.02);
+  // 삭개오 좌·우 가장자리만 살짝 감싸 멀리서 봤을 때 숲에 어우러지게 하고, 정면 중앙(x ≈ 0, z ≈ 1.48)은 비워 가까이 올려다보면 발견되도록 배치
+  const subCrownFrontRimL = createLowPolyMesh(new THREE.IcosahedronGeometry(0.95 * scale, 0), '#65a30d', -1.45 * scale, perchLocalY - 0.25 * scale, 1.78 * scale, true);
+  subCrownFrontRimL.scale.set(0.95, 0.72, 0.90);
+  const subCrownFrontRimR = createLowPolyMesh(new THREE.IcosahedronGeometry(0.95 * scale, 0), '#558b2f', 1.45 * scale, perchLocalY - 0.22 * scale, 1.78 * scale, true);
+  subCrownFrontRimR.scale.set(0.95, 0.72, 0.90);
+  grp.add(topCrown, subCrownL1, subCrownL2, subCrownR1, subCrownR2, subCrownBack, subCrownFrontRimL, subCrownFrontRimR);
 
-  // 돌무화과 열매 장식 (높은 수관 가장자리에만 소량 배치)
-  [[-1.1, -0.35], [1.05, -0.25], [0.25, 0.85]].forEach(([fx, fz], idx) => {
-    const fig = createLowPolyMesh(new THREE.DodecahedronGeometry(0.14 * scale, 0), idx % 2 === 0 ? '#a3e635' : '#ca8a04', fx * scale, canopyBaseY - 0.58 * scale, fz * scale, false);
+  // 돌무화과 열매 장식 (수관 가장자리 배치)
+  [[-1.8, 0.55], [1.75, 0.55], [-1.1, -0.85], [1.1, -0.82]].forEach(([fx, fz], idx) => {
+    const fig = createLowPolyMesh(new THREE.DodecahedronGeometry(0.13 * scale, 0), idx % 2 === 0 ? '#a3e635' : '#ca8a04', fx * scale, trunkH - 0.55 * scale, fz * scale, false);
     grp.add(fig);
   });
 
-  // 예수님/군중 방향을 향해 노출된 삭개오 앉은 가지가 열리도록 회전
+  // 예수님/군중 방향을 향해 삭개오가 앉은 포켓이 열리도록 회전
   const faceAng = Math.atan2(faceTargetX - x, faceTargetZ - z);
   grp.position.set(x, by, z);
   grp.rotation.y = faceAng;
@@ -1572,7 +1586,7 @@ function createZacchaeusPerchSycamoreTree(x, z, scale = 1.38, faceTargetX = 36.2
     z + Math.cos(faceAng) * perchLocalZ
   );
 
-  const registeredWallMeshes = [trunk, mainCrown, subCrownL, subCrownR, subCrownFrontHigh];
+  const registeredWallMeshes = [trunk, topCrown, subCrownL1, subCrownL2, subCrownR1, subCrownR2, subCrownBack, subCrownFrontRimL, subCrownFrontRimR];
   wallMeshes.push(...registeredWallMeshes);
   const trunkCollider = {
     minX: x - 0.85 * scale,

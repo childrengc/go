@@ -1000,11 +1000,35 @@
       overflow: hidden !important;
     }
 
+    .cert-reveal-stage {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.42rem;
+    }
+    .cert-flip-pill-below {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.22rem 0.72rem;
+      border-radius: 9999px;
+      background: rgba(15, 23, 42, 0.84);
+      border: 1px solid rgba(251, 191, 36, 0.78);
+      color: #fef3c7;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+      white-space: nowrap;
+      max-width: 92vw;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      pointer-events: none;
+    }
     .cert-card-scene {
       perspective: 1200px;
       -webkit-perspective: 1200px;
-      width: min(68vw, 44dvh, 266px);
-      height: min(90.67vw, 58.67dvh, 355px);
+      width: min(64vw, 40dvh, 254px);
+      height: min(85.33vw, 53.33dvh, 339px);
       aspect-ratio: 3 / 4;
       position: relative;
       z-index: 2;
@@ -1018,8 +1042,15 @@
       height: 100%;
       transform-style: preserve-3d;
       -webkit-transform-style: preserve-3d;
-      transition: transform 0.78s cubic-bezier(0.22, 1.12, 0.36, 1);
-      cursor: pointer;
+      transition: transform 0.72s cubic-bezier(0.22, 1.12, 0.36, 1);
+      cursor: grab;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .cert-card-inner.is-dragging {
+      transition: none !important;
+      cursor: grabbing;
     }
     .cert-card-inner.is-flipped {
       transform: rotateY(180deg);
@@ -1044,6 +1075,8 @@
       height: 100%;
       object-fit: cover;
       display: block;
+      pointer-events: none;
+      -webkit-user-drag: none;
     }
     .cert-card-sheen {
       position: absolute;
@@ -1068,15 +1101,38 @@
       text-align: center;
     }
 
-    /* 모험의 증표 횡스크롤 카드 갤러리 (스크롤바 비노출 · 깔끔한 터치/휠 횡스크롤) */
+    /* 모험의 증표 횡스크롤 카드 갤러리 (스크롤바 비노출 · 마우스/터치 포인터 드래그 스와이프 지원) */
     .badges-modal-card {
       overflow: hidden !important;
       max-height: 95dvh;
     }
+    .badges-top-bar {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      grid-template-areas:
+        "title close"
+        "tabs  tabs";
+      align-items: center;
+      gap: 0.45rem 0.5rem;
+      margin-bottom: 0.45rem;
+      flex-shrink: 0;
+    }
+    .badges-title-wrap {
+      grid-area: title;
+      min-width: 0;
+    }
+    .badges-close-btn {
+      grid-area: close;
+      justify-self: end;
+    }
+    .badges-tabs-row {
+      grid-area: tabs;
+    }
     .badges-scroll-track {
+      position: relative;
       display: flex;
       align-items: center;
-      gap: 0.95rem;
+      gap: 0.9rem;
       overflow-x: auto;
       overflow-y: hidden;
       scroll-snap-type: x mandatory;
@@ -1085,7 +1141,16 @@
       -ms-overflow-style: none;
       flex: 1 1 auto;
       min-height: 0;
-      padding: 0.35rem 0.5rem 0.5rem;
+      padding: 0.35rem 0.6rem 0.45rem;
+      cursor: grab;
+      touch-action: pan-y;
+      user-select: none;
+      -webkit-user-select: none;
+      perspective: 1100px;
+    }
+    .badges-scroll-track.is-pointer-dragging {
+      cursor: grabbing;
+      scroll-snap-type: none !important;
     }
     .badges-scroll-track::-webkit-scrollbar {
       display: none;
@@ -1093,9 +1158,37 @@
     .badge-gallery-slot {
       flex: 0 0 auto;
       scroll-snap-align: center;
-      width: clamp(220px, 60vw, 262px);
-      height: clamp(293px, 80vw, 349px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.34rem;
+      --badge-card-w: clamp(206px, 56vw, 244px);
+    }
+    .badge-card-frame {
+      width: var(--badge-card-w);
+      height: calc(var(--badge-card-w) * 4 / 3);
       aspect-ratio: 3 / 4;
+      position: relative;
+      transform: rotateY(var(--swipe-tilt, 0deg));
+      transition: transform 0.22s ease-out;
+    }
+    .badge-card-below-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.18rem 0.62rem;
+      border-radius: 9999px;
+      background: rgba(15, 23, 42, 0.84);
+      border: 1px solid rgba(251, 191, 36, 0.72);
+      color: #fef3c7;
+      font-family: 'Jua', sans-serif;
+      font-size: 10.5px;
+      line-height: 1.25;
+      white-space: nowrap;
+      max-width: var(--badge-card-w);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      box-shadow: 0 3px 10px rgba(15, 23, 42, 0.28);
     }
     .badge-card-locked {
       width: 100%;
@@ -1121,11 +1214,11 @@
 
     @media (orientation: portrait) and (max-height: 670px) {
       #ending-modal .ending-card-layout {
-        gap: 0.45rem !important;
+        gap: 0.42rem !important;
       }
       #ending-modal .cert-card-scene {
-        width: min(62vw, 40dvh, 232px) !important;
-        height: min(82.67vw, 53.33dvh, 309px) !important;
+        width: min(60vw, 37dvh, 220px) !important;
+        height: min(80vw, 49.33dvh, 293px) !important;
       }
       #ending-modal .ending-card-actions {
         gap: 0.3rem !important;
@@ -1137,7 +1230,7 @@
     }
 
     /* 가로모드에서 인증카드 조회 시 스크롤바 없이 좌우 2단 배치 + 3:4 비율 보정 및 내용 잘림 방지 */
-    @media (orientation: landscape) and (max-height: 620px) {
+    @media (orientation: landscape) and (max-height: 640px) {
       #ending-modal {
         padding: 0.35rem 0.75rem !important;
       }
@@ -1151,13 +1244,20 @@
         overflow: visible !important;
         padding: 0 !important;
       }
+      #ending-modal .cert-reveal-stage {
+        gap: 0.32rem !important;
+      }
       #ending-modal .cert-reveal-rays {
-        width: min(72dvh, 290px) !important;
-        height: min(72dvh, 290px) !important;
+        width: min(68dvh, 270px) !important;
+        height: min(68dvh, 270px) !important;
       }
       #ending-modal .cert-card-scene {
-        height: min(86dvh, 352px) !important;
-        width: min(64.5dvh, 264px) !important;
+        height: min(76dvh, 316px) !important;
+        width: min(57dvh, 237px) !important;
+      }
+      #ending-modal .cert-flip-pill-below {
+        font-size: 9.5px !important;
+        padding: 0.16rem 0.58rem !important;
       }
       #ending-modal .ending-card-actions {
         width: min(44vw, 255px) !important;
@@ -1170,69 +1270,93 @@
       }
 
       #adventure-badges-modal {
-        padding: 0.35rem 0.6rem !important;
+        padding: 0.3rem 0.55rem !important;
       }
       #adventure-badges-modal .badges-modal-card {
-        padding: 0.55rem 0.85rem !important;
+        padding: 0.45rem 0.75rem !important;
         max-height: 96dvh !important;
-        border-radius: 1.25rem !important;
+        border-radius: 1.15rem !important;
       }
-      #adventure-badges-modal .badges-header-row {
-        margin-bottom: 0.3rem !important;
-        align-items: center !important;
+      #adventure-badges-modal .badges-top-bar {
+        grid-template-columns: auto 1fr auto;
+        grid-template-areas: "title tabs close";
+        gap: 0.35rem 0.6rem !important;
+        margin-bottom: 0.25rem !important;
       }
       #adventure-badges-modal .badges-subtitle {
         display: none !important;
       }
+      #adventure-badges-modal .badges-title-wrap h2 {
+        font-size: 0.98rem !important;
+        line-height: 1.15 !important;
+      }
+      #adventure-badges-modal #badges-modal-count {
+        font-size: 0.66rem !important;
+        padding: 0.1rem 0.45rem !important;
+      }
       #adventure-badges-modal .badges-tabs-row {
-        margin-bottom: 0.25rem !important;
-        gap: 0.35rem !important;
+        justify-content: flex-start !important;
+        margin-bottom: 0 !important;
+        gap: 0.3rem !important;
       }
       #adventure-badges-modal .badges-tab-btn {
+        padding: 0.24rem 0.6rem !important;
+        font-size: 0.72rem !important;
+      }
+      #adventure-badges-modal .badges-close-btn {
         padding: 0.24rem 0.65rem !important;
         font-size: 0.72rem !important;
       }
       #adventure-badges-modal .badges-scroll-track {
-        padding: 0.2rem 0.35rem !important;
+        padding: 0.15rem 0.35rem !important;
         gap: 0.7rem !important;
       }
       #adventure-badges-modal .badge-gallery-slot {
-        height: min(70dvh, 304px) !important;
-        width: min(52.5dvh, 228px) !important;
+        gap: 0.22rem !important;
+        --badge-card-h: min(63dvh, 276px);
+      }
+      #adventure-badges-modal .badge-card-frame {
+        height: var(--badge-card-h) !important;
+        width: calc(var(--badge-card-h) * 3 / 4) !important;
+      }
+      #adventure-badges-modal .badge-card-below-pill {
+        max-width: calc(var(--badge-card-h) * 3 / 4);
+        font-size: 9px !important;
+        padding: 0.14rem 0.5rem !important;
       }
       #adventure-badges-modal .badges-footer-hint {
-        margin-top: 0.2rem !important;
-        font-size: 0.65rem !important;
-        line-height: 1.2 !important;
+        margin-top: 0.15rem !important;
+        font-size: 0.64rem !important;
+        line-height: 1.18 !important;
       }
       #adventure-badges-modal .badge-card-locked {
-        padding: 10px 9px !important;
+        padding: 8px 8px !important;
       }
       #adventure-badges-modal .badge-locked-q {
-        font-size: 2.75rem !important;
+        font-size: 2.45rem !important;
       }
 
       .cert-card-face {
         border-width: 3px;
-        border-radius: 18px;
+        border-radius: 17px;
       }
       .cert-card-back {
-        padding: 7px 9px 6px !important;
-        gap: 3px !important;
+        padding: 6px 8px 5px !important;
+        gap: 2.5px !important;
       }
       .cert-card-back .cert-back-badge {
-        font-size: 8.5px !important;
-        padding: 1.5px 7px !important;
-        margin-bottom: 2px !important;
+        font-size: 8px !important;
+        padding: 1.5px 6px !important;
+        margin-bottom: 1.5px !important;
       }
       .cert-card-back .cert-back-title {
-        font-size: 13px !important;
-        line-height: 1.15 !important;
-        margin-bottom: 2px !important;
+        font-size: 12px !important;
+        line-height: 1.12 !important;
+        margin-bottom: 1.5px !important;
       }
       .cert-card-back .cert-back-verse {
-        font-size: 8.5px !important;
-        line-height: 1.25 !important;
+        font-size: 8px !important;
+        line-height: 1.2 !important;
         margin-bottom: 0 !important;
         display: -webkit-box;
         -webkit-line-clamp: 2;
@@ -1240,70 +1364,77 @@
         overflow: hidden;
       }
       .cert-card-back .cert-back-box {
-        padding: 5px 7px !important;
-        border-radius: 10px !important;
-        font-size: 9px !important;
+        padding: 4px 6px !important;
+        border-radius: 9px !important;
+        font-size: 8.5px !important;
         border-width: 1.5px !important;
       }
       .cert-card-back .cert-back-box > * + * {
-        margin-top: 2px !important;
+        margin-top: 1.5px !important;
       }
       .cert-card-back .cert-back-row {
-        font-size: 9px !important;
-        line-height: 1.15 !important;
+        font-size: 8.4px !important;
+        line-height: 1.14 !important;
       }
       .cert-card-back .cert-back-code {
-        font-size: 11px !important;
+        font-size: 10.5px !important;
       }
       .cert-card-back .cert-back-footer {
-        padding-top: 2px !important;
-        font-size: 8.5px !important;
+        padding-top: 1.5px !important;
+        font-size: 8px !important;
       }
       .cert-card-back .cert-level-pill {
-        font-size: 8px !important;
-        padding: 1px 5px !important;
+        font-size: 7.5px !important;
+        padding: 1px 4px !important;
       }
     }
 
     @media (orientation: landscape) and (max-height: 430px) {
       #ending-modal .cert-card-scene {
-        height: min(88dvh, 310px) !important;
-        width: min(66dvh, 232px) !important;
+        height: min(74dvh, 268px) !important;
+        width: min(55.5dvh, 201px) !important;
       }
       #ending-modal .ending-card-actions {
         gap: 0.25rem !important;
       }
       #adventure-badges-modal .badge-gallery-slot {
-        height: min(67dvh, 264px) !important;
-        width: min(50.25dvh, 198px) !important;
+        --badge-card-h: min(59dvh, 212px);
+      }
+      #adventure-badges-modal .badge-card-frame {
+        height: var(--badge-card-h) !important;
+        width: calc(var(--badge-card-h) * 3 / 4) !important;
+      }
+      #adventure-badges-modal .badge-card-below-pill {
+        max-width: calc(var(--badge-card-h) * 3 / 4);
+        font-size: 8.5px !important;
       }
       .cert-card-back {
-        padding: 6px 8px 5px !important;
+        padding: 5px 6px 4px !important;
         gap: 2px !important;
       }
       .cert-card-back .cert-back-badge {
-        font-size: 8px !important;
-        padding: 1px 6px !important;
+        font-size: 7.4px !important;
+        padding: 1px 5px !important;
       }
       .cert-card-back .cert-back-title {
-        font-size: 11.5px !important;
+        font-size: 10.5px !important;
       }
       .cert-card-back .cert-back-verse {
-        font-size: 8px !important;
-        line-height: 1.2 !important;
+        font-size: 7.4px !important;
+        line-height: 1.15 !important;
       }
       .cert-card-back .cert-back-box {
-        padding: 4px 6px !important;
-        font-size: 8.5px !important;
+        padding: 3.5px 5px !important;
+        font-size: 7.8px !important;
       }
       .cert-card-back .cert-back-row {
-        font-size: 8.2px !important;
+        font-size: 7.6px !important;
       }
       .cert-card-back .cert-back-code {
-        font-size: 10px !important;
+        font-size: 9.5px !important;
       }
       .cert-card-back .cert-back-footer {
-        font-size: 8px !important;
+        font-size: 7.2px !important;
       }
     }
   </style>
@@ -1480,7 +1611,7 @@
       <span id="miracle-guide-bubble-extra" class="text-[11px] font-bold text-amber-950 truncate"></span>
     </div>
     <div class="flex items-center justify-between gap-2 mt-2">
-      <span class="text-[10px] text-amber-950/85 font-bold">👆 터치하면 우측 상단 안내 버튼에 쏙 들어가요!</span>
+      <span class="text-[10px] text-amber-950/85 font-bold">👆 터치·클릭 또는 키를 누르면 바로 진행돼요!</span>
       <button type="button" onclick="event.stopPropagation(); window.dismissMiracleGuideBubbleToButton();"
               class="px-3 py-1 rounded-full bg-white/75 hover:bg-white/95 border border-amber-500/50 text-amber-950 font-jua text-[11px] shrink-0 shadow-sm">확인 ▶</button>
     </div>
@@ -1861,22 +1992,20 @@
   <div id="ending-modal" class="hidden fixed inset-0 z-[150] items-center justify-center p-2 sm:p-4 bg-slate-950/82 backdrop-blur-md overflow-hidden">
     <div class="ending-card-layout flex flex-col items-center justify-center gap-2.5 sm:gap-3 w-full max-w-md max-h-full overflow-visible py-0.5">
       <div class="cert-reveal-stage">
-        <div id="ending-reveal-rays" class="cert-reveal-rays"></div>
-        <div id="ending-cert-scene" class="cert-card-scene">
-          <div id="ending-cert-card" class="cert-card-inner" role="button" tabindex="0"
-               onclick="toggleEndingCertCardFlip()"
-               onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleEndingCertCardFlip();}"
-               aria-label="인증서 카드 앞면·뒷면 전환">
-            <!-- 앞면: 인게임 3D 그래픽 상징 카드 일러스트 -->
-            <div id="ending-card-front-face" class="cert-card-face cert-card-front">
-              <img id="ending-card-front-img" class="cert-card-front-img" alt="에피소드 모험의 증표 카드 앞면" />
-              <div class="cert-card-sheen"></div>
-              <div id="ending-card-front-pill" class="absolute bottom-2 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-slate-950/75 border border-amber-300/80 text-amber-200 font-jua text-[10px] whitespace-nowrap pointer-events-none shadow">
-                ✨ 터치해서 뒷면 인증서 보기 ↻
+        <div class="relative flex items-center justify-center">
+          <div id="ending-reveal-rays" class="cert-reveal-rays"></div>
+          <div id="ending-cert-scene" class="cert-card-scene">
+            <div id="ending-cert-card" class="cert-card-inner" role="button" tabindex="0"
+                 onclick="toggleEndingCertCardFlip()"
+                 onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleEndingCertCardFlip();}"
+                 aria-label="인증서 카드 앞면·뒷면 전환">
+              <!-- 앞면: 인게임 3D 그래픽 상징 카드 일러스트 -->
+              <div id="ending-card-front-face" class="cert-card-face cert-card-front">
+                <img id="ending-card-front-img" class="cert-card-front-img" alt="에피소드 모험의 증표 카드 앞면" />
+                <div class="cert-card-sheen"></div>
               </div>
-            </div>
 
-            <!-- 뒷면: 공식 인증서 내용 (에피소드 인증서 / 예수님의 발자취 공용) -->
+              <!-- 뒷면: 공식 인증서 내용 (에피소드 인증서 / 예수님의 발자취 공용) -->
             <div id="ending-card-back-face" class="cert-card-face cert-card-back">
               <!-- [모드 1] 에피소드 완주 인증서 -->
               <div id="ending-cert-episode-body" class="w-full h-full flex flex-col justify-between">
@@ -1908,7 +2037,7 @@
 
                 <div class="cert-back-footer pt-1 flex items-center justify-between text-[9.5px] font-jua text-amber-900/80">
                   <span>광릉내 재림교회 어린이부</span>
-                  <span class="text-amber-700">↻ 터치: 앞면</span>
+                  <span class="text-amber-700">↻ 스와이프·터치</span>
                 </div>
               </div>
 
@@ -1938,18 +2067,19 @@
 
                 <div class="cert-back-footer pt-1 flex items-center justify-between text-[9.5px] font-jua text-slate-700">
                   <span>광릉내 재림교회 어린이부</span>
-                  <span class="text-amber-700">↻ 터치: 앞면</span>
+                  <span class="text-amber-700">↻ 스와이프·터치</span>
                 </div>
               </div>
             </div>
           </div>
         </div>
+        </div>
+        <p id="ending-card-flip-hint" class="cert-flip-pill-below font-jua text-amber-100 text-[11px] sm:text-xs">
+          ✨ 카드를 좌우로 스와이프하거나 터치하면 뒤집혀요!
+        </p>
       </div>
 
       <div class="ending-card-actions w-full max-w-[300px] flex flex-col gap-1.5 text-center">
-        <p id="ending-card-flip-hint" class="font-jua text-amber-200 text-[11px] sm:text-xs drop-shadow">
-          ✨ 카드를 터치하면 앞면 그림과 뒷면 인증서가 뒤집혀요!
-        </p>
         <div id="ending-card-episode-actions" class="flex flex-col gap-1.5">
           <div class="grid grid-cols-2 gap-1.5">
             <button type="button" onclick="closeEndingToLookAround()" class="mc-btn py-2 rounded-2xl bg-sky-400 hover:bg-sky-300 text-slate-950 font-jua text-xs sm:text-sm">
@@ -1983,31 +2113,32 @@
   <!-- =================================================================== -->
   <div id="adventure-badges-modal" class="hidden fixed inset-0 z-[155] items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-hidden">
     <div class="badges-modal-card mc-card w-full max-w-4xl rounded-3xl p-3 sm:p-5 flex flex-col max-h-[95dvh] overflow-hidden">
-      <div class="badges-header-row flex items-start justify-between gap-2 mb-1.5">
-        <div class="min-w-0">
+      <div class="badges-top-bar">
+        <div class="badges-title-wrap">
           <div class="flex items-center gap-2 flex-wrap">
             <h2 class="font-jua text-lg sm:text-2xl text-amber-900 leading-tight">🏅 모험의 증표</h2>
             <span id="badges-modal-count" class="px-2.5 py-0.5 rounded-full bg-amber-300 text-amber-950 font-jua text-xs">0 / 4 수집</span>
           </div>
           <p class="badges-subtitle text-[11px] sm:text-xs text-slate-600 mt-0.5">
-            좌우로 넘겨 수집한 인증 카드를 확인하고, 카드를 터치해 앞면 그림과 뒷면 인증 내역을 뒤집어 보세요!
+            카드를 좌우로 스와이프(드래그)해 살펴보고, 터치해 앞면 그림과 뒷면 인증 내역을 뒤집어 보세요!
           </p>
         </div>
+
         <button type="button" onclick="closeAdventureBadgesModal()"
-                class="mc-btn-slim shrink-0 px-3 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-jua text-xs sm:text-sm">
+                class="badges-close-btn mc-btn-slim shrink-0 px-3 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-jua text-xs sm:text-sm">
           ✕ 닫기
         </button>
-      </div>
 
-      <div class="badges-tabs-row flex items-center gap-2 mb-2 shrink-0">
-        <button id="badges-tab-episodes" type="button" onclick="setAdventureBadgesTab('episodes')"
-                class="badges-tab-btn mc-btn-slim px-3 py-1.5 rounded-xl bg-amber-500 text-slate-950 font-jua text-xs sm:text-sm">
-          🏅 에피소드
-        </button>
-        <button id="badges-tab-footsteps" type="button" onclick="setAdventureBadgesTab('footsteps')"
-                class="badges-tab-btn mc-btn-slim px-3 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-950 font-jua text-xs sm:text-sm">
-          👣 예수님의 발자취
-        </button>
+        <div class="badges-tabs-row flex items-center gap-2 shrink-0">
+          <button id="badges-tab-episodes" type="button" onclick="setAdventureBadgesTab('episodes')"
+                  class="badges-tab-btn mc-btn-slim px-3 py-1.5 rounded-xl bg-amber-500 text-slate-950 font-jua text-xs sm:text-sm">
+            🏅 에피소드
+          </button>
+          <button id="badges-tab-footsteps" type="button" onclick="setAdventureBadgesTab('footsteps')"
+                  class="badges-tab-btn mc-btn-slim px-3 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-950 font-jua text-xs sm:text-sm">
+            👣 예수님의 발자취
+          </button>
+        </div>
       </div>
 
       <div id="adventure-badges-track" class="badges-scroll-track"></div>
@@ -2018,22 +2149,22 @@
     </div>
   </div>
 
-<!-- 게임 스크립트 로드 (전체 스크립트 캐시 강제 갱신 ?v=32 및 버전 일관성 자동 검증 적용) -->
-  <script src="core.js?v=32"></script>
-  <script src="ep1_noah.js?v=32"></script>
-  <script src="ep2_exodus.js?v=32"></script>
-  <script src="ep3_david_base.js?v=32"></script>
-  <script src="ep3_david_st1_2.js?v=32"></script>
-  <script src="ep3_david_st3_end.js?v=32"></script>
-  <script src="ep4_miracle_base.js?v=32"></script>
-  <script src="ep4_miracle_assets.js?v=32"></script>
-  <script src="ep4_miracle_world.js?v=32"></script>
-  <script src="ep4_miracle_stages.js?v=32"></script>
-  <script src="ep4_multiplayer.js?v=32"></script>
+<!-- 게임 스크립트 로드 (전체 스크립트 캐시 강제 갱신 ?v=34 및 버전 일관성 자동 검증 적용) -->
+  <script src="core.js?v=34"></script>
+  <script src="ep1_noah.js?v=34"></script>
+  <script src="ep2_exodus.js?v=34"></script>
+  <script src="ep3_david_base.js?v=34"></script>
+  <script src="ep3_david_st1_2.js?v=34"></script>
+  <script src="ep3_david_st3_end.js?v=34"></script>
+  <script src="ep4_miracle_base.js?v=34"></script>
+  <script src="ep4_miracle_assets.js?v=34"></script>
+  <script src="ep4_miracle_world.js?v=34"></script>
+  <script src="ep4_miracle_stages.js?v=34"></script>
+  <script src="ep4_multiplayer.js?v=34"></script>
   <script>
     // GitHub Pages CDN·브라우저 부분 캐시로 신·구버전 스크립트가 뒤섞여 로드되는 현상을 자동 감지해 1회 강제 새로고침
     (function verifyScriptBuildConsistency() {
-      const EXPECTED = '20261124_v32';
+      const EXPECTED = '20261124_v34';
       const vers = window.__GAME_BUILD_VERSIONS__ || {};
       const keys = ['core', 'ep4_base', 'ep4_assets', 'ep4_world', 'ep4_stages', 'ep4_mp'];
       const mismatch = keys.some(k => vers[k] !== EXPECTED);

@@ -6,7 +6,7 @@
 // =========================================================================
 
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_assets = '20261124_v32';
+window.__GAME_BUILD_VERSIONS__.ep4_assets = '20261124_v34';
 
 const _miracleDoubleSideMatCache = {};
 function matLowPolyDouble(hexColor) {
@@ -6456,3 +6456,264 @@ window.createBibleScrollProp = function (scale = 1.0) {
   grp.scale.setScalar(scale);
   return grp;
 };
+
+// =========================================================================
+// [1세기 이스라엘 고유 식생 로우 폴리곤 에셋 6종] (외곽 산맥·기슭 자연화 식재용)
+//   - 올리브나무 · 무화과나무 · 대추야자 · 우슬초 · 아네모네 · 가시덤불 케이퍼 & 거친 풀
+// =========================================================================
+(function registerIsraelFirstCenturyFloraAssets() {
+  function seededRand(seed) {
+    const x = Math.sin(seed * 127.1 + 311.7) * 43758.5453;
+    return x - Math.floor(x);
+  }
+
+  function makeWoodenForkedTrunk(grp, trunkPts, radii, barkMain, barkAlt, seed, branches) {
+    if (typeof window.createOrganicWoodTrunkGeo === 'function') {
+      const geo = window.createOrganicWoodTrunkGeo(trunkPts, radii, 6, seed, true);
+      grp.add(createLowPolyMesh(geo, barkMain, 0, 0, 0, true));
+    } else {
+      for (let i = 0; i < trunkPts.length - 1; i++) {
+        const a = trunkPts[i], b = trunkPts[i + 1];
+        grp.add(createBranchSegmentMesh(
+          new THREE.Vector3(a[0], a[1], a[2]),
+          new THREE.Vector3(b[0], b[1], b[2]),
+          radii[i], radii[i + 1], i % 2 === 0 ? barkMain : barkAlt, seed + i * 7, i === 0
+        ));
+      }
+    }
+    branches.forEach((br, idx) => {
+      const seg = createBranchSegmentMesh(
+        new THREE.Vector3(br.from[0], br.from[1], br.from[2]),
+        new THREE.Vector3(br.to[0], br.to[1], br.to[2]),
+        br.r0, br.r1, idx % 2 === 0 ? barkMain : barkAlt, seed + 31 + idx * 11, false
+      );
+      grp.add(seg);
+    });
+  }
+
+  // 1) 1세기 이스라엘 올리브나무 (Olea europaea) — 뒤틀린 줄기 + 은빛 세이지 수관 + 작은 올리브 열매
+  window.createIsraelOliveTreeGroup = function (scale = 1.0, seed = 101) {
+    const grp = new THREE.Group();
+    const leanX = (seededRand(seed + 1) - 0.5) * 0.22;
+    const forkPt = [leanX * 0.6, 1.38, 0.04];
+    makeWoodenForkedTrunk(
+      grp,
+      [[0, -0.08, 0], [leanX * 0.35, 0.65, -0.04], forkPt],
+      [0.34, 0.24, 0.20],
+      '#6d4728', '#7d5432', seed,
+      [
+        { from: forkPt, to: [-0.88, 2.28,  0.34], r0: 0.16, r1: 0.09 },
+        { from: forkPt, to: [ 0.92, 2.34, -0.24], r0: 0.15, r1: 0.085 },
+        { from: forkPt, to: [-0.14, 2.66, -0.78], r0: 0.14, r1: 0.08 },
+        { from: forkPt, to: [ 0.18, 2.60,  0.80], r0: 0.14, r1: 0.08 }
+      ]
+    );
+
+    const sageCols = ['#8c9e78', '#9bae85', '#778b65', '#a8b895', '#82966e'];
+    const pods = [
+      [0.02, 2.98, 0.02, 1.06, 0.80, 1.02],
+      [-0.98, 2.48, 0.38, 0.86, 0.72, 0.84],
+      [ 1.02, 2.52,-0.28, 0.84, 0.72, 0.82],
+      [-0.22, 2.74,-0.88, 0.76, 0.68, 0.76],
+      [ 0.24, 2.68, 0.88, 0.78, 0.68, 0.78]
+    ];
+    pods.forEach(([px, py, pz, rx, ry, rz], i) => {
+      const m = createLowPolyMesh(new THREE.IcosahedronGeometry(0.95, 0), sageCols[(seed + i) % sageCols.length], px, py, pz, true);
+      m.scale.set(rx, ry, rz);
+      m.rotation.set(seededRand(seed + i * 3) * 0.4, i * 1.1, seededRand(seed + i * 5) * 0.3);
+      grp.add(m);
+
+      for (let t = 0; t < 2; t++) {
+        const ang = (i * 1.7 + t * 2.5 + seed * 0.4);
+        const olive = createLowPolyMesh(new THREE.DodecahedronGeometry(0.085, 0), (t % 2 === 0 ? '#2b381f' : '#404e2a'), px + Math.cos(ang) * 0.56 * rx, py - 0.32 * ry, pz + Math.sin(ang) * 0.56 * rz, false);
+        olive.scale.set(0.85, 1.25, 0.85);
+        grp.add(olive);
+      }
+    });
+    grp.scale.setScalar(scale);
+    return grp;
+  };
+
+  // 2) 무화과나무 (Ficus carica) — 넓게 퍼진 가지 + 풍성한 초록 잎 + 보라빛 무화과 열매
+  window.createIsraelFigTreeGroup = function (scale = 1.0, seed = 202) {
+    const grp = new THREE.Group();
+    const forkPt = [(seededRand(seed) - 0.5) * 0.16, 1.28, 0];
+    makeWoodenForkedTrunk(
+      grp,
+      [[0, -0.08, 0], [forkPt[0] * 0.5, 0.62, 0.04], forkPt],
+      [0.36, 0.25, 0.20],
+      '#6f4929', '#815734', seed,
+      [
+        { from: forkPt, to: [-1.18, 2.26,  0.46], r0: 0.17, r1: 0.09 },
+        { from: forkPt, to: [ 1.16, 2.30,  0.22], r0: 0.17, r1: 0.09 },
+        { from: forkPt, to: [ 0.12, 2.48, -1.12], r0: 0.15, r1: 0.085 },
+        { from: forkPt, to: [-0.28, 2.75,  0.15], r0: 0.15, r1: 0.08 }
+      ]
+    );
+
+    const figLeafCols = ['#5f8a3e', '#719e49', '#4f7832', '#6a9644'];
+    const padSpots = [
+      [ 0.00, 3.05,  0.00, 1.55, 0.82],
+      [-1.25, 2.48,  0.52, 1.18, 0.68],
+      [ 1.24, 2.52,  0.28, 1.15, 0.68],
+      [ 0.18, 2.66, -1.15, 1.12, 0.66],
+      [-0.65, 2.78, -0.62, 1.05, 0.64],
+      [ 0.72, 2.76,  0.78, 1.05, 0.64]
+    ];
+    padSpots.forEach(([px, py, pz, pr, ph], i) => {
+      const geo = (typeof createFlattenedFoliagePadGeo === 'function')
+        ? createFlattenedFoliagePadGeo(pr, ph, 1)
+        : new THREE.IcosahedronGeometry(pr, 0);
+      const pad = createLowPolyMesh(geo, figLeafCols[(seed + i) % figLeafCols.length], px, py, pz, true);
+      if (typeof createFlattenedFoliagePadGeo !== 'function') pad.scale.set(1.0, 0.56, 1.0);
+      pad.rotation.y = (seed + i) * 0.9;
+      grp.add(pad);
+
+      if (i > 0) {
+        const fig = createLowPolyMesh(new THREE.DodecahedronGeometry(0.11, 0), (i % 2 === 0 ? '#4c1d6e' : '#6b21a8'), px * 0.88, py - 0.36, pz * 0.88, false);
+        fig.scale.set(0.85, 1.35, 0.85);
+        grp.add(fig);
+      }
+    });
+    grp.scale.setScalar(scale);
+    return grp;
+  };
+
+  // 3) 대추야자 (Phoenix dactylifera) — 각진 마디 줄기 + 황금 대추열매 송이 + 방사형 야자 잎
+  window.createIsraelDatePalmGroup = function (scale = 1.0, seed = 303) {
+    const grp = new THREE.Group();
+    const leanX = (seededRand(seed) - 0.5) * 0.36;
+    const leanZ = (seededRand(seed + 2) - 0.5) * 0.28;
+    const segs = 7;
+    const hTotal = 4.35;
+    let topX = 0, topY = 0, topZ = 0;
+
+    for (let s = 0; s < segs; s++) {
+      const t = (s + 0.5) / segs;
+      const sx = leanX * Math.pow(t, 1.35);
+      const sz = leanZ * Math.pow(t, 1.35);
+      const sy = t * hTotal;
+      const rB = 0.29 - t * 0.11;
+      const seg = createLowPolyMesh(
+        new THREE.CylinderGeometry(rB * 1.08, rB * 0.82, (hTotal / segs) * 1.12, 6),
+        s % 2 === 0 ? '#7a5432' : '#8e6642',
+        sx, sy, sz, true
+      );
+      grp.add(seg);
+      topX = sx; topY = sy + 0.32; topZ = sz;
+    }
+
+    // 황금/호박색 대추 열매 송이
+    for (let d = 0; d < 4; d++) {
+      const ang = (d / 4) * Math.PI * 2 + seed * 0.3;
+      const dateCl = createLowPolyMesh(new THREE.DodecahedronGeometry(0.20, 0), (d % 2 === 0 ? '#d97706' : '#e58f24'), topX + Math.cos(ang) * 0.32, topY - 0.22, topZ + Math.sin(ang) * 0.32, false);
+      dateCl.scale.set(0.78, 1.45, 0.78);
+      grp.add(dateCl);
+    }
+
+    // 방사형 아치 야자 잎
+    const frondCols = ['#5f8c35', '#73a144', '#4a7328'];
+    for (let f = 0; f < 8; f++) {
+      const yaw = (f / 8) * Math.PI * 2 + seededRand(seed + f) * 0.25;
+      const frondPivot = new THREE.Group();
+      frondPivot.position.set(topX, topY + 0.06, topZ);
+      frondPivot.rotation.y = yaw;
+
+      const inner = createLowPolyMesh(new THREE.ConeGeometry(0.26, 1.35, 4), frondCols[f % frondCols.length], 0, 0.26, 0.58, true);
+      inner.rotation.x = 1.05;
+      inner.scale.set(1.25, 1.0, 0.32);
+
+      const outer = createLowPolyMesh(new THREE.ConeGeometry(0.22, 1.40, 4), frondCols[(f + 1) % frondCols.length], 0, 0.08, 1.62, true);
+      outer.rotation.x = 1.82;
+      outer.scale.set(1.18, 1.0, 0.28);
+
+      frondPivot.add(inner, outer);
+      grp.add(frondPivot);
+    }
+    grp.scale.setScalar(scale);
+    return grp;
+  };
+
+  // 4) 우슬초 (Origanum syriacum) — 둥근 허브 덤불 + 보라빛 작은 꽃대
+  window.createIsraelHyssopShrubGroup = function (scale = 1.0, seed = 404) {
+    const grp = new THREE.Group();
+    const herbCols = ['#63854c', '#74985a', '#537340'];
+    const tufts = [
+      [ 0.00, 0.34,  0.00, 0.44],
+      [-0.30, 0.26,  0.18, 0.34],
+      [ 0.32, 0.27, -0.14, 0.34],
+      [-0.12, 0.25, -0.28, 0.32],
+      [ 0.16, 0.26,  0.28, 0.32]
+    ];
+    tufts.forEach(([x, y, z, r], i) => {
+      const leaf = createLowPolyMesh(new THREE.IcosahedronGeometry(r, 0), herbCols[(seed + i) % herbCols.length], x, y, z, true);
+      leaf.scale.set(1.12, 0.85, 1.12);
+      grp.add(leaf);
+    });
+    for (let s = 0; s < 5; s++) {
+      const ang = (s / 5) * Math.PI * 2 + seed * 0.5;
+      const rDist = (s === 0 ? 0.05 : 0.26);
+      const sx = Math.cos(ang) * rDist;
+      const sz = Math.sin(ang) * rDist;
+      const spike = createLowPolyMesh(new THREE.DodecahedronGeometry(0.11, 0), (s % 2 === 0 ? '#a78bfa' : '#c4b5fd'), sx, 0.62 + (s % 2) * 0.10, sz, false);
+      spike.scale.set(0.85, 1.38, 0.85);
+      grp.add(spike);
+    }
+    grp.scale.setScalar(scale);
+    return grp;
+  };
+
+  // 5) 붉은 아네모네 군락 (Anemone coronaria) — 햇살 아래 붉은 꽃송이 + 검은 심지
+  window.createIsraelAnemoneClusterGroup = function (scale = 1.0, seed = 505) {
+    const grp = new THREE.Group();
+    const petalCols = ['#dc2626', '#ef4444', '#b91c1c'];
+    const baseLeaf = createLowPolyMesh(new THREE.IcosahedronGeometry(0.32, 0), '#4d7c0f', 0, 0.14, 0, false);
+    baseLeaf.scale.set(1.35, 0.45, 1.25);
+    grp.add(baseLeaf);
+
+    for (let i = 0; i < 4; i++) {
+      const ang = (i / 4) * Math.PI * 2 + seed * 0.7;
+      const fx = Math.cos(ang) * (0.14 + (i % 2) * 0.16);
+      const fz = Math.sin(ang) * (0.14 + (i % 2) * 0.16);
+      const fh = 0.48 + (i % 2) * 0.16;
+      const stem = createLowPolyMesh(new THREE.CylinderGeometry(0.025, 0.032, fh, 4), '#3f6212', fx, fh * 0.5, fz, false);
+      const cup = createLowPolyMesh(new THREE.CylinderGeometry(0.19, 0.07, 0.14, 6), petalCols[(seed + i) % petalCols.length], fx, fh + 0.04, fz, false);
+      const center = createLowPolyMesh(new THREE.DodecahedronGeometry(0.06, 0), '#1e1b18', fx, fh + 0.08, fz, false);
+      grp.add(stem, cup, center);
+    }
+    grp.scale.setScalar(scale);
+    return grp;
+  };
+
+  // 6) 바위 틈 케이퍼 관목 & 거친 풀 (Capparis spinosa & Mediterranean Scrub)
+  window.createIsraelCaperAndGrassGroup = function (scale = 1.0, seed = 606) {
+    const grp = new THREE.Group();
+    const stone = createLowPolyMesh(new THREE.DodecahedronGeometry(0.46, 0), '#a89f91', 0, 0.20, 0, true);
+    stone.scale.set(1.35, 0.58, 1.12);
+    stone.rotation.y = seed * 0.5;
+    grp.add(stone);
+
+    const shrubCols = ['#5d8739', '#719b48', '#88a64d'];
+    [[-0.34, 0.24, 0.16], [0.36, 0.22, -0.14], [0.06, 0.28, 0.34], [-0.14, 0.24, -0.32]].forEach(([bx, by, bz], idx) => {
+      const bush = createLowPolyMesh(new THREE.IcosahedronGeometry(0.28, 0), shrubCols[(seed + idx) % shrubCols.length], bx, by, bz, false);
+      bush.scale.set(1.25, 0.62, 1.18);
+      grp.add(bush);
+      if (idx < 3) {
+        const bloom = createLowPolyMesh(new THREE.DodecahedronGeometry(0.085, 0), '#f5e4f7', bx * 1.08, by + 0.14, bz * 1.08, false);
+        grp.add(bloom);
+      }
+    });
+
+    // 거친 풀잎 칼날
+    const grassCols = ['#7d9645', '#9ba856', '#b89f5d'];
+    for (let g = 0; g < 6; g++) {
+      const ang = (g / 6) * Math.PI * 2 + seed * 0.3;
+      const blade = createLowPolyMesh(new THREE.ConeGeometry(0.075, 0.55 + (g % 2) * 0.18, 3), grassCols[g % grassCols.length], Math.cos(ang) * 0.52, 0.22, Math.sin(ang) * 0.52, false);
+      blade.rotation.z = -Math.cos(ang) * 0.38;
+      blade.rotation.x = Math.sin(ang) * 0.38;
+      grp.add(blade);
+    }
+    grp.scale.setScalar(scale);
+    return grp;
+  };
+})();

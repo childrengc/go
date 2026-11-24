@@ -1305,7 +1305,10 @@ function spawnSpeedPearl(x, z) {
   stage2Pearls.push({ group: grp, core: pearlCore, pos: new THREE.Vector3(x, by + 0.5, z), collected: false, label: lbl });
 }
 
+let stage2WaitingGuideBeforeCountdown = false;
+
 function startStage2Countdown() {
+  stage2WaitingGuideBeforeCountdown = false;
   isPlaying = false;
   isTimeAttackActive = false;
   stage2CountdownActive = true;
@@ -1570,8 +1573,26 @@ function buildExodusStage2World() {
   if (renderer && scene && camera) {
     renderer.compile(scene, camera);
   }
-  startStage2Countdown();
+  isPlaying = false;
+  isTimeAttackActive = false;
+  stage2CountdownActive = false;
+  stage2WaitingGuideBeforeCountdown = true;
+  if (window.MiracleGuideUI) {
+    window.MiracleGuideUI.lastAutoKey = '';
+  }
   updateStageHUD();
+
+  const beginStage2CountdownAfterGuide = () => {
+    if (!stage2WaitingGuideBeforeCountdown) return;
+    stage2WaitingGuideBeforeCountdown = false;
+    if (currentEpisode !== 'exodus' || currentStage !== 2) return;
+    startStage2Countdown();
+  };
+  if (typeof window.runAfterMissionGuideBubble === 'function') {
+    window.runAfterMissionGuideBubble(beginStage2CountdownAfterGuide);
+  } else {
+    beginStage2CountdownAfterGuide();
+  }
 }
 
 function updateStage2Speedrun(dt, now) {
@@ -1604,7 +1625,7 @@ function updateStage2Speedrun(dt, now) {
     }
   });
 
-  if (!isPlaying || stage2CountdownActive) return;
+  if (!isPlaying || stage2CountdownActive || stage2WaitingGuideBeforeCountdown || (typeof window.isMissionGuideBubbleBlockingAction === 'function' && window.isMissionGuideBubbleBlockingAction())) return;
   if (soldierDamageCooldown > 0) soldierDamageCooldown -= dt;
 
   const startWaitZ = (exodusStage2SlopeMeta ? exodusStage2SlopeMeta.southZ : 135) - 15.2;
@@ -2749,7 +2770,7 @@ function updateExodusCutsceneFrame(dt, now) {
     return true;
   }
 
-  if (currentStage === 2 && stage2CountdownActive) {
+  if (currentStage === 2 && (stage2CountdownActive || stage2WaitingGuideBeforeCountdown)) {
     updateStage2Speedrun(dt, now);
     snapCameraToPlayer();
     return true;

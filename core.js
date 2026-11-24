@@ -5,7 +5,7 @@
 // =========================================================================
 
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.core = '20261124_v32';
+window.__GAME_BUILD_VERSIONS__.core = '20261124_v34';
 
 // 퀴즈 선택지 순서 무작위 셔플 공용 헬퍼 (정답이 항상 1번에 고정되지 않도록 보장)
 function shuffleQuizOptions(opts, ansIdx = 0) {
@@ -687,6 +687,8 @@ const MiracleGuideUI = {
   isBubbleOpen: false,
   isTyping: false,
   isSucking: false,
+  openedAt: 0,
+  onCloseCallbacks: [],
   activeFieldInfo: null,
   activeStageInfo: null,
   lastAutoKey: '',
@@ -704,6 +706,62 @@ function _clearMiracleGuideTimers() {
   if (MiracleGuideUI.autoCloseTimerId) { clearTimeout(MiracleGuideUI.autoCloseTimerId); MiracleGuideUI.autoCloseTimerId = null; }
   if (MiracleGuideUI.suckTimerId) { clearTimeout(MiracleGuideUI.suckTimerId); MiracleGuideUI.suckTimerId = null; }
 }
+
+function _flushMiracleGuideCloseCallbacks(clearOnly = false) {
+  const cbs = Array.isArray(MiracleGuideUI.onCloseCallbacks) ? MiracleGuideUI.onCloseCallbacks.splice(0) : [];
+  if (clearOnly || cbs.length === 0) return;
+  cbs.forEach(fn => {
+    if (typeof fn === 'function') {
+      try { fn(); } catch (e) {}
+    }
+  });
+}
+
+window.isMissionGuideBubbleBlockingAction = function () {
+  if (window.isMiracleMultiplayerMode) return false;
+  if (!MiracleGuideUI.isBubbleOpen) return false;
+  const bubble = document.getElementById('miracle-guide-bubble');
+  if (!bubble || bubble.classList.contains('hidden')) {
+    _clearMiracleGuideTimers();
+    MiracleGuideUI.isBubbleOpen = false;
+    MiracleGuideUI.isTyping = false;
+    MiracleGuideUI.isSucking = false;
+    _flushMiracleGuideCloseCallbacks(false);
+    return false;
+  }
+  if (MiracleGuideUI.isSucking && !MiracleGuideUI.suckTimerId) {
+    _clearMiracleGuideTimers();
+    bubble.classList.add('hidden');
+    bubble.style.pointerEvents = '';
+    bubble.style.transition = 'none';
+    bubble.style.transform = 'translate(-50%, -50%) scale(1)';
+    bubble.style.opacity = '1';
+    MiracleGuideUI.isBubbleOpen = false;
+    MiracleGuideUI.isTyping = false;
+    MiracleGuideUI.isSucking = false;
+    _flushMiracleGuideCloseCallbacks(false);
+    return false;
+  }
+  if (
+    !MiracleGuideUI.isTyping &&
+    !MiracleGuideUI.isSucking &&
+    !MiracleGuideUI.autoCloseTimerId &&
+    MiracleGuideUI.openedAt > 0 &&
+    (performance.now() - MiracleGuideUI.openedAt) > 12000
+  ) {
+    window.dismissMiracleGuideBubbleToButton();
+  }
+  return true;
+};
+
+window.runAfterMissionGuideBubble = function (cb) {
+  if (typeof cb !== 'function') return;
+  if (!window.isMissionGuideBubbleBlockingAction()) {
+    cb();
+    return;
+  }
+  MiracleGuideUI.onCloseCallbacks.push(cb);
+};
 
 function positionMiracleGuideButton() {
   // 우측 상단 구석(#hud-top-right 내부)에 정식 배치되었으므로 멀티플레이 HUD 간격만 동기화
@@ -802,18 +860,21 @@ function updateMiracleGuideButtonVisibility() {
 }
 window.updateMiracleGuideButtonVisibility = updateMiracleGuideButtonVisibility;
 
-function hideMissionGuideBubbleImmediately() {
+function hideMissionGuideBubbleImmediately(opts = {}) {
   _clearMiracleGuideTimers();
   MiracleGuideUI.isBubbleOpen = false;
   MiracleGuideUI.isTyping = false;
   MiracleGuideUI.isSucking = false;
+  MiracleGuideUI.openedAt = 0;
   const bubble = document.getElementById('miracle-guide-bubble');
   if (bubble) {
     bubble.classList.add('hidden');
+    bubble.style.pointerEvents = '';
     bubble.style.transition = 'none';
     bubble.style.transform = 'translate(-50%, -50%) scale(1)';
     bubble.style.opacity = '1';
   }
+  _flushMiracleGuideCloseCallbacks(!(opts && opts.runCallbacks));
 }
 window.hideMissionGuideBubbleImmediately = hideMissionGuideBubbleImmediately;
 
@@ -837,7 +898,7 @@ window.showMiracleGuideBubble = function (opts = {}) {
   const progressText = opts.progressText || '';
   const extraText = opts.extraText || '';
   const canCancel = Boolean(opts.canCancel);
-  const autoCloseMs = typeof opts.autoCloseMs === 'number' ? opts.autoCloseMs : 2300;
+  const autoCloseMs = (typeof opts.autoCloseMs === 'number' && opts.autoCloseMs > 0) ? opts.autoCloseMs : 2500;
 
   if (titleEl) titleEl.textContent = title;
   if (progRow) {
@@ -863,6 +924,7 @@ window.showMiracleGuideBubble = function (opts = {}) {
     }
   } catch (e) {}
 
+  bubble.style.pointerEvents = '';
   bubble.style.transition = 'none';
   bubble.style.transform = `translate(calc(-50% + ${dx.toFixed(1)}px), calc(-50% + ${dy.toFixed(1)}px)) scale(0.08) rotate(10deg)`;
   bubble.style.opacity = '0';
@@ -877,8 +939,12 @@ window.showMiracleGuideBubble = function (opts = {}) {
   MiracleGuideUI.isBubbleOpen = true;
   MiracleGuideUI.isSucking = false;
   MiracleGuideUI.isTyping = true;
+  MiracleGuideUI.openedAt = performance.now();
   MiracleGuideUI.fullText = text;
   MiracleGuideUI.typedIdx = 0;
+  if (typeof joyX !== 'undefined') joyX = 0;
+  if (typeof joyY !== 'undefined') joyY = 0;
+  if (typeof currentMoveSpeed !== 'undefined') currentMoveSpeed = 0;
   textEl.textContent = '';
   if (cursorEl) cursorEl.classList.remove('hidden');
 
@@ -916,7 +982,7 @@ window.onMiracleGuideBubbleClick = function () {
     if (MiracleGuideUI.autoCloseTimerId) clearTimeout(MiracleGuideUI.autoCloseTimerId);
     MiracleGuideUI.autoCloseTimerId = setTimeout(() => {
       window.dismissMiracleGuideBubbleToButton();
-    }, 1100);
+    }, 900);
   } else {
     window.dismissMiracleGuideBubbleToButton();
   }
@@ -925,11 +991,20 @@ window.onMiracleGuideBubbleClick = function () {
 window.dismissMiracleGuideBubbleToButton = function () {
   const bubble = document.getElementById('miracle-guide-bubble');
   const btn = document.getElementById('miracle-guide-btn');
-  if (!bubble || bubble.classList.contains('hidden') || MiracleGuideUI.isSucking) return;
+  if (!bubble || bubble.classList.contains('hidden')) {
+    _clearMiracleGuideTimers();
+    MiracleGuideUI.isBubbleOpen = false;
+    MiracleGuideUI.isTyping = false;
+    MiracleGuideUI.isSucking = false;
+    _flushMiracleGuideCloseCallbacks(false);
+    return;
+  }
+  if (MiracleGuideUI.isSucking) return;
 
   _clearMiracleGuideTimers();
   MiracleGuideUI.isTyping = false;
   MiracleGuideUI.isSucking = true;
+  bubble.style.pointerEvents = 'none';
 
   let dx = Math.round((window.innerWidth || 1000) * 0.42);
   let dy = -Math.round((window.innerHeight || 700) * 0.38);
@@ -942,12 +1017,14 @@ window.dismissMiracleGuideBubbleToButton = function () {
     }
   } catch (e) {}
 
-  bubble.style.transition = 'transform 0.52s cubic-bezier(0.45, -0.15, 0.85, 0.35), opacity 0.46s ease-in';
+  bubble.style.transition = 'transform 0.30s cubic-bezier(0.45, -0.15, 0.85, 0.35), opacity 0.26s ease-in';
   bubble.style.transform = `translate(calc(-50% + ${dx.toFixed(1)}px), calc(-50% + ${dy.toFixed(1)}px)) scale(0.08) rotate(10deg)`;
   bubble.style.opacity = '0';
 
   MiracleGuideUI.suckTimerId = setTimeout(() => {
+    MiracleGuideUI.suckTimerId = null;
     bubble.classList.add('hidden');
+    bubble.style.pointerEvents = '';
     bubble.style.transition = 'none';
     bubble.style.transform = 'translate(-50%, -50%) scale(1)';
     bubble.style.opacity = '1';
@@ -958,7 +1035,8 @@ window.dismissMiracleGuideBubbleToButton = function () {
       void btn.offsetWidth;
       btn.classList.add('absorb-pop');
     }
-  }, 530);
+    _flushMiracleGuideCloseCallbacks(false);
+  }, 320);
 };
 
 window.openMiracleGuideFromButton = function () {
@@ -6698,22 +6776,25 @@ function setEndingCertCardFlipped(flipped, withSfx = false) {
   const card = document.getElementById('ending-cert-card');
   const hint = document.getElementById('ending-card-flip-hint');
   if (!card) return;
+  card.classList.remove('is-dragging');
+  card.style.transform = '';
   card.classList.toggle('is-flipped', Boolean(flipped));
   if (hint) {
     if (window.__endingModalMode === 'footsteps') {
       hint.textContent = flipped
-        ? '✨ 카드를 터치하면 앞면 그림을 다시 볼 수 있어요!'
-        : '✨ 카드를 터치하면 뒷면 발자취 카드를 볼 수 있어요!';
+        ? '✨ 좌우 스와이프 · 터치해서 앞면 그림 보기 ↻'
+        : '✨ 좌우 스와이프 · 터치해서 발자취 카드 보기 ↻';
     } else {
       hint.textContent = flipped
-        ? '✨ 카드를 터치하면 앞면 그림을 다시 볼 수 있어요!'
-        : '✨ 카드를 터치하면 뒷면 공식 인증서를 볼 수 있어요!';
+        ? '✨ 좌우 스와이프 · 터치해서 앞면 그림 보기 ↻'
+        : '✨ 좌우 스와이프 · 터치해서 뒷면 인증서 보기 ↻';
     }
   }
   if (withSfx) playSfx('switch');
 }
 
 function toggleEndingCertCardFlip() {
+  if (Date.now() < (window._endingDragSuppressClickUntil || 0)) return;
   clearEndingCardFlipTimer();
   const card = document.getElementById('ending-cert-card');
   if (!card) return;
@@ -6722,8 +6803,91 @@ function toggleEndingCertCardFlip() {
 }
 window.toggleEndingCertCardFlip = toggleEndingCertCardFlip;
 
+function bindEndingCertCardSwipeInteraction() {
+  const scene = document.getElementById('ending-cert-scene');
+  const card = document.getElementById('ending-cert-card');
+  if (!scene || !card || scene._swipeBound) return;
+  scene._swipeBound = true;
+
+  let active = false;
+  let activePointerId = null;
+  let startX = 0;
+  let startY = 0;
+  let lastX = 0;
+  let lastT = 0;
+  let vx = 0;
+  let baseAngle = 0;
+  let movedHoriz = false;
+
+  const finishDrag = (endX) => {
+    if (!active) return;
+    active = false;
+    activePointerId = null;
+    card.classList.remove('is-dragging');
+    card.style.transform = '';
+
+    const dx = endX - startX;
+    if (movedHoriz || Math.abs(dx) > 8) {
+      window._endingDragSuppressClickUntil = Date.now() + 360;
+      const wasFlipped = card.classList.contains('is-flipped');
+      if (Math.abs(dx) > 38 || Math.abs(vx) > 0.32) {
+        setEndingCertCardFlipped(!wasFlipped, true);
+      } else {
+        setEndingCertCardFlipped(wasFlipped, false);
+      }
+    }
+  };
+
+  scene.addEventListener('dragstart', (e) => e.preventDefault());
+  scene.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    active = true;
+    activePointerId = e.pointerId;
+    startX = e.clientX;
+    startY = e.clientY;
+    lastX = e.clientX;
+    lastT = performance.now();
+    vx = 0;
+    movedHoriz = false;
+    baseAngle = card.classList.contains('is-flipped') ? 180 : 0;
+  });
+
+  window.addEventListener('pointermove', (e) => {
+    if (!active || (activePointerId !== null && e.pointerId !== activePointerId)) return;
+    const now = performance.now();
+    const dt = Math.max(8, now - lastT);
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    vx = (e.clientX - lastX) / dt;
+    lastX = e.clientX;
+    lastT = now;
+
+    if (!movedHoriz && Math.abs(dx) > 6 && Math.abs(dx) >= Math.abs(dy) * 0.75) {
+      movedHoriz = true;
+      clearEndingCardFlipTimer();
+      card.classList.add('is-dragging');
+    }
+    if (movedHoriz) {
+      const rotY = baseAngle + Math.max(-195, Math.min(195, dx * 0.68));
+      const tiltX = Math.max(-10, Math.min(10, -dy * 0.12));
+      card.style.transform = `rotateY(${rotY.toFixed(1)}deg) rotateX(${tiltX.toFixed(1)}deg)`;
+    }
+  });
+
+  window.addEventListener('pointerup', (e) => {
+    if (!active || (activePointerId !== null && e.pointerId !== activePointerId)) return;
+    finishDrag(e.clientX);
+  });
+
+  window.addEventListener('pointercancel', (e) => {
+    if (!active || (activePointerId !== null && e.pointerId !== activePointerId)) return;
+    finishDrag(lastX);
+  });
+}
+
 function _applyEndingModalVisualMode(mode, footstepsMeta = null) {
   window.__endingModalMode = mode;
+  bindEndingCertCardSwipeInteraction();
   const frontFace = document.getElementById('ending-card-front-face');
   const backFace = document.getElementById('ending-card-back-face');
   const frontPill = document.getElementById('ending-card-front-pill');
@@ -6962,12 +7126,157 @@ window.closeFootstepsAwardModal = closeFootstepsAwardModal;
 let currentAdventureBadgesTab = 'episodes';
 
 function toggleBadgeGalleryCardFlip(cardDomKey) {
+  if (Date.now() < (window._badgeTrackSuppressClickUntil || 0)) return;
   const card = document.getElementById(`badge-gallery-card-${cardDomKey}`);
   if (!card) return;
   card.classList.toggle('is-flipped');
   playSfx('switch');
 }
 window.toggleBadgeGalleryCardFlip = toggleBadgeGalleryCardFlip;
+
+function bindBadgesTrackSwipeInteraction(track) {
+  if (!track || track._swipeBound) return;
+  track._swipeBound = true;
+
+  track.addEventListener('wheel', (e) => {
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+      track.scrollLeft += e.deltaY;
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  let isDown = false;
+  let pointerId = null;
+  let startX = 0;
+  let startY = 0;
+  let startScrollLeft = 0;
+  let lastX = 0;
+  let lastT = 0;
+  let velocity = 0;
+  let didDrag = false;
+  let momentumRaf = 0;
+
+  const setTrackTilt = (deg) => {
+    track.style.setProperty('--swipe-tilt', `${deg.toFixed(1)}deg`);
+  };
+
+  const stopMomentum = () => {
+    if (momentumRaf) {
+      cancelAnimationFrame(momentumRaf);
+      momentumRaf = 0;
+    }
+  };
+
+  const snapToNearestCard = () => {
+    const slots = track.querySelectorAll('.badge-gallery-slot');
+    if (!slots || slots.length === 0) return;
+    const center = track.scrollLeft + track.clientWidth * 0.5;
+    let bestTarget = track.scrollLeft;
+    let bestDist = Infinity;
+    slots.forEach((slot) => {
+      const slotCenter = slot.offsetLeft + slot.offsetWidth * 0.5;
+      const d = Math.abs(slotCenter - center);
+      if (d < bestDist) {
+        bestDist = d;
+        bestTarget = Math.max(0, slotCenter - track.clientWidth * 0.5);
+      }
+    });
+    track.classList.remove('is-pointer-dragging');
+    setTrackTilt(0);
+    if (typeof track.scrollTo === 'function') {
+      track.scrollTo({ left: bestTarget, behavior: 'smooth' });
+    } else {
+      track.scrollLeft = bestTarget;
+    }
+  };
+
+  track.addEventListener('dragstart', (e) => e.preventDefault());
+  track.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    stopMomentum();
+    isDown = true;
+    pointerId = e.pointerId;
+    startX = e.clientX;
+    startY = e.clientY;
+    lastX = e.clientX;
+    lastT = performance.now();
+    startScrollLeft = track.scrollLeft;
+    velocity = 0;
+    didDrag = false;
+  });
+
+  window.addEventListener('pointermove', (e) => {
+    if (!isDown || (pointerId !== null && e.pointerId !== pointerId)) return;
+    const now = performance.now();
+    const dt = Math.max(8, now - lastT);
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    const stepDx = e.clientX - lastX;
+    lastX = e.clientX;
+    lastT = now;
+
+    if (!didDrag && Math.abs(dx) > 6 && Math.abs(dx) >= Math.abs(dy) * 0.8) {
+      didDrag = true;
+      track.classList.add('is-pointer-dragging');
+    }
+    if (didDrag) {
+      track.scrollLeft = startScrollLeft - dx;
+      velocity = stepDx / dt;
+      setTrackTilt(Math.max(-9, Math.min(9, stepDx * 0.45)));
+    }
+  });
+
+  const endSwipe = () => {
+    if (!isDown) return;
+    isDown = false;
+    pointerId = null;
+    if (!didDrag) {
+      setTrackTilt(0);
+      return;
+    }
+    window._badgeTrackSuppressClickUntil = Date.now() + 380;
+
+    let coastV = Math.max(-2.6, Math.min(2.6, velocity)) * 16;
+    if (Math.abs(coastV) < 1.2) {
+      snapToNearestCard();
+      return;
+    }
+    const tick = () => {
+      track.scrollLeft -= coastV;
+      setTrackTilt(Math.max(-8, Math.min(8, coastV * 0.35)));
+      coastV *= 0.90;
+      if (Math.abs(coastV) > 0.65 && track.scrollLeft > 0 && track.scrollLeft < track.scrollWidth - track.clientWidth) {
+        momentumRaf = requestAnimationFrame(tick);
+      } else {
+        momentumRaf = 0;
+        snapToNearestCard();
+      }
+    };
+    momentumRaf = requestAnimationFrame(tick);
+  };
+
+  window.addEventListener('pointerup', (e) => {
+    if (!isDown || (pointerId !== null && e.pointerId !== pointerId)) return;
+    endSwipe();
+  });
+  window.addEventListener('pointercancel', (e) => {
+    if (!isDown || (pointerId !== null && e.pointerId !== pointerId)) return;
+    endSwipe();
+  });
+
+  const badgesModal = document.getElementById('adventure-badges-modal');
+  if (badgesModal && !badgesModal._arrowNavBound) {
+    badgesModal._arrowNavBound = true;
+    document.addEventListener('keydown', (e) => {
+      if (badgesModal.classList.contains('hidden')) return;
+      if (e.key === 'ArrowRight') {
+        track.scrollBy({ left: 230, behavior: 'smooth' });
+      } else if (e.key === 'ArrowLeft') {
+        track.scrollBy({ left: -230, behavior: 'smooth' });
+      }
+    });
+  }
+}
 
 function setAdventureBadgesTab(tabKey) {
   currentAdventureBadgesTab = (tabKey === 'footsteps') ? 'footsteps' : 'episodes';
@@ -7000,22 +7309,27 @@ function _renderEpisodesBadgesHTML() {
     if (!cert) {
       return `
         <div class="badge-gallery-slot" data-badge-ep="${epId}" data-collected="0">
-          <div class="badge-card-locked">
-            <div class="w-full flex items-center justify-between text-[10px] font-jua text-amber-300/75">
-              <span>${meta.epLabel}</span>
-              <span>🔒 미획득</span>
-            </div>
-            <div class="flex flex-col items-center justify-center gap-2 my-auto">
-              <div class="relative flex items-center justify-center">
-                <span class="text-5xl sm:text-6xl select-none" style="filter: brightness(0) opacity(0.32);">${meta.icon}</span>
-                <span class="badge-locked-q font-jua absolute">?</span>
+          <div class="badge-card-frame">
+            <div class="badge-card-locked">
+              <div class="w-full flex items-center justify-between text-[10px] font-jua text-amber-300/75">
+                <span>${meta.epLabel}</span>
+                <span>🔒 미획득</span>
               </div>
-              <div class="font-jua text-sm sm:text-base text-slate-200 tracking-wide mt-1">???</div>
-              <p class="text-[10px] sm:text-[10.5px] text-slate-400 leading-snug px-1">${meta.silhouetteHint}</p>
+              <div class="flex flex-col items-center justify-center gap-2 my-auto">
+                <div class="relative flex items-center justify-center">
+                  <span class="text-5xl sm:text-6xl select-none" style="filter: brightness(0) opacity(0.32);">${meta.icon}</span>
+                  <span class="badge-locked-q font-jua absolute">?</span>
+                </div>
+                <div class="font-jua text-sm sm:text-base text-slate-200 tracking-wide mt-1">???</div>
+                <p class="text-[10px] sm:text-[10.5px] text-slate-400 leading-snug px-1">${meta.silhouetteHint}</p>
+              </div>
+              <div class="w-full px-2 py-1 rounded-xl bg-slate-900/80 border border-slate-700/80 text-[10px] text-amber-200/85 font-jua">
+                에피소드 ${meta.epNum} 완주 시 획득!
+              </div>
             </div>
-            <div class="w-full px-2 py-1 rounded-xl bg-slate-900/80 border border-slate-700/80 text-[10px] text-amber-200/85 font-jua">
-              에피소드 ${meta.epNum} 완주 시 획득!
-            </div>
+          </div>
+          <div class="badge-card-below-pill" style="opacity:0.72;">
+            ${meta.epLabel} · 미획득
           </div>
         </div>
       `;
@@ -7028,41 +7342,43 @@ function _renderEpisodesBadgesHTML() {
 
     return `
       <div class="badge-gallery-slot" data-badge-ep="${epId}" data-collected="1">
-        <div class="cert-card-scene w-full h-full" style="width:100%;height:100%;">
-          <div id="badge-gallery-card-${domKey}" class="cert-card-inner" role="button" tabindex="0"
-               onclick="toggleBadgeGalleryCardFlip('${domKey}')"
-               onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleBadgeGalleryCardFlip('${domKey}');}"
-               aria-label="${meta.shortTitle} 인증 카드 앞·뒷면 전환">
-            <div class="cert-card-face cert-card-front">
-              <img src="${frontUrl}" class="cert-card-front-img" alt="${meta.shortTitle} 모험의 증표 앞면" />
-              <div class="cert-card-sheen"></div>
-              <div class="absolute bottom-2 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-slate-950/78 border border-amber-300/80 text-amber-200 font-jua text-[10px] whitespace-nowrap pointer-events-none">
-                🏅 ${modeCount}개 레벨 클리어 · 터치 ↻
+        <div class="badge-card-frame">
+          <div class="cert-card-scene w-full h-full" style="width:100%;height:100%;">
+            <div id="badge-gallery-card-${domKey}" class="cert-card-inner" role="button" tabindex="0"
+                 onclick="toggleBadgeGalleryCardFlip('${domKey}')"
+                 onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleBadgeGalleryCardFlip('${domKey}');}"
+                 aria-label="${meta.shortTitle} 인증 카드 앞·뒷면 전환">
+              <div class="cert-card-face cert-card-front">
+                <img src="${frontUrl}" class="cert-card-front-img" alt="${meta.shortTitle} 모험의 증표 앞면" />
+                <div class="cert-card-sheen"></div>
               </div>
-            </div>
-            <div class="cert-card-face cert-card-back">
-              <div>
-                <div class="cert-back-badge inline-block px-2 py-0.5 rounded-full bg-amber-300 text-amber-950 font-jua text-[9.5px] mb-1">
-                  ${meta.badge}
+              <div class="cert-card-face cert-card-back">
+                <div>
+                  <div class="cert-back-badge inline-block px-2 py-0.5 rounded-full bg-amber-300 text-amber-950 font-jua text-[9.5px] mb-1">
+                    ${meta.badge}
+                  </div>
+                  <h3 class="cert-back-title font-jua text-sm sm:text-base text-amber-900 leading-tight mb-0.5">${meta.title}</h3>
+                  <p class="cert-back-verse text-[9px] text-slate-600 leading-snug mb-1.5 line-clamp-2">${meta.verse}</p>
                 </div>
-                <h3 class="cert-back-title font-jua text-sm sm:text-base text-amber-900 leading-tight mb-0.5">${meta.title}</h3>
-                <p class="cert-back-verse text-[9px] text-slate-600 leading-snug mb-1.5 line-clamp-2">${meta.verse}</p>
-              </div>
-              <div class="cert-back-box bg-white/95 border-2 border-amber-400 rounded-xl p-2 text-left text-[10px] space-y-1">
-                <div class="cert-back-row flex justify-between gap-1"><span class="text-slate-500 shrink-0">대원</span><span class="font-bold text-slate-900 truncate">${cert.playerName}</span></div>
-                <div class="pt-0.5 border-t border-amber-100">
-                  <div class="cert-back-row text-[9px] text-slate-500 mb-0.5">클리어 레벨 (누적)</div>
-                  <div class="flex flex-wrap gap-1">${levelPills}</div>
+                <div class="cert-back-box bg-white/95 border-2 border-amber-400 rounded-xl p-2 text-left text-[10px] space-y-1">
+                  <div class="cert-back-row flex justify-between gap-1"><span class="text-slate-500 shrink-0">대원</span><span class="font-bold text-slate-900 truncate">${cert.playerName}</span></div>
+                  <div class="pt-0.5 border-t border-amber-100">
+                    <div class="cert-back-row text-[9px] text-slate-500 mb-0.5">클리어 레벨 (누적)</div>
+                    <div class="flex flex-wrap gap-1">${levelPills}</div>
+                  </div>
+                  <div class="cert-back-row flex justify-between gap-1 pt-0.5 border-t border-amber-100"><span class="text-slate-500 shrink-0">인증코드</span><span class="cert-back-code font-jua text-xs text-rose-600">${cert.code}</span></div>
+                  <div class="cert-back-row flex justify-between gap-1 text-[9px] text-slate-400"><span>획득/갱신</span><span>${cert.updatedAt}</span></div>
                 </div>
-                <div class="cert-back-row flex justify-between gap-1 pt-0.5 border-t border-amber-100"><span class="text-slate-500 shrink-0">인증코드</span><span class="cert-back-code font-jua text-xs text-rose-600">${cert.code}</span></div>
-                <div class="cert-back-row flex justify-between gap-1 text-[9px] text-slate-400"><span>획득/갱신</span><span>${cert.updatedAt}</span></div>
-              </div>
-              <div class="cert-back-footer pt-1 flex items-center justify-between text-[9px] font-jua text-amber-900/80">
-                <span>광릉내 재림교회 어린이부</span>
-                <span class="text-amber-700">↻ 앞면</span>
+                <div class="cert-back-footer pt-1 flex items-center justify-between text-[9px] font-jua text-amber-900/80">
+                  <span>광릉내 재림교회 어린이부</span>
+                  <span class="text-amber-700">↻ 스와이프·터치</span>
+                </div>
               </div>
             </div>
           </div>
+        </div>
+        <div class="badge-card-below-pill">
+          🏅 ${modeCount}개 레벨 클리어 · 터치 뒤집기 ↻
         </div>
       </div>
     `;
@@ -7083,28 +7399,33 @@ function _renderFootstepsBadgesHTML() {
       const pct = Math.min(100, Math.round((completedMissions / Math.max(1, reqCount)) * 100));
       return `
         <div class="badge-gallery-slot" data-badge-fp="${tierId}" data-collected="0">
-          <div class="badge-card-locked" style="border-color: ${meta.borderColor};">
-            <div class="w-full flex items-center justify-between text-[10px] font-jua" style="color: ${meta.innerBorder};">
-              <span>${meta.stageLabel} · ${meta.borderLabel}</span>
-              <span>🔒 미획득</span>
-            </div>
-            <div class="flex flex-col items-center justify-center gap-1.5 my-auto">
-              <div class="relative flex items-center justify-center">
-                <span class="text-5xl sm:text-6xl select-none" style="filter: brightness(0) opacity(0.32);">${meta.symbolIcon}</span>
-                <span class="badge-locked-q font-jua absolute">?</span>
+          <div class="badge-card-frame">
+            <div class="badge-card-locked" style="border-color: ${meta.borderColor};">
+              <div class="w-full flex items-center justify-between text-[10px] font-jua" style="color: ${meta.innerBorder};">
+                <span>${meta.stageLabel} · ${meta.borderLabel}</span>
+                <span>🔒 미획득</span>
               </div>
-              <div class="font-jua text-sm sm:text-base text-slate-200 tracking-wide mt-0.5">???</div>
-              <p class="text-[10px] text-slate-300 leading-snug px-1">상징: ${meta.symbolName}</p>
-              <div class="w-full px-2 mt-0.5">
-                <div class="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden border border-slate-600/80">
-                  <div class="h-full rounded-full" style="width:${pct}%; background-color:${meta.borderColor};"></div>
+              <div class="flex flex-col items-center justify-center gap-1.5 my-auto">
+                <div class="relative flex items-center justify-center">
+                  <span class="text-5xl sm:text-6xl select-none" style="filter: brightness(0) opacity(0.32);">${meta.symbolIcon}</span>
+                  <span class="badge-locked-q font-jua absolute">?</span>
                 </div>
-                <div class="text-[9.5px] font-bold text-amber-200 mt-0.5">진행도 ${Math.min(completedMissions, reqCount)} / ${reqCount}</div>
+                <div class="font-jua text-sm sm:text-base text-slate-200 tracking-wide mt-0.5">???</div>
+                <p class="text-[10px] text-slate-300 leading-snug px-1">상징: ${meta.symbolName}</p>
+                <div class="w-full px-2 mt-0.5">
+                  <div class="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden border border-slate-600/80">
+                    <div class="h-full rounded-full" style="width:${pct}%; background-color:${meta.borderColor};"></div>
+                  </div>
+                  <div class="text-[9.5px] font-bold text-amber-200 mt-0.5">진행도 ${Math.min(completedMissions, reqCount)} / ${reqCount}</div>
+                </div>
+              </div>
+              <div class="w-full px-2 py-1 rounded-xl bg-slate-900/85 border border-slate-700/80 text-[10px] text-amber-200/90 font-jua">
+                EP4 ${reqLabel} 시 획득!
               </div>
             </div>
-            <div class="w-full px-2 py-1 rounded-xl bg-slate-900/85 border border-slate-700/80 text-[10px] text-amber-200/90 font-jua">
-              EP4 ${reqLabel} 시 획득!
-            </div>
+          </div>
+          <div class="badge-card-below-pill" style="border-color: ${meta.borderColor}; opacity: 0.78;">
+            ${meta.stageLabel} · ${Math.min(completedMissions, reqCount)}/${reqCount}
           </div>
         </div>
       `;
@@ -7116,39 +7437,41 @@ function _renderFootstepsBadgesHTML() {
 
     return `
       <div class="badge-gallery-slot" data-badge-fp="${tierId}" data-collected="1">
-        <div class="cert-card-scene w-full h-full" style="width:100%;height:100%;">
-          <div id="badge-gallery-card-${domKey}" class="cert-card-inner" role="button" tabindex="0"
-               onclick="toggleBadgeGalleryCardFlip('${domKey}')"
-               onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleBadgeGalleryCardFlip('${domKey}');}"
-               aria-label="${meta.title} 발자취 카드 앞·뒷면 전환">
-            <div class="cert-card-face cert-card-front" style="border-color: ${meta.borderColor};">
-              <img src="${frontUrl}" class="cert-card-front-img" alt="${meta.title} 예수님의 발자취 앞면" />
-              <div class="cert-card-sheen"></div>
-              <div class="absolute bottom-2 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-slate-950/78 border text-amber-100 font-jua text-[10px] whitespace-nowrap pointer-events-none" style="border-color: ${meta.borderColor};">
-                ${meta.symbolIcon} ${meta.title} · 터치 ↻
+        <div class="badge-card-frame">
+          <div class="cert-card-scene w-full h-full" style="width:100%;height:100%;">
+            <div id="badge-gallery-card-${domKey}" class="cert-card-inner" role="button" tabindex="0"
+                 onclick="toggleBadgeGalleryCardFlip('${domKey}')"
+                 onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleBadgeGalleryCardFlip('${domKey}');}"
+                 aria-label="${meta.title} 발자취 카드 앞·뒷면 전환">
+              <div class="cert-card-face cert-card-front" style="border-color: ${meta.borderColor};">
+                <img src="${frontUrl}" class="cert-card-front-img" alt="${meta.title} 예수님의 발자취 앞면" />
+                <div class="cert-card-sheen"></div>
               </div>
-            </div>
-            <div class="cert-card-face cert-card-back" style="border-color: ${meta.borderColor}; background: ${meta.backGrad};">
-              <div>
-                <div class="cert-back-badge inline-block px-2 py-0.5 rounded-full text-white font-jua text-[9.5px] mb-1" style="background-color: ${meta.badgeBg};">
-                  👣 ${meta.stageLabel} · 예수님의 발자취
+              <div class="cert-card-face cert-card-back" style="border-color: ${meta.borderColor}; background: ${meta.backGrad};">
+                <div>
+                  <div class="cert-back-badge inline-block px-2 py-0.5 rounded-full text-white font-jua text-[9.5px] mb-1" style="background-color: ${meta.badgeBg};">
+                    👣 ${meta.stageLabel} · 예수님의 발자취
+                  </div>
+                  <h3 class="cert-back-title font-jua text-sm sm:text-base text-slate-900 leading-tight mb-0.5">${meta.title}</h3>
+                  <p class="cert-back-verse text-[9px] text-slate-700 leading-snug mb-1.5 line-clamp-2">${meta.desc}</p>
                 </div>
-                <h3 class="cert-back-title font-jua text-sm sm:text-base text-slate-900 leading-tight mb-0.5">${meta.title}</h3>
-                <p class="cert-back-verse text-[9px] text-slate-700 leading-snug mb-1.5 line-clamp-2">${meta.desc}</p>
-              </div>
-              <div class="cert-back-box bg-white/95 border-2 rounded-xl p-2 text-left text-[10px] space-y-1" style="border-color: ${meta.borderColor};">
-                <div class="cert-back-row flex justify-between gap-1"><span class="text-slate-500 shrink-0">대원</span><span class="font-bold text-slate-900 truncate">${cert.playerName}</span></div>
-                <div class="cert-back-row flex justify-between gap-1 pt-0.5 border-t border-slate-100"><span class="text-slate-500 shrink-0">상징</span><span class="font-bold text-amber-800 truncate">${meta.symbolIcon} ${meta.symbolName}</span></div>
-                <div class="cert-back-row flex justify-between gap-1 pt-0.5 border-t border-slate-100"><span class="text-slate-500 shrink-0">달성</span><span class="font-bold text-emerald-700 truncate">${milestoneShort}</span></div>
-                <div class="cert-back-row flex justify-between gap-1 pt-0.5 border-t border-slate-100"><span class="text-slate-500 shrink-0">카드코드</span><span class="cert-back-code font-jua text-xs text-rose-600">${cert.code}</span></div>
-                <div class="cert-back-row flex justify-between gap-1 text-[9px] text-slate-400"><span>획득일</span><span>${cert.issuedAt}</span></div>
-              </div>
-              <div class="cert-back-footer pt-1 flex items-center justify-between text-[9px] font-jua text-slate-700">
-                <span>광릉내 재림교회 어린이부</span>
-                <span class="text-amber-700">↻ 앞면</span>
+                <div class="cert-back-box bg-white/95 border-2 rounded-xl p-2 text-left text-[10px] space-y-1" style="border-color: ${meta.borderColor};">
+                  <div class="cert-back-row flex justify-between gap-1"><span class="text-slate-500 shrink-0">대원</span><span class="font-bold text-slate-900 truncate">${cert.playerName}</span></div>
+                  <div class="cert-back-row flex justify-between gap-1 pt-0.5 border-t border-slate-100"><span class="text-slate-500 shrink-0">상징</span><span class="font-bold text-amber-800 truncate">${meta.symbolIcon} ${meta.symbolName}</span></div>
+                  <div class="cert-back-row flex justify-between gap-1 pt-0.5 border-t border-slate-100"><span class="text-slate-500 shrink-0">달성</span><span class="font-bold text-emerald-700 truncate">${milestoneShort}</span></div>
+                  <div class="cert-back-row flex justify-between gap-1 pt-0.5 border-t border-slate-100"><span class="text-slate-500 shrink-0">카드코드</span><span class="cert-back-code font-jua text-xs text-rose-600">${cert.code}</span></div>
+                  <div class="cert-back-row flex justify-between gap-1 text-[9px] text-slate-400"><span>획득일</span><span>${cert.issuedAt}</span></div>
+                </div>
+                <div class="cert-back-footer pt-1 flex items-center justify-between text-[9px] font-jua text-slate-700">
+                  <span>광릉내 재림교회 어린이부</span>
+                  <span class="text-amber-700">↻ 스와이프·터치</span>
+                </div>
               </div>
             </div>
           </div>
+        </div>
+        <div class="badge-card-below-pill" style="border-color: ${meta.borderColor};">
+          ${meta.symbolIcon} ${meta.title} · 터치 뒤집기 ↻
         </div>
       </div>
     `;
@@ -7169,15 +7492,9 @@ function renderAdventureBadgesGallery() {
   }
   if (!track) return;
 
-  if (!track._wheelBound) {
-    track._wheelBound = true;
-    track.addEventListener('wheel', (e) => {
-      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-        track.scrollLeft += e.deltaY;
-        e.preventDefault();
-      }
-    }, { passive: false });
-  }
+  bindBadgesTrackSwipeInteraction(track);
+  track.classList.remove('is-pointer-dragging');
+  track.style.setProperty('--swipe-tilt', '0deg');
 
   track.innerHTML = currentAdventureBadgesTab === 'footsteps'
     ? _renderFootstepsBadgesHTML()
@@ -7339,6 +7656,12 @@ function setupControls() {
 
   zone.addEventListener('pointerdown', e => {
     e.preventDefault(); e.stopPropagation();
+    if (typeof window.isMissionGuideBubbleBlockingAction === 'function' && window.isMissionGuideBubbleBlockingAction()) {
+      if ((performance.now() - (MiracleGuideUI.openedAt || 0)) >= 260) {
+        window.dismissMiracleGuideBubbleToButton();
+      }
+      return;
+    }
     joyPointerId = e.pointerId;
     const r = zone.getBoundingClientRect();
     cx = r.left + r.width / 2; cy = r.top + r.height / 2;
@@ -7346,6 +7669,12 @@ function setupControls() {
   });
 
   document.getElementById('canvas-container').addEventListener('pointerdown', e => {
+    if (typeof window.isMissionGuideBubbleBlockingAction === 'function' && window.isMissionGuideBubbleBlockingAction()) {
+      if ((performance.now() - (MiracleGuideUI.openedAt || 0)) >= 260) {
+        window.dismissMiracleGuideBubbleToButton();
+      }
+      return;
+    }
     if (!isPlaying || doveCutscene.active || pillarCutscene.active || seaPartingCutscene.active || sinaiCutscene.active) return;
     if (e.pointerId === joyPointerId) return;
     camPointerId = e.pointerId; lastCamX = e.clientX;
@@ -7367,6 +7696,29 @@ function setupControls() {
   window.addEventListener('pointerup', endPointer);
   window.addEventListener('pointercancel', endPointer);
   window.addEventListener('keydown', e => {
+    const activeTag = (document.activeElement && document.activeElement.tagName) ? document.activeElement.tagName.toUpperCase() : '';
+    if (activeTag !== 'INPUT' && activeTag !== 'TEXTAREA' && typeof window.isMissionGuideBubbleBlockingAction === 'function' && window.isMissionGuideBubbleBlockingAction()) {
+      const elapsed = performance.now() - (MiracleGuideUI.openedAt || 0);
+      if (e.code === 'Escape') {
+        e.preventDefault();
+        window.dismissMiracleGuideBubbleToButton();
+        return;
+      }
+      if (e.code === 'Space' || e.code === 'Enter') {
+        e.preventDefault();
+        if (elapsed >= 180) {
+          if (MiracleGuideUI.isTyping) window.onMiracleGuideBubbleClick();
+          else window.dismissMiracleGuideBubbleToButton();
+        }
+        return;
+      }
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code)) {
+        if (elapsed >= 260) window.dismissMiracleGuideBubbleToButton();
+        keys[e.code] = false;
+        return;
+      }
+      return;
+    }
     keys[e.code] = true;
     if (e.code === 'Space') { e.preventDefault(); playerJump(); }
     if (e.code === 'KeyQ') rotateCameraDeg(-15);
@@ -7376,6 +7728,7 @@ function setupControls() {
 }
 
 function playerJump() {
+  if (typeof window.isMissionGuideBubbleBlockingAction === 'function' && window.isMissionGuideBubbleBlockingAction()) return;
   if (!isPlaying || stage2CountdownActive || doveCutscene.active || pillarCutscene.active || seaPartingCutscene.active || sinaiCutscene.active) return;
   if (typeof window.isPlayerMovementLocked === 'function' && window.isPlayerMovementLocked()) return;
   if (isGrounded || playerPos.y <= getSupportHeight(playerPos.x, playerPos.z, playerPos.y) + 0.18) {
@@ -7719,8 +8072,9 @@ function initEngine(skipInitialPreview = false) {
     }
 
     const epPlugin = getActiveEpisodePlugin();
+    const guideBubblePaused = (typeof window.isMissionGuideBubbleBlockingAction === 'function') && window.isMissionGuideBubbleBlockingAction();
 
-    if (isPlaying && isTimeAttackActive && !doveCutscene.active && !pillarCutscene.active && !seaPartingCutscene.active && !sinaiCutscene.active) {
+    if (isPlaying && isTimeAttackActive && !guideBubblePaused && !doveCutscene.active && !pillarCutscene.active && !seaPartingCutscene.active && !sinaiCutscene.active) {
       timeRemaining -= dt;
       if (timeRemaining <= 0) {
         if (!timeAttackFirstRechargeUsed) {
@@ -7782,6 +8136,16 @@ function initEngine(skipInitialPreview = false) {
     }
 
     if (isPlaying) {
+      if (guideBubblePaused) {
+        currentMoveSpeed = 0;
+        joyX = 0;
+        joyY = 0;
+        playerGroup.position.copy(playerPos);
+        applyCoreCameraByMode();
+        updateWallTransparency();
+        renderer.render(scene, camera);
+        return;
+      }
       cameraYaw = lerpAngle(cameraYaw, cameraTargetYaw, dt * 12);
       const prevGrounded = isGrounded;
       const prevVelY = playerVelY;
