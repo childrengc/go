@@ -4,7 +4,7 @@
 // - 확장된 오픈월드 지형 고도 계산기(넓어진 골고다 언덕 포함) 및 소프트 로우 폴리곤 자연물 팩토리
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_base = '20261124_v36';
+window.__GAME_BUILD_VERSIONS__.ep4_base = '20261125_v41';
 
 // =========================================================================
 // 🎬 [에피소드 4 오프닝 · 엔딩 영상 주소 설정]
@@ -1432,171 +1432,247 @@ function addLowPolyCactusAndScrub(x, z, scale = 1.0) {
   return grp;
 }
 
-function createLowPolySycamoreTree(x, z, scale = 1.45) {
-  recordMiracleWorldTree(x, z, 'sycamore', scale);
-  const by = getBaseGroundHeight(x, z);
-  const grp = new THREE.Group();
-  const seed = Math.abs(Math.round(x * 19 + z * 37)) + 41;
-  const trunkH = 3.6 * scale;
+// 굵은 각면이 살아있는 소프트 로우폴리 나뭇잎 지오메트리 생성 (공유 정점 일관 변위 + 하단 평탄화)
+function createOrganicLowPolyFoliageGeo(radius, seed = 1, flattenBottom = true, useDodeca = false) {
+  const raw = useDodeca
+    ? new THREE.DodecahedronGeometry(radius, 0)
+    : new THREE.IcosahedronGeometry(radius, 0);
+  const pos = raw.attributes.position;
+  const bucketDisp = {};
 
-  // 굵고 울퉁불퉁하게 휘어 올라가는 비정형 소프트 로우폴리 돌무화과나무 기둥 (뿌리 버팀목 포함)
-  const trunkGeo = createOrganicWoodTrunkGeo(
-    [
-      [0, -0.10 * scale, 0],
-      [0.14 * scale, trunkH * 0.32, -0.10 * scale],
-      [-0.10 * scale, trunkH * 0.66, 0.12 * scale],
-      [0.05 * scale, trunkH, 0.04 * scale]
-    ],
-    [0.74 * scale, 0.56 * scale, 0.48 * scale, 0.38 * scale],
-    7,
-    seed,
-    true
-  );
-  const trunk = createLowPolyMesh(trunkGeo, '#5c2d0c', 0, 0, 0, true);
+  for (let i = 0; i < pos.count; i++) {
+    const vx = pos.getX(i);
+    const vy = pos.getY(i);
+    const vz = pos.getZ(i);
+    const key = `${Math.round(vx * 1000)}_${Math.round(vy * 1000)}_${Math.round(vz * 1000)}`;
+    if (!bucketDisp[key]) {
+      const hashIn = seed * 19.37 + vx * 11.7 + vy * 23.1 + vz * 31.9;
+      const h = (Math.sin(hashIn) * 43758.5453);
+      const frac = h - Math.floor(h);
+      const radialScale = 1.0 + (frac - 0.5) * 0.28;
+      let nx = vx * radialScale;
+      let ny = vy * radialScale;
+      let nz = vz * radialScale;
+      if (flattenBottom && ny < -0.22 * radius) {
+        ny = -0.22 * radius + (ny + 0.22 * radius) * 0.42;
+      }
+      bucketDisp[key] = [nx, ny, nz];
+    }
+    const d = bucketDisp[key];
+    pos.setXYZ(i, d[0], d[1], d[2]);
+  }
 
-  // 삭개오가 올라앉는 굵고 비정형으로 뻗은 주 가지 + 반대편 보조 가지들
-  const branchMain = createOrganicWoodSegmentMesh(
-    new THREE.Vector3(-0.04 * scale, trunkH * 0.58, 0.08 * scale),
-    new THREE.Vector3(2.05 * scale, trunkH * 0.86, 0.65 * scale),
-    0.28 * scale, 0.14 * scale, '#5c2d0c', seed + 17, 0.16, false
-  );
-  const branchOpp = createOrganicWoodSegmentMesh(
-    new THREE.Vector3(-0.08 * scale, trunkH * 0.68, 0.04 * scale),
-    new THREE.Vector3(-1.55 * scale, trunkH * 0.96, -0.42 * scale),
-    0.24 * scale, 0.12 * scale, '#6b3612', seed + 29, 0.18, false
-  );
-  const branchBack = createOrganicWoodSegmentMesh(
-    new THREE.Vector3(0.02 * scale, trunkH * 0.72, -0.06 * scale),
-    new THREE.Vector3(0.35 * scale, trunkH * 1.02, -1.35 * scale),
-    0.20 * scale, 0.10 * scale, '#5c2d0c', seed + 43, 0.15, false
-  );
-
-  const mainCrown = createLowPolyMesh(new THREE.IcosahedronGeometry(2.3 * scale, 0), '#3f6212', 0, trunkH + 0.8 * scale, 0, true);
-  mainCrown.scale.set(1.25, 0.72, 1.25);
-  const subCrown1 = createLowPolyMesh(new THREE.IcosahedronGeometry(1.5 * scale, 0), '#4d7c0f', 1.6 * scale, trunkH + 0.35 * scale, 0.5 * scale, true);
-  const subCrown2 = createLowPolyMesh(new THREE.IcosahedronGeometry(1.4 * scale, 0), '#65a30d', -1.4 * scale, trunkH + 0.45 * scale, -0.4 * scale, true);
-
-  grp.add(trunk, branchMain, branchOpp, branchBack, mainCrown, subCrown1, subCrown2);
-  grp.position.set(x, by, z);
-  worldGroup.add(grp);
-  wallMeshes.push(trunk, branchMain, mainCrown, subCrown1, subCrown2);
-  colliders.push({ minX: x - 0.95 * scale, maxX: x + 0.95 * scale, minZ: z - 0.95 * scale, maxZ: z + 0.95 * scale });
-  return grp;
+  const finalGeo = raw.index ? raw.toNonIndexed() : raw;
+  if (finalGeo !== raw) raw.dispose();
+  finalGeo.computeVertexNormals();
+  return finalGeo;
 }
 
-// [삭개오 미션 전용] 삭개오가 걸터앉는 노출된 수평 가지 + 높은 우산형 수관 전용 돌무화과나무
-// - 삭개오의 머리부터 매달린 발끝까지 전신이 나뭇잎에 가리지 않고 100% 선명하게 보이도록 설계
-// - 미션 구역 내 랜덤 스폰 및 미션 종료 시 충돌체/메쉬 깔끔히 정리 가능
-function createZacchaeusPerchSycamoreTree(x, z, scale = 1.38, faceTargetX = 36.2, faceTargetZ = -5.8) {
+// [턴어라운드 레퍼런스 기반] 여리고 돌무화과나무 공용 생성 헬퍼
+// - 흙더미 없이 바닥에서 바로 뻗어 나오는 굵은 뿌리 줄기 + 열린 Y자 가지 + 각진 다각형 소프트 로우폴리 수관 + 매달린 돌무화과 열매
+// - 가지 위 착석 지점 주변 나뭇잎을 완전히 비워 어떤 각도에서도 삭개오 전신이 100% 또렷하게 보임
+function buildTurnaroundSycamoreTreeData(x, z, scale = 1.42, faceTargetX = null, faceTargetZ = null, isMissionPerch = false) {
   const by = getBaseGroundHeight(x, z);
   const grp = new THREE.Group();
-  const seed = Math.abs(Math.round(x * 23 + z * 41)) + 97;
-  const trunkH = 3.85 * scale;
+  const seed = Math.abs(Math.round(x * 23 + z * 41)) + (isMissionPerch ? 97 : 41);
+  const hRand = (idx) => {
+    const v = Math.sin(seed * 12.9898 + idx * 78.233) * 43758.5453;
+    return v - Math.floor(v);
+  };
 
-  // 1) 땅에 깊게 뿌리내린 굵고 자연스러운 비정형 줄기
+  // 1) 바닥에 자연스럽게 놓인 작은 회색 돌멩이 + 풀잎 묶음 (흙더미 제거, 땅에서 직접 시작)
+  [[-0.92, 0.56, 0.14], [0.85, -0.48, 0.12], [-0.40, -0.92, 0.11], [0.52, 0.84, 0.10]].forEach(([px, pz, pr], idx) => {
+    const rock = createLowPolyMesh(new THREE.DodecahedronGeometry(pr * scale, 0), idx % 2 === 0 ? '#9ca3af' : '#78716c', px * scale, 0.055 * scale, pz * scale, true);
+    rock.scale.set(1.22, 0.68, 1.0);
+    rock.rotation.y = idx * 0.9;
+    grp.add(rock);
+  });
+
+  for (let gi = 0; gi < 6; gi++) {
+    const ang = (gi / 6) * Math.PI * 2 + 0.35;
+    const rad = (0.94 + (gi % 2) * 0.22) * scale;
+    const tuft = createLowPolyMesh(new THREE.ConeGeometry(0.10 * scale, 0.30 * scale, 4), gi % 2 === 0 ? '#7c9248' : '#8fa654', Math.cos(ang) * rad, 0.14 * scale, Math.sin(ang) * rad, false);
+    tuft.rotation.set((hRand(gi + 1) - 0.5) * 0.35, ang, (hRand(gi + 7) - 0.5) * 0.35);
+    grp.add(tuft);
+  }
+
+  // 2) 땅속에서 굵게 뻗어 올라오는 따뜻한 갈색 로우폴리 주 기둥 (약간 오른쪽으로 올라가 왼쪽 앉은 자리와 어우러짐)
+  const trunkTopY = 3.55 * scale;
   const trunkGeo = createOrganicWoodTrunkGeo(
     [
-      [0, -0.08 * scale, 0],
-      [-0.08 * scale, trunkH * 0.30, -0.06 * scale],
-      [-0.14 * scale, trunkH * 0.65, -0.10 * scale],
-      [-0.05 * scale, trunkH, -0.08 * scale]
+      [0, -0.14 * scale, 0],
+      [0.02 * scale, 1.05 * scale, -0.02 * scale],
+      [0.05 * scale, 2.25 * scale, -0.04 * scale],
+      [0.02 * scale, trunkTopY, -0.05 * scale]
     ],
-    [0.68 * scale, 0.52 * scale, 0.44 * scale, 0.34 * scale],
+    [0.86 * scale, 0.44 * scale, 0.35 * scale, 0.27 * scale],
     7,
     seed,
     true
   );
-  const trunk = createLowPolyMesh(trunkGeo, '#5c2d0c', 0, 0, 0, true);
+  const trunk = createLowPolyMesh(trunkGeo, '#8b5a36', 0, 0, 0, true);
   grp.add(trunk);
 
-  // 키 작은 삭개오가 밟고 나뭇잎 높이까지 올라간 나무 옹이·뿌리 발판 3개
-  const stepRoot1 = createLowPolyMesh(new THREE.DodecahedronGeometry(0.32 * scale, 0), '#6b3612', 0.42 * scale, 0.28 * scale, 0.22 * scale, true);
-  stepRoot1.scale.set(1.25, 0.65, 1.0);
-  const stepKnot2 = createLowPolyMesh(new THREE.DodecahedronGeometry(0.24 * scale, 0), '#7c4728', 0.34 * scale, 1.25 * scale, 0.28 * scale, true);
-  stepKnot2.scale.set(1.1, 0.72, 1.1);
-  const stepKnot3 = createLowPolyMesh(new THREE.DodecahedronGeometry(0.21 * scale, 0), '#6b3612', 0.22 * scale, 2.30 * scale, 0.36 * scale, true);
-  stepKnot3.scale.set(1.05, 0.68, 1.05);
-  grp.add(stepRoot1, stepKnot2, stepKnot3);
-
-  // 2) 일반 돌무화과나무 나뭇잎 영역 높이(3.48 * scale)로 올린 삭개오 전용 수평 주 가지
-  const perchLocalY = 3.48 * scale;
-  const perchLocalZ = 1.48 * scale;
-  const perchBranch = createOrganicWoodSegmentMesh(
-    new THREE.Vector3(-0.04 * scale, 2.75 * scale, 0.04 * scale),
-    new THREE.Vector3(0.0, perchLocalY, perchLocalZ + 0.56 * scale),
-    0.29 * scale, 0.15 * scale, '#6b3612', seed + 13, 0.08, false
-  );
-  const perchBoughRest = createLowPolyMesh(new THREE.CylinderGeometry(0.19 * scale, 0.22 * scale, 0.85 * scale, 6), '#5c2d0c', 0, perchLocalY - 0.04 * scale, perchLocalZ * 0.92, true);
-  perchBoughRest.rotation.x = Math.PI * 0.48;
-  grp.add(perchBranch, perchBoughRest);
-
-  // 3) 좌·우·뒤쪽 나뭇잎 수관을 받쳐주는 상부 가지들 (정면 중앙 시야만 깔끔하게 열어둠)
-  const upperB1 = createOrganicWoodSegmentMesh(
-    new THREE.Vector3(-0.10 * scale, trunkH * 0.74, -0.06 * scale),
-    new THREE.Vector3(-1.85 * scale, trunkH + 0.22 * scale, 0.35 * scale),
-    0.22 * scale, 0.10 * scale, '#6b3612', seed + 29, 0.14, false
-  );
-  const upperB2 = createOrganicWoodSegmentMesh(
-    new THREE.Vector3(-0.04 * scale, trunkH * 0.76, -0.06 * scale),
-    new THREE.Vector3(1.85 * scale, trunkH + 0.25 * scale, 0.35 * scale),
-    0.21 * scale, 0.10 * scale, '#5c2d0c', seed + 43, 0.14, false
-  );
-  const upperB3 = createOrganicWoodSegmentMesh(
-    new THREE.Vector3(-0.05 * scale, trunkH * 0.82, -0.08 * scale),
-    new THREE.Vector3(0.08 * scale, trunkH + 0.55 * scale, -1.05 * scale),
-    0.19 * scale, 0.09 * scale, '#6b3612', seed + 61, 0.12, false
-  );
-  grp.add(upperB1, upperB2, upperB3);
-
-  // 4) 일반 나무와 동일한 나뭇잎 높이대 수관 (삭개오가 앉아 있는 정면 중앙 영역만 나뭇잎 메쉬를 부분 제거하여 포켓 개방!)
-  const topCrown = createLowPolyMesh(new THREE.IcosahedronGeometry(1.82 * scale, 0), '#3f6212', 0, trunkH + 1.48 * scale, -0.45 * scale, true);
-  topCrown.scale.set(1.25, 0.54, 1.05);
-  const subCrownL1 = createLowPolyMesh(new THREE.IcosahedronGeometry(1.32 * scale, 0), '#4d7c0f', -2.05 * scale, trunkH - 0.08 * scale, 0.65 * scale, true);
-  subCrownL1.scale.set(1.08, 0.72, 1.08);
-  const subCrownL2 = createLowPolyMesh(new THREE.IcosahedronGeometry(1.42 * scale, 0), '#558b2f', -1.45 * scale, trunkH + 0.35 * scale, -0.75 * scale, true);
-  subCrownL2.scale.set(1.12, 0.74, 1.10);
-  const subCrownR1 = createLowPolyMesh(new THREE.IcosahedronGeometry(1.32 * scale, 0), '#65a30d', 2.05 * scale, trunkH - 0.06 * scale, 0.65 * scale, true);
-  subCrownR1.scale.set(1.08, 0.72, 1.08);
-  const subCrownR2 = createLowPolyMesh(new THREE.IcosahedronGeometry(1.40 * scale, 0), '#4d7c0f', 1.45 * scale, trunkH + 0.38 * scale, -0.72 * scale, true);
-  subCrownR2.scale.set(1.12, 0.74, 1.10);
-  const subCrownBack = createLowPolyMesh(new THREE.IcosahedronGeometry(1.52 * scale, 0), '#3f6212', 0, trunkH + 0.32 * scale, -1.25 * scale, true);
-  subCrownBack.scale.set(1.24, 0.74, 1.02);
-  // 삭개오 좌·우 가장자리만 살짝 감싸 멀리서 봤을 때 숲에 어우러지게 하고, 정면 중앙(x ≈ 0, z ≈ 1.48)은 비워 가까이 올려다보면 발견되도록 배치
-  const subCrownFrontRimL = createLowPolyMesh(new THREE.IcosahedronGeometry(0.95 * scale, 0), '#65a30d', -1.45 * scale, perchLocalY - 0.25 * scale, 1.78 * scale, true);
-  subCrownFrontRimL.scale.set(0.95, 0.72, 0.90);
-  const subCrownFrontRimR = createLowPolyMesh(new THREE.IcosahedronGeometry(0.95 * scale, 0), '#558b2f', 1.45 * scale, perchLocalY - 0.22 * scale, 1.78 * scale, true);
-  subCrownFrontRimR.scale.set(0.95, 0.72, 0.90);
-  grp.add(topCrown, subCrownL1, subCrownL2, subCrownR1, subCrownR2, subCrownBack, subCrownFrontRimL, subCrownFrontRimR);
-
-  // 돌무화과 열매 장식 (수관 가장자리 배치)
-  [[-1.8, 0.55], [1.75, 0.55], [-1.1, -0.85], [1.1, -0.82]].forEach(([fx, fz], idx) => {
-    const fig = createLowPolyMesh(new THREE.DodecahedronGeometry(0.13 * scale, 0), idx % 2 === 0 ? '#a3e635' : '#ca8a04', fx * scale, trunkH - 0.55 * scale, fz * scale, false);
-    grp.add(fig);
+  // 뿌리 버팀목 디테일 (흙더미 없이 바닥 지면으로 직접 뿌리내린 굵은 뿌리 4갈래)
+  [[-0.86, 0.46], [0.84, 0.52], [-0.55, -0.78], [0.68, -0.68]].forEach(([rx, rz], ri) => {
+    const rootLeg = createOrganicWoodSegmentMesh(
+      new THREE.Vector3(rx * 0.16 * scale, 0.52 * scale, rz * 0.16 * scale),
+      new THREE.Vector3(rx * scale, -0.04 * scale, rz * scale),
+      0.24 * scale, 0.08 * scale, ri % 2 === 0 ? '#8b5a36' : '#784b2c', seed + 101 + ri * 7, 0.06, false
+    );
+    grp.add(rootLeg);
   });
 
-  // 예수님/군중 방향을 향해 삭개오가 앉은 포켓이 열리도록 회전
-  const faceAng = Math.atan2(faceTargetX - x, faceTargetZ - z);
+  // 3) 삭개오가 걸터앉는 왼쪽(-X) 수평 주 가지 (정밀한 중심선으로 다리·몸통 클리핑 ZERO!)
+  const seatLx = -0.66 * scale;
+  const seatLy = 1.92 * scale;
+  const seatLz = 0.10 * scale;
+  const seatBranchGeo = createOrganicWoodTrunkGeo(
+    [
+      [-0.08 * scale, 1.62 * scale, 0.02 * scale],
+      [-0.42 * scale, 1.88 * scale, 0.08 * scale],
+      [seatLx, seatLy, seatLz],
+      [-1.38 * scale, 2.08 * scale, 0.08 * scale],
+      [-2.14 * scale, 2.74 * scale, 0.04 * scale]
+    ],
+    [0.24 * scale, 0.18 * scale, 0.15 * scale, 0.12 * scale, 0.08 * scale],
+    6,
+    seed + 13,
+    false
+  );
+  const seatBranch = createLowPolyMesh(seatBranchGeo, '#784b2c', 0, 0, 0, true);
+  grp.add(seatBranch);
+
+  // 반대편(+X) 낮게 뻗은 보조 가지
+  const sideBranchGeo = createOrganicWoodTrunkGeo(
+    [
+      [0.08 * scale, 1.82 * scale, 0.00 * scale],
+      [0.75 * scale, 2.05 * scale, 0.04 * scale],
+      [1.45 * scale, 2.24 * scale, 0.06 * scale],
+      [2.02 * scale, 2.82 * scale, 0.04 * scale]
+    ],
+    [0.21 * scale, 0.16 * scale, 0.12 * scale, 0.075 * scale],
+    6,
+    seed + 29,
+    false
+  );
+  const sideBranch = createLowPolyMesh(sideBranchGeo, '#8b5a36', 0, 0, 0, true);
+  grp.add(sideBranch);
+
+  // 상부 Y자 수관 지지 가지 4갈래 (y >= 3.05*scale 위쪽만 분기하여 시야창 완전히 개방)
+  const upperSpecs = [
+    [[0.02, 3.05, -0.04], [-1.42, 4.18, 0.34], 0.18, 0.09],
+    [[0.04, 3.12, -0.05], [ 1.44, 4.15, 0.28], 0.17, 0.09],
+    [[0.02, 3.28, -0.05], [-0.08, 4.55, 0.18], 0.17, 0.09],
+    [[0.02, 3.18, -0.06], [ 0.06, 4.22, -1.18], 0.16, 0.085]
+  ];
+  upperSpecs.forEach(([p1, p2, rb, rt], ui) => {
+    const ub = createOrganicWoodSegmentMesh(
+      new THREE.Vector3(p1[0] * scale, p1[1] * scale, p1[2] * scale),
+      new THREE.Vector3(p2[0] * scale, p2[1] * scale, p2[2] * scale),
+      rb * scale, rt * scale, ui % 2 === 0 ? '#784b2c' : '#8b5a36', seed + 47 + ui * 11, 0.10, false
+    );
+    grp.add(ub);
+  });
+
+  // 4) 다각형 각면이 살아있는 소프트 로우폴리 올리브그린 수관 + 바깥쪽 낮은 가지 끝 작은 잎 뭉치
+  const oliveTones = ['#9aa854', '#879546', '#adb968', '#76843c'];
+  const canopySpecs = [
+    // 상단 풍성한 우산형 수관 (하단 경계 y >= 3.35*scale 로 삭개오 위 공간 100% 개방)
+    { lx:  0.00, ly: 4.86, lz:  0.00, r: 1.24, sx: 1.18, sy: 0.78, sz: 1.12, col: 0 },
+    { lx: -0.96, ly: 4.46, lz:  0.42, r: 0.94, sx: 1.06, sy: 0.80, sz: 1.02, col: 2 },
+    { lx:  0.96, ly: 4.44, lz:  0.38, r: 0.94, sx: 1.06, sy: 0.80, sz: 1.02, col: 1 },
+    { lx: -1.68, ly: 4.18, lz:  0.14, r: 0.76, sx: 1.02, sy: 0.84, sz: 1.00, col: 0 },
+    { lx:  1.66, ly: 4.16, lz:  0.10, r: 0.76, sx: 1.02, sy: 0.84, sz: 1.00, col: 2 },
+    { lx: -0.64, ly: 4.58, lz: -0.92, r: 0.90, sx: 1.08, sy: 0.82, sz: 1.02, col: 3 },
+    { lx:  0.68, ly: 4.54, lz: -0.88, r: 0.88, sx: 1.08, sy: 0.82, sz: 1.02, col: 1 },
+    { lx:  0.04, ly: 4.28, lz:  0.92, r: 0.78, sx: 1.12, sy: 0.76, sz: 0.94, col: 2 },
+    // 좌·우 낮은 가지 바깥 끝에만 달린 각진 다각형 잎 뭉치 (중앙 착석 공간과 완전히 분리!)
+    { lx: -2.20, ly: 2.86, lz:  0.04, r: 0.54, sx: 1.05, sy: 0.84, sz: 1.02, col: 2 },
+    { lx: -1.86, ly: 2.68, lz: -0.22, r: 0.42, sx: 1.00, sy: 0.85, sz: 1.00, col: 0 },
+    { lx:  2.06, ly: 2.90, lz:  0.04, r: 0.52, sx: 1.05, sy: 0.84, sz: 1.02, col: 1 },
+    { lx:  1.76, ly: 2.72, lz: -0.18, r: 0.40, sx: 1.00, sy: 0.85, sz: 1.00, col: 3 }
+  ];
+  const crownMeshes = [];
+  canopySpecs.forEach((cs, idx) => {
+    const puff = createLowPolyMesh(
+      createOrganicLowPolyFoliageGeo(cs.r * scale, seed + idx * 17, cs.ly > 3.5, idx % 3 === 2),
+      oliveTones[cs.col % oliveTones.length],
+      cs.lx * scale, cs.ly * scale, cs.lz * scale, true
+    );
+    puff.scale.set(cs.sx, cs.sy, cs.sz);
+    puff.rotation.set((hRand(idx + 21) - 0.5) * 0.25, hRand(idx + 53) * Math.PI, (hRand(idx + 77) - 0.5) * 0.25);
+    grp.add(puff);
+    crownMeshes.push(puff);
+  });
+
+  // 5) 수관 아래와 바깥쪽 가지 끝에 매달린 돌무화과 열매 장식
+  const figClusterSpecs = [
+    [-1.42, 3.48,  0.42],
+    [ 1.38, 3.46,  0.38],
+    [-2.14, 2.38,  0.14],
+    [ 1.98, 2.42,  0.12],
+    [ 0.22, 3.55, -1.02]
+  ];
+  figClusterSpecs.forEach(([fx, fy, fz], ci) => {
+    const stem = createLowPolyMesh(new THREE.CylinderGeometry(0.016 * scale, 0.016 * scale, 0.26 * scale, 4), '#784b2c', fx * scale, (fy + 0.12) * scale, fz * scale, false);
+    const f1 = createLowPolyMesh(new THREE.DodecahedronGeometry(0.088 * scale, 0), ci % 2 === 0 ? '#9aa653' : '#a35b43', (fx - 0.05) * scale, fy * scale, (fz + 0.03) * scale, false);
+    const f2 = createLowPolyMesh(new THREE.DodecahedronGeometry(0.078 * scale, 0), ci % 2 === 0 ? '#a35b43' : '#9aa653', (fx + 0.06) * scale, (fy - 0.05) * scale, (fz - 0.03) * scale, false);
+    grp.add(stem, f1, f2);
+  });
+
+  // 회전 적용 (미션 전용 나무는 예수님·군중을 향하도록, 숲 일반 나무는 시드별 자연 회전)
+  const faceAng = (faceTargetX !== null && faceTargetZ !== null)
+    ? Math.atan2(faceTargetX - x, faceTargetZ - z)
+    : ((seed % 7) * 0.9);
   grp.position.set(x, by, z);
   grp.rotation.y = faceAng;
   worldGroup.add(grp);
 
-  const perchWorldPos = new THREE.Vector3(
-    x + Math.sin(faceAng) * perchLocalZ,
-    by + perchLocalY + 0.16 * scale,
-    z + Math.cos(faceAng) * perchLocalZ
+  // Three.js rotation.y = faceAng 로컬->월드 좌표 변환 (x' = x*cos(a) + z*sin(a), z' = -x*sin(a) + z*cos(a))
+  const cosA = Math.cos(faceAng);
+  const sinA = Math.sin(faceAng);
+  const localToWorld = (lx, ly, lz) => new THREE.Vector3(
+    x + lx * cosA + lz * sinA,
+    by + ly,
+    z - lx * sinA + lz * cosA
   );
 
-  const registeredWallMeshes = [trunk, topCrown, subCrownL1, subCrownL2, subCrownR1, subCrownR2, subCrownBack, subCrownFrontRimL, subCrownFrontRimR];
+  // 삭개오가 두 발을 branch 앞쪽으로 드리우고 엉덩이가 branch 윗면에 정확히 닿는 착석 좌표
+  const perchWorldPos = localToWorld(seatLx, seatLy + 0.14 * scale, seatLz + 0.10 * scale);
+  const trunkMidWorldPos = localToWorld(-0.24 * scale, 1.05 * scale, 0.62 * scale);
+  const climbDownWorldPos = localToWorld(-0.18 * scale, 0.0, 1.32 * scale);
+
+  const registeredWallMeshes = [trunk, seatBranch, sideBranch, ...crownMeshes];
   wallMeshes.push(...registeredWallMeshes);
   const trunkCollider = {
-    minX: x - 0.85 * scale,
-    maxX: x + 0.85 * scale,
-    minZ: z - 0.85 * scale,
-    maxZ: z + 0.85 * scale
+    minX: x - 0.92 * scale,
+    maxX: x + 0.92 * scale,
+    minZ: z - 0.92 * scale,
+    maxZ: z + 0.92 * scale
   };
   colliders.push(trunkCollider);
 
-  return { group: grp, perchWorldPos, faceAng, trunkCollider, registeredWallMeshes };
+  return {
+    group: grp,
+    perchWorldPos,
+    trunkMidWorldPos,
+    climbDownWorldPos,
+    faceAng,
+    trunkCollider,
+    registeredWallMeshes
+  };
+}
+
+function createLowPolySycamoreTree(x, z, scale = 1.45) {
+  recordMiracleWorldTree(x, z, 'sycamore', scale);
+  const built = buildTurnaroundSycamoreTreeData(x, z, scale, null, null, false);
+  return built.group;
+}
+
+// [삭개오 미션 전용] 턴어라운드 기반 노출 주 가지 + 높은 올리브그린 수관 돌무화과나무
+function createZacchaeusPerchSycamoreTree(x, z, scale = 1.32, faceTargetX = 36.2, faceTargetZ = -5.8) {
+  return buildTurnaroundSycamoreTreeData(x, z, scale, faceTargetX, faceTargetZ, true);
 }
 window.createZacchaeusPerchSycamoreTree = createZacchaeusPerchSycamoreTree;
 
@@ -5677,47 +5753,51 @@ function ensureMiracleCustomUI() {
       </div>
 
       <!-- [부활 이후 갈릴리 바닷가 아침식사 전용] 낚시(힘 조절 투척 + 랜덤 입질 게이지) & 모닥불 생선 굽기 UI -->
-      <div id="miracle-breakfast-ui" class="hidden fixed bottom-20 sm:bottom-24 left-1/2 -translate-x-1/2 z-30 pointer-events-auto w-[92%] max-w-[348px] bg-slate-900/90 border-2 border-amber-300 rounded-2xl p-3 text-white shadow-2xl backdrop-blur-sm flex flex-col gap-2">
-        <div class="flex items-center justify-between gap-2">
-          <span id="miracle-bf-phase" class="font-jua text-xs sm:text-sm text-amber-300">🎣 갈릴리 바닷가 낚시</span>
-          <span id="miracle-bf-count" class="px-2 py-0.5 rounded-full bg-sky-500 text-slate-950 font-jua text-[11px]">🐟 0 / 3</span>
-        </div>
-        <p id="miracle-bf-hint" class="text-[11px] sm:text-xs text-slate-100 leading-snug text-center">버튼을 길게 누를수록 멀리 던져 물고기가 더 잘 잡혀요!</p>
+      <div id="miracle-breakfast-ui" class="hidden fixed bottom-4 sm:bottom-5 left-1/2 -translate-x-1/2 z-30 pointer-events-auto w-[92%] max-w-[348px] bg-slate-900/90 border-2 border-amber-300 rounded-2xl p-3 text-white shadow-2xl backdrop-blur-sm flex flex-col gap-2">
+        <div class="bf-left-col flex flex-col gap-1.5 min-w-0">
+          <div class="bf-header flex items-center justify-between gap-2">
+            <span id="miracle-bf-phase" class="font-jua text-xs sm:text-sm text-amber-300 truncate">🎣 갈릴리 바닷가 낚시</span>
+            <span id="miracle-bf-count" class="px-2 py-0.5 rounded-full bg-sky-500 text-slate-950 font-jua text-[11px] shrink-0">🐟 0 / 3</span>
+          </div>
+          <p id="miracle-bf-hint" class="text-[11px] sm:text-xs text-slate-100 leading-snug text-center">버튼을 길게 누를수록 멀리 던져 물고기가 더 잘 잡혀요!</p>
 
-        <!-- 1단계: 투척 힘 게이지 바 -->
-        <div id="miracle-bf-cast-wrap" class="flex flex-col gap-1">
-          <div class="w-full h-4 rounded-full bg-slate-800 border border-slate-500 overflow-hidden relative">
-            <div id="miracle-bf-power-bar" class="h-full bg-gradient-to-r from-sky-400 via-emerald-400 to-amber-400" style="width: 0%;"></div>
-            <span id="miracle-bf-power-label" class="absolute inset-0 flex items-center justify-center font-jua text-[10px] text-white drop-shadow">힘 0%</span>
-          </div>
-          <div class="flex justify-between text-[10px] text-slate-300 px-1">
-            <span>가까이 (느린 입질)</span>
-            <span class="text-amber-300 font-bold">멀리 던질수록 잘 잡혀요! 🌊</span>
-          </div>
-        </div>
+          <div class="bf-gauges flex flex-col">
+            <!-- 1단계: 투척 힘 게이지 바 -->
+            <div id="miracle-bf-cast-wrap" class="flex flex-col gap-1">
+              <div class="w-full h-4 rounded-full bg-slate-800 border border-slate-500 overflow-hidden relative">
+                <div id="miracle-bf-power-bar" class="h-full bg-gradient-to-r from-sky-400 via-emerald-400 to-amber-400" style="width: 0%;"></div>
+                <span id="miracle-bf-power-label" class="absolute inset-0 flex items-center justify-center font-jua text-[10px] text-white drop-shadow">힘 0%</span>
+              </div>
+              <div class="bf-sub-labels flex justify-between text-[10px] text-slate-300 px-1">
+                <span>가까이 (느린 입질)</span>
+                <span class="text-amber-300 font-bold">멀리 던질수록 잘 잡혀요! 🌊</span>
+              </div>
+            </div>
 
-        <!-- 2단계: 입질 타이밍 게이지 바 (랜덤 구간 + 랜덤 이동 속도) -->
-        <div id="miracle-bf-bite-wrap" class="hidden flex flex-col gap-1">
-          <div class="w-full h-6 rounded-full bg-slate-800 border-2 border-amber-300 overflow-hidden relative">
-            <div id="miracle-bf-zone" class="absolute top-0 bottom-0 bg-emerald-400/85 border-x-2 border-white" style="left: 35%; width: 24%;"></div>
-            <div id="miracle-bf-needle" class="absolute top-0 bottom-0 w-2 -ml-1 bg-rose-500 border border-white rounded-full shadow" style="left: 10%;"></div>
-          </div>
-          <div class="text-[10px] text-center text-emerald-300 font-jua">⚡ 빨간 바늘이 초록 구간에 들어왔을 때 버튼을 누르세요!</div>
-        </div>
+            <!-- 2단계: 입질 타이밍 게이지 바 (랜덤 구간 + 랜덤 이동 속도) -->
+            <div id="miracle-bf-bite-wrap" class="hidden flex flex-col gap-1">
+              <div class="w-full h-6 rounded-full bg-slate-800 border-2 border-amber-300 overflow-hidden relative">
+                <div id="miracle-bf-zone" class="absolute top-0 bottom-0 bg-emerald-400/85 border-x-2 border-white" style="left: 35%; width: 24%;"></div>
+                <div id="miracle-bf-needle" class="absolute top-0 bottom-0 w-2 -ml-1 bg-rose-500 border border-white rounded-full shadow" style="left: 10%;"></div>
+              </div>
+              <div class="bf-sub-labels text-[10px] text-center text-emerald-300 font-jua">⚡ 빨간 바늘이 초록 구간에 들어왔을 때 버튼을 누르세요!</div>
+            </div>
 
-        <!-- 3단계: 모닥불 물고기 굽기 게이지 바 (너무 오래 두면 타버림!) -->
-        <div id="miracle-bf-cook-wrap" class="hidden flex flex-col gap-1">
-          <div class="w-full h-5 rounded-full bg-slate-800 border border-amber-300 overflow-hidden relative">
-            <div class="absolute inset-y-0 left-0 bg-sky-400/35" style="width: 44%;"></div>
-            <div class="absolute inset-y-0 bg-emerald-400/65 border-x border-amber-200" style="left: 44%; width: 46%;"></div>
-            <div class="absolute inset-y-0 right-0 bg-rose-600/75" style="width: 10%;"></div>
-            <div id="miracle-bf-cook-bar" class="h-full bg-gradient-to-r from-amber-300 via-orange-500 to-rose-600 transition-none" style="width: 0%;"></div>
-            <span id="miracle-bf-cook-label" class="absolute inset-0 flex items-center justify-center font-jua text-[10px] text-white drop-shadow">굽기 준비</span>
-          </div>
-          <div class="flex justify-between text-[10px] px-1">
-            <span class="text-sky-300">덜 익음</span>
-            <span class="text-emerald-300 font-bold">✨ 노릇노릇 (꺼내기!)</span>
-            <span class="text-rose-400 font-bold">🔥 탄다!</span>
+            <!-- 3단계: 모닥불 물고기 굽기 게이지 바 (너무 오래 두면 타버림!) -->
+            <div id="miracle-bf-cook-wrap" class="hidden flex flex-col gap-1">
+              <div class="w-full h-5 rounded-full bg-slate-800 border border-amber-300 overflow-hidden relative">
+                <div class="absolute inset-y-0 left-0 bg-sky-400/35" style="width: 44%;"></div>
+                <div class="absolute inset-y-0 bg-emerald-400/65 border-x border-amber-200" style="left: 44%; width: 46%;"></div>
+                <div class="absolute inset-y-0 right-0 bg-rose-600/75" style="width: 10%;"></div>
+                <div id="miracle-bf-cook-bar" class="h-full bg-gradient-to-r from-amber-300 via-orange-500 to-rose-600 transition-none" style="width: 0%;"></div>
+                <span id="miracle-bf-cook-label" class="absolute inset-0 flex items-center justify-center font-jua text-[10px] text-white drop-shadow">굽기 준비</span>
+              </div>
+              <div class="bf-sub-labels flex justify-between text-[10px] px-1">
+                <span class="text-sky-300">덜 익음</span>
+                <span class="text-emerald-300 font-bold">✨ 노릇노릇 (꺼내기!)</span>
+                <span class="text-rose-400 font-bold">🔥 탄다!</span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -5729,6 +5809,50 @@ function ensureMiracleCustomUI() {
                 class="mc-btn w-full py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 border-2 border-white text-slate-950 font-jua text-sm sm:text-base shadow-lg select-none touch-none">
           🎣 꾹 눌러서 낚시줄 던지기
         </button>
+      </div>
+
+      <!-- [에피소드 4 삭개오 미션 전용] 4~5단계 돈주머니 드래그 터치/포인터 전체화면 레이어 -->
+      <div id="miracle-zac-drag-layer" style="z-index: 26;" class="hidden fixed inset-0 pointer-events-auto select-none touch-none">
+        <svg id="miracle-zac-drag-svg" class="absolute inset-0 w-full h-full pointer-events-none"></svg>
+        <div id="miracle-zac-pouch-anchor" class="hidden absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none flex flex-col items-center gap-1">
+          <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-full border-4 border-amber-300 bg-amber-400/20 shadow-[0_0_24px_rgba(251,191,36,0.75)] animate-ping absolute"></div>
+          <div class="w-14 h-14 sm:w-16 sm:h-16 rounded-full border-4 border-amber-200 bg-amber-400/25 shadow-lg relative"></div>
+          <span class="px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 font-jua text-[11px] sm:text-xs border-2 border-white shadow-md whitespace-nowrap">💰 여기서 드래그!</span>
+        </div>
+        <div id="miracle-zac-drag-coin" class="hidden absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none text-3xl sm:text-4xl drop-shadow-xl">🪙</div>
+      </div>
+
+      <!-- [에피소드 4 삭개오 미션 전용] 대사 자막 · 내려오기 버튼 · 돈주머니 게이지 UI -->
+      <div id="miracle-zacchaeus-ui" style="z-index: 30;" class="hidden fixed inset-0 pointer-events-none">
+        <div id="miracle-zac-pouch-hud" class="hidden pointer-events-auto fixed top-14 sm:top-16 left-1/2 -translate-x-1/2 w-[90%] max-w-[390px] bg-slate-900/88 border-2 border-amber-300 rounded-2xl px-3.5 py-2.5 text-white shadow-2xl backdrop-blur-sm flex flex-col gap-1.5">
+          <div class="flex items-center justify-between gap-2">
+            <span class="font-jua text-xs sm:text-sm text-amber-300">💰 삭개오의 돈주머니</span>
+            <div class="flex items-center gap-1.5">
+              <span class="px-2 py-0.5 rounded-full bg-amber-500/25 border border-amber-300/60 text-amber-200 font-jua text-[10px]">목표 50%</span>
+              <span id="miracle-zac-gauge-pct" class="px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 font-jua text-[11px]">100%</span>
+            </div>
+          </div>
+          <div class="w-full h-4 sm:h-5 rounded-full bg-slate-800 border border-amber-300/80 overflow-hidden relative">
+            <div id="miracle-zac-gauge-bar" class="h-full bg-gradient-to-r from-emerald-400 via-amber-400 to-yellow-300 transition-all duration-300" style="width: 100%;"></div>
+            <div class="absolute inset-y-0 w-0.5 bg-white shadow-[0_0_6px_#ffffff]" style="left: 50%;"></div>
+            <span id="miracle-zac-gauge-label" class="absolute inset-0 flex items-center justify-center font-jua text-[10px] sm:text-[11px] text-white drop-shadow">남은 나눔: 5회</span>
+          </div>
+          <p id="miracle-zac-drag-hint" class="text-[11px] text-amber-100 text-center leading-snug font-bold">돈주머니를 눌러 군중 쪽으로 드래그해서 나누어 주세요!</p>
+        </div>
+
+        <div id="miracle-zac-bottom-wrap" class="fixed bottom-5 sm:bottom-7 left-1/2 -translate-x-1/2 w-[92%] max-w-[460px] flex flex-col items-center gap-2.5 pointer-events-none">
+          <div id="miracle-zac-speech-box" class="hidden pointer-events-auto w-full bg-slate-900/90 border-2 border-amber-300 rounded-2xl px-4 py-3 text-white shadow-2xl backdrop-blur-sm">
+            <div class="flex items-center gap-2 mb-1">
+              <span id="miracle-zac-speaker" class="px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 font-jua text-xs">✨ 예수님</span>
+            </div>
+            <p id="miracle-zac-speech-text" class="font-jua text-sm sm:text-base text-amber-50 leading-relaxed"></p>
+          </div>
+          <button id="miracle-zac-descend-btn" type="button"
+                  onclick="if (typeof window.triggerMiracleZacchaeusDescend === 'function') window.triggerMiracleZacchaeusDescend();"
+                  class="hidden pointer-events-auto mc-btn px-7 py-3 rounded-2xl bg-amber-400 hover:bg-amber-300 border-4 border-white text-slate-950 font-jua text-base sm:text-lg shadow-2xl animate-bounce">
+            ⬇️ 내려오기
+          </button>
+        </div>
       </div>
 
       <div id="miracle-notebook-modal" style="z-index: 140;" class="hidden pointer-events-auto fixed inset-0 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3">
@@ -6216,6 +6340,8 @@ function hideAllMiracleCustomUI() {
   const s1Ui = document.getElementById('miracle-s1-ui');
   const sowerWrap = document.getElementById('miracle-sower-btn-wrap');
   const bfUi = document.getElementById('miracle-breakfast-ui');
+  const zacUi = document.getElementById('miracle-zacchaeus-ui');
+  const zacDrag = document.getElementById('miracle-zac-drag-layer');
   const flareLayer = document.getElementById('miracle-sun-flare-layer');
   const flySkip = document.getElementById('ep4-flyover-skip-wrap');
   if (flySkip) flySkip.classList.add('hidden');
@@ -6231,6 +6357,8 @@ function hideAllMiracleCustomUI() {
   if (s1Ui) s1Ui.classList.add('hidden');
   if (sowerWrap) sowerWrap.classList.add('hidden');
   if (bfUi) bfUi.classList.add('hidden');
+  if (zacUi) zacUi.classList.add('hidden');
+  if (zacDrag) zacDrag.classList.add('hidden');
   if (flareLayer) {
     flareLayer.style.opacity = '0';
     flareLayer.style.display = 'none';

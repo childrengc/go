@@ -5,7 +5,7 @@
 // =========================================================================
 
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.core = '20261124_v36';
+window.__GAME_BUILD_VERSIONS__.core = '20261125_v41';
 
 // 퀴즈 선택지 순서 무작위 셔플 공용 헬퍼 (정답이 항상 1번에 고정되지 않도록 보장)
 function shuffleQuizOptions(opts, ansIdx = 0) {
@@ -576,7 +576,9 @@ function syncOverlayModalBodyClass() {
     'retry-modal',
     'ending-modal',
     'adventure-badges-modal',
-    'ending-map-choice-modal'
+    'ending-map-choice-modal',
+    'game-exit-confirm-modal',
+    'game-closed-screen'
   ];
   let anyOpen = fullModalIds.some(id => {
     const el = document.getElementById(id);
@@ -664,6 +666,100 @@ if (typeof document !== 'undefined') {
   document.addEventListener('fullscreenchange', syncHudMenuInfo);
   document.addEventListener('webkitfullscreenchange', syncHudMenuInfo);
 }
+
+let _exitModalWasPlaying = false;
+function openGameExitConfirmModal() {
+  setHudMenuOpen(false);
+  if (typeof playSfx === 'function') playSfx('switch');
+  _exitModalWasPlaying = Boolean(isPlaying);
+  isPlaying = false;
+  joyX = 0; joyY = 0; currentMoveSpeed = 0;
+  if (typeof keys !== 'undefined' && keys) Object.keys(keys).forEach(k => { keys[k] = false; });
+  const modal = document.getElementById('game-exit-confirm-modal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+  syncOverlayModalBodyClass();
+}
+window.openGameExitConfirmModal = openGameExitConfirmModal;
+
+function closeGameExitConfirmModal() {
+  const modal = document.getElementById('game-exit-confirm-modal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+  if (_exitModalWasPlaying) {
+    isPlaying = true;
+    _exitModalWasPlaying = false;
+  }
+  syncOverlayModalBodyClass();
+}
+window.closeGameExitConfirmModal = closeGameExitConfirmModal;
+
+function confirmExitBibleAdventureGame() {
+  const modal = document.getElementById('game-exit-confirm-modal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+  _exitModalWasPlaying = false;
+  isPlaying = false;
+  isTimeAttackActive = false;
+  joyX = 0; joyY = 0; currentMoveSpeed = 0;
+  if (typeof keys !== 'undefined' && keys) Object.keys(keys).forEach(k => { keys[k] = false; });
+
+  try {
+    if (typeof saveMiracleNotebookProgress === 'function') saveMiracleNotebookProgress();
+    if (typeof saveLocalPlayerProgress === 'function' && typeof explorerName !== 'undefined' && explorerName) {
+      saveLocalPlayerProgress(explorerName);
+    }
+  } catch (e) {}
+
+  try {
+    if (typeof stopStageBgm === 'function') stopStageBgm();
+    if (typeof window.stopMiracleOpenWorldOgg === 'function') window.stopMiracleOpenWorldOgg(true);
+    if (typeof window.speechSynthesis !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel();
+  } catch (e) {}
+
+  try {
+    if (window.MiracleMultiplayer && window.MiracleMultiplayer.active && typeof window.MiracleMultiplayer.leaveRoom === 'function') {
+      window.MiracleMultiplayer.leaveRoom();
+    }
+  } catch (e) {}
+
+  try {
+    if (document.fullscreenElement && document.exitFullscreen) {
+      document.exitFullscreen().catch(() => {});
+    } else if (document.webkitFullscreenElement && document.webkitExitFullscreen) {
+      document.webkitExitFullscreen();
+    }
+  } catch (e) {}
+
+  try {
+    if (window.Android && typeof window.Android.closeApp === 'function') {
+      window.Android.closeApp();
+    } else if (window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === 'function') {
+      window.ReactNativeWebView.postMessage('EXIT_APP');
+    }
+    window.close();
+    window.open('', '_self');
+    window.close();
+  } catch (e) {}
+
+  setTimeout(() => {
+    if (!window.closed) {
+      const closedEl = document.getElementById('game-closed-screen');
+      if (closedEl) {
+        closedEl.classList.remove('hidden');
+        closedEl.classList.add('flex');
+        syncOverlayModalBodyClass();
+      }
+    }
+  }, 260);
+}
+window.confirmExitBibleAdventureGame = confirmExitBibleAdventureGame;
 
 function toggleBgm() {
   bgmEnabled = !bgmEnabled;
@@ -1212,7 +1308,7 @@ function buildUiTutorialSteps(isManual = false) {
     steps.push({
       id: 'hud-menu-btn',
       title: '☰ 메뉴 버튼',
-      desc: '내 이름이 적힌 메뉴 버튼을 누르면 현재 맵·레벨 확인, 월드맵 이동, 모험의 증표, 화면안내, 음악 끄기·전체화면을 열 수 있어요!',
+      desc: '내 이름이 적힌 메뉴 버튼을 누르면 현재 맵·레벨 확인, 월드맵 이동, 모험의 증표, 화면안내, 음악 끄기·전체화면, 게임 종료를 열 수 있어요!',
       shape: 'pill'
     });
     if (document.getElementById('hud-badges-btn')) {
@@ -1679,6 +1775,37 @@ function formatKoreanBibleTextForTTS(text) {
 }
 window.formatKoreanBibleTextForTTS = formatKoreanBibleTextForTTS;
 
+function stripEmojisAndSymbolsForTTS(text) {
+  if (!text) return '';
+  let out = String(text);
+  out = out
+    .replace(/&/g, '과')
+    .replace(/[→➡➜➔➤⇒]/g, ', ')
+    .replace(/·/g, ' ')
+    .replace(/\[([^\]]+)\]/g, '$1, ');
+  // 키캡 이모티콘(1️⃣ 등), 국기(지역 코드 쌍), 결합자·변이선택자 제거
+  out = out
+    .replace(/[0-9#*]\uFE0F?\u20E3/g, ' ')
+    .replace(/[\uD83C][\uDDE6-\uDDFF]/g, ' ')
+    .replace(/[\u200D\u20E3\uFE0E\uFE0F]/g, '');
+  // 유니코드 확장 그림문자(📖, ✨, 🌈 등 모든 이모티콘) 일괄 제거
+  try {
+    out = out.replace(/\p{Extended_Pictographic}/gu, ' ');
+  } catch (e) {}
+  // 보조 영역(U+1F000~) 및 화살표·도형·원문자·딩뱃 기호 제거 (한글·영문·숫자·기본 문장부호 유지)
+  out = out
+    .replace(/[\uD83C-\uDBFF][\uDC00-\uDFFF]/g, ' ')
+    .replace(/[\u2190-\u2BFF]/g, ' ')
+    .replace(/\(\s*\)/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([.,!?])/g, '$1')
+    .replace(/,\s*,+/g, ',')
+    .replace(/^[\s,·•\-]+/, '')
+    .trim();
+  return out;
+}
+window.stripEmojisAndSymbolsForTTS = stripEmojisAndSymbolsForTTS;
+
 let melodyTimer = null;
 function speakText(text, onEndOrOpts) {
   const onEnd = (typeof onEndOrOpts === 'function')
@@ -1696,7 +1823,7 @@ function speakText(text, onEndOrOpts) {
   };
   if (!text) { finish(); return; }
   const formattedText = formatKoreanBibleTextForTTS(text);
-  const cleanText = formattedText.replace(/⚡/g, '').replace(/&/g, '과').trim();
+  const cleanText = stripEmojisAndSymbolsForTTS(formattedText);
   if (!cleanText) { finish(); return; }
   if (melodyTimer) { clearInterval(melodyTimer); melodyTimer = null; }
   let ttsWorked = false;
@@ -2068,7 +2195,6 @@ const FOOTSTEPS_CARD_META = {
     requiredCount: 3,
     isAllClear: false,
     title: '갈릴리의 길벗',
-    borderLabel: '따뜻한 황토색',
     borderColor: '#c87a32',
     innerBorder: '#f7d7a8',
     badgeBg: '#9a4f16',
@@ -2088,7 +2214,6 @@ const FOOTSTEPS_CARD_META = {
     requiredCount: 5,
     isAllClear: false,
     title: '기적의 목격자',
-    borderLabel: '맑은 하늘색',
     borderColor: '#38bdf8',
     innerBorder: '#e0f2fe',
     badgeBg: '#0284c7',
@@ -2108,7 +2233,6 @@ const FOOTSTEPS_CARD_META = {
     requiredCount: 7,
     isAllClear: false,
     title: '말씀을 품은 제자',
-    borderLabel: '싱그러운 초록색',
     borderColor: '#22c55e',
     innerBorder: '#dcfce7',
     badgeBg: '#15803d',
@@ -2128,7 +2252,6 @@ const FOOTSTEPS_CARD_META = {
     requiredCount: 10,
     isAllClear: false,
     title: '신실한 동행자',
-    borderLabel: '깊은 보라색',
     borderColor: '#7c3aed',
     innerBorder: '#ede9fe',
     badgeBg: '#5b21b6',
@@ -2148,7 +2271,6 @@ const FOOTSTEPS_CARD_META = {
     requiredCount: 22,
     isAllClear: true,
     title: '부활의 기쁜 증인',
-    borderLabel: '찬란한 황금빛',
     borderColor: '#f59e0b',
     innerBorder: '#fef9c3',
     badgeBg: '#b45309',
@@ -2431,6 +2553,9 @@ function ensureEndingWorldMapChoiceModal() {
 }
 
 function showEndingWorldMapChoiceModal() {
+  joyX = 0; joyY = 0; keys = {}; currentMoveSpeed = 0;
+  const knobEl = document.getElementById('joystick-knob');
+  if (knobEl) knobEl.style.transform = 'translate(0,0)';
   const modal = ensureEndingWorldMapChoiceModal();
   const iconEl = document.getElementById('ending-choice-icon');
   const titleEl = document.getElementById('ending-choice-title');
@@ -2877,6 +3002,8 @@ function openWorldMapFromGame() {
       miracleS1: isElVisible('miracle-s1-ui'),
       miracleSower: isElVisible('miracle-sower-btn-wrap'),
       miracleBreakfast: isElVisible('miracle-breakfast-ui'),
+      miracleZacchaeus: isElVisible('miracle-zacchaeus-ui'),
+      miracleZacDrag: isElVisible('miracle-zac-drag-layer'),
       miracleMiniNav: isElVisible('miracle-mini-nav'),
       davidSt1Panel: isElVisible('david-st1-panel'),
       davidSt3Tracker: isElVisible('david-st3-quest-tracker'),
@@ -2907,6 +3034,7 @@ function openWorldMapFromGame() {
 
   [
     'miracle-hud-left', 'miracle-s1-ui', 'miracle-sower-btn-wrap', 'miracle-breakfast-ui',
+    'miracle-zacchaeus-ui', 'miracle-zac-drag-layer',
     'david-st1-panel', 'david-st3-quest-tracker',
     'mp-online-badge', 'miracle-mp-hud', 'mp-harvest-btn-wrap', 'mp-local-bubble'
   ].forEach(id => {
@@ -2997,6 +3125,8 @@ function resumeGameFromWorldMap() {
     restoreVis('miracle-s1-ui', v.miracleS1);
     restoreVis('miracle-sower-btn-wrap', v.miracleSower);
     restoreVis('miracle-breakfast-ui', v.miracleBreakfast);
+    restoreVis('miracle-zacchaeus-ui', v.miracleZacchaeus);
+    restoreVis('miracle-zac-drag-layer', v.miracleZacDrag);
     if (typeof updateMiracleNotebookHudBadge === 'function') updateMiracleNotebookHudBadge();
     if (snap.wasMultiplayer) {
       restoreVis('mp-online-badge', v.mpOnlineBadge);
@@ -4421,7 +4551,7 @@ function buildEndingWorld() {
 
   const certBtn = document.getElementById('cert-open-btn');
   if (certBtn) {
-    if (allowCert) certBtn.classList.remove('hidden');
+    if (allowCert && currentEpisode !== 'noah') certBtn.classList.remove('hidden');
     else certBtn.classList.add('hidden');
   }
 }
@@ -6982,6 +7112,9 @@ function showEndingCertificate(opts = {}) {
   setHudMenuOpen(false);
   hideMissionGuideBubbleImmediately();
   clearEndingCardFlipTimer();
+  joyX = 0; joyY = 0; keys = {}; currentMoveSpeed = 0;
+  const knobEl = document.getElementById('joystick-knob');
+  if (knobEl) knobEl.style.transform = 'translate(0,0)';
 
   const epKey = (opts && opts.episode && EPISODE_ORDER.includes(opts.episode)) ? opts.episode : currentEpisode;
   const forceShow = Boolean(opts && opts.forceShow);
@@ -6996,6 +7129,11 @@ function showEndingCertificate(opts = {}) {
   }
 
   certShownInCurrentRun = true;
+  const certBtnShown = document.getElementById('cert-open-btn');
+  if (certBtnShown) certBtnShown.classList.add('hidden');
+  if (epKey === 'noah' && targetObject && targetObject.type === 'altar' && targetObject.label) {
+    targetObject.label.innerHTML = '🪨 감사의 제단 (다가가면 월드맵 이동 선택창이 열려요!)';
+  }
   _applyEndingModalVisualMode('episode');
 
   // 에피소드당 1장의 인증서를 발급·보존하고, 이번 클리어 레벨을 누적 추가!
@@ -7459,7 +7597,7 @@ function _renderFootstepsBadgesHTML() {
           <div class="badge-card-frame">
             <div class="badge-card-locked" style="border-color: ${meta.borderColor};">
               <div class="w-full flex items-center justify-between text-[10px] font-jua" style="color: ${meta.innerBorder};">
-                <span>${meta.stageLabel} · ${meta.borderLabel}</span>
+                <span>${meta.stageLabel}</span>
                 <span>🔒 미획득</span>
               </div>
               <div class="flex flex-col items-center justify-center gap-1.5 my-auto">
@@ -7734,6 +7872,7 @@ function setupControls() {
       return;
     }
     if (!isPlaying || doveCutscene.active || pillarCutscene.active || seaPartingCutscene.active || sinaiCutscene.active) return;
+    if (typeof miracleActiveFieldEvent !== 'undefined' && miracleActiveFieldEvent && miracleActiveFieldEvent.cutsceneActive) return;
     if (e.pointerId === joyPointerId) return;
     camPointerId = e.pointerId; lastCamX = e.clientX;
   });
@@ -7741,7 +7880,7 @@ function setupControls() {
   window.addEventListener('pointermove', e => {
     if (e.pointerId === joyPointerId) {
       handleJoyMove(e.clientX, e.clientY);
-    } else if (e.pointerId === camPointerId && isPlaying && !doveCutscene.active && !pillarCutscene.active && !seaPartingCutscene.active && !sinaiCutscene.active) {
+    } else if (e.pointerId === camPointerId && isPlaying && !doveCutscene.active && !pillarCutscene.active && !seaPartingCutscene.active && !sinaiCutscene.active && !(typeof miracleActiveFieldEvent !== 'undefined' && miracleActiveFieldEvent && miracleActiveFieldEvent.cutsceneActive)) {
       const dx = e.clientX - lastCamX; lastCamX = e.clientX;
       cameraTargetYaw -= dx * 0.0075;
     }
@@ -8333,23 +8472,31 @@ function initEngine(skipInitialPreview = false) {
         checkAndFadeEndingArkIfBlocking(dt);
       }
 
-      // [전체 에피소드 공통 요청사항] 1차 시도일 때는 인증서를 띄우고, 2회차/재선택 엔딩일 때는 제단 접근 시 월드맵 이동 선택창 오픈!
+      // [전체 에피소드 공통 요청사항] 1차 시도 제단 첫 방문 시에만 인증서를 1회 띄우고, 재방문/2회차부터는 월드맵 이동 선택창 오픈!
       if (currentStage === 4 && targetObject && currentEpisode !== 'david') {
         const td = Math.hypot(playerPos.x - targetObject.pos.x, playerPos.z - targetObject.pos.z);
         updateWorldLabelPos(targetObject.label, targetObject.pos, td < 26);
         if (guideArrowGroup.visible) {
           guideArrowGroup.rotation.y = Math.atan2(targetObject.pos.x - playerPos.x, targetObject.pos.z - playerPos.z) - playerGroup.rotation.y;
         }
-        if (td < 4.2 && !certAutoShown) {
-          certAutoShown = true;
-          if (canShowCertificateForCurrentRun()) {
-            showEndingCertificate();
-          } else {
-            showEndingWorldMapChoiceModal();
+        const endingModalEl = document.getElementById('ending-modal');
+        const choiceModalEl = document.getElementById('ending-map-choice-modal');
+        const isEndingUiOpen = Boolean(
+          (endingModalEl && !endingModalEl.classList.contains('hidden')) ||
+          (choiceModalEl && !choiceModalEl.classList.contains('hidden'))
+        );
+        if (!isEndingUiOpen && targetObject.type === 'altar' && Math.abs(playerPos.y) < 3.5) {
+          if (td < 4.2 && !certAutoShown) {
+            certAutoShown = true;
+            if (canShowCertificateForCurrentRun() && !certShownInCurrentRun) {
+              showEndingCertificate();
+            } else {
+              showEndingWorldMapChoiceModal();
+            }
+          } else if (td > 6.2 && (!canShowCertificateForCurrentRun() || certShownInCurrentRun)) {
+            // [세상 둘러보기] 후 제단에서 멀어졌다가 다시 제단으로 오면 월드맵 이동 선택창이 열리도록 리셋
+            certAutoShown = false;
           }
-        } else if (td > 6.2 && !canShowCertificateForCurrentRun()) {
-          // 2회차 엔딩에서 [계속 둘러보기] 후 제단에서 멀어졌다가 다시 제단으로 오면 다시 선택창이 열리도록 리셋
-          certAutoShown = false;
         }
       }
     }

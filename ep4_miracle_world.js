@@ -4,7 +4,7 @@
 // - 계단으로 건물 2층 등반 후 인접한 옆 건물 옥상·2층으로 점프 이동할 수 있는 근접 마을 배치
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_world = '20261124_v36';
+window.__GAME_BUILD_VERSIONS__.ep4_world = '20261125_v41';
 
 window.miracleOpenWorldIntroFlyover = {
   active: false,
@@ -2298,7 +2298,7 @@ function getMiracleOptionalEventsCatalog() {
       color: 0x0284c7,
       npcPreset: 'disciple',
       speaker: '중풍병자의 네 친구',
-      introText: '"열린 문 너머로 예수님이 말씀을 가르치고 계시지만 사람들이 가득해 들어갈 수가 없어요! 저희와 함께 들것을 메고 오른쪽 외벽 돌계단을 따라 집 지붕 위로 올라가 주세요!"',
+      introText: '"열린 문 너머로 예수님이 말씀을 가르치고 계시지만 사람들이 가득해 들어갈 수가 없어요! 먼저 올라가 옥상에서 기다리는 두 친구에게 갈 수 있도록, 저희 두 사람과 함께 들것을 메고 오른쪽 외벽 돌계단으로 올라가 주세요!"',
       greetingText: '"평안하신가요! 함께 지붕 위로 들것을 옮겨 주신 덕분에 우리 친구가 죄 사함을 받고 건강하게 걸어서 집으로 돌아갔어요!"',
       missionType: 'escort_guide',
       escortType: 'stretcher',
@@ -2366,16 +2366,16 @@ function getMiracleOptionalEventsCatalog() {
       title: '🌳 ⑤ 삭개오를 찾아라: 여리고 나무 숲 속 삭개오 찾기',
       x: 27, z: -5,
       color: 0x8b5cf6,
-      npcPreset: 'zacchaeus',
+      npcPreset: 'villager',
       speaker: '여리고 주민',
-      introText: '"예수님과 많은 군중이 여리고 나무 숲길로 오셨어요! 키 작은 세리장 삭개오가 여러 나무 중 한 그루 위에 올라가 숨어 있으니 나무들을 살펴 찾아보세요!"',
+      introText: '"예수님과 많은 군중이 여리고 나무 숲길로 오셨어요! 키 작은 세리장 삭개오가 돌무화과나무 위에 올라가 있으니 숲을 살펴 찾아보세요!"',
       greetingText: '"할렐루야! 예수님께서 오늘 삭개오의 집에 머무시며 구원이 이 집에 이르렀다고 선포하셨어요!"',
       missionType: 'find_observe',
       zacchaeusGrove: true,
       findTargetPos: { x: 38, y: 3.0, z: -2 },
       findTargetLabel: '🌳 나무 위에 올라간 삭개오 발견!',
       completeSpeaker: '예수님과 삭개오',
-      completeText: '"삭개오야 속히 내려오라 내가 오늘 네 집에 유하여야 하겠다! ... 주여 보시옵소서 내 소유의 절반을 가난한 자들에게 주겠사오며!" (눅 19:1~10)',
+      completeText: '"오늘 이 집은 구원 받았습니다. 오늘 당신의 집에서 머물겠어요" (눅 19:1~10)',
       unlockNotebookIds: ['rumor_zacchaeus', 'wd_luke1910'],
       quiz: {
         q: '예수님을 만난 삭개오는 어떻게 변화되었나요?',
@@ -3162,6 +3162,11 @@ function syncMiracleBreakfastUI() {
     return;
   }
   const bs = miracleActiveFieldEvent.breakfastState;
+  const camBar = document.getElementById('cam-bottom-bar');
+  if (camBar && camBar.style.display !== 'none') {
+    if (bs._prevCamBarDisplay === undefined) bs._prevCamBarDisplay = camBar.style.display || 'flex';
+    camBar.style.display = 'none';
+  }
   ui.classList.remove('hidden');
 
   const phaseEl = document.getElementById('miracle-bf-phase');
@@ -3498,6 +3503,490 @@ window.triggerMiracleSowerPlant = function () {
   syncMiracleMissionStatusPanel();
 };
 
+// =========================================================================
+// [삭개오 7단계 미션] 3D 돈주머니 · 컷신 자막/버튼/게이지 UI · 드래그 금화 뿌리기 컨트롤러
+// =========================================================================
+function createZacchaeusMoneyPouchMesh() {
+  const grp = new THREE.Group();
+  const bagMat = new THREE.MeshStandardMaterial({ color: '#87522D', emissive: '#6D3F20', emissiveIntensity: 0.28, roughness: 0.80, flatShading: true });
+  const rimMat = new THREE.MeshStandardMaterial({ color: '#6D3F20', emissive: '#4d2a13', emissiveIntensity: 0.24, roughness: 0.84, flatShading: true });
+  const cordMat = new THREE.MeshStandardMaterial({ color: '#eab308', emissive: '#a16207', emissiveIntensity: 0.35, roughness: 0.55, flatShading: true });
+  const coinMat = new THREE.MeshStandardMaterial({ color: '#fde047', emissive: '#ca8a04', emissiveIntensity: 0.45, roughness: 0.35, metalness: 0.25, flatShading: true });
+
+  const sackGeo = new THREE.DodecahedronGeometry(0.42, 0);
+  const sack = new THREE.Mesh(sackGeo, bagMat);
+  sack.position.y = 0.34;
+  sack.scale.set(1.12, 0.88, 1.08);
+  sack.castShadow = true;
+
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.24, 0.22, 8), rimMat);
+  neck.position.y = 0.68;
+  const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.195, 0.195, 0.065, 8), cordMat);
+  cord.position.y = 0.67;
+  const flare = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.16, 0.16, 8), bagMat);
+  flare.position.y = 0.80;
+
+  const coinHeap = new THREE.Group();
+  coinHeap.position.y = 0.84;
+  [
+    [0, 0.03, 0], [-0.09, 0.01, 0.06], [0.09, 0.02, 0.05],
+    [-0.07, 0.02, -0.07], [0.08, 0.01, -0.06], [0.02, 0.07, 0.01]
+  ].forEach(([cx, cy, cz], idx) => {
+    const c = new THREE.Mesh(new THREE.CylinderGeometry(0.082, 0.082, 0.028, 8), coinMat);
+    c.position.set(cx, cy, cz);
+    c.rotation.set(0.25 * (idx % 2), idx * 0.8, 0.3 * ((idx % 3) - 1));
+    coinHeap.add(c);
+  });
+
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.54, 0.74, 24),
+    new THREE.MeshBasicMaterial({ color: 0xfde047, side: THREE.DoubleSide, transparent: true, opacity: 0.82 })
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.06;
+
+  grp.add(sack, neck, cord, flare, coinHeap, ring);
+  grp.userData.coinHeap = coinHeap;
+  grp.userData.ring = ring;
+  return grp;
+}
+
+function syncMiracleZacchaeusOverlayUI(fe) {
+  const ui = document.getElementById('miracle-zacchaeus-ui');
+  const dragLayer = document.getElementById('miracle-zac-drag-layer');
+  const pouchHud = document.getElementById('miracle-zac-pouch-hud');
+  const speechBox = document.getElementById('miracle-zac-speech-box');
+  const speakerEl = document.getElementById('miracle-zac-speaker');
+  const textEl = document.getElementById('miracle-zac-speech-text');
+  const descendBtn = document.getElementById('miracle-zac-descend-btn');
+  const pctEl = document.getElementById('miracle-zac-gauge-pct');
+  const barEl = document.getElementById('miracle-zac-gauge-bar');
+  const lblEl = document.getElementById('miracle-zac-gauge-label');
+  const hintEl = document.getElementById('miracle-zac-drag-hint');
+  if (!ui) return;
+
+  if (!fe || !fe.cutsceneActive || fe.cutsceneType !== 'zacchaeus_story') {
+    ui.classList.add('hidden');
+    if (dragLayer) dragLayer.classList.add('hidden');
+    return;
+  }
+  ui.classList.remove('hidden');
+
+  const ph = fe.cutscenePhase;
+  const zd = fe.zacchaeusData || {};
+
+  if (ph === 'jesus_calls') {
+    if (speechBox) speechBox.classList.remove('hidden');
+    if (speakerEl) speakerEl.textContent = '✨ 예수님';
+    if (textEl) textEl.textContent = '"삭개오씨, 어서 내려오세요"';
+    if (descendBtn) descendBtn.classList.add('hidden');
+    if (pouchHud) pouchHud.classList.add('hidden');
+    if (dragLayer) dragLayer.classList.add('hidden');
+  } else if (ph === 'zacchaeus_ready_descend') {
+    if (speechBox) speechBox.classList.add('hidden');
+    if (descendBtn) descendBtn.classList.remove('hidden');
+    if (pouchHud) pouchHud.classList.add('hidden');
+    if (dragLayer) dragLayer.classList.add('hidden');
+  } else if (ph === 'descending') {
+    if (speechBox) speechBox.classList.add('hidden');
+    if (descendBtn) descendBtn.classList.add('hidden');
+    if (pouchHud) pouchHud.classList.add('hidden');
+    if (dragLayer) dragLayer.classList.add('hidden');
+  } else if (ph === 'zacchaeus_confess') {
+    if (speechBox) speechBox.classList.remove('hidden');
+    if (speakerEl) speakerEl.textContent = '🌳 삭개오';
+    if (textEl) textEl.textContent = '"소유의 절반을 가난한 자들에게 주겠습니다."';
+    if (descendBtn) descendBtn.classList.add('hidden');
+    if (pouchHud) pouchHud.classList.add('hidden');
+    if (dragLayer) dragLayer.classList.add('hidden');
+  } else if (ph === 'coin_drag_minigame') {
+    if (speechBox) speechBox.classList.add('hidden');
+    if (descendBtn) descendBtn.classList.add('hidden');
+    if (pouchHud) pouchHud.classList.remove('hidden');
+    if (dragLayer) dragLayer.classList.remove('hidden');
+
+    const gPct = Math.max(50, Math.min(100, zd.gaugePct !== undefined ? zd.gaugePct : 100));
+    const remToss = Math.max(0, Math.round((gPct - 50) / 10));
+    if (pctEl) pctEl.textContent = `${gPct}%`;
+    if (barEl) barEl.style.width = `${gPct}%`;
+    if (lblEl) lblEl.textContent = remToss > 0 ? `남은 나눔: ${remToss}회` : '🎉 소유의 절반(50%) 달성!';
+    if (hintEl) {
+      hintEl.textContent = remToss > 0
+        ? '돈주머니를 눌러 군중 쪽으로 드래그해서 나누어 주세요!'
+        : '✨ 가난한 이웃들과 기쁘게 나누었어요!';
+    }
+  } else if (ph === 'jesus_blessing') {
+    if (speechBox) speechBox.classList.remove('hidden');
+    if (speakerEl) speakerEl.textContent = '✨ 예수님';
+    if (textEl) textEl.textContent = '"오늘 이 집은 구원 받았습니다. 오늘 당신의 집에서 머물겠어요"';
+    if (descendBtn) descendBtn.classList.add('hidden');
+    if (pouchHud) pouchHud.classList.add('hidden');
+    if (dragLayer) dragLayer.classList.add('hidden');
+  }
+}
+
+function getZacchaeusDragWorldPoint(clientX, clientY, planeY, zd) {
+  const vw = Math.max(1, window.innerWidth || 1280);
+  const vh = Math.max(1, window.innerHeight || 720);
+  if (typeof camera !== 'undefined' && camera && typeof THREE.Raycaster === 'function') {
+    const ndc = new THREE.Vector2((clientX / vw) * 2 - 1, -(clientY / vh) * 2 + 1);
+    const rc = new THREE.Raycaster();
+    rc.setFromCamera(ndc, camera);
+    if (rc.ray.direction.y < -0.05) {
+      const t = (planeY - rc.ray.origin.y) / rc.ray.direction.y;
+      if (t > 0 && t < 90) {
+        return new THREE.Vector3(
+          rc.ray.origin.x + rc.ray.direction.x * t,
+          planeY,
+          rc.ray.origin.z + rc.ray.direction.z * t
+        );
+      }
+    }
+  }
+  const start = zd.dragStart || { x: vw * 0.5, y: vh * 0.5 };
+  const sdx = clientX - start.x;
+  const sdy = clientY - start.y;
+  const slen = Math.hypot(sdx, sdy) || 1;
+  const fwd = new THREE.Vector3();
+  if (camera && typeof camera.getWorldDirection === 'function') camera.getWorldDirection(fwd);
+  fwd.y = 0;
+  if (fwd.lengthSq() < 1e-4) fwd.set(0, 0, -1);
+  fwd.normalize();
+  const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
+  const center = zd.confessPos || new THREE.Vector3();
+  return center.clone()
+    .addScaledVector(right, (sdx / slen) * 3.8)
+    .addScaledVector(fwd, (-sdy / slen) * 3.8);
+}
+
+function launchZacchaeusGoldCoinToss(fe, aimWorldPt) {
+  const zd = fe.zacchaeusData;
+  if (!zd || zd.reachedHalf) return;
+
+  const center = zd.confessPos || zd.zacGroup.position;
+  const dxAim = aimWorldPt.x - center.x;
+  const dzAim = aimWorldPt.z - center.z;
+  const aimAng = Math.atan2(dxAim, dzAim);
+
+  // 방향에 가장 가까운 군중 3명 선별 (군중 방향으로 자연스럽게 날아가도록)
+  const list = Array.isArray(zd.crowdMembers) ? zd.crowdMembers.slice() : [];
+  list.sort((a, b) => {
+    const da = Math.hypot(a.mesh.position.x - aimWorldPt.x, a.mesh.position.z - aimWorldPt.z);
+    const db = Math.hypot(b.mesh.position.x - aimWorldPt.x, b.mesh.position.z - aimWorldPt.z);
+    return da - db;
+  });
+  const chosenTargets = list.slice(0, 3);
+
+  const origin = zd.pouchPos ? zd.pouchPos.clone() : center.clone();
+  origin.y += 0.82;
+
+  for (let i = 0; i < 7; i++) {
+    const cMesh = createLowPolyMesh(new THREE.CylinderGeometry(0.115, 0.115, 0.034, 8), '#fde047', origin.x, origin.y, origin.z, false);
+    if (cMesh.material && cMesh.material.emissive) {
+      cMesh.material.emissive.set('#ca8a04');
+      cMesh.material.emissiveIntensity = 0.45;
+    }
+    worldGroup.add(cMesh);
+
+    let destPt;
+    let targetMember = null;
+    if (chosenTargets.length > 0 && i < 6) {
+      targetMember = chosenTargets[i % chosenTargets.length];
+      destPt = new THREE.Vector3(
+        targetMember.mesh.position.x + (Math.random() - 0.5) * 0.55,
+        targetMember.mesh.position.y + 0.95,
+        targetMember.mesh.position.z + (Math.random() - 0.5) * 0.55
+      );
+    } else {
+      const spAng = aimAng + (Math.random() - 0.5) * 0.55;
+      const rad = 2.8 + Math.random() * 1.4;
+      const tx = center.x + Math.sin(spAng) * rad;
+      const tz = center.z + Math.cos(spAng) * rad;
+      destPt = new THREE.Vector3(tx, getMiracleOpenWorldGroundHeight(tx, tz) + 0.75, tz);
+    }
+
+    zd.flyingCoins.push({
+      mesh: cMesh,
+      startPos: origin.clone(),
+      endPos: destPt,
+      targetMember,
+      elapsed: -i * 0.035,
+      duration: 0.56 + (i % 3) * 0.08,
+      arcHeight: 1.55 + Math.random() * 0.75,
+      done: false
+    });
+  }
+
+  zd.throwTargetYaw = aimAng;
+  zd.throwAnimTimer = 0.58;
+  zd.tossCount = (zd.tossCount || 0) + 1;
+  zd.gaugePct = Math.max(50, (zd.gaugePct || 100) - 10);
+
+  if (zd.pouchMesh) {
+    const s = THREE.MathUtils.lerp(0.76, 1.08, (zd.gaugePct - 50) / 50);
+    zd.pouchMesh.scale.set(s * 1.12, s * 0.85, s * 1.12);
+  }
+  if (zd.gaugePct <= 50) {
+    zd.reachedHalf = true;
+    zd.finishDelay = 0.95;
+  }
+
+  playSfx('clock');
+  syncMiracleZacchaeusOverlayUI(fe);
+  syncMiracleMissionStatusPanel();
+}
+
+function bindMiracleZacchaeusDragEvents() {
+  if (window.__miracleZacDragEventsBound) return;
+  window.__miracleZacDragEventsBound = true;
+
+  const layer = document.getElementById('miracle-zac-drag-layer');
+  if (!layer) return;
+
+  const clearVisual = () => {
+    const svg = document.getElementById('miracle-zac-drag-svg');
+    const coinEl = document.getElementById('miracle-zac-drag-coin');
+    if (svg) svg.innerHTML = '';
+    if (coinEl) coinEl.classList.add('hidden');
+  };
+
+  const renderVisual = (startPt, currPt) => {
+    const svg = document.getElementById('miracle-zac-drag-svg');
+    const coinEl = document.getElementById('miracle-zac-drag-coin');
+    const vw = Math.max(1, window.innerWidth || 1280);
+    const vh = Math.max(1, window.innerHeight || 720);
+    if (svg) {
+      svg.setAttribute('viewBox', `0 0 ${vw} ${vh}`);
+      const midX = (startPt.x + currPt.x) * 0.5;
+      const arcLift = Math.min(95, Math.hypot(currPt.x - startPt.x, currPt.y - startPt.y) * 0.28 + 24);
+      const midY = (startPt.y + currPt.y) * 0.5 - arcLift;
+      svg.innerHTML = `
+        <path d="M ${startPt.x.toFixed(1)} ${startPt.y.toFixed(1)} Q ${midX.toFixed(1)} ${midY.toFixed(1)} ${currPt.x.toFixed(1)} ${currPt.y.toFixed(1)}"
+              stroke="#facc15" stroke-width="5" stroke-dasharray="10 7" fill="none" stroke-linecap="round" opacity="0.92"/>
+        <circle cx="${currPt.x.toFixed(1)}" cy="${currPt.y.toFixed(1)}" r="20"
+                stroke="#fef08a" stroke-width="3" fill="rgba(250,204,21,0.24)"/>
+      `;
+    }
+    if (coinEl) {
+      coinEl.style.left = `${currPt.x}px`;
+      coinEl.style.top = `${currPt.y}px`;
+      coinEl.classList.remove('hidden');
+    }
+  };
+
+  layer.addEventListener('pointerdown', (e) => {
+    const fe = (typeof miracleActiveFieldEvent !== 'undefined') ? miracleActiveFieldEvent : null;
+    if (!fe || !fe.cutsceneActive || fe.cutsceneType !== 'zacchaeus_story' || fe.cutscenePhase !== 'coin_drag_minigame') return;
+    const zd = fe.zacchaeusData;
+    if (!zd || zd.reachedHalf || zd.dragging) return;
+
+    const pScreen = zd.pouchScreenPos || { x: window.innerWidth * 0.5, y: window.innerHeight * 0.55 };
+    const dist = Math.hypot(e.clientX - pScreen.x, e.clientY - pScreen.y);
+    if (dist > 155) {
+      const anc = document.getElementById('miracle-zac-pouch-anchor');
+      if (anc) {
+        anc.style.transform = 'translate(-50%, -50%) scale(1.16)';
+        setTimeout(() => { if (anc) anc.style.transform = 'translate(-50%, -50%) scale(1)'; }, 180);
+      }
+      return;
+    }
+
+    e.preventDefault();
+    zd.dragging = true;
+    zd.dragPointerId = e.pointerId;
+    zd.dragStart = { x: pScreen.x, y: pScreen.y };
+    zd.dragCurr = { x: e.clientX, y: e.clientY };
+    try { layer.setPointerCapture(e.pointerId); } catch (err) {}
+    renderVisual(zd.dragStart, zd.dragCurr);
+  });
+
+  window.addEventListener('pointermove', (e) => {
+    const fe = (typeof miracleActiveFieldEvent !== 'undefined') ? miracleActiveFieldEvent : null;
+    if (!fe || fe.cutsceneType !== 'zacchaeus_story' || !fe.zacchaeusData) return;
+    const zd = fe.zacchaeusData;
+    if (!zd.dragging || e.pointerId !== zd.dragPointerId) return;
+    e.preventDefault();
+    zd.dragCurr = { x: e.clientX, y: e.clientY };
+    renderVisual(zd.dragStart, zd.dragCurr);
+  }, { passive: false });
+
+  const endDrag = (e) => {
+    const fe = (typeof miracleActiveFieldEvent !== 'undefined') ? miracleActiveFieldEvent : null;
+    if (!fe || fe.cutsceneType !== 'zacchaeus_story' || !fe.zacchaeusData) return;
+    const zd = fe.zacchaeusData;
+    if (!zd.dragging || e.pointerId !== zd.dragPointerId) return;
+    zd.dragging = false;
+    zd.dragPointerId = null;
+    clearVisual();
+
+    if (fe.cutscenePhase === 'coin_drag_minigame' && !zd.reachedHalf) {
+      const dx = e.clientX - zd.dragStart.x;
+      const dy = e.clientY - zd.dragStart.y;
+      if (Math.hypot(dx, dy) >= 34) {
+        const planeY = ((zd.confessPos ? zd.confessPos.y : 0) + 0.65);
+        const aimPt = getZacchaeusDragWorldPoint(e.clientX, e.clientY, planeY, zd);
+        launchZacchaeusGoldCoinToss(fe, aimPt);
+      }
+    }
+  };
+  window.addEventListener('pointerup', endDrag);
+  window.addEventListener('pointercancel', endDrag);
+
+  window.addEventListener('keydown', (e) => {
+    const fe = (typeof miracleActiveFieldEvent !== 'undefined') ? miracleActiveFieldEvent : null;
+    if (!fe || !fe.cutsceneActive || fe.cutsceneType !== 'zacchaeus_story') return;
+    if (fe.cutscenePhase === 'zacchaeus_ready_descend' && (e.code === 'Space' || e.code === 'Enter')) {
+      e.preventDefault();
+      if (typeof window.triggerMiracleZacchaeusDescend === 'function') window.triggerMiracleZacchaeusDescend();
+    }
+  });
+}
+
+window.triggerMiracleZacchaeusDescend = function () {
+  if (!miracleActiveFieldEvent || miracleActiveFieldEvent.cutsceneType !== 'zacchaeus_story') return;
+  if (miracleActiveFieldEvent.cutscenePhase !== 'zacchaeus_ready_descend') return;
+  miracleActiveFieldEvent.cutscenePhase = 'descending';
+  miracleActiveFieldEvent.cutsceneTimer = 0;
+  const zd = miracleActiveFieldEvent.zacchaeusData;
+  if (zd) {
+    const jPos = zd.jesusPos;
+    const pPos = zd.perchPos;
+    const tx = pPos.x - jPos.x;
+    const tz = pPos.z - jPos.z;
+    const len = Math.hypot(tx, tz) || 1;
+    const cx = jPos.x + (tx / len) * 1.95;
+    const cz = jPos.z + (tz / len) * 1.95;
+    zd.confessPos = new THREE.Vector3(cx, getMiracleOpenWorldGroundHeight(cx, cz), cz);
+    const cd = zd.perchTree && zd.perchTree.climbDownWorldPos
+      ? zd.perchTree.climbDownWorldPos.clone()
+      : new THREE.Vector3((pPos.x + cx) * 0.5, getMiracleOpenWorldGroundHeight((pPos.x + cx) * 0.5, (pPos.z + cz) * 0.5), (pPos.z + cz) * 0.5);
+    cd.y = getMiracleOpenWorldGroundHeight(cd.x, cd.z);
+    zd.climbDownPos = cd;
+  }
+  playSfx('jump');
+  syncMiracleZacchaeusOverlayUI(miracleActiveFieldEvent);
+  syncMiracleMissionStatusPanel();
+};
+
+function setFlatYawToward(obj, targetX, targetZ) {
+  if (!obj || !obj.position) return 0;
+  const yaw = Math.atan2(targetX - obj.position.x, targetZ - obj.position.z);
+  obj.rotation.set(0, yaw, 0);
+  return yaw;
+}
+
+function startZacchaeusStoryCutscene(fe) {
+  if (!fe || fe.cutsceneActive) return;
+  const zd = fe.zacchaeusData;
+  if (!zd) {
+    finishMiracleFieldEvent(fe.spot);
+    return;
+  }
+  ensureMiracleCustomUI();
+  bindMiracleZacchaeusDragEvents();
+  if (typeof hideMissionGuideBubbleImmediately === 'function') hideMissionGuideBubbleImmediately();
+
+  const joyEl = document.getElementById('joystick-zone');
+  const camBar = document.getElementById('cam-bottom-bar');
+  const actEl = document.getElementById('action-zone');
+  zd._savedHud = {
+    joy: (joyEl && joyEl.style.display && joyEl.style.display !== 'none') ? joyEl.style.display : 'block',
+    camBar: (camBar && camBar.style.display && camBar.style.display !== 'none') ? camBar.style.display : 'flex',
+    act: (actEl && actEl.style.display && actEl.style.display !== 'none') ? actEl.style.display : 'flex'
+  };
+  if (joyEl) joyEl.style.display = 'none';
+  if (camBar) camBar.style.display = 'none';
+  if (actEl) actEl.style.display = 'none';
+  zd._cutsceneEntered = true;
+
+  if (typeof joyX !== 'undefined') joyX = 0;
+  if (typeof joyY !== 'undefined') joyY = 0;
+  if (typeof currentMoveSpeed !== 'undefined') currentMoveSpeed = 0;
+  if (typeof keys !== 'undefined' && keys) Object.keys(keys).forEach(k => { keys[k] = false; });
+
+  // 플레이어 캐릭터가 예수님-나무 사이 및 카메라 촬영 전면(+stageSide)을 가리지 않도록 반대편 배경으로 이동
+  const midX = (zd.jesusPos.x + zd.perchPos.x) * 0.5;
+  const midZ = (zd.jesusPos.z + zd.perchPos.z) * 0.5;
+  if (typeof playerPos !== 'undefined' && playerPos) {
+    const dirX = zd.perchPos.x - zd.jesusPos.x;
+    const dirZ = zd.perchPos.z - zd.jesusPos.z;
+    const dLen = Math.hypot(dirX, dirZ) || 1;
+    const sSign = zd.stageSideSign || 1;
+    const bgSideX = -(dirZ / dLen) * sSign;
+    const bgSideZ = (dirX / dLen) * sSign;
+    const pxNew = zd.jesusPos.x - (dirX / dLen) * 2.4 + bgSideX * 2.8;
+    const pzNew = zd.jesusPos.z - (dirZ / dLen) * 2.4 + bgSideZ * 2.8;
+    playerPos.set(pxNew, getMiracleOpenWorldGroundHeight(pxNew, pzNew), pzNew);
+    if (typeof playerGroup !== 'undefined' && playerGroup) {
+      playerGroup.position.copy(playerPos);
+      const lookYaw = setFlatYawToward(playerGroup, midX, midZ);
+      if (typeof playerFacing !== 'undefined') playerFacing = lookYaw;
+    }
+  }
+
+  if (fe.targetZone && fe.targetZone.label) fe.targetZone.label.style.opacity = '0';
+
+  fe.cutsceneActive = true;
+  fe.cutsceneCameraActive = true;
+  fe.cutsceneType = 'zacchaeus_story';
+  fe.cutscenePhase = 'jesus_calls';
+  fe.cutsceneTimer = 0;
+
+  playSfx('switch');
+  if (typeof speakText === 'function') speakText('삭개오씨, 어서 내려오세요');
+  syncMiracleZacchaeusOverlayUI(fe);
+  syncMiracleMissionStatusPanel();
+}
+
+// 컷신 카메라 ↔ 대상 직선 시야 통로에 군중·플레이어가 들어오면 배경 쪽으로 비켜 세우는 실시간 시야 보정
+function keepZacchaeusCameraLineClear(camPos, targetPos, zd, dt, snapInstant = false) {
+  if (!camPos || !targetPos || !zd) return;
+  const dx = targetPos.x - camPos.x;
+  const dz = targetPos.z - camPos.z;
+  const abLenSq = dx * dx + dz * dz;
+  if (abLenSq < 0.04) return;
+
+  const jPos = zd.jesusPos;
+  const pPos = zd.perchPos;
+  const fx = pPos.x - jPos.x;
+  const fz = pPos.z - jPos.z;
+  const fLen = Math.hypot(fx, fz) || 1;
+  const sSign = zd.stageSideSign || 1;
+  // 촬영 전면(+stageSide)의 정반대인 배경(-stageSide) + 예수님 뒤쪽 방향
+  const escX = (-(fz / fLen) * sSign) * 0.85 - (fx / fLen) * 0.52;
+  const escZ = ((fx / fLen) * sSign) * 0.85 - (fz / fLen) * 0.52;
+  const escLen = Math.hypot(escX, escZ) || 1;
+  const ex = escX / escLen;
+  const ez = escZ / escLen;
+
+  const stepAlpha = snapInstant ? 1.0 : Math.min(1, (dt || 0.016) * 11.0);
+  const crowd = Array.isArray(zd.crowdMembers) ? zd.crowdMembers : [];
+
+  crowd.forEach(cm => {
+    if (!cm || !cm.mesh) return;
+    const m = cm.mesh;
+    const px = m.position.x;
+    const pz = m.position.z;
+    const dCam = Math.hypot(px - camPos.x, pz - camPos.z);
+    const t = ((px - camPos.x) * dx + (pz - camPos.z) * dz) / abLenSq;
+    const cx = camPos.x + t * dx;
+    const cz = camPos.z + t * dz;
+    const perpDist = Math.hypot(px - cx, pz - cz);
+
+    if ((t > -0.15 && t < 1.08 && perpDist < 1.48) || dCam < 1.95) {
+      let nx = cx + ex * 2.25;
+      let nz = cz + ez * 2.25;
+      if (Math.hypot(nx - targetPos.x, nz - targetPos.z) < 2.15) {
+        nx = targetPos.x + ex * 2.75;
+        nz = targetPos.z + ez * 2.75;
+      }
+      m.position.x = THREE.MathUtils.lerp(px, nx, stepAlpha);
+      m.position.z = THREE.MathUtils.lerp(pz, nz, stepAlpha);
+      m.position.y = getMiracleOpenWorldGroundHeight(m.position.x, m.position.z);
+    }
+  });
+}
+
 function syncMiracleMissionStatusPanel() {
   if (typeof window.updateMiracleMissionStatusUI !== 'function') return;
   if (!miracleActiveFieldEvent) {
@@ -3573,7 +4062,7 @@ function syncMiracleMissionStatusPanel() {
     window.updateMiracleMissionStatusUI({
       title: `👣 ${shortTitle}`,
       goal: ev.id === 'ev_paralytic'
-        ? '오른쪽 외벽 계단으로 올라가 지붕 위 목표 지점으로 가세요!'
+        ? '두 친구와 들것을 메고 오른쪽 외벽 계단으로 올라가 옥상 친구들과 합류하세요!'
         : (ev.randomTreeGoal ? '멀리 있는 나무 아래 계신 예수님께 아이들을 인도하세요!' : `${ev.goalLabel}까지 동행하세요!`),
       progressText: `남은 거리 ${td}m`,
       extraText: fe.cutsceneActive ? '🎬 컷신 진행 중...' : '👣 일행과 동행 중'
@@ -3601,17 +4090,56 @@ function syncMiracleMissionStatusPanel() {
       warn: isBurst
     });
   } else if (fe.type === 'find_observe') {
+    let goal = '';
+    let progressText = fe.cutsceneActive ? '🎬 컷신 감상 중' : '탐색 중 (0/1)';
+    let extraText = '';
+    if (ev.zacchaeusGrove) {
+      const zd = fe.zacchaeusData;
+      if (fe.cutsceneActive && fe.cutsceneType === 'zacchaeus_story') {
+        if (fe.cutscenePhase === 'jesus_calls') {
+          goal = '예수님께서 나무 위 삭개오를 부르고 계세요!';
+          progressText = '2단계: 예수님의 부르심';
+          extraText = '✨ 컷신 진행 중';
+        } else if (fe.cutscenePhase === 'zacchaeus_ready_descend') {
+          goal = '화면 아래 [내려오기] 버튼을 눌러 삭개오가 내려오게 하세요!';
+          progressText = '2단계: 내려오기 대기';
+          extraText = '⬇️ 버튼을 누르세요!';
+        } else if (fe.cutscenePhase === 'descending') {
+          goal = '삭개오가 기뻐하며 나무에서 내려오고 있어요!';
+          progressText = '3단계: 내려오는 중';
+          extraText = '🏃 예수님 앞으로 이동';
+        } else if (fe.cutscenePhase === 'zacchaeus_confess') {
+          goal = '삭개오가 예수님께 회개의 고백을 드리고 있어요!';
+          progressText = '3단계: 회개 고백';
+          extraText = '🙏 진심 어린 고백';
+        } else if (fe.cutscenePhase === 'coin_drag_minigame') {
+          const gPct = zd ? zd.gaugePct : 100;
+          goal = '돈주머니에서 돈을 드래그해 군중에게 나누어 주세요!';
+          progressText = `돈주머니 ${gPct}% (목표 50%)`;
+          extraText = '💰 주머니 → 군중 드래그!';
+        } else {
+          goal = '예수님께서 오늘의 구원을 선포하고 계세요!';
+          progressText = '6단계: 구원 선포';
+          extraText = '✨ 잠시 후 퀴즈!';
+        }
+      } else {
+        goal = '여리고 나무 숲 속 여러 나무 중 삭개오가 올라간 나무를 찾으세요!';
+        extraText = '🌳 나무 위를 잘 살펴보세요!';
+      }
+    } else if (ev.alleyRandomAura) {
+      goal = '마을 건물 사이에 있는 감사한 사마리아인을 찾으세요!';
+    } else if (ev.thomasCutscene) {
+      goal = '마을 어딘가에 나타나신 부활의 예수님을 찾아 손의 못자국을 확인하세요!';
+    } else if (ev.widowCutscene) {
+      goal = '성전 헌금함 앞 가난한 과부에게 다가가 관찰하세요!';
+    } else {
+      goal = `${ev.findTargetLabel}을(를) 찾으세요!`;
+    }
     window.updateMiracleMissionStatusUI({
       title: `🔍 ${shortTitle}`,
-      goal: ev.zacchaeusGrove
-        ? '여리고 나무 숲 속 여러 나무 중 삭개오가 올라간 나무를 찾으세요!'
-        : (ev.alleyRandomAura
-          ? '마을 건물 사이에 있는 감사한 사마리아인을 찾으세요!'
-          : (ev.thomasCutscene
-            ? '마을 어딘가에 나타나신 부활의 예수님을 찾아 손의 못자국을 확인하세요!'
-            : (ev.widowCutscene ? '성전 헌금함 앞 가난한 과부에게 다가가 관찰하세요!' : `${ev.findTargetLabel}을(를) 찾으세요!`))),
-      progressText: fe.cutsceneActive ? '🎬 컷신 감상 중' : '탐색 중 (0/1)',
-      extraText: ev.zacchaeusGrove ? '🌳 나무 위를 잘 살펴보세요!' : ''
+      goal,
+      progressText,
+      extraText
     });
   } else if (fe.type === 'breakfast_fish_cook' && fe.breakfastState) {
     const bs = fe.breakfastState;
@@ -4101,18 +4629,33 @@ function clearMiracleFieldEventObjects() {
       }
     });
   }
-  // 아침식사 낚시·모닥불 미션 정리: 낚싯대 제거, 플레이어 착석 자세 복원, 숨겼던 기존 NPC·불꺼진 모닥불 복원
+  // 숨겼던 기존 NPC 복원 (중풍병자·낚시 등 미션 공통)
+  if (miracleActiveFieldEvent && miracleActiveFieldEvent.hiddenSpotNpc) {
+    miracleActiveFieldEvent.hiddenSpotNpc.visible = true;
+  }
+  // 아침식사 낚시·모닥불 미션 정리: 낚싯대 제거, 플레이어 착석 자세 복원, 숨겼던 불꺼진 모닥불·카메라바 복원
   let needCamSnap = false;
   if (miracleActiveFieldEvent && miracleActiveFieldEvent.breakfastState) {
     const bs = miracleActiveFieldEvent.breakfastState;
     needCamSnap = true;
     if (bs.rodMesh && bs.rodMesh.parent) bs.rodMesh.parent.remove(bs.rodMesh);
-    if (bs.hiddenSpotNpc) bs.hiddenSpotNpc.visible = true;
+    const camBar = document.getElementById('cam-bottom-bar');
+    if (camBar && bs._prevCamBarDisplay !== undefined) {
+      camBar.style.display = bs._prevCamBarDisplay;
+    }
     if (playerLimbs) {
       if (playerLimbs.lLeg) playerLimbs.lLeg.rotation.x = 0;
       if (playerLimbs.rLeg) playerLimbs.rLeg.rotation.x = 0;
-      if (playerLimbs.lArm) playerLimbs.lArm.rotation.x = 0;
-      if (playerLimbs.rArm) playerLimbs.rArm.rotation.x = 0;
+      if (playerLimbs.lArm) {
+        playerLimbs.lArm.rotation.x = 0;
+        playerLimbs.lArm.rotation.z = 0;
+      }
+      if (playerLimbs.rArm) {
+        playerLimbs.rArm.rotation.x = 0;
+        playerLimbs.rArm.rotation.z = 0;
+      }
+      if (playerLimbs.lElbow) playerLimbs.lElbow.rotation.x = 0;
+      if (playerLimbs.rElbow) playerLimbs.rElbow.rotation.x = 0;
     }
     if (bs.returnPos) {
       playerPos.copy(bs.returnPos);
@@ -4123,6 +4666,41 @@ function clearMiracleFieldEventObjects() {
       window.miracleBurntCampfireMeshes.forEach(cf => { if (cf.mesh) cf.mesh.visible = true; });
     }
   }
+  // 삭개오 미션 컷신/드래그 UI·돈주머니·동전·컨트롤 복원
+  if (miracleActiveFieldEvent && miracleActiveFieldEvent.zacchaeusData) {
+    const zd = miracleActiveFieldEvent.zacchaeusData;
+    if (zd._cutsceneEntered) needCamSnap = true;
+    if (typeof playerGroup !== 'undefined' && playerGroup) {
+      playerGroup.rotation.x = 0;
+      playerGroup.rotation.z = 0;
+    }
+    zd.dragging = false;
+    zd.dragPointerId = null;
+    if (zd._savedHud) {
+      const joyEl = document.getElementById('joystick-zone');
+      const camBar = document.getElementById('cam-bottom-bar');
+      const actEl = document.getElementById('action-zone');
+      if (joyEl) joyEl.style.display = zd._savedHud.joy || 'block';
+      if (camBar) camBar.style.display = zd._savedHud.camBar || 'flex';
+      if (actEl) actEl.style.display = zd._savedHud.act || 'flex';
+    }
+    if (zd.pouchMesh) worldGroup.remove(zd.pouchMesh);
+    if (zd.blessingAura) worldGroup.remove(zd.blessingAura);
+    if (Array.isArray(zd.flyingCoins)) {
+      zd.flyingCoins.forEach(fc => { if (fc && fc.mesh) worldGroup.remove(fc.mesh); });
+      zd.flyingCoins = [];
+    }
+    if (Array.isArray(zd.sparkles)) {
+      zd.sparkles.forEach(sp => { if (sp && sp.mesh) worldGroup.remove(sp.mesh); });
+      zd.sparkles = [];
+    }
+  }
+  ['miracle-zacchaeus-ui', 'miracle-zac-drag-layer', 'miracle-zac-pouch-hud', 'miracle-zac-speech-box', 'miracle-zac-descend-btn', 'miracle-zac-pouch-anchor', 'miracle-zac-drag-coin'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('hidden');
+  });
+  const zacSvg = document.getElementById('miracle-zac-drag-svg');
+  if (zacSvg) zacSvg.innerHTML = '';
   miracleWorldMissionObjects.forEach(obj => {
     if (obj.mesh && !obj.keepInWorld) worldGroup.remove(obj.mesh);
     if (obj.label) obj.label.remove();
@@ -4632,54 +5210,67 @@ function startMiracleFieldEvent(evSpot) {
     miracleActiveFieldEvent.escortFollowers = [];
 
     if (evSpot.escortType === 'stretcher') {
-      // 들것 손잡이 막대 2개 + 나무 틀 + 베개 + 들것 영역(z ∈ [-1.2, +1.2]) 안에 정확히 누워 있는 중풍병자!
-      const poleL = createLowPolyMesh(new THREE.CylinderGeometry(0.055, 0.055, 3.05, 6), '#78350f', -0.68, 0.66, 0, false);
+      // 시작 지점 NPC는 운반 컷신 중복 방지를 위해 미션 중 임시 숨김
+      if (evSpot.npcMesh) {
+        miracleActiveFieldEvent.hiddenSpotNpc = evSpot.npcMesh;
+        evSpot.npcMesh.visible = false;
+      }
+
+      // 2인 앞·뒤 1열 들것 운반 (좁은 외벽 돌계단 통과 최적화)
+      const poleL = createLowPolyMesh(new THREE.CylinderGeometry(0.052, 0.052, 3.55, 6), '#78350f', -0.46, 0.66, 0, false);
       poleL.rotation.x = Math.PI * 0.5;
-      const poleR = createLowPolyMesh(new THREE.CylinderGeometry(0.055, 0.055, 3.05, 6), '#78350f',  0.68, 0.66, 0, false);
+      const poleR = createLowPolyMesh(new THREE.CylinderGeometry(0.052, 0.052, 3.55, 6), '#78350f',  0.46, 0.66, 0, false);
       poleR.rotation.x = Math.PI * 0.5;
-      const bedPad = createLowPolyMesh(new THREE.BoxGeometry(1.32, 0.14, 2.35), '#b45309', 0, 0.66, 0, true);
-      const sheet  = createLowPolyMesh(new THREE.BoxGeometry(1.18, 0.06, 2.15), '#f5ead6', 0, 0.75, 0, false);
-      const pillow = createLowPolyMesh(new THREE.DodecahedronGeometry(0.22, 0), '#fffbeb', 0, 0.82, -0.82, false);
-      pillow.scale.set(1.55, 0.45, 0.85);
+      const bedPad = createLowPolyMesh(new THREE.BoxGeometry(0.98, 0.14, 1.96), '#b45309', 0, 0.66, 0, true);
+      const sheet  = createLowPolyMesh(new THREE.BoxGeometry(0.86, 0.06, 1.78), '#f5ead6', 0, 0.75, 0, false);
+      const pillow = createLowPolyMesh(new THREE.DodecahedronGeometry(0.20, 0), '#fffbeb', 0, 0.82, -0.72, false);
+      pillow.scale.set(1.35, 0.45, 0.80);
 
-      const f1 = createLowPolyPersonMesh('disciple', 1); f1.position.set(-0.76, 0, -1.05);
-      const f2 = createLowPolyPersonMesh('disciple', 2); f2.position.set( 0.76, 0, -1.05);
-      const f3 = createLowPolyPersonMesh('disciple', 3); f3.position.set(-0.76, 0,  1.05);
-      const f4 = createLowPolyPersonMesh('disciple', 4); f4.position.set( 0.76, 0,  1.05);
+      // 앞 1명(z=+1.45), 뒤 1명(z=-1.45) — 서로 다른 보행 위상으로 자연스러운 보행 연출
+      const fBack  = createLowPolyPersonMesh('disciple', 1); fBack.position.set(0, 0, -1.45);
+      const fFront = createLowPolyPersonMesh('disciple', 2); fFront.position.set(0, 0,  1.45);
+      if (fBack.userData) fBack.userData.walkPhase = 0;
+      if (fFront.userData) fFront.userData.walkPhase = Math.PI * 0.35;
 
-      // 발바닥 원점(y=0) → rotation.x = -PI/2 시 머리가 -Z(-1.68)로 가므로 z=+0.86으로 중앙 정렬 (z ∈ [-0.82, +0.86] ⊂ [-1.2, +1.2]!)
+      // 발바닥 원점(y=0) → rotation.x = -PI/2 시 들것 중앙에 맞춰 누운 중풍병자
       const patient = createLowPolyPersonMesh('villager', 5);
-      patient.scale.set(0.82, 0.82, 0.82);
+      patient.scale.set(0.78, 0.78, 0.78);
       patient.rotation.x = -Math.PI * 0.5;
-      patient.position.set(0, 0.82, 0.86);
+      patient.position.set(0, 0.82, 0.78);
 
       const stretcherOnly = new THREE.Group();
       stretcherOnly.add(poleL, poleR, bedPad, sheet, pillow, patient);
+      [[-0.46, -1.05], [0.46, -1.05], [-0.46, 1.05], [0.46, 1.05]].forEach(([kx, kz]) => {
+        const knot = createLowPolyMesh(new THREE.CylinderGeometry(0.088, 0.088, 0.11, 7), '#d9b87c', kx, 0.66, kz, false);
+        knot.rotation.x = Math.PI * 0.5;
+        stretcherOnly.add(knot);
+      });
       stretcherOnly.position.y = 0.22;
-      eGrp.add(stretcherOnly, f1, f2, f3, f4);
+      eGrp.add(stretcherOnly, fBack, fFront);
 
       const friendSpecs = [
-        { mesh: f1, side: -1, fb: -1 },
-        { mesh: f2, side:  1, fb: -1 },
-        { mesh: f3, side: -1, fb:  1 },
-        { mesh: f4, side:  1, fb:  1 }
+        { mesh: fBack,  fb: -1, cutSide: -1, cutFb: 1 },
+        { mesh: fFront, fb:  1, cutSide:  1, cutFb: 1 }
       ];
-      friendSpecs.forEach(sp => {
-        if (sp.mesh && sp.mesh.userData) {
-          if (sp.mesh.userData.lArm) sp.mesh.userData.lArm.rotation.x = -0.45;
-          if (sp.mesh.userData.rArm) sp.mesh.userData.rArm.rotation.x = -0.45;
-        }
-      });
+      if (fBack.userData) {
+        if (fBack.userData.lArm) { fBack.userData.lArm.rotation.x = -0.62; fBack.userData.lArm.rotation.z = -0.14; }
+        if (fBack.userData.rArm) { fBack.userData.rArm.rotation.x = -0.62; fBack.userData.rArm.rotation.z =  0.14; }
+      }
+      if (fFront.userData) {
+        if (fFront.userData.lArm) { fFront.userData.lArm.rotation.x = 0.34; fFront.userData.lArm.rotation.z = -0.14; }
+        if (fFront.userData.rArm) { fFront.userData.rArm.rotation.x = 0.34; fFront.userData.rArm.rotation.z =  0.14; }
+      }
 
       eGrp.userData = {
         stretcherOnly,
-        friends: [f1, f2, f3, f4],
+        friends: [fBack, fFront],
         friendSpecs,
         patient,
         raiseBlend: 0,
         curHeading: 0,
         curStretchY: 0.22,
         curStretchPitch: 0,
+        smoothSpd: 0,
         isMoving: false
       };
     } else if (evSpot.escortType === 'children') {
@@ -4877,6 +5468,36 @@ function startMiracleFieldEvent(evSpot) {
     const targetObj = { mesh: gGrp, pos: new THREE.Vector3(gx, gy + 0.5, gz), label: gLbl, goalY: gy };
     miracleWorldMissionObjects.push(targetObj);
     miracleActiveFieldEvent.targetZone = targetObj;
+
+    // [중풍병자 미션] 옥상에서 기다리는 2명의 친구 미리 배치 (총 4명 = 아래 2명 운반 + 옥상 2명 대기)
+    if (evSpot.id === 'ev_paralytic') {
+      const holeX = gx - 1.2;
+      const holeZ = gz - 0.8;
+      const roofFriends = [];
+      [
+        { x: holeX - 1.08, z: holeZ - 1.48, side: -1, idx: 3, phase: 0.4 },
+        { x: holeX + 1.08, z: holeZ - 1.48, side:  1, idx: 4, phase: 1.7 }
+      ].forEach(spec => {
+        const rfY = (typeof window.getMiracleNpcSupportY === 'function')
+          ? window.getMiracleNpcSupportY(spec.x, spec.z, gy + 0.5, 1.5)
+          : gy;
+        const rfMesh = createLowPolyPersonMesh('disciple', spec.idx);
+        rfMesh.position.set(spec.x, rfY, spec.z);
+        rfMesh.rotation.y = Math.atan2(1.5, 2.8); // 계단 입구 방향을 바라보며 대기
+        worldGroup.add(rfMesh);
+        miracleWorldMissionObjects.push({ mesh: rfMesh });
+        roofFriends.push({
+          mesh: rfMesh,
+          side: spec.side,
+          slotX: spec.x,
+          slotZ: spec.z,
+          baseY: rfY,
+          heading: rfMesh.rotation.y,
+          phase: spec.phase
+        });
+      });
+      miracleActiveFieldEvent.rooftopFriends = roofFriends;
+    }
   } else if (evSpot.missionType === 'follow_messenger') {
     // [우물가의 여인] 마을 캐릭터 3명을 매번 랜덤 선택 → 여인이 3명에게 소식을 전하러 걸어갈 때 따라가기!
     const allHumanCandidates = [];
@@ -5092,16 +5713,31 @@ function startMiracleFieldEvent(evSpot) {
         }
       }
 
-      // 예수님과 군중은 전용 나무에서 5.8~7.2m 떨어진 여리고 숲길 중심에 배치 (나무와 겹치지 않도록 자동 보정)
+      // 예수님과 군중 위치: 전용 나무에서 5.8~7.2m 거리이며 숲 나무/건물과 겹치지 않는 안전 지점 선정
       let jesusX = 36.2, jesusZ = -5.8;
-      if (Math.hypot(treeX - jesusX, treeZ - jesusZ) < 5.6) {
-        const awayAng = Math.atan2(jesusX - treeX, jesusZ - treeZ) || 0.8;
-        jesusX = Math.max(29.0, Math.min(44.5, treeX + Math.sin(awayAng) * 6.4));
-        jesusZ = Math.max(-11.5, Math.min(3.0, treeZ + Math.cos(awayAng) * 6.4));
+      if (!isClearForZacTree(jesusX, jesusZ, 3.4) || Math.hypot(treeX - jesusX, treeZ - jesusZ) < 5.6) {
+        let foundJ = false;
+        const baseAng = Math.atan2(jesusX - treeX, jesusZ - treeZ) || 0.8;
+        for (let ai = 0; ai < 12; ai++) {
+          const ang = baseAng + (ai * Math.PI * 2) / 12;
+          const cxJ = Math.max(28.5, Math.min(45.5, treeX + Math.sin(ang) * 6.4));
+          const czJ = Math.max(-13.0, Math.min(4.2, treeZ + Math.cos(ang) * 6.4));
+          if (isClearForZacTree(cxJ, czJ, 3.2)) {
+            jesusX = cxJ;
+            jesusZ = czJ;
+            foundJ = true;
+            break;
+          }
+        }
+        if (!foundJ) {
+          const awayAng = Math.atan2(jesusX - treeX, jesusZ - treeZ) || 0.8;
+          jesusX = Math.max(29.0, Math.min(44.5, treeX + Math.sin(awayAng) * 6.4));
+          jesusZ = Math.max(-11.5, Math.min(3.0, treeZ + Math.cos(awayAng) * 6.4));
+        }
       }
 
-      // 삭개오 전용 나무 생성 (노출된 수평 가지 + 높은 우산형 수관으로 삭개오 전신이 100% 또렷하게 보임!)
-      const zacTreeScale = 1.36;
+      // 삭개오 전용 돌무화과나무 생성 (턴어라운드 기반 노출 주 가지 + 높은 올리브그린 수관)
+      const zacTreeScale = 1.32;
       const perchTree = (typeof window.createZacchaeusPerchSycamoreTree === 'function')
         ? window.createZacchaeusPerchSycamoreTree(treeX, treeZ, zacTreeScale, jesusX, jesusZ)
         : null;
@@ -5118,29 +5754,67 @@ function startMiracleFieldEvent(evSpot) {
       } else {
         fx = treeX + 1.4;
         fz = treeZ + 0.5;
-        fy = getMiracleOpenWorldGroundHeight(treeX, treeZ) + 2.8;
+        fy = getMiracleOpenWorldGroundHeight(treeX, treeZ) + 2.6;
       }
 
-      // 군중(12명) + 예수님 스폰
+      // 카메라 시야가 가장 트인 무대 측면(stageSideSign) 선정 + 군중은 예수님 뒤·반대편 반원 배경에 배치해 가림 원천 차단!
+      const toTreeDx = treeX - jesusX;
+      const toTreeDz = treeZ - jesusZ;
+      const toTreeLen = Math.hypot(toTreeDx, toTreeDz) || 1;
+      const fwdX = toTreeDx / toTreeLen;
+      const fwdZ = toTreeDz / toTreeLen;
+      const sideX = fwdZ;
+      const sideZ = -fwdX;
+      const scoreStageSide = (s) => {
+        const ax = jesusX + fwdX * 1.4 + sideX * s * 3.4;
+        const az = jesusZ + fwdZ * 1.4 + sideZ * s * 3.4;
+        const bx = jesusX + fwdX * 2.55 + sideX * s * 1.25;
+        const bz = jesusZ + fwdZ * 2.55 + sideZ * s * 1.25;
+        let minD = 999;
+        grove.forEach(gt => {
+          minD = Math.min(minD, Math.hypot(ax - gt.x, az - gt.z), Math.hypot(bx - gt.x, bz - gt.z));
+        });
+        for (let bi = 0; bi < bBounds.length; bi++) {
+          const b = bBounds[bi];
+          if (ax >= b.minX - 1.5 && ax <= b.maxX + 1.5 && az >= b.minZ - 1.5 && az <= b.maxZ + 1.5) minD -= 5;
+        }
+        return minD;
+      };
+      const stageSideSign = (scoreStageSide(1) >= scoreStageSide(-1)) ? 1 : -1;
+
       const crowdGrp = new THREE.Group();
       const jesusY = getMiracleOpenWorldGroundHeight(jesusX, jesusZ);
       const jesusNpc = createLowPolyPersonMesh('jesus', 0);
       jesusNpc.position.set(jesusX, jesusY, jesusZ);
-      jesusNpc.lookAt(fx, jesusY, fz);
+      setFlatYawToward(jesusNpc, fx, fz);
       crowdGrp.add(jesusNpc);
 
-      for (let ci = 0; ci < 12; ci++) {
-        const ang = (ci / 12) * Math.PI * 2 + 0.25;
-        const rad = 2.4 + (ci % 3) * 1.05;
-        const px = jesusX + Math.cos(ang) * rad;
-        const pz = jesusZ + Math.sin(ang) * rad;
-        if (Math.hypot(px - treeX, pz - treeZ) < 2.2) continue;
+      // 군중(11명)은 카메라 전면(+stageSide) 및 나무-예수님 사이(fwd)를 피해 뒤·반대편 반원에 배치!
+      const crowdCenterX = -fwdX * 0.72 - sideX * stageSideSign * 0.68;
+      const crowdCenterZ = -fwdZ * 0.72 - sideZ * stageSideSign * 0.68;
+      const crowdArcCenter = Math.atan2(crowdCenterX, crowdCenterZ);
+      const crowdMembers = [];
+      for (let ci = 0; ci < 11; ci++) {
+        const frac = (ci / 10) * 2 - 1; // -1 .. +1
+        const ang = crowdArcCenter + frac * 1.30;
+        const rad = 2.55 + (ci % 3) * 0.85;
+        const px = jesusX + Math.sin(ang) * rad;
+        const pz = jesusZ + Math.cos(ang) * rad;
+        if (Math.hypot(px - treeX, pz - treeZ) < 2.6 || !isClearForZacTree(px, pz, 2.0)) continue;
         const py = getMiracleOpenWorldGroundHeight(px, pz);
         const preset = ci % 3 === 0 ? 'woman' : (ci % 4 === 0 ? 'child' : 'villager');
         const cNpc = createLowPolyPersonMesh(preset, 70 + ci);
         cNpc.position.set(px, py, pz);
-        cNpc.lookAt(jesusX, py, jesusZ);
+        setFlatYawToward(cNpc, jesusX, jesusZ);
         crowdGrp.add(cNpc);
+        crowdMembers.push({
+          mesh: cNpc,
+          homePos: new THREE.Vector3(px, py, pz),
+          ringPos: null,
+          blessingPos: null,
+          cheerTimer: 0,
+          phase: ci * 0.85
+        });
       }
       worldGroup.add(crowdGrp);
       miracleWorldMissionObjects.push({ mesh: crowdGrp });
@@ -5148,37 +5822,79 @@ function startMiracleFieldEvent(evSpot) {
       miracleActiveFieldEvent.crowdCenter = { x: jesusX, z: jesusZ };
 
       const fGrp = new THREE.Group();
+      // 키가 매우 작은 삭개오 모델 (createLowPolyPersonMesh 내부 uniform scale = 0.66 그대로 유지)
       const zacMesh = createLowPolyPersonMesh('zacchaeus', 5);
-      zacMesh.scale.set(0.90, 0.90, 0.90);
-      // 노출된 수평 가지 위에 걸터앉아 두 다리를 앞으로 드리우고 예수님을 반갑게 바라보는 전신 착석 포즈!
+      // 턴어라운드 이미지 포즈: 두 다리 앞으로 굽혀 내리고, 왼손(+X rArm)으로 중앙 기둥을 짚고 오른손(-X lArm)은 가지 짚기
       if (zacMesh.userData) {
-        if (zacMesh.userData.lLeg && zacMesh.userData.rLeg) {
-          zacMesh.userData.lLeg.rotation.x = -1.25;
-          zacMesh.userData.rLeg.rotation.x = -1.25;
+        const zu = zacMesh.userData;
+        if (zu.lLeg && zu.rLeg) {
+          zu.lLeg.rotation.x = -1.35;
+          zu.rLeg.rotation.x = -1.35;
         }
-        if (zacMesh.userData.lArm && zacMesh.userData.rArm) {
-          zacMesh.userData.lArm.rotation.x = -0.52;
-          zacMesh.userData.rArm.rotation.x = -0.52;
+        if (zu.lKnee && zu.rKnee) {
+          zu.lKnee.rotation.x = 1.32;
+          zu.rKnee.rotation.x = 1.32;
+        }
+        if (zu.rArm) {
+          zu.rArm.rotation.x = -0.52;
+          zu.rArm.rotation.z = 0.72;
+          if (zu.rElbow) zu.rElbow.rotation.x = -0.48;
+        }
+        if (zu.lArm) {
+          zu.lArm.rotation.x = -0.22;
+          zu.lArm.rotation.z = -0.18;
+          if (zu.lElbow) zu.lElbow.rotation.x = -0.26;
         }
       }
-      // 앉은 자세에서 엉덩이가 나뭇가지 바로 위에 안정적으로 놓이도록 미세 높이 보정
-      zacMesh.position.y = -0.34;
+      // 앉은 자세에서 엉덩이가 나뭇가지 윗면 바로 위에 안정적으로 놓이도록 미세 높이 보정
+      zacMesh.position.y = -0.42;
       fGrp.add(zacMesh);
       fGrp.position.set(fx, fy, fz);
-      fGrp.lookAt(jesusX, fy, jesusZ);
+      setFlatYawToward(fGrp, jesusX, jesusZ);
       worldGroup.add(fGrp);
 
       const fLbl = createWorldLabel(evSpot.findTargetLabel);
       fLbl.style.opacity = '0';
       const targetObj = {
         mesh: fGrp,
-        pos: new THREE.Vector3(fx, fy + 1.25, fz),
+        pos: new THREE.Vector3(fx, fy + 0.95, fz),
         label: fLbl,
         treePos: { x: treeX, z: treeZ },
         perchTree
       };
       miracleWorldMissionObjects.push(targetObj);
       miracleActiveFieldEvent.targetZone = targetObj;
+      miracleActiveFieldEvent.zacchaeusData = {
+        zacGroup: fGrp,
+        zacMesh,
+        jesusNpc,
+        jesusPos: new THREE.Vector3(jesusX, jesusY, jesusZ),
+        stageSideSign,
+        perchTree,
+        perchPos: new THREE.Vector3(fx, fy, fz),
+        treePos: new THREE.Vector3(treeX, getMiracleOpenWorldGroundHeight(treeX, treeZ), treeZ),
+        crowdMembers,
+        confessPos: null,
+        pouchPos: null,
+        pouchMesh: null,
+        blessingAura: null,
+        gaugePct: 100,
+        tossCount: 0,
+        reachedHalf: false,
+        finishDelay: 0,
+        throwAnimTimer: 0,
+        throwTargetYaw: null,
+        flyingCoins: [],
+        sparkles: [],
+        dragging: false,
+        dragPointerId: null,
+        dragStart: { x: 0, y: 0 },
+        dragCurr: { x: 0, y: 0 },
+        pouchScreenPos: null,
+        highCamYaw: 0.45,
+        _cutsceneEntered: false,
+        _savedHud: null
+      };
     } else if (evSpot.alleyRandomAura) {
       // [10명 중 돌아온 1명] 마을 건물 사이 랜덤 골목 + 빛나는 오라!
       const aPos = findSafeOpenWorldOutdoorPos({
@@ -5544,6 +6260,43 @@ function startMiracleFieldEvent(evSpot) {
   syncMiracleMissionStatusPanel();
 }
 
+function spawnPersistentRockHouse(cx = 57, cz = 21) {
+  if (window.miracleRockHouseBuilt) return window.miracleRockHouseMesh || null;
+  let houseGrp = null;
+  if (typeof addJudeanRoadsideBuilding === 'function') {
+    houseGrp = addJudeanRoadsideBuilding(cx, cz, 1, 0, 0.92, false);
+  }
+  window.miracleRockHouseBuilt = true;
+  window.miracleRockHouseMesh = houseGrp;
+
+  if (window.MiracleDayNight && typeof window.MiracleDayNight.registerNightLightSource === 'function') {
+    const gy = getMiracleOpenWorldGroundHeight(cx, cz);
+    window.MiracleDayNight.registerNightLightSource({
+      pos: new THREE.Vector3(cx + 1.8, gy + 2.1, cz + 3.6),
+      yOffset: 0,
+      color: 0xffb347,
+      intensity: 1.55,
+      distance: 13.5,
+      phase: 4.1,
+      isActive: () => Boolean(window.MiracleDayNight && window.MiracleDayNight.nightFactor > 0.12)
+    });
+  }
+  if (typeof miracleSunSystem !== 'undefined' && miracleSunSystem) {
+    miracleSunSystem.cullBuilt = false;
+  }
+  return houseGrp;
+}
+
+function spawnPersistentMustardTree(cx = 46, cz = -20) {
+  if (window.miracleMustardTreeGrown) return;
+  if (typeof addLowPolyCanopyTree === 'function') addLowPolyCanopyTree(cx, cz, 1.45, true);
+  else createLowPolySycamoreTree(cx, cz, 1.65);
+  window.miracleMustardTreeGrown = true;
+  if (typeof miracleSunSystem !== 'undefined' && miracleSunSystem) {
+    miracleSunSystem.cullBuilt = false;
+  }
+}
+
 function finishMiracleFieldEvent(evSpot) {
   if (miracleActiveFieldEvent) {
     if (miracleActiveFieldEvent.messenger) miracleActiveFieldEvent.messenger.walkHomeOnClear = true;
@@ -5565,9 +6318,9 @@ function finishMiracleFieldEvent(evSpot) {
     if (typeof playerGroup !== 'undefined' && playerGroup) playerGroup.position.copy(playerPos);
     if (typeof snapCameraToPlayer === 'function') snapCameraToPlayer();
 
-    if (typeof addJudeanRoadsideBuilding === 'function') {
-      addJudeanRoadsideBuilding(evSpot.x + 5, evSpot.z - 3, 1, 0, 0.92, false);
-    }
+    const rx = evSpot.x + (evSpot.targetOffset ? evSpot.targetOffset.x : 5);
+    const rz = evSpot.z + (evSpot.targetOffset ? evSpot.targetOffset.z : -3);
+    spawnPersistentRockHouse(rx, rz);
   }
 
   if (evSpot.ring && evSpot.ring.material) evSpot.ring.material.color.setHex(0x10b981);
@@ -5587,8 +6340,9 @@ function finishMiracleFieldEvent(evSpot) {
 
   if (evSpot.id === 'par_mustard' && !evSpot._treeGrown) {
     evSpot._treeGrown = true;
-    if (typeof addLowPolyCanopyTree === 'function') addLowPolyCanopyTree(evSpot.x + 4, evSpot.z, 1.45, true);
-    else createLowPolySycamoreTree(evSpot.x + 4, evSpot.z, 1.65);
+    const mx = evSpot.x + (evSpot.targetOffset ? evSpot.targetOffset.x : 4);
+    const mz = evSpot.z + (evSpot.targetOffset ? evSpot.targetOffset.z : 0);
+    spawnPersistentMustardTree(mx, mz);
   }
 
   playSfx('clear');
@@ -5664,7 +6418,7 @@ function updateMiracleFieldEventFrame(dt, now) {
   }
 
   // =========================================================================
-  // [전용 컷신 1] 중풍병자 옥상 망치질 → 옥상 파편 부서짐 → 4줄 밧줄 하강 컷신
+  // [전용 컷신 1] 중풍병자 옥상 망치질 → 옥상 파편 부서짐 → 4명 합류 4줄 밧줄 하강 컷신
   // =========================================================================
   if (fe.cutsceneActive && fe.cutsceneType === 'paralytic_roof') {
     fe.cutsceneTimer += dt;
@@ -5672,6 +6426,49 @@ function updateMiracleFieldEventFrame(dt, now) {
     const holeX = evSpot.goalPos.x - 1.2;
     const holeZ = evSpot.goalPos.z - 0.8;
     const roofY = fe.cutsceneProps ? fe.cutsceneProps.roofY : playerPos.y;
+    const rfList = Array.isArray(fe.rooftopFriends) ? fe.rooftopFriends : [];
+
+    const alignFriendToHoleCorner = (spMesh, targetX, targetZ, rate = 6.5) => {
+      if (!spMesh) return;
+      const faceKnot = Math.atan2(targetX - spMesh.position.x, targetZ - spMesh.position.z);
+      spMesh.rotation.y = lerpAngle(spMesh.rotation.y, faceKnot, Math.min(1, dt * rate));
+    };
+
+    const getNpcHandWorldPos = (npc, isLeft, outVec) => {
+      if (!npc) return outVec.set(holeX, roofY + 1.0, holeZ);
+      const grip = npc.getObjectByName(isLeft ? 'handGripL' : 'handGripR');
+      if (grip) {
+        grip.getWorldPosition(outVec);
+        return outVec;
+      }
+      const arm = npc.userData ? (isLeft ? npc.userData.lArm : npc.userData.rArm) : null;
+      if (arm) {
+        outVec.set(0, -0.60, 0.04).applyMatrix4(arm.matrixWorld);
+        return outVec;
+      }
+      npc.getWorldPosition(outVec);
+      outVec.y += 1.05;
+      return outVec;
+    };
+
+    const orientRopeBetween = (mesh, pA, pB) => {
+      if (!mesh || !pA || !pB) return;
+      if (!window._paralyticRopeDirTmp) {
+        window._paralyticRopeDirTmp = new THREE.Vector3();
+        window._paralyticRopeUpVec = new THREE.Vector3(0, 1, 0);
+      }
+      const dir = window._paralyticRopeDirTmp.subVectors(pB, pA);
+      const dist = dir.length();
+      if (dist < 0.006) {
+        mesh.visible = false;
+        return;
+      }
+      mesh.visible = true;
+      mesh.position.addVectors(pA, pB).multiplyScalar(0.5);
+      mesh.scale.set(1, dist, 1);
+      dir.divideScalar(dist);
+      mesh.quaternion.setFromUnitVectors(window._paralyticRopeUpVec, dir);
+    };
 
     if (fe.cutscenePhase === 'hammer') {
       // 측면 드라마틱 클로즈업 앵글
@@ -5688,19 +6485,49 @@ function updateMiracleFieldEventFrame(dt, now) {
           eud.stretcherOnly.position.y = THREE.MathUtils.damp(eud.stretcherOnly.position.y, 0, 8, dt);
           eud.stretcherOnly.rotation.x = THREE.MathUtils.damp(eud.stretcherOnly.rotation.x, 0, 8, dt);
         }
+        // 들것을 올린 2명의 친구 → 구멍 남쪽 테두리 두 모서리(±1.08, +1.48)로 이동해 담당 들것 매듭을 바라봄
         if (Array.isArray(eud.friendSpecs)) {
           eud.friendSpecs.forEach(sp => {
             if (!sp.mesh) return;
-            sp.mesh.position.x = THREE.MathUtils.damp(sp.mesh.position.x, sp.side * 0.76, 8, dt);
+            const sSide = (sp.cutSide !== undefined ? sp.cutSide : (sp.side || 1));
+            const destX = sSide * 1.08;
+            const destZ = 1.48;
+            const distRem = Math.hypot(destX - sp.mesh.position.x, destZ - sp.mesh.position.z);
+            sp.mesh.position.x = THREE.MathUtils.damp(sp.mesh.position.x, destX, 5.5, dt);
+            sp.mesh.position.z = THREE.MathUtils.damp(sp.mesh.position.z, destZ, 5.5, dt);
             sp.mesh.position.y = THREE.MathUtils.damp(sp.mesh.position.y, 0, 8, dt);
+            alignFriendToHoleCorner(sp.mesh, sSide * 0.46, 1.05, 6.5);
             if (typeof window.applyMiracleNpcLimbAnimation === 'function') {
               window.applyMiracleNpcLimbAnimation(sp.mesh, {
-                speed: 0, isMoving: false, lArmX: -0.45, rArmX: -0.45, lArmZ: 0, rArmZ: 0, dampRate: 10
+                speed: distRem > 0.14 ? 2.4 : 0,
+                isMoving: distRem > 0.14,
+                lArmX: -0.35, rArmX: -0.35, lArmZ: 0.18, rArmZ: -0.18, dampRate: 10
               }, dt);
             }
           });
         }
       }
+      // 옥상 대기 2명의 친구 → 구멍 북쪽 테두리 두 모서리(±1.08, -1.48)로 자리 잡고 담당 들것 매듭을 바라봄
+      rfList.forEach(rf => {
+        const m = rf.mesh;
+        if (!m) return;
+        const distRem = Math.hypot(rf.slotX - m.position.x, rf.slotZ - m.position.z);
+        m.position.x = THREE.MathUtils.damp(m.position.x, rf.slotX, 5.5, dt);
+        m.position.z = THREE.MathUtils.damp(m.position.z, rf.slotZ, 5.5, dt);
+        m.position.y = THREE.MathUtils.damp(m.position.y, rf.baseY !== undefined ? rf.baseY : roofY, 8, dt);
+        const knotX = holeX + (rf.side || -1) * 0.46;
+        const knotZ = holeZ - 1.05;
+        const faceKnot = Math.atan2(knotX - m.position.x, knotZ - m.position.z);
+        rf.heading = lerpAngle(rf.heading || m.rotation.y, faceKnot, dt * 6.5);
+        m.rotation.y = rf.heading;
+        if (typeof window.applyMiracleNpcLimbAnimation === 'function') {
+          window.applyMiracleNpcLimbAnimation(m, {
+            speed: distRem > 0.14 ? 2.2 : 0,
+            isMoving: distRem > 0.14,
+            lArmX: -0.32, rArmX: -0.32, lArmZ: 0.18, rArmZ: -0.18, dampRate: 10
+          }, dt);
+        }
+      });
 
       if (typeof playerChopAnimTimer !== 'undefined') playerChopAnimTimer = 0.2;
       if (playerLimbs && playerLimbs.lArm) {
@@ -5740,7 +6567,6 @@ function updateMiracleFieldEventFrame(dt, now) {
         );
         warmGlow.rotation.x = -Math.PI * 0.5;
         warmGlow.position.y = 0.09;
-        // 깨진 가장자리 돌·흙 조각 테두리
         for (let e = 0; e < 10; e++) {
           const ang = (e / 10) * Math.PI * 2;
           const rim = createLowPolyMesh(new THREE.DodecahedronGeometry(0.24, 0), '#bfa47c', Math.cos(ang) * 1.15, 0.12, Math.sin(ang) * 1.55, false);
@@ -5773,51 +6599,144 @@ function updateMiracleFieldEventFrame(dt, now) {
       camera.position.lerp(new THREE.Vector3(holeX + 4.2, roofY + 6.4, holeZ + 4.4), Math.min(1, dt * 3.2));
       camera.lookAt(holeX, roofY + 0.1, holeZ);
 
+      if (eg && eg.userData && Array.isArray(eg.userData.friendSpecs)) {
+        eg.userData.friendSpecs.forEach(sp => {
+          if (!sp.mesh) return;
+          const sSide = (sp.cutSide !== undefined ? sp.cutSide : (sp.side || 1));
+          sp.mesh.position.x = THREE.MathUtils.damp(sp.mesh.position.x, sSide * 1.08, 7.0, dt);
+          sp.mesh.position.z = THREE.MathUtils.damp(sp.mesh.position.z, 1.48, 7.0, dt);
+          alignFriendToHoleCorner(sp.mesh, sSide * 0.46, 1.05, 8.0);
+        });
+      }
+      rfList.forEach(rf => {
+        if (!rf || !rf.mesh) return;
+        rf.mesh.position.x = THREE.MathUtils.damp(rf.mesh.position.x, rf.slotX, 7.0, dt);
+        rf.mesh.position.z = THREE.MathUtils.damp(rf.mesh.position.z, rf.slotZ, 7.0, dt);
+        const knotX = holeX + (rf.side || -1) * 0.46;
+        const knotZ = holeZ - 1.05;
+        const faceKnot = Math.atan2(knotX - rf.mesh.position.x, knotZ - rf.mesh.position.z);
+        rf.heading = lerpAngle(rf.heading || rf.mesh.rotation.y, faceKnot, dt * 8.0);
+        rf.mesh.rotation.y = rf.heading;
+      });
+
       if (fe.cutsceneTimer > 1.55) {
         fe.cutscenePhase = 'lower';
         fe.cutsceneTimer = 0;
-        showToast('🪢 네 친구가 밧줄 4줄로 중풍병자 들것을 예수님 앞으로 조심스레 내립니다!');
+        showToast('🪢 네 친구가 모두 모여 밧줄 4줄로 중풍병자 들것을 예수님 앞으로 조심스레 내립니다!');
 
-        // 4줄 밧줄(지붕 구멍 네 모서리 ↔ 들것 네 모서리) 생성
-        const ropes = [];
-        [[-0.68, -1.05], [0.68, -1.05], [-0.68, 1.05], [0.68, 1.05]].forEach(([rx, rz]) => {
-          const rMesh = createLowPolyMesh(new THREE.CylinderGeometry(0.032, 0.032, 1.0, 5), '#e5c687', holeX + rx, roofY, holeZ + rz, false);
-          worldGroup.add(rMesh);
-          miracleWorldMissionObjects.push({ mesh: rMesh });
-          ropes.push({ mesh: rMesh, rx, rz });
+        if (eg) {
+          eg.position.set(holeX, roofY, holeZ);
+          eg.rotation.y = 0;
+        }
+        const eud = (eg && eg.userData) ? eg.userData : {};
+        const fSpecs = Array.isArray(eud.friendSpecs) ? eud.friendSpecs : [];
+        const ropeSegGeo = new THREE.CylinderGeometry(0.032, 0.032, 1.0, 6);
+        const coilGeo = new THREE.TorusGeometry(0.16, 0.042, 5, 10);
+        const cornerPairs = [];
+        if (rfList[0] && rfList[0].mesh) cornerPairs.push({ friend: rfList[0].mesh, isInEg: false, slotX: rfList[0].slotX, slotZ: rfList[0].slotZ, rx: -0.46, rz: -1.05, sideX: -1, sideZ: -1 });
+        if (rfList[1] && rfList[1].mesh) cornerPairs.push({ friend: rfList[1].mesh, isInEg: false, slotX: rfList[1].slotX, slotZ: rfList[1].slotZ, rx:  0.46, rz: -1.05, sideX:  1, sideZ: -1 });
+        fSpecs.forEach(sp => {
+          if (!sp || !sp.mesh) return;
+          const sSide = (sp.cutSide !== undefined ? sp.cutSide : (sp.side || 1));
+          cornerPairs.push({ friend: sp.mesh, isInEg: true, slotX: sSide * 1.08, slotZ: 1.48, rx: sSide * 0.46, rz: 1.05, sideX: sSide, sideZ: 1 });
+        });
+
+        const ropes = cornerPairs.map((cpItem, idx) => {
+          const mainMesh = createLowPolyMesh(ropeSegGeo, '#e5c687', holeX + cpItem.rx, roofY, holeZ + cpItem.rz, false);
+          const gripMesh = createLowPolyMesh(ropeSegGeo, '#edd299', holeX + cpItem.rx, roofY + 1.0, holeZ + cpItem.rz, false);
+          const tailMesh = createLowPolyMesh(ropeSegGeo, '#d9b87c', holeX + cpItem.rx, roofY + 0.5, holeZ + cpItem.rz, false);
+          const worldBaseX = cpItem.isInEg ? (holeX + cpItem.slotX) : cpItem.slotX;
+          const worldBaseZ = cpItem.isInEg ? (holeZ + cpItem.slotZ) : cpItem.slotZ;
+          const coilPos = new THREE.Vector3(
+            worldBaseX + cpItem.sideX * 0.24,
+            roofY + 0.04,
+            worldBaseZ + cpItem.sideZ * 0.16
+          );
+          const coilMesh = createLowPolyMesh(coilGeo, '#cfa96b', coilPos.x, coilPos.y, coilPos.z, false);
+          coilMesh.rotation.x = Math.PI * 0.5;
+          worldGroup.add(mainMesh, gripMesh, tailMesh, coilMesh);
+          miracleWorldMissionObjects.push({ mesh: mainMesh }, { mesh: gripMesh }, { mesh: tailMesh }, { mesh: coilMesh });
+          return {
+            ...cpItem,
+            idx,
+            mainMesh,
+            gripMesh,
+            tailMesh,
+            coilMesh,
+            coilPos
+          };
         });
         fe.cutsceneProps.ropes = ropes;
       }
     } else if (fe.cutscenePhase === 'lower') {
-      // 하이앵글 하강 전용 시네마틱 카메라 (지붕 구멍 아래를 내려다봄!)
+      // 하이앵글 하강 전용 시네마틱 카메라 (4명 친구 손에 직접 닿는 밧줄이 아래 들것까지 연결!)
       const p = Math.min(1, fe.cutsceneTimer / 3.2);
       const camAng = 0.55 + p * 0.65;
       camera.position.lerp(new THREE.Vector3(holeX + Math.cos(camAng) * 5.2, roofY + 5.8 - p * 0.8, holeZ + Math.sin(camAng) * 5.2), Math.min(1, dt * 3.5));
       camera.lookAt(holeX, roofY - p * 1.4, holeZ);
 
       const dropDepth = p * 3.1;
-      if (eg && eg.userData && eg.userData.stretcherOnly) {
-        eg.userData.stretcherOnly.position.y = -dropDepth;
-        // 네 친구는 옥상 구멍 가장자리에 남아 몸을 앞으로 숙이며 밧줄을 내리는 모션!
-        if (Array.isArray(eg.userData.friends)) {
-          eg.userData.friends.forEach(fr => {
-            if (fr.userData && fr.userData.lArm && fr.userData.rArm) {
-              fr.userData.lArm.rotation.x = -0.85 + Math.sin(tSec * 4) * 0.15;
-              fr.userData.rArm.rotation.x = -0.85 - Math.sin(tSec * 4) * 0.15;
-            }
-          });
+      if (eg) {
+        eg.position.set(holeX, roofY, holeZ);
+        eg.rotation.y = 0;
+        if (eg.userData && eg.userData.stretcherOnly) {
+          eg.userData.stretcherOnly.position.y = -dropDepth;
+        } else {
+          eg.position.y = roofY - dropDepth;
         }
-      } else if (eg) {
-        eg.position.y = roofY - dropDepth;
       }
 
-      if (fe.cutsceneProps && Array.isArray(fe.cutsceneProps.ropes)) {
-        const len = Math.max(0.15, dropDepth + 0.55);
-        fe.cutsceneProps.ropes.forEach(rp => {
-          rp.mesh.scale.set(1, len, 1);
-          rp.mesh.position.set(holeX + rp.rx, roofY - len * 0.5 + 0.55, holeZ + rp.rz);
-        });
-      }
+      const ropes = (fe.cutsceneProps && Array.isArray(fe.cutsceneProps.ropes)) ? fe.cutsceneProps.ropes : [];
+      ropes.forEach((rp, idx) => {
+        const fr = rp.friend;
+        if (!fr || !fr.userData) return;
+
+        if (rp.isInEg) {
+          fr.position.set(rp.slotX, 0, rp.slotZ);
+          fr.rotation.y = Math.atan2(rp.rx - rp.slotX, rp.rz - rp.slotZ);
+        } else {
+          fr.position.set(rp.slotX, roofY, rp.slotZ);
+          fr.rotation.y = Math.atan2((holeX + rp.rx) - rp.slotX, (holeZ + rp.rz) - rp.slotZ);
+        }
+
+        const phaseOff = idx * 1.15;
+        if (typeof window.applyMiracleNpcLimbAnimation === 'function') {
+          window.applyMiracleNpcLimbAnimation(fr, {
+            speed: 0,
+            isMoving: false,
+            lArmX: -0.92 + Math.sin(tSec * 4.8 + phaseOff) * 0.25,
+            rArmX: -0.92 - Math.sin(tSec * 4.8 + phaseOff) * 0.25,
+            lArmZ: 0.48,
+            rArmZ: -0.48,
+            dampRate: 14
+          }, dt);
+        }
+        if (fr.userData.head) {
+          fr.userData.head.rotation.x = THREE.MathUtils.damp(fr.userData.head.rotation.x, 0.46, 8, dt);
+        }
+      });
+
+      if (eg) eg.updateMatrixWorld(true);
+      const lHand = new THREE.Vector3();
+      const rHand = new THREE.Vector3();
+      const knotPos = new THREE.Vector3();
+      ropes.forEach(rp => {
+        if (!rp.friend) return;
+        if (!rp.isInEg) rp.friend.updateMatrixWorld(true);
+        getNpcHandWorldPos(rp.friend, true, lHand);
+        getNpcHandWorldPos(rp.friend, false, rHand);
+        const upperHand = (lHand.y >= rHand.y) ? lHand : rHand;
+        const lowerHand = (lHand.y >= rHand.y) ? rHand : lHand;
+        knotPos.set(holeX + rp.rx, roofY + 0.66 - dropDepth, holeZ + rp.rz);
+
+        orientRopeBetween(rp.mainMesh, lowerHand, knotPos);
+        orientRopeBetween(rp.gripMesh, upperHand, lowerHand);
+        orientRopeBetween(rp.tailMesh, upperHand, rp.coilPos);
+        if (rp.coilMesh) {
+          const coilSc = Math.max(0.65, 1.0 - p * 0.30);
+          rp.coilMesh.scale.set(coilSc, coilSc, 1);
+        }
+      });
 
       if (fe.cutsceneTimer > 3.5) {
         fe.cutsceneActive = false;
@@ -6011,6 +6930,535 @@ function updateMiracleFieldEventFrame(dt, now) {
       return;
     }
     syncMiracleMissionStatusPanel();
+    return;
+  }
+
+  // =========================================================================
+  // [전용 컷신 4] 삭개오 7단계 스토리 & 하이앵글 돈주머니 드래그 나눔 미니게임
+  // =========================================================================
+  if (fe.cutsceneActive && fe.cutsceneType === 'zacchaeus_story' && fe.zacchaeusData) {
+    fe.cutsceneTimer += dt;
+    const zd = fe.zacchaeusData;
+    const zGrp = zd.zacGroup;
+    const zMesh = zd.zacMesh;
+    const zu = (zMesh && zMesh.userData) ? zMesh.userData : {};
+    const jNpc = zd.jesusNpc;
+    const ju = (jNpc && jNpc.userData) ? jNpc.userData : {};
+    const jPos = zd.jesusPos;
+    const pPos = zd.perchPos;
+
+    // 일시정지 복귀 시에도 컷신 중 이동 버튼/조이스틱 재노출 방지
+    const joyEl = document.getElementById('joystick-zone');
+    const camBar = document.getElementById('cam-bottom-bar');
+    const actEl = document.getElementById('action-zone');
+    if (joyEl && joyEl.style.display !== 'none') joyEl.style.display = 'none';
+    if (camBar && camBar.style.display !== 'none') camBar.style.display = 'none';
+    if (actEl && actEl.style.display !== 'none') actEl.style.display = 'none';
+
+    const dirX = pPos.x - jPos.x;
+    const dirZ = pPos.z - jPos.z;
+    const dirLen = Math.hypot(dirX, dirZ) || 1;
+    const fwdX = dirX / dirLen;
+    const fwdZ = dirZ / dirLen;
+    const sideX = fwdZ;
+    const sideZ = -fwdX;
+    const sSign = zd.stageSideSign || 1;
+    const camSideX = sideX * sSign;
+    const camSideZ = sideZ * sSign;
+
+    if (fe.cutscenePhase === 'jesus_calls') {
+      // 2-A단계: 카메라가 예수님께로 이동 ("삭개오씨, 어서 내려오세요") — 군중 없는 전면/측면에서 클로즈업
+      if (jNpc) setFlatYawToward(jNpc, pPos.x, pPos.z);
+      if (ju.head) ju.head.rotation.x = THREE.MathUtils.damp(ju.head.rotation.x, -0.22, 8, dt);
+      if (ju.rArm) {
+        ju.rArm.rotation.x = THREE.MathUtils.damp(ju.rArm.rotation.x, -1.42 + Math.sin(tSec * 4.5) * 0.16, 10, dt);
+        ju.rArm.rotation.z = THREE.MathUtils.damp(ju.rArm.rotation.z, 0.25, 10, dt);
+      }
+      if (ju.lArm) {
+        ju.lArm.rotation.x = THREE.MathUtils.damp(ju.lArm.rotation.x, -0.35, 10, dt);
+      }
+
+      const targetCam = new THREE.Vector3(
+        jPos.x + fwdX * 2.55 + camSideX * 1.25,
+        jPos.y + 1.82,
+        jPos.z + fwdZ * 2.55 + camSideZ * 1.25
+      );
+      keepZacchaeusCameraLineClear(targetCam, jPos, zd, dt, fe.cutsceneTimer < 0.08);
+      camera.position.lerp(targetCam, Math.min(1, dt * 4.8));
+      camera.lookAt(jPos.x, jPos.y + 1.50, jPos.z);
+
+      if (fe.cutsceneTimer >= 3.2) {
+        fe.cutscenePhase = 'zacchaeus_ready_descend';
+        fe.cutsceneTimer = 0;
+        playSfx('switch');
+        syncMiracleZacchaeusOverlayUI(fe);
+        syncMiracleMissionStatusPanel();
+      }
+    } else if (fe.cutscenePhase === 'zacchaeus_ready_descend') {
+      // 2-B단계: 카메라가 나무 위 삭개오로 옮겨지고 [내려오기] 버튼 생성
+      const targetCam = new THREE.Vector3(
+        pPos.x - fwdX * 3.15 + camSideX * 0.85,
+        pPos.y + 0.62,
+        pPos.z - fwdZ * 3.15 + camSideZ * 0.85
+      );
+      keepZacchaeusCameraLineClear(targetCam, pPos, zd, dt, false);
+      camera.position.lerp(targetCam, Math.min(1, dt * 4.8));
+      camera.lookAt(pPos.x, pPos.y + 0.32, pPos.z);
+
+      // 기뻐하며 다리 흔들고 한쪽 손 흔드는 착석 대기 모션
+      if (zu.lKnee && zu.rKnee) {
+        zu.lKnee.rotation.x = 1.32 + Math.sin(tSec * 5.2) * 0.14;
+        zu.rKnee.rotation.x = 1.32 - Math.sin(tSec * 5.2) * 0.14;
+      }
+      if (zu.lArm) {
+        zu.lArm.rotation.x = THREE.MathUtils.damp(zu.lArm.rotation.x, -0.75, 8, dt);
+        zu.lArm.rotation.z = THREE.MathUtils.damp(zu.lArm.rotation.z, -0.42 + Math.sin(tSec * 6.5) * 0.25, 10, dt);
+      }
+    } else if (fe.cutscenePhase === 'descending') {
+      // 3-A단계: 삭개오 하강 → 예수님 앞으로 이동
+      const totalDur = 2.25;
+      const p = Math.min(1, fe.cutsceneTimer / totalDur);
+      const confessPos = zd.confessPos || new THREE.Vector3(jPos.x + fwdX * 1.95, jPos.y, jPos.z + fwdZ * 1.95);
+      const midTrunk = (zd.perchTree && zd.perchTree.trunkMidWorldPos) ? zd.perchTree.trunkMidWorldPos : pPos.clone().lerp(confessPos, 0.35);
+      const climbGround = zd.climbDownPos || pPos.clone().lerp(confessPos, 0.55);
+
+      if (p < 0.42) {
+        const u = p / 0.42;
+        if (u < 0.5) {
+          const k = u / 0.5;
+          zGrp.position.lerpVectors(pPos, midTrunk, k);
+        } else {
+          const k = (u - 0.5) / 0.5;
+          zGrp.position.lerpVectors(midTrunk, climbGround, k);
+        }
+        zMesh.position.y = THREE.MathUtils.lerp(-0.42, 0.0, u);
+        if (zu.lLeg && zu.rLeg) {
+          zu.lLeg.rotation.x = THREE.MathUtils.lerp(-1.35, 0.0, u);
+          zu.rLeg.rotation.x = THREE.MathUtils.lerp(-1.35, 0.0, u);
+        }
+        if (zu.lKnee && zu.rKnee) {
+          zu.lKnee.rotation.x = THREE.MathUtils.lerp(1.32, 0.0, u);
+          zu.rKnee.rotation.x = THREE.MathUtils.lerp(1.32, 0.0, u);
+        }
+        if (zu.lArm && zu.rArm) {
+          zu.lArm.rotation.z = THREE.MathUtils.damp(zu.lArm.rotation.z, -0.35, 8, dt);
+          zu.rArm.rotation.z = THREE.MathUtils.damp(zu.rArm.rotation.z,  0.35, 8, dt);
+          zu.lArm.rotation.x = THREE.MathUtils.damp(zu.lArm.rotation.x, -0.45, 8, dt);
+          zu.rArm.rotation.x = THREE.MathUtils.damp(zu.rArm.rotation.x, -0.45, 8, dt);
+        }
+        if (zu.lElbow && zu.rElbow) {
+          zu.lElbow.rotation.x = THREE.MathUtils.damp(zu.lElbow.rotation.x, -0.15, 8, dt);
+          zu.rElbow.rotation.x = THREE.MathUtils.damp(zu.rElbow.rotation.x, -0.15, 8, dt);
+        }
+        setFlatYawToward(zGrp, jPos.x, jPos.z);
+      } else {
+        const u = (p - 0.42) / 0.58;
+        zGrp.position.lerpVectors(climbGround, confessPos, u);
+        zGrp.position.y = getMiracleOpenWorldGroundHeight(zGrp.position.x, zGrp.position.z);
+        zMesh.position.y = 0;
+        if (zu.lKnee && zu.rKnee) { zu.lKnee.rotation.x = 0; zu.rKnee.rotation.x = 0; }
+        setFlatYawToward(zGrp, confessPos.x, confessPos.z);
+        if (typeof window.applyMiracleNpcLimbAnimation === 'function') {
+          window.applyMiracleNpcLimbAnimation(zMesh, { speed: 4.5, isMoving: true, strideFactor: 1.85 }, dt);
+        }
+      }
+
+      if (jNpc) {
+        setFlatYawToward(jNpc, zGrp.position.x, zGrp.position.z);
+        if (ju.head) ju.head.rotation.x = THREE.MathUtils.damp(ju.head.rotation.x, 0.08, 6, dt);
+        if (ju.rArm) ju.rArm.rotation.x = THREE.MathUtils.damp(ju.rArm.rotation.x, -0.25, 6, dt);
+      }
+
+      const lookMid = new THREE.Vector3(
+        (zGrp.position.x + jPos.x) * 0.5,
+        Math.max(jPos.y + 0.9, zGrp.position.y + 0.7),
+        (zGrp.position.z + jPos.z) * 0.5
+      );
+      const targetCam = new THREE.Vector3(
+        lookMid.x + camSideX * 4.35 + fwdX * 0.45,
+        lookMid.y + 1.55,
+        lookMid.z + camSideZ * 4.35 + fwdZ * 0.45
+      );
+      keepZacchaeusCameraLineClear(targetCam, lookMid, zd, dt, false);
+      camera.position.lerp(targetCam, Math.min(1, dt * 4.5));
+      camera.lookAt(lookMid);
+
+      if (p >= 1) {
+        zGrp.position.copy(confessPos);
+        setFlatYawToward(zGrp, jPos.x, jPos.z);
+        if (zu.lKnee && zu.rKnee) { zu.lKnee.rotation.x = 0; zu.rKnee.rotation.x = 0; }
+        if (zu.lElbow && zu.rElbow) { zu.lElbow.rotation.x = 0; zu.rElbow.rotation.x = 0; }
+        fe.cutscenePhase = 'zacchaeus_confess';
+        fe.cutsceneTimer = 0;
+        playSfx('rescue');
+        if (typeof speakText === 'function') speakText('소유의 절반을 가난한 자들에게 주겠습니다.');
+        syncMiracleZacchaeusOverlayUI(fe);
+        syncMiracleMissionStatusPanel();
+      }
+    } else if (fe.cutscenePhase === 'zacchaeus_confess') {
+      // 3-B단계: 삭개오의 고백 ("소유의 절반을 가난한 자들에게 주겠습니다.") — 가림 없는 +camSide 투샷
+      const confessPos = zd.confessPos || zGrp.position;
+      setFlatYawToward(zGrp, jPos.x, jPos.z);
+      if (jNpc) setFlatYawToward(jNpc, confessPos.x, confessPos.z);
+
+      if (typeof window.applyMiracleNpcLimbAnimation === 'function') {
+        window.applyMiracleNpcLimbAnimation(zMesh, {
+          speed: 0, isMoving: false,
+          lArmX: -0.78, rArmX: -0.78, lArmZ: 0.24, rArmZ: -0.24, dampRate: 10
+        }, dt);
+      }
+      if (zu.lElbow && zu.rElbow) {
+        zu.lElbow.rotation.x = THREE.MathUtils.damp(zu.lElbow.rotation.x, -0.58, 10, dt);
+        zu.rElbow.rotation.x = THREE.MathUtils.damp(zu.rElbow.rotation.x, -0.58, 10, dt);
+      }
+      if (zu.head) zu.head.rotation.x = THREE.MathUtils.damp(zu.head.rotation.x, -0.26, 8, dt);
+      if (ju.head) ju.head.rotation.x = THREE.MathUtils.damp(ju.head.rotation.x, 0.16, 8, dt);
+
+      const midX = confessPos.x * 0.56 + jPos.x * 0.44;
+      const midZ = confessPos.z * 0.56 + jPos.z * 0.44;
+      const targetCam = new THREE.Vector3(
+        midX + camSideX * 3.15 + fwdX * 0.35,
+        confessPos.y + 1.60,
+        midZ + camSideZ * 3.15 + fwdZ * 0.35
+      );
+      keepZacchaeusCameraLineClear(targetCam, new THREE.Vector3(midX, confessPos.y + 1.0, midZ), zd, dt, fe.cutsceneTimer < 0.08);
+      camera.position.lerp(targetCam, Math.min(1, dt * 4.8));
+      camera.lookAt(midX, confessPos.y + 1.04, midZ);
+
+      if (fe.cutsceneTimer >= 3.6) {
+        // 4단계 진입 준비: 나무 가림 없는 highCamYaw 선정 → 말굽형 군중 정렬 → 돈주머니 생성
+        fe.cutscenePhase = 'coin_drag_minigame';
+        fe.cutsceneTimer = 0;
+
+        const jesusAngFromConf = Math.atan2(jPos.x - confessPos.x, jPos.z - confessPos.z);
+        const crowdList = zd.crowdMembers || [];
+        const grove = Array.isArray(window.miracleZacchaeusGroveTrees) ? window.miracleZacchaeusGroveTrees : [];
+
+        // 1) 하이앵글 카메라 각도 먼저 선정 (예수님 + 촬영 전면 측 선호, 나무 간섭 회피)
+        let bestAng = jesusAngFromConf + sSign * 0.40;
+        let bestScore = -1e9;
+        for (let ai = 0; ai < 8; ai++) {
+          const testAng = (jesusAngFromConf + (ai * Math.PI * 2) / 8);
+          const camTX = confessPos.x + Math.sin(testAng) * 6.2;
+          const camTZ = confessPos.z + Math.cos(testAng) * 6.2;
+          let minTreeD = Math.hypot(camTX - zd.treePos.x, camTZ - zd.treePos.z);
+          grove.forEach(gt => { minTreeD = Math.min(minTreeD, Math.hypot(camTX - gt.x, camTZ - gt.z)); });
+          const jBonus = Math.cos(testAng - (jesusAngFromConf + sSign * 0.35)) * 2.4;
+          const score = Math.min(6.2, minTreeD) + jBonus;
+          if (score > bestScore) { bestScore = score; bestAng = testAng; }
+        }
+        zd.highCamYaw = bestAng;
+
+        // 2) 카메라 정반대 말굽형 반원에 군중 정렬 (카메라 전방 시야 통로 확보)
+        const farCenterAng = zd.highCamYaw + Math.PI;
+        crowdList.forEach((cm, idx) => {
+          const frac = crowdList.length > 1 ? ((idx / (crowdList.length - 1)) * 2 - 1) : 0;
+          const ang = farCenterAng + frac * 1.82;
+          let rad = (idx % 2 === 0) ? 3.25 : 4.05;
+          let rx = confessPos.x + Math.sin(ang) * rad;
+          let rz = confessPos.z + Math.cos(ang) * rad;
+          if (Math.hypot(rx - jPos.x, rz - jPos.z) < 1.55) {
+            rad = 3.65;
+            rx = confessPos.x + Math.sin(ang + 0.25 * (frac >= 0 ? 1 : -1)) * rad;
+            rz = confessPos.z + Math.cos(ang + 0.25 * (frac >= 0 ? 1 : -1)) * rad;
+          }
+          if (Math.hypot(rx - zd.treePos.x, rz - zd.treePos.z) < 2.15 ||
+              grove.some(gt => Math.hypot(rx - gt.x, rz - gt.z) < 2.15)) {
+            rad = 2.65;
+            rx = confessPos.x + Math.sin(ang) * rad;
+            rz = confessPos.z + Math.cos(ang) * rad;
+          }
+          cm.ringPos = new THREE.Vector3(rx, getMiracleOpenWorldGroundHeight(rx, rz), rz);
+        });
+
+        // 3) 삭개오 앞(군중 말굽 중심 방향)에 3D 돈주머니 생성
+        const px = confessPos.x + Math.sin(farCenterAng) * 0.80;
+        const pz = confessPos.z + Math.cos(farCenterAng) * 0.80;
+        zd.pouchPos = new THREE.Vector3(px, getMiracleOpenWorldGroundHeight(px, pz), pz);
+        if (zd.pouchMesh) worldGroup.remove(zd.pouchMesh);
+        zd.pouchMesh = createZacchaeusMoneyPouchMesh();
+        zd.pouchMesh.position.copy(zd.pouchPos);
+        zd.pouchMesh.scale.set(1.12, 0.88, 1.12);
+        worldGroup.add(zd.pouchMesh);
+
+        zd.gaugePct = 100;
+        zd.reachedHalf = false;
+        zd.dragging = false;
+
+        syncMiracleZacchaeusOverlayUI(fe);
+        syncMiracleMissionStatusPanel();
+      }
+    } else if (fe.cutscenePhase === 'coin_drag_minigame') {
+      // 4~5단계: 하이앵글 카메라 + 돈주머니 드래그로 군중에게 뿌리기 (100% → 50%)
+      const confessPos = zd.confessPos || zGrp.position;
+      const vw = Math.max(1, window.innerWidth || 1280);
+      const vh = Math.max(1, window.innerHeight || 720);
+      const aspect = Math.max(0.45, Math.min(2.2, vw / vh));
+      const distScale = aspect < 1.0 ? Math.min(1.42, 0.92 + 0.36 / aspect) : 1.0;
+
+      const camDist = 5.9 * distScale;
+      const camH = 8.8 * distScale;
+      const targetCam = new THREE.Vector3(
+        confessPos.x + Math.sin(zd.highCamYaw) * camDist,
+        confessPos.y + camH,
+        confessPos.z + Math.cos(zd.highCamYaw) * camDist
+      );
+      camera.position.lerp(targetCam, Math.min(1, dt * 4.2));
+      camera.lookAt(confessPos.x, confessPos.y + 0.72, confessPos.z);
+
+      // 군중 원형 이동 + 돈 받은 사람 환호 점프 애니메이션
+      (zd.crowdMembers || []).forEach(cm => {
+        if (!cm || !cm.mesh) return;
+        const m = cm.mesh;
+        if (cm.ringPos) {
+          m.position.x = THREE.MathUtils.damp(m.position.x, cm.ringPos.x, 5.5, dt);
+          m.position.z = THREE.MathUtils.damp(m.position.z, cm.ringPos.z, 5.5, dt);
+        }
+        const gY = getMiracleOpenWorldGroundHeight(m.position.x, m.position.z);
+        const faceZac = Math.atan2(confessPos.x - m.position.x, confessPos.z - m.position.z);
+        m.rotation.y = lerpAngle(m.rotation.y, faceZac, Math.min(1, dt * 6.0));
+        if (cm.cheerTimer > 0) {
+          cm.cheerTimer = Math.max(0, cm.cheerTimer - dt);
+          const hop = Math.abs(Math.sin(tSec * 10.5 + cm.phase)) * 0.24;
+          m.position.y = gY + hop;
+          if (typeof window.applyMiracleNpcLimbAnimation === 'function') {
+            window.applyMiracleNpcLimbAnimation(m, {
+              speed: 0, isMoving: false,
+              lArmX: -2.45 + Math.sin(tSec * 11 + cm.phase) * 0.25,
+              rArmX: -2.45 - Math.sin(tSec * 11 + cm.phase) * 0.25,
+              lArmZ: -0.35, rArmZ: 0.35, dampRate: 14
+            }, dt);
+          }
+        } else {
+          m.position.y = THREE.MathUtils.damp(m.position.y, gY, 10, dt);
+          if (typeof window.applyMiracleNpcLimbAnimation === 'function') {
+            window.applyMiracleNpcLimbAnimation(m, { speed: 0, isMoving: false }, dt);
+          }
+        }
+      });
+
+      // 삭개오 돈주머니 펄스 및 3D→2D 화면 투영 좌표 갱신
+      if (zd.pouchMesh) {
+        if (zd.pouchMesh.userData && zd.pouchMesh.userData.ring) {
+          const rp = 0.94 + Math.sin(tSec * 5.0) * 0.10;
+          zd.pouchMesh.userData.ring.scale.set(rp, rp, 1);
+        }
+        const proj = zd.pouchMesh.position.clone().add(new THREE.Vector3(0, 0.42, 0)).project(camera);
+        const sx = (proj.x * 0.5 + 0.5) * vw;
+        const sy = (-proj.y * 0.5 + 0.5) * vh;
+        zd.pouchScreenPos = { x: sx, y: sy };
+        const anc = document.getElementById('miracle-zac-pouch-anchor');
+        if (anc) {
+          if (!zd.reachedHalf && !zd.dragging && proj.z < 1) {
+            anc.style.left = `${sx.toFixed(1)}px`;
+            anc.style.top = `${sy.toFixed(1)}px`;
+            anc.classList.remove('hidden');
+          } else {
+            anc.classList.add('hidden');
+          }
+        }
+      }
+
+      // 삭개오 투척/대기 포즈
+      if (zd.dragging && zd.dragCurr) {
+        const aimPt = getZacchaeusDragWorldPoint(zd.dragCurr.x, zd.dragCurr.y, confessPos.y + 0.65, zd);
+        const aimAng = Math.atan2(aimPt.x - confessPos.x, aimPt.z - confessPos.z);
+        zGrp.rotation.y = lerpAngle(zGrp.rotation.y, aimAng, Math.min(1, dt * 10));
+        if (typeof window.applyMiracleNpcLimbAnimation === 'function') {
+          window.applyMiracleNpcLimbAnimation(zMesh, {
+            speed: 0, isMoving: false, lArmX: -1.15, lArmZ: -0.45, rArmX: -0.42, dampRate: 12
+          }, dt);
+        }
+      } else if (zd.throwAnimTimer > 0) {
+        zd.throwAnimTimer = Math.max(0, zd.throwAnimTimer - dt);
+        const pT = 1.0 - (zd.throwAnimTimer / 0.58);
+        if (zd.throwTargetYaw !== null) {
+          zGrp.rotation.y = lerpAngle(zGrp.rotation.y, zd.throwTargetYaw, Math.min(1, dt * 12));
+        }
+        const fling = Math.sin(pT * Math.PI);
+        if (typeof window.applyMiracleNpcLimbAnimation === 'function') {
+          window.applyMiracleNpcLimbAnimation(zMesh, {
+            speed: 0, isMoving: false,
+            lArmX: -0.6 - fling * 1.65,
+            rArmX: -0.5 - fling * 0.85,
+            lArmZ: -0.25 - fling * 0.35,
+            dampRate: 18
+          }, dt);
+        }
+      } else {
+        if (zd.pouchPos) {
+          const pouchAng = Math.atan2(zd.pouchPos.x - confessPos.x, zd.pouchPos.z - confessPos.z);
+          zGrp.rotation.y = lerpAngle(zGrp.rotation.y, pouchAng, Math.min(1, dt * 6.5));
+        }
+        if (typeof window.applyMiracleNpcLimbAnimation === 'function') {
+          window.applyMiracleNpcLimbAnimation(zMesh, { speed: 0, isMoving: false, lArmX: -0.35, rArmX: -0.35, dampRate: 8 }, dt);
+        }
+      }
+      if (zu.lElbow && zu.rElbow) {
+        const targetEl = zd.dragging ? -0.45 : (zd.throwAnimTimer > 0 ? -0.18 : -0.15);
+        zu.lElbow.rotation.x = THREE.MathUtils.damp(zu.lElbow.rotation.x, targetEl, 12, dt);
+        zu.rElbow.rotation.x = THREE.MathUtils.damp(zu.rElbow.rotation.x, -0.15, 10, dt);
+      }
+
+      // 날아가는 3D 금화 포물선 업데이트 + 도착 반짝임 & 군중 환호 트리거
+      for (let ci = zd.flyingCoins.length - 1; ci >= 0; ci--) {
+        const fc = zd.flyingCoins[ci];
+        fc.elapsed += dt;
+        if (fc.elapsed < 0) {
+          fc.mesh.visible = false;
+          continue;
+        }
+        fc.mesh.visible = true;
+        const u = Math.min(1, fc.elapsed / fc.duration);
+        fc.mesh.position.x = THREE.MathUtils.lerp(fc.startPos.x, fc.endPos.x, u);
+        fc.mesh.position.z = THREE.MathUtils.lerp(fc.startPos.z, fc.endPos.z, u);
+        fc.mesh.position.y = THREE.MathUtils.lerp(fc.startPos.y, fc.endPos.y, u) + Math.sin(u * Math.PI) * fc.arcHeight;
+        fc.mesh.rotation.y += dt * 14;
+        fc.mesh.rotation.x += dt * 9;
+
+        if (u >= 1) {
+          if (fc.targetMember) fc.targetMember.cheerTimer = 1.35;
+          for (let si = 0; si < 2; si++) {
+            const sp = createLowPolyMesh(new THREE.OctahedronGeometry(0.11, 0), si % 2 === 0 ? '#fef08a' : '#f59e0b', fc.endPos.x, fc.endPos.y + 0.1, fc.endPos.z, false);
+            worldGroup.add(sp);
+            zd.sparkles.push({
+              mesh: sp,
+              vx: (Math.random() - 0.5) * 1.6,
+              vy: 1.4 + Math.random() * 1.4,
+              vz: (Math.random() - 0.5) * 1.6,
+              life: 0.6
+            });
+          }
+          playSfx('rescue');
+          worldGroup.remove(fc.mesh);
+          zd.flyingCoins.splice(ci, 1);
+        }
+      }
+
+      for (let si = zd.sparkles.length - 1; si >= 0; si--) {
+        const sp = zd.sparkles[si];
+        sp.life -= dt;
+        if (sp.life <= 0) {
+          worldGroup.remove(sp.mesh);
+          zd.sparkles.splice(si, 1);
+          continue;
+        }
+        sp.mesh.position.x += sp.vx * dt;
+        sp.mesh.position.y += sp.vy * dt;
+        sp.mesh.position.z += sp.vz * dt;
+        const sSc = Math.max(0.1, sp.life * 1.6);
+        sp.mesh.scale.set(sSc, sSc, sSc);
+      }
+
+      // 50% 달성 시 잠시 환호 감상 후 6단계 예수님 축복 컷신으로 전환 (군중을 배경 -camSide 반원으로 정돈)
+      if (zd.reachedHalf) {
+        zd.finishDelay -= dt;
+        if (zd.finishDelay <= 0) {
+          fe.cutscenePhase = 'jesus_blessing';
+          fe.cutsceneTimer = 0;
+          if (zd.pouchMesh) {
+            worldGroup.remove(zd.pouchMesh);
+            zd.pouchMesh = null;
+          }
+          const grove = Array.isArray(window.miracleZacchaeusGroveTrees) ? window.miracleZacchaeusGroveTrees : [];
+          const bgCenterAng = Math.atan2(-camSideX * 0.85 - fwdX * 0.45, -camSideZ * 0.85 - fwdZ * 0.45);
+          const crowdList = zd.crowdMembers || [];
+          crowdList.forEach((cm, idx) => {
+            const frac = crowdList.length > 1 ? ((idx / (crowdList.length - 1)) * 2 - 1) : 0;
+            const ang = bgCenterAng + frac * 1.25;
+            let rad = 3.55 + (idx % 2) * 0.85;
+            let bx = jPos.x + Math.sin(ang) * rad;
+            let bz = jPos.z + Math.cos(ang) * rad;
+            if (Math.hypot(bx - zd.treePos.x, bz - zd.treePos.z) < 2.2 ||
+                grove.some(gt => Math.hypot(bx - gt.x, bz - gt.z) < 2.2)) {
+              rad = 3.0;
+              bx = jPos.x + Math.sin(ang) * rad;
+              bz = jPos.z + Math.cos(ang) * rad;
+            }
+            cm.blessingPos = new THREE.Vector3(bx, getMiracleOpenWorldGroundHeight(bx, bz), bz);
+          });
+          if (typeof createGoldenAuraGroup === 'function') {
+            zd.blessingAura = createGoldenAuraGroup(0xfde047, 1.45);
+            zd.blessingAura.position.copy(jPos);
+            worldGroup.add(zd.blessingAura);
+          }
+          playSfx('clear');
+          if (typeof speakText === 'function') speakText('오늘 이 집은 구원 받았습니다. 오늘 당신의 집에서 머물겠어요');
+          syncMiracleZacchaeusOverlayUI(fe);
+          syncMiracleMissionStatusPanel();
+        }
+      }
+    } else if (fe.cutscenePhase === 'jesus_blessing') {
+      // 6단계: 예수님의 구원 선포 클로즈업 (군중은 -camSide 배경에서 환호, +camSide 카메라 전면 100% 개방)
+      const confessPos = zd.confessPos || zGrp.position;
+      if (jNpc) setFlatYawToward(jNpc, confessPos.x, confessPos.z);
+      setFlatYawToward(zGrp, jPos.x, jPos.z);
+
+      (zd.crowdMembers || []).forEach(cm => {
+        if (!cm || !cm.mesh) return;
+        const m = cm.mesh;
+        if (cm.blessingPos) {
+          m.position.x = THREE.MathUtils.damp(m.position.x, cm.blessingPos.x, 7.0, dt);
+          m.position.z = THREE.MathUtils.damp(m.position.z, cm.blessingPos.z, 7.0, dt);
+        }
+        m.position.y = getMiracleOpenWorldGroundHeight(m.position.x, m.position.z);
+        const lookP = Math.atan2(jPos.x - m.position.x, jPos.z - m.position.z);
+        m.rotation.y = lerpAngle(m.rotation.y, lookP, Math.min(1, dt * 6));
+        if (typeof window.applyMiracleNpcLimbAnimation === 'function') {
+          window.applyMiracleNpcLimbAnimation(m, {
+            speed: 0, isMoving: false,
+            lArmX: -1.45 + Math.sin(tSec * 6.5 + cm.phase) * 0.22,
+            rArmX: -1.45 - Math.sin(tSec * 6.5 + cm.phase) * 0.22,
+            lArmZ: -0.25, rArmZ: 0.25, dampRate: 10
+          }, dt);
+        }
+      });
+
+      if (zd.blessingAura && zd.blessingAura.userData && typeof zd.blessingAura.userData.animate === 'function') {
+        zd.blessingAura.userData.animate(tSec);
+      }
+
+      if (ju.lArm && ju.rArm) {
+        ju.lArm.rotation.x = THREE.MathUtils.damp(ju.lArm.rotation.x, -0.88, 8, dt);
+        ju.lArm.rotation.z = THREE.MathUtils.damp(ju.lArm.rotation.z, -0.34, 8, dt);
+        ju.rArm.rotation.x = THREE.MathUtils.damp(ju.rArm.rotation.x, -0.88, 8, dt);
+        ju.rArm.rotation.z = THREE.MathUtils.damp(ju.rArm.rotation.z,  0.34, 8, dt);
+      }
+      if (ju.head) ju.head.rotation.x = THREE.MathUtils.damp(ju.head.rotation.x, 0.14, 8, dt);
+
+      if (typeof window.applyMiracleNpcLimbAnimation === 'function') {
+        window.applyMiracleNpcLimbAnimation(zMesh, {
+          speed: 0, isMoving: false,
+          lArmX: -1.15 + Math.sin(tSec * 6) * 0.18,
+          rArmX: -1.15 - Math.sin(tSec * 6) * 0.18,
+          dampRate: 10
+        }, dt);
+      }
+      if (zu.lElbow && zu.rElbow) {
+        zu.lElbow.rotation.x = THREE.MathUtils.damp(zu.lElbow.rotation.x, -0.16, 10, dt);
+        zu.rElbow.rotation.x = THREE.MathUtils.damp(zu.rElbow.rotation.x, -0.16, 10, dt);
+      }
+      if (zu.head) zu.head.rotation.x = THREE.MathUtils.damp(zu.head.rotation.x, -0.22, 8, dt);
+
+      const midX = jPos.x * 0.56 + confessPos.x * 0.44;
+      const midZ = jPos.z * 0.56 + confessPos.z * 0.44;
+      const lookTgt = new THREE.Vector3(midX, jPos.y + 1.22, midZ);
+      const targetCam = new THREE.Vector3(
+        midX + camSideX * 3.05 + fwdX * 0.55,
+        jPos.y + 1.76,
+        midZ + camSideZ * 3.05 + fwdZ * 0.55
+      );
+      keepZacchaeusCameraLineClear(targetCam, lookTgt, zd, dt, fe.cutsceneTimer < 0.08);
+      camera.position.lerp(targetCam, Math.min(1, dt * 4.2));
+      camera.lookAt(lookTgt);
+
+      if (fe.cutsceneTimer >= 4.2) {
+        fe.cutsceneActive = false;
+        fe.cutsceneCameraActive = false;
+        finishMiracleFieldEvent(evSpot);
+        return;
+      }
+    }
     return;
   }
 
@@ -6321,12 +7769,12 @@ function updateMiracleFieldEventFrame(dt, now) {
         updateWorldLabelPos(fe.escortGroup.label, new THREE.Vector3(sumX / cnt, sumY / cnt, sumZ / cnt), ed < MIRACLE_TAG_DIST_NPC);
       }
     } else if (fe.escortGroup) {
-      // [중풍병자 4인 들것 운반] 4명 개별 계단/지면 접지 · 보행 다리 모션 · 좁은 계단 두 팔 들어 올리기 · 병상 수평 유지
+      // [중풍병자 2인 앞·뒤 1열 들것 운반] 개별 계단/지면 접지 · 자연스러운 보행 · 계단 들것 수평 유지 + 옥상 대기 2인 손인사
       const eg = fe.escortGroup.mesh;
       const ud = eg.userData || {};
       const prevX = eg.position.x, prevZ = eg.position.z;
-      let targetX = playerPos.x - Math.sin(playerFacing) * 2.05;
-      let targetZ = playerPos.z - Math.cos(playerFacing) * 2.05;
+      let targetX = playerPos.x - Math.sin(playerFacing) * 2.15;
+      let targetZ = playerPos.z - Math.cos(playerFacing) * 2.15;
 
       const sb = (window.miracleParalyticHouseInfo && window.miracleParalyticHouseInfo.stairBounds)
         ? window.miracleParalyticHouseInfo.stairBounds
@@ -6338,17 +7786,17 @@ function updateMiracleFieldEventFrame(dt, now) {
       );
 
       if (onStairCorridor && sb) {
-        targetX = THREE.MathUtils.lerp(targetX, sb.centerX, 0.78);
+        targetX = THREE.MathUtils.lerp(targetX, sb.centerX, 0.86);
       }
 
       const dxT = targetX - prevX;
       const dzT = targetZ - prevZ;
       const dTarget = Math.hypot(dxT, dzT);
-      if (!ud.isMoving && dTarget > 0.75) ud.isMoving = true;
-      if (ud.isMoving && dTarget < 0.28) ud.isMoving = false;
+      if (!ud.isMoving && dTarget > 0.72) ud.isMoving = true;
+      if (ud.isMoving && dTarget < 0.25) ud.isMoving = false;
 
       if (ud.isMoving && dTarget > 0.02) {
-        const moveSpd = Math.min(7.4, 4.8 + dTarget * 0.65);
+        const moveSpd = Math.min(7.4, 4.6 + dTarget * 0.65);
         const step = Math.min(dTarget, moveSpd * safeDt);
         eg.position.x = prevX + (dxT / dTarget) * step;
         eg.position.z = prevZ + (dzT / dTarget) * step;
@@ -6360,6 +7808,8 @@ function updateMiracleFieldEventFrame(dt, now) {
       eg.position.y = (Math.abs(rawBaseY - eg.position.y) > 2.2) ? rawBaseY : THREE.MathUtils.damp(eg.position.y, rawBaseY, 16, safeDt);
 
       const actualSpd = Math.hypot(eg.position.x - prevX, eg.position.z - prevZ) / safeDt;
+      ud.smoothSpd = THREE.MathUtils.damp(ud.smoothSpd || 0, actualSpd, 8.5, safeDt);
+
       let targetYaw = playerFacing;
       if (onStairCorridor && sb && (eg.position.y < sb.topY - 0.35 || inSbRect(eg.position.x, eg.position.z))) {
         // 동쪽 좁은 돌계단 오르내릴 때 들것 방향을 계단 통로(-Z/+Z)와 나란히 유지해 벽면 관통 방지
@@ -6371,39 +7821,33 @@ function updateMiracleFieldEventFrame(dt, now) {
       ud.curHeading = lerpAngle(ud.curHeading || 0, targetYaw, Math.min(1, safeDt * 7.5));
       eg.rotation.y = ud.curHeading;
 
-      if (Array.isArray(ud.friendSpecs) && ud.stretcherOnly) {
-        const cosH = Math.cos(ud.curHeading);
+      if (Array.isArray(ud.friendSpecs) && ud.stretcherOnly && ud.friendSpecs.length >= 2) {
         const sinH = Math.sin(ud.curHeading);
-        const preSideX = THREE.MathUtils.lerp(0.76, 0.48, ud.raiseBlend || 0);
+        const cosH = Math.cos(ud.curHeading);
         const friendYs = [];
-        let minFY = Infinity, maxFY = -Infinity, avgFY = 0, frontSum = 0, backSum = 0;
 
         for (let fi = 0; fi < ud.friendSpecs.length; fi++) {
           const sp = ud.friendSpecs[fi];
-          const lx = sp.side * preSideX;
-          const lz = sp.fb * 1.05;
-          const wx = eg.position.x + lx * cosH + lz * sinH;
-          const wz = eg.position.z - lx * sinH + lz * cosH;
+          const lz = sp.fb * 1.45;
+          const wx = eg.position.x + lz * sinH;
+          const wz = eg.position.z + lz * cosH;
           const fy = (typeof window.getMiracleNpcSupportY === 'function')
             ? window.getMiracleNpcSupportY(wx, wz, eg.position.y + 0.70, 1.65)
             : getMiracleOpenWorldGroundHeight(wx, wz);
           friendYs.push(fy);
-          if (fy < minFY) minFY = fy;
-          if (fy > maxFY) maxFY = fy;
-          avgFY += fy;
-          if (sp.fb > 0) frontSum += fy; else backSum += fy;
         }
-        avgFY /= ud.friendSpecs.length;
-        const heightSpread = maxFY - minFY;
-        const slopeDiff = Math.abs((frontSum * 0.5) - (backSum * 0.5));
-        const shouldRaise = onStairCorridor || heightSpread > 0.28 || slopeDiff > 0.26;
+
+        const backY = friendYs[0];
+        const frontY = friendYs[1];
+        const avgFY = (backY + frontY) * 0.5;
+        const slopeDiff = frontY - backY;
+        const shouldRaise = onStairCorridor || Math.abs(slopeDiff) > 0.25;
         ud.raiseBlend = THREE.MathUtils.damp(ud.raiseBlend || 0, shouldRaise ? 1.0 : 0.0, 6.2, safeDt);
 
-        const sideX = THREE.MathUtils.lerp(0.76, 0.48, ud.raiseBlend);
         const lowPoleY = avgFY + 0.86;
-        const highPoleY = Math.max(maxFY + 1.05, Math.min(minFY + 2.05, avgFY + 1.88));
+        const highPoleY = Math.max(backY, frontY) + 0.96;
         const desiredPoleWorldY = THREE.MathUtils.lerp(lowPoleY, highPoleY, ud.raiseBlend);
-        const desiredPitch = THREE.MathUtils.clamp(-Math.atan2((frontSum * 0.5) - (backSum * 0.5), 2.1) * 0.10, -0.10, 0.10);
+        const desiredPitch = THREE.MathUtils.clamp(-Math.atan2(slopeDiff, 2.9) * 0.14, -0.14, 0.14);
 
         ud.curStretchY = THREE.MathUtils.damp(ud.curStretchY !== undefined ? ud.curStretchY : 0.22, desiredPoleWorldY - eg.position.y - 0.66, 10, safeDt);
         ud.curStretchPitch = THREE.MathUtils.damp(ud.curStretchPitch || 0, desiredPitch, 10, safeDt);
@@ -6413,35 +7857,63 @@ function updateMiracleFieldEventFrame(dt, now) {
           const sp = ud.friendSpecs[fi];
           const fr = sp.mesh;
           if (!fr) continue;
-          fr.position.x = THREE.MathUtils.damp(fr.position.x, sp.side * sideX, 12, safeDt);
+          fr.position.x = THREE.MathUtils.damp(fr.position.x, 0, 12, safeDt);
+          fr.position.z = THREE.MathUtils.damp(fr.position.z, sp.fb * 1.45, 12, safeDt);
+          fr.rotation.y = THREE.MathUtils.damp(fr.rotation.y, 0, 12, safeDt);
           const localY = friendYs[fi] - eg.position.y;
           fr.position.y = (Math.abs(localY - fr.position.y) > 2.0) ? localY : THREE.MathUtils.damp(fr.position.y, localY, 16, safeDt);
 
-          const poleYAtFriend = (ud.curStretchY + 0.66) - Math.sin(ud.curStretchPitch) * (sp.fb * 1.05);
-          const dyShoulder = (poleYAtFriend - fr.position.y) - 1.46;
-          const cosArm = THREE.MathUtils.clamp(-dyShoulder / 0.61, -0.97, 0.92);
-          const armAngle = -Math.max(0.45, Math.acos(cosArm));
-          const inwardBias = -sp.side * THREE.MathUtils.lerp(0.14, 0.08, ud.raiseBlend);
-          const spreadOut = THREE.MathUtils.lerp(0.10, 0.16, ud.raiseBlend);
+          const poleYAtFriend = (ud.curStretchY + 0.66) - Math.sin(ud.curStretchPitch) * (sp.fb * 0.98);
+          let armX;
+          if (sp.fb < 0) {
+            // 뒤쪽 친구: 양팔을 앞으로 뻗어 들것 뒷손잡이를 자연스럽게 잡음
+            armX = THREE.MathUtils.clamp(-0.62 - Math.max(-0.2, (poleYAtFriend - fr.position.y - 0.88) * 1.15), -1.45, -0.45);
+          } else {
+            // 앞쪽 친구: 양팔을 뒤로 내려 들것 앞손잡이를 안정감 있게 잡음
+            armX = THREE.MathUtils.clamp(0.36 - Math.max(0, (poleYAtFriend - (fr.position.y + 0.88)) * 0.35), 0.14, 0.44);
+          }
 
           if (typeof window.applyMiracleNpcLimbAnimation === 'function') {
             const animRes = window.applyMiracleNpcLimbAnimation(fr, {
-              speed: actualSpd,
-              isMoving: actualSpd > 0.18,
+              speed: ud.smoothSpd,
+              isMoving: ud.smoothSpd > 0.14,
               strideFactor: 1.55,
-              legAmp: 0.56,
-              lArmX: armAngle,
-              rArmX: armAngle,
-              lArmZ: -spreadOut + inwardBias,
-              rArmZ: spreadOut + inwardBias,
+              legAmp: 0.54,
+              lArmX: armX,
+              rArmX: armX,
+              lArmZ: -0.13,
+              rArmZ: 0.13,
               dampRate: 12
             }, safeDt);
             avgBob += animRes.bobY;
           }
         }
         avgBob /= ud.friendSpecs.length;
-        ud.stretcherOnly.position.y = ud.curStretchY + avgBob * 0.45;
+        ud.stretcherOnly.position.y = ud.curStretchY + avgBob * 0.35;
         ud.stretcherOnly.rotation.x = ud.curStretchPitch;
+      }
+
+      // 옥상에서 기다리는 2명의 친구: 플레이어 쪽을 바라보며 반갑게 손짓하며 대기
+      if (Array.isArray(fe.rooftopFriends)) {
+        fe.rooftopFriends.forEach(rf => {
+          const m = rf && rf.mesh;
+          if (!m) return;
+          const faceAng = Math.atan2(playerPos.x - m.position.x, playerPos.z - m.position.z);
+          rf.heading = lerpAngle(rf.heading !== undefined ? rf.heading : m.rotation.y, faceAng, safeDt * 4.5);
+          m.rotation.y = rf.heading;
+          const distP = Math.hypot(playerPos.x - m.position.x, playerPos.z - m.position.z);
+          const waveNear = distP < 22.0;
+          if (typeof window.applyMiracleNpcLimbAnimation === 'function') {
+            window.applyMiracleNpcLimbAnimation(m, {
+              speed: 0,
+              isMoving: false,
+              rArmX: waveNear ? (-2.15 + Math.sin(tSec * 5.2 + (rf.phase || 0)) * 0.35) : undefined,
+              rArmZ: waveNear ? 0.25 : 0.04,
+              lArmZ: -0.04,
+              dampRate: 10
+            }, safeDt);
+          }
+        });
       }
 
       const ed = Math.hypot(playerPos.x - eg.position.x, playerPos.z - eg.position.z);
@@ -6463,7 +7935,7 @@ function updateMiracleFieldEventFrame(dt, now) {
           fe.cutscenePhase = 'hammer';
           fe.cutsceneTimer = 0;
           fe.cutsceneProps = { roofY: playerPos.y, debris: [], ropes: [], lastHitIdx: -1 };
-          showToast('🔨 무사히 지붕에 올라왔어요! 망치로 옥상을 뚫기 시작합니다!');
+          showToast('🔨 옥상에서 기다리던 두 친구와 합류했어요! 망치로 지붕을 뚫기 시작합니다!');
         } else if (!fe.cutsceneActive) {
           if (evSpot.escortType === 'emmaus') {
             fe.walkHomeEscortOnClear = true;
@@ -6678,7 +8150,7 @@ function updateMiracleFieldEventFrame(dt, now) {
       const horizD = Math.min(distPerch, distTree);
       updateWorldLabelPos(tz.label, tz.pos, horizD < (evSpot.zacchaeusGrove ? 5.6 : MIRACLE_TAG_DIST_SPOT));
 
-      const triggerDist = evSpot.widowCutscene ? 4.2 : (evSpot.zacchaeusGrove ? 3.6 : 3.7);
+      const triggerDist = (evSpot.widowCutscene || evSpot.zacchaeusGrove) ? 4.2 : 3.7;
       if (horizD < triggerDist) {
         if (evSpot.widowCutscene && !fe.cutsceneActive) {
           // 두 렙돈 넣은 과부 전용 컷신 시작!
@@ -6730,15 +8202,10 @@ function updateMiracleFieldEventFrame(dt, now) {
         }
 
         if (evSpot.zacchaeusGrove) {
-          // [삭개오 발견 시] 카메라를 군중·예수님이 없는 쪽으로 돌리고 군중·예수님·삭개오 즉시 사라지게 처리!
-          const cc = fe.crowdCenter || { x: 36.2, z: -5.8 };
-          const awayAngle = Math.atan2(playerPos.x - cc.x, playerPos.z - cc.z);
-          cameraYaw = awayAngle;
-          cameraTargetYaw = awayAngle;
-          playerFacing = awayAngle;
-          if (fe.crowdGroup) fe.crowdGroup.visible = false;
-          if (tz.mesh) tz.mesh.visible = false;
-          if (typeof snapCameraToPlayer === 'function') snapCameraToPlayer();
+          if (!fe.cutsceneActive) {
+            startZacchaeusStoryCutscene(fe);
+          }
+          return;
         }
 
         finishMiracleFieldEvent(evSpot);
@@ -6827,17 +8294,41 @@ function updateMiracleFieldEventFrame(dt, now) {
       bs.phase === 'cast_ready' || bs.phase === 'charging' || bs.phase === 'casting' ||
       bs.phase === 'waiting_bite' || bs.phase === 'bite_timing' || bs.phase === 'fish_caught'
     );
+    window.__ep4SkipArmAnimThisFrame = true;
+
+    const setBreakfastArmsPose = (rArmX, lArmX = -0.40, rElbowX = -0.25, lElbowX = -0.20) => {
+      if (!playerLimbs) return;
+      if (playerLimbs.rArm) {
+        playerLimbs.rArm.rotation.x = rArmX;
+        playerLimbs.rArm.rotation.z = 0;
+      }
+      if (playerLimbs.lArm) {
+        playerLimbs.lArm.rotation.x = lArmX;
+        playerLimbs.lArm.rotation.z = 0;
+      }
+      if (playerLimbs.rElbow) playerLimbs.rElbow.rotation.x = rElbowX;
+      if (playerLimbs.lElbow) playerLimbs.lElbow.rotation.x = lElbowX;
+    };
+
+    const aspect = window.innerWidth / Math.max(1, window.innerHeight);
+    const isLandscape = aspect >= 1.15;
 
     if (isFishingPhase) {
-      // 바닷가 낚시 시네마틱 카메라 (플레이어 + 낚싯대 + 이어진 낚시줄 + 갈릴리 바다 + 찌가 한눈에 담김)
-      const camTargetPos = new THREE.Vector3(bs.standPos.x + 6.8, bs.standPos.y + 5.6, bs.standPos.z + 7.2);
-      const lookX = bs.phase === 'waiting_bite' || bs.phase === 'bite_timing'
-        ? (bs.standPos.x + bs.castTargetX) * 0.5
-        : bs.standPos.x - 6.0;
-      camera.position.lerp(camTargetPos, Math.min(1, dt * 4.0));
-      camera.lookAt(lookX, bs.standPos.y + 0.6, bs.standPos.z);
+      // 바닷가 낚시 시네마틱 카메라 (가로모드에서도 플레이어·낚싯대 스윙·찌·뛰어오르는 물고기가 하단 UI 위로 온전히 보이도록 프레이밍)
+      const camTargetPos = isLandscape
+        ? new THREE.Vector3(bs.standPos.x + 6.4, bs.standPos.y + 4.8, bs.standPos.z + 8.6)
+        : new THREE.Vector3(bs.standPos.x + 6.8, bs.standPos.y + 5.6, bs.standPos.z + 7.2);
+      const lookX = (bs.phase === 'waiting_bite' || bs.phase === 'bite_timing')
+        ? (isLandscape ? (bs.standPos.x - Math.min(7.8, bs.castDist * 0.42)) : (bs.standPos.x + bs.castTargetX) * 0.5)
+        : (isLandscape ? (bs.standPos.x - 3.2) : (bs.standPos.x - 6.0));
+      const lookY = isLandscape
+        ? ((bs.phase === 'waiting_bite' || bs.phase === 'bite_timing') ? (bs.standPos.y + 0.95) : (bs.standPos.y + 1.30))
+        : (bs.standPos.y + 0.6);
+      camera.position.lerp(camTargetPos, Math.min(1, dt * 4.5));
+      camera.lookAt(lookX, lookY, bs.standPos.z);
 
       if (bs.phase === 'cast_ready') {
+        setBreakfastArmsPose(-0.88 + Math.sin(tSec * 2.2) * 0.03, -0.46, -0.22, -0.18);
         // 대기 중에도 낚싯대 끝에서 낚시줄과 찌가 아래로 자연스럽게 드리워져 연결 유지!
         const tipV = getLiveRodTipWorldPos();
         const hangX = tipV.x - 0.15;
@@ -6852,9 +8343,8 @@ function updateMiracleFieldEventFrame(dt, now) {
         bs.power += bs.powerDir * dt * 1.15;
         if (bs.power >= 1.0) { bs.power = 1.0; bs.powerDir = -1; }
         else if (bs.power <= 0.05) { bs.power = 0.05; bs.powerDir = 1; }
-        if (playerLimbs && playerLimbs.rArm) {
-          playerLimbs.rArm.rotation.x = -0.85 - bs.power * 0.72; // 힘을 모을수록 장대를 뒤로 젖힘!
-        }
+        // 힘을 모을수록 장대를 뒤로 크게 젖히는 준비 자세
+        setBreakfastArmsPose(-0.88 - bs.power * 1.18, -0.50 - bs.power * 0.38, -0.35 - bs.power * 0.25, -0.22);
         const tipV = getLiveRodTipWorldPos();
         const hangX = tipV.x + 0.25 * bs.power;
         const hangY = Math.max(-0.15, tipV.y - 1.25);
@@ -6866,9 +8356,13 @@ function updateMiracleFieldEventFrame(dt, now) {
       } else if (bs.phase === 'casting') {
         bs.castAnimTimer += dt;
         const u = Math.min(1, bs.castAnimTimer / 0.55);
-        if (playerLimbs && playerLimbs.rArm) {
-          playerLimbs.rArm.rotation.x = THREE.MathUtils.lerp(-1.45, -0.55, u);
-        }
+        const easeU = 1 - Math.pow(1 - u, 3);
+        setBreakfastArmsPose(
+          THREE.MathUtils.lerp(-2.02, -0.45, easeU),
+          THREE.MathUtils.lerp(-0.85, -0.35, easeU),
+          THREE.MathUtils.lerp(-0.55, -0.15, easeU),
+          -0.18
+        );
         const tipV = getLiveRodTipWorldPos();
         const bx = THREE.MathUtils.lerp(tipV.x, bs.castTargetX, u);
         const bz = THREE.MathUtils.lerp(tipV.z, bs.castTargetZ, u);
@@ -6884,6 +8378,7 @@ function updateMiracleFieldEventFrame(dt, now) {
           syncMiracleBreakfastUI();
         }
       } else if (bs.phase === 'waiting_bite') {
+        setBreakfastArmsPose(-0.78 + Math.sin(tSec * 2.1) * 0.04, -0.42, -0.24, -0.18);
         bs.biteWaitTimer -= dt;
         const bobY = -0.34 + Math.sin(tSec * 3.8) * 0.06;
         if (bs.bobberGrp) {
@@ -6913,6 +8408,7 @@ function updateMiracleFieldEventFrame(dt, now) {
           syncMiracleBreakfastUI();
         }
       } else if (bs.phase === 'bite_timing') {
+        setBreakfastArmsPose(-0.86 + Math.sin(tSec * 24.0) * 0.16, -0.52 + Math.cos(tSec * 20.0) * 0.08, -0.30, -0.22);
         bs.biteTimeout -= dt;
         bs.needlePos += bs.needleDir * bs.needleSpeed * dt;
         if (bs.needlePos >= 98) { bs.needlePos = 98; bs.needleDir = -1; }
@@ -6938,6 +8434,12 @@ function updateMiracleFieldEventFrame(dt, now) {
       } else if (bs.phase === 'fish_caught') {
         bs.catchAnimTimer += dt;
         const u = Math.min(1, bs.catchAnimTimer / 1.05);
+        const liftU = Math.min(1, u * 2.2);
+        setBreakfastArmsPose(
+          THREE.MathUtils.lerp(-0.86, -1.92, liftU),
+          THREE.MathUtils.lerp(-0.52, -1.10, liftU),
+          -0.36, -0.25
+        );
         if (bs.leapFish) {
           const fx = THREE.MathUtils.lerp(bs.castTargetX, bs.standPos.x, u);
           const fz = THREE.MathUtils.lerp(bs.castTargetZ, bs.standPos.z, u);
@@ -6963,21 +8465,24 @@ function updateMiracleFieldEventFrame(dt, now) {
             if (playerLimbs) {
               if (playerLimbs.lLeg) playerLimbs.lLeg.rotation.x = -1.20;
               if (playerLimbs.rLeg) playerLimbs.rLeg.rotation.x = -1.20;
-              if (playerLimbs.rArm) playerLimbs.rArm.rotation.x = -0.35;
             }
+            setBreakfastArmsPose(-0.35, -0.20, -0.25, -0.20);
             playSfx('rescue');
           } else {
             bs.phase = 'cast_ready';
             bs.power = 0;
-            if (playerLimbs && playerLimbs.rArm) playerLimbs.rArm.rotation.x = -0.85;
+            setBreakfastArmsPose(-0.88, -0.46, -0.22, -0.18);
           }
         }
       }
     } else {
       // 3) 모닥불 굽기 & 예수님과 아침식사 시네마틱 카메라
-      const camFirePos = new THREE.Vector3(bs.firePos.x + 0.2, bs.firePos.y + 3.4, bs.firePos.z + 5.8);
+      const camFirePos = isLandscape
+        ? new THREE.Vector3(bs.firePos.x + 0.2, bs.firePos.y + 3.1, bs.firePos.z + 6.4)
+        : new THREE.Vector3(bs.firePos.x + 0.2, bs.firePos.y + 3.4, bs.firePos.z + 5.8);
       camera.position.lerp(camFirePos, Math.min(1, dt * 4.2));
-      camera.lookAt(bs.firePos.x, bs.firePos.y + 0.95, bs.firePos.z + 0.25);
+      camera.lookAt(bs.firePos.x, bs.firePos.y + (isLandscape ? 1.05 : 0.95), bs.firePos.z + 0.25);
+      setBreakfastArmsPose(-0.35, -0.22, -0.24, -0.18);
 
       if (bs.phase === 'roasting') {
         bs.roastElapsed += dt;
@@ -7020,9 +8525,7 @@ function updateMiracleFieldEventFrame(dt, now) {
       } else if (bs.phase === 'eating') {
         bs.eatTimer += dt;
         // 예수님과 플레이어가 함께 맛있게 먹으며 고개를 끄덕이는 따뜻한 모션
-        if (playerLimbs && playerLimbs.rArm) {
-          playerLimbs.rArm.rotation.x = -0.75 + Math.sin(tSec * 7.5) * 0.35;
-        }
+        setBreakfastArmsPose(-0.75 + Math.sin(tSec * 7.5) * 0.35, -0.30, -0.45 + Math.sin(tSec * 7.5) * 0.15, -0.20);
         if (bs.jesusByFire && bs.jesusByFire.userData && bs.jesusByFire.userData.rArm) {
           bs.jesusByFire.userData.rArm.rotation.x = -0.70 + Math.cos(tSec * 6.5) * 0.30;
         }
@@ -7581,6 +9084,9 @@ function buildMiracleOpenWorld(restoreSavedPos = false) {
   window.miracleZacchaeusGroveTrees = [];
   window.miracleReturningNpcs = [];
   window.miracleHarvestNodes = [];
+  window.miracleRockHouseBuilt = false;
+  window.miracleRockHouseMesh = null;
+  window.miracleMustardTreeGrown = false;
   if (window.miracleOpenWorldIntroFlyover) {
     window.miracleOpenWorldIntroFlyover.active = false;
     window.miracleOpenWorldIntroFlyover.timer = 0;
@@ -7619,6 +9125,29 @@ function buildMiracleOpenWorld(restoreSavedPos = false) {
     window.miracleBurntCampfires.forEach(cf => {
       spawnPersistentBurntCampfire(cf.x, cf.z, false);
     });
+  }
+
+  // 반석 위의 집(par_builder) · 겨자씨 나무(par_mustard) 영구 복원 (스테이지 밤 전환·재입장 후에도 유지!)
+  const hasBuilderDone =
+    (typeof miracleCompletedMissionIds !== 'undefined' && miracleCompletedMissionIds.has('par_builder')) ||
+    (typeof miracleCollectedIds !== 'undefined' && miracleCollectedIds.has('par_builder'));
+  if (!window.isMiracleMultiplayerMode && hasBuilderDone) {
+    const bSpot = Array.isArray(miracleEventSpots) ? miracleEventSpots.find(s => s && s.id === 'par_builder') : null;
+    const rx = (bSpot ? bSpot.x : 52) + (bSpot && bSpot.targetOffset ? bSpot.targetOffset.x : 5);
+    const rz = (bSpot ? bSpot.z : 24) + (bSpot && bSpot.targetOffset ? bSpot.targetOffset.z : -3);
+    spawnPersistentRockHouse(rx, rz);
+    if (bSpot) bSpot._houseBuilt = true;
+  }
+
+  const hasMustardDone =
+    (typeof miracleCompletedMissionIds !== 'undefined' && miracleCompletedMissionIds.has('par_mustard')) ||
+    (typeof miracleCollectedIds !== 'undefined' && miracleCollectedIds.has('par_mustard'));
+  if (hasMustardDone) {
+    const mSpot = Array.isArray(miracleEventSpots) ? miracleEventSpots.find(s => s && s.id === 'par_mustard') : null;
+    const mx = (mSpot ? mSpot.x : 42) + (mSpot && mSpot.targetOffset ? mSpot.targetOffset.x : 4);
+    const mz = (mSpot ? mSpot.z : -20) + (mSpot && mSpot.targetOffset ? mSpot.targetOffset.z : 0);
+    spawnPersistentMustardTree(mx, mz);
+    if (mSpot) mSpot._treeGrown = true;
   }
 
   currentMapRectBounds = {

@@ -6,7 +6,7 @@
 // =========================================================================
 
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_assets = '20261124_v36';
+window.__GAME_BUILD_VERSIONS__.ep4_assets = '20261125_v41';
 
 const _miracleDoubleSideMatCache = {};
 function matLowPolyDouble(hexColor) {
@@ -2628,7 +2628,11 @@ function createSeamlessPonchoArm(isLeft, shawlHex, stripe1Hex, stripe2Hex, inner
   const thumb = createLowPolyMesh(new THREE.BoxGeometry(0.045, 0.075, 0.055), skinHex, -side * 0.05, -0.23, 0.065, false);
   thumb.rotation.x = 0.3;
 
-  lowerArmGrp.add(palm, fingers, thumb);
+  const handGrip = new THREE.Object3D();
+  handGrip.name = isLeft ? 'handGripL' : 'handGripR';
+  handGrip.position.set(0, -0.24, 0.03);
+
+  lowerArmGrp.add(palm, fingers, thumb, handGrip);
   sleevePivot.add(lowerArmGrp);
   armGrp.add(sleevePivot);
   return armGrp;
@@ -2893,6 +2897,27 @@ const HERO_CLAY_PALETTE = {
   soleLeather: '#4E311B'
 };
 
+// [턴어라운드 레퍼런스 기반] 세리장 삭개오 전용 소프트 로우폴리 클레이 팔레트
+const ZACCHAEUS_CLAY_PALETTE = {
+  skin: '#EFC09F',
+  hair: '#6E4226',
+  beard: '#5D361E',
+  brow: '#4D2C18',
+  eye: '#221712',
+  mouth: '#B86B58',
+  tunic: '#ECE3CD',
+  tunicTrim: '#DFD4B8',
+  tunicHem: '#C9A45C',
+  belt: '#7C4D2D',
+  pouch: '#87522D',
+  pouchFlap: '#6D3F20',
+  pouchStud: '#D4A843',
+  bracer: '#6E4124',
+  bracerTrim: '#59341C',
+  sandalStrap: '#734427',
+  sandalSole: '#A6774E'
+};
+
 // PBR MeshStandardMaterial이 환경맵 없는 에피소드4 조명 아래에서 칙칙하게 죽지 않도록 따뜻한 자가 발광 보정 적용
 const HERO_CLAY_EMISSIVE = {
   '#F2D3B8': 0.34,
@@ -2911,7 +2936,23 @@ const HERO_CLAY_EMISSIVE = {
   '#7A4E2D': 0.24,
   '#855632': 0.24,
   '#633E24': 0.22,
-  '#4E311B': 0.20
+  '#4E311B': 0.20,
+  '#EFC09F': 0.34,
+  '#6E4226': 0.24,
+  '#5D361E': 0.22,
+  '#4D2C18': 0.18,
+  '#221712': 0.06,
+  '#B86B58': 0.28,
+  '#ECE3CD': 0.34,
+  '#DFD4B8': 0.32,
+  '#C9A45C': 0.28,
+  '#7C4D2D': 0.24,
+  '#87522D': 0.24,
+  '#6D3F20': 0.22,
+  '#6E4124': 0.22,
+  '#59341C': 0.20,
+  '#734427': 0.22,
+  '#A6774E': 0.24
 };
 
 const _heroSoftClayMatCache = {};
@@ -3952,6 +3993,459 @@ function createHeroBoyLeg(isLeft) {
   return legGrp;
 }
 
+// =========================================================================
+// [삭개오 턴어라운드 전용 조형 파츠]
+// - 정밀 비율(전체 신장 ~2.22m 리그)로 조형 후 uniform scale 0.66 으로 매우 작은 키 구현!
+// =========================================================================
+let _zacBeardGeo = null;
+function getZacchaeusBeardGeo() {
+  if (_zacBeardGeo) return _zacBeardGeo;
+  const rows = 4;
+  const segs = 12;
+  const maxPhi = Math.PI * 0.56;
+  const outerGrid = [];
+  const innerGrid = [];
+
+  for (let r = 0; r < rows; r++) {
+    const oRow = [];
+    const iRow = [];
+    for (let c = 0; c <= segs; c++) {
+      const u = (c / segs) * 2 - 1;
+      const absU = Math.abs(u);
+      const phi = u * maxPhi;
+      const centerW = Math.cos(u * Math.PI * 0.5);
+
+      let y, rx, rz, zBoost;
+      if (r === 0) {
+        // 입 아래 ~ 양볼 구레나룻 연결 상단
+        y = -0.158 + absU * absU * 0.148;
+        rx = 0.278;
+        rz = 0.252;
+        zBoost = 0.018 * centerW;
+      } else if (r === 1) {
+        // 턱선 외곽 볼륨
+        y = -0.208 + absU * absU * 0.068;
+        rx = 0.256;
+        rz = 0.238;
+        zBoost = 0.028 * centerW;
+      } else if (r === 2) {
+        // 부드러운 둥근 턱수염 하단
+        y = -0.274 + absU * absU * 0.088;
+        rx = 0.172;
+        rz = 0.194;
+        zBoost = 0.030 * centerW;
+      } else {
+        // 턱밑 내측 수납 마감
+        y = -0.232 + absU * absU * 0.042;
+        rx = 0.100;
+        rz = 0.120;
+        zBoost = -0.015;
+      }
+
+      const ox = Math.sin(phi) * rx;
+      const oz = Math.cos(phi) * rz + zBoost;
+      const ix = ox * 0.78;
+      const iz = oz * 0.78 - 0.014;
+      oRow.push([ox, y, oz]);
+      iRow.push([ix, y + 0.008, iz]);
+    }
+    outerGrid.push(oRow);
+    innerGrid.push(iRow);
+  }
+
+  const v = [];
+  for (let r = 0; r < rows - 1; r++) {
+    for (let c = 0; c < segs; c++) {
+      pushQuad(v, outerGrid[r][c], outerGrid[r + 1][c], outerGrid[r + 1][c + 1], outerGrid[r][c + 1]);
+      pushQuad(v, innerGrid[r][c], innerGrid[r][c + 1], innerGrid[r + 1][c + 1], innerGrid[r + 1][c]);
+    }
+  }
+  for (let c = 0; c < segs; c++) {
+    pushQuad(v, innerGrid[0][c], outerGrid[0][c], outerGrid[0][c + 1], innerGrid[0][c + 1]);
+  }
+  for (let r = 0; r < rows - 1; r++) {
+    pushQuad(v, innerGrid[r][0], innerGrid[r + 1][0], outerGrid[r + 1][0], outerGrid[r][0]);
+    pushQuad(v, outerGrid[r][segs], outerGrid[r + 1][segs], innerGrid[r + 1][segs], innerGrid[r][segs]);
+  }
+
+  _zacBeardGeo = markCachedGeo(buildBufferGeoFromTriangles(v));
+  return _zacBeardGeo;
+}
+
+function createZacchaeusBeardGroup() {
+  const zp = ZACCHAEUS_CLAY_PALETTE;
+  const grp = new THREE.Group();
+  grp.name = 'zacBeard';
+  const jawMesh = createHeroClayMesh(getZacchaeusBeardGeo(), zp.beard, 0, 0, 0, { roughness: 0.88, metalness: 0.02 });
+  const stL = createHeroClayMesh(getSoftStacheWingGeo(true),  zp.beard, -0.048, -0.102, 0.248, { roughness: 0.88, metalness: 0.02, castShadow: false });
+  const stR = createHeroClayMesh(getSoftStacheWingGeo(false), zp.beard,  0.048, -0.102, 0.248, { roughness: 0.88, metalness: 0.02, castShadow: false });
+  const underLip = createHeroClayMesh(new THREE.OctahedronGeometry(0.026, 0), zp.beard, 0, -0.168, 0.244, { roughness: 0.88, metalness: 0.02, castShadow: false });
+  underLip.scale.set(1.15, 0.85, 0.72);
+  grp.add(jawMesh, stL, stR, underLip);
+  return grp;
+}
+
+function createZacchaeusHairGroup() {
+  const zp = ZACCHAEUS_CLAY_PALETTE;
+  const hairGrp = new THREE.Group();
+  hairGrp.name = 'zacHair';
+  const hOpt = { roughness: 0.88, metalness: 0.03 };
+  hairGrp.add(createHeroClayMesh(getHeroBoyHairCapGeo(), zp.hair, 0, 0, 0, hOpt));
+
+  const spikeGeo = getHeroHairSpikeGeo();
+  const bangGeo  = getHeroBangChunkGeo();
+  const sideGeo  = getHeroSideburnGeo();
+  const addMesh = (geo, x, y, z, sx, sy, sz, rx, ry, rz, shadow = true) => {
+    const m = createHeroClayMesh(geo, zp.hair, x, y, z, { roughness: 0.88, metalness: 0.03, castShadow: shadow });
+    m.scale.set(sx, sy, sz);
+    m.rotation.set(rx, ry, rz);
+    hairGrp.add(m);
+  };
+
+  // 이마 위로 부드럽게 흐르는 턴어라운드 갈색 헝클어진 앞머리 5가닥
+  addMesh(bangGeo, -0.220, 0.265, 0.195, 0.135, 0.185, 0.088, -0.24,  0.42, -0.16);
+  addMesh(bangGeo, -0.115, 0.295, 0.214, 0.160, 0.190, 0.092, -0.32,  0.18,  0.28);
+  addMesh(bangGeo,  0.005, 0.304, 0.218, 0.178, 0.202, 0.098, -0.34, -0.02,  0.22);
+  addMesh(bangGeo,  0.128, 0.292, 0.212, 0.168, 0.192, 0.096, -0.30, -0.24,  0.18);
+  addMesh(bangGeo,  0.218, 0.270, 0.185, 0.145, 0.195, 0.096, -0.24, -0.44,  0.14);
+
+  // 정수리·상부 다면체 볼륨
+  addMesh(spikeGeo, -0.072, 0.312,  0.020, 0.240, 0.105, 0.210,  0.08,  0.24,  0.26);
+  addMesh(spikeGeo,  0.078, 0.310, -0.020, 0.235, 0.105, 0.205, -0.12, -0.22, -0.24);
+  addMesh(spikeGeo,  0.000, 0.302, -0.125, 0.245, 0.105, 0.195, -0.50,  0.00,  0.00);
+
+  // 뒤통수 & 목덜미 모발
+  addMesh(bangGeo, -0.135, 0.245, -0.275, 0.185, 0.215, 0.095,  0.22,  0.38, -0.10);
+  addMesh(bangGeo,  0.000, 0.255, -0.292, 0.205, 0.225, 0.100,  0.22,  0.00,  0.00);
+  addMesh(bangGeo,  0.135, 0.245, -0.275, 0.185, 0.215, 0.095,  0.22, -0.38,  0.10);
+  addMesh(bangGeo, -0.165, 0.055, -0.288, 0.148, 0.190, 0.084, -0.44,  0.42, -0.08, false);
+  addMesh(bangGeo, -0.058, 0.048, -0.314, 0.160, 0.198, 0.088, -0.46,  0.14, -0.03, false);
+  addMesh(bangGeo,  0.058, 0.048, -0.314, 0.160, 0.198, 0.088, -0.46, -0.14,  0.03, false);
+  addMesh(bangGeo,  0.165, 0.055, -0.288, 0.148, 0.190, 0.084, -0.44, -0.42,  0.08, false);
+
+  // 구레나룻 (턱수염과 자연스럽게 연결)
+  addMesh(sideGeo, -0.280, 0.035, 0.056, 1.00, 1.04, 1.00, 0.02, 0.0,  0.03, false);
+  addMesh(sideGeo,  0.280, 0.035, 0.056, 1.00, 1.04, 1.00, 0.02, 0.0, -0.03, false);
+  return hairGrp;
+}
+
+let _zacBeltTailGeoLong = null;
+let _zacBeltTailGeoShort = null;
+function getZacchaeusBeltTailGeo(len = 0.31, topW = 0.044, botW = 0.058, thick = 0.024) {
+  const isLong = len > 0.26;
+  if (isLong && _zacBeltTailGeoLong) return _zacBeltTailGeoLong;
+  if (!isLong && _zacBeltTailGeoShort) return _zacBeltTailGeoShort;
+
+  const hT = thick * 0.5;
+  const rows = [
+    { y:  0.00,      w: topW * 0.45, zOff: 0.000 },
+    { y: -len * 0.42, w: (topW + botW) * 0.25, zOff: 0.012 },
+    { y: -len * 0.86, w: botW * 0.52, zOff: 0.024 }
+  ];
+  const rings = rows.map(r => [
+    [-r.w, r.y,  hT + r.zOff],
+    [-r.w, r.y, -hT + r.zOff],
+    [ r.w, r.y, -hT + r.zOff],
+    [ r.w, r.y,  hT + r.zOff]
+  ]);
+  const tip = [0.006, -len, 0.026];
+  const topC = [0, 0.01, 0];
+  const v = [];
+  for (let c = 0; c < 4; c++) {
+    const cn = (c + 1) % 4;
+    pushTriangle(v, topC, rings[0][c], rings[0][cn]);
+    pushQuad(v, rings[0][c], rings[1][c], rings[1][cn], rings[0][cn]);
+    pushQuad(v, rings[1][c], rings[2][c], rings[2][cn], rings[1][cn]);
+    pushTriangle(v, rings[2][c], tip, rings[2][cn]);
+  }
+  const geo = markCachedGeo(buildBufferGeoFromTriangles(v));
+  if (isLong) _zacBeltTailGeoLong = geo;
+  else _zacBeltTailGeoShort = geo;
+  return geo;
+}
+
+function createZacchaeusGearGroup() {
+  const zp = ZACCHAEUS_CLAY_PALETTE;
+  const gearGrp = new THREE.Group();
+  gearGrp.name = 'zacGear';
+
+  // 1) 갈색 가죽 허리띠
+  gearGrp.add(createHeroClayMesh(getHeroBeltGeo(), zp.belt, 0, 0, 0, { roughness: 0.80, metalness: 0.05 }));
+
+  // 2) 앞-왼쪽 입체 매듭 + 자연스럽게 휘어 내려오는 다면체 벨트 끈 2갈래
+  const knot = createHeroClayMesh(new THREE.DodecahedronGeometry(0.054, 0), zp.belt, 0.105, 1.048, 0.212, { roughness: 0.80, metalness: 0.05, castShadow: false });
+  knot.scale.set(1.08, 1.16, 0.86);
+  const tailLong = createHeroClayMesh(getZacchaeusBeltTailGeo(0.32, 0.044, 0.058, 0.022), zp.belt, 0.094, 1.032, 0.212, { roughness: 0.82, metalness: 0.04, castShadow: false });
+  tailLong.rotation.set(-0.15, 0.16, -0.05);
+  const tailShort = createHeroClayMesh(getZacchaeusBeltTailGeo(0.22, 0.040, 0.052, 0.020), zp.pouchFlap, 0.136, 1.035, 0.204, { roughness: 0.82, metalness: 0.04, castShadow: false });
+  tailShort.rotation.set(-0.16, 0.34, 0.14);
+  gearGrp.add(knot, tailLong, tailShort);
+
+  // 3) 왼쪽 허리춤(+X) 라운드 플랩 가죽 돈주머니 (황동 단추 포함)
+  const pouchGrp = new THREE.Group();
+  pouchGrp.position.set(0.305, 0.892, 0.055);
+  pouchGrp.rotation.set(0.04, 0.24, 0.12);
+  const lOpt = { roughness: 0.80, metalness: 0.05 };
+  const flapCap = createHeroClayMesh(new THREE.CylinderGeometry(0.088, 0.094, 0.128, 7), zp.pouchFlap, 0.016, 0.068, 0, lOpt);
+  flapCap.scale.set(0.95, 0.85, 1.15);
+  const pouchBtn = createHeroClayMesh(new THREE.CylinderGeometry(0.022, 0.024, 0.022, 6), zp.pouchStud, 0.088, -0.008, 0, { roughness: 0.45, metalness: 0.22, castShadow: false });
+  pouchBtn.rotation.z = Math.PI / 2;
+  pouchGrp.add(
+    createHeroClayMesh(new THREE.CylinderGeometry(0.024, 0.024, 0.118, 5), zp.bracer, -0.028, 0.130, -0.040, lOpt),
+    createHeroClayMesh(new THREE.CylinderGeometry(0.024, 0.024, 0.118, 5), zp.bracer, -0.028, 0.130,  0.040, lOpt),
+    createHeroClayMesh(getHeroPouchBagGeo(), zp.pouch, 0, 0, 0, lOpt),
+    flapCap,
+    pouchBtn
+  );
+  gearGrp.add(pouchGrp);
+  return gearGrp;
+}
+
+let _zacFingersGeoL = null;
+let _zacFingersGeoR = null;
+function getZacchaeusFingersGeo(isLeft) {
+  if (isLeft && _zacFingersGeoL) return _zacFingersGeoL;
+  if (!isLeft && _zacFingersGeoR) return _zacFingersGeoR;
+
+  const side = isLeft ? -1 : 1;
+  const rows = [
+    { y:  0.000, rx: 0.042, rz: 0.050, cx: 0.000,         cz: 0.000 },
+    { y: -0.042, rx: 0.036, rz: 0.042, cx: -side * 0.006, cz: 0.005 },
+    { y: -0.078, rx: 0.024, rz: 0.028, cx: -side * 0.012, cz: 0.008 }
+  ];
+  const cols = 6;
+  const rings = rows.map(r => {
+    const arr = [];
+    for (let c = 0; c < cols; c++) {
+      const phi = (c / cols) * Math.PI * 2;
+      arr.push([r.cx + Math.sin(phi) * r.rx, r.y, r.cz + Math.cos(phi) * r.rz]);
+    }
+    return arr;
+  });
+  const topC = [0, 0.008, 0];
+  const botC = [-side * 0.014, -0.090, 0.009];
+  const v = [];
+  for (let c = 0; c < cols; c++) {
+    const cn = (c + 1) % cols;
+    pushTriangle(v, topC, rings[0][c], rings[0][cn]);
+    pushQuad(v, rings[0][c], rings[1][c], rings[1][cn], rings[0][cn]);
+    pushQuad(v, rings[1][c], rings[2][c], rings[2][cn], rings[1][cn]);
+    pushTriangle(v, rings[2][c], botC, rings[2][cn]);
+  }
+  const geo = markCachedGeo(buildBufferGeoFromTriangles(v));
+  if (isLeft) _zacFingersGeoL = geo;
+  else _zacFingersGeoR = geo;
+  return geo;
+}
+
+function createZacchaeusArm(isLeft) {
+  const zp = ZACCHAEUS_CLAY_PALETTE;
+  const side = isLeft ? -1 : 1;
+  const armGrp = new THREE.Group();
+  armGrp.position.set(side * 0.285, 1.375, 0.0);
+
+  const pivot = new THREE.Group();
+  pivot.rotation.z = side * 0.16;
+
+  // 크림색 단색 반팔 소매 (#ECE3CD) + 소매 끝 얇은 입체 테두리
+  const shCap = createHeroClayMesh(new THREE.DodecahedronGeometry(0.068, 0), zp.tunic, -side * 0.018, -0.032, 0);
+  shCap.scale.set(0.88, 0.78, 0.88);
+  const sleeve = createHeroClayMesh(new THREE.CylinderGeometry(0.074, 0.098, 0.220, 8), zp.tunic, 0, -0.132, 0);
+  const cuffTrim = createHeroClayMesh(new THREE.CylinderGeometry(0.095, 0.100, 0.022, 8), zp.tunicTrim, 0, -0.232, 0, { roughness: 0.86, metalness: 0.02, castShadow: false });
+  pivot.add(shCap, sleeve, cuffTrim);
+
+  // 맨팔 + 테두리가 살아있는 가죽 아대 + 경사/윤곽 손가락·엄지
+  const lowerArmGrp = new THREE.Group();
+  lowerArmGrp.name = 'elbowPivot';
+  lowerArmGrp.position.set(0, -0.232, 0);
+  lowerArmGrp.rotation.z = -side * 0.08;
+
+  const bareArm = createHeroClayMesh(new THREE.CylinderGeometry(0.072, 0.058, 0.27, 8), zp.skin, 0, -0.135, 0, { roughness: 0.84, metalness: 0.02 });
+  const bracer  = createHeroClayMesh(new THREE.CylinderGeometry(0.074, 0.068, 0.088, 8), zp.bracer, 0, -0.195, 0, { roughness: 0.82, metalness: 0.05 });
+  const brTop   = createHeroClayMesh(new THREE.CylinderGeometry(0.076, 0.075, 0.016, 8), zp.bracerTrim, 0, -0.152, 0, { roughness: 0.82, metalness: 0.05, castShadow: false });
+  const brBot   = createHeroClayMesh(new THREE.CylinderGeometry(0.070, 0.069, 0.016, 8), zp.bracerTrim, 0, -0.236, 0, { roughness: 0.82, metalness: 0.05, castShadow: false });
+
+  const palm    = createHeroClayMesh(new THREE.CylinderGeometry(0.060, 0.054, 0.092, 6), zp.skin, 0, -0.292, 0.008, { roughness: 0.84, metalness: 0.02 });
+  palm.scale.set(0.84, 1.0, 1.04);
+  const fingers = createHeroClayMesh(getZacchaeusFingersGeo(isLeft), zp.skin, 0, -0.326, 0.010, { roughness: 0.84, metalness: 0.02 });
+  const thumb   = createHeroClayMesh(new THREE.CylinderGeometry(0.018, 0.024, 0.068, 6), zp.skin, -side * 0.046, -0.304, 0.050, { roughness: 0.84, metalness: 0.02, castShadow: false });
+  thumb.rotation.x = 0.28;
+  thumb.rotation.z = side * 0.16;
+
+  lowerArmGrp.add(bareArm, bracer, brTop, brBot, palm, fingers, thumb);
+  pivot.add(lowerArmGrp);
+  armGrp.add(pivot);
+  return armGrp;
+}
+
+// =========================================================================
+// [소프트 로우폴리 발 & 샌들 조형]
+// - 발등에서 발가락으로 자연스럽게 경사지며 좁아지는 다면체 발 + 윤곽 맞춤 밑창·아치형 가죽 끈
+// =========================================================================
+let _zacFootGeo = null;
+function getZacchaeusFootGeo() {
+  if (_zacFootGeo) return _zacFootGeo;
+
+  const sections = [
+    { z: -0.095, rx: 0.056, yBot: -0.044, yTop:  0.036 },
+    { z: -0.015, rx: 0.066, yBot: -0.044, yTop:  0.056 },
+    { z:  0.052, rx: 0.072, yBot: -0.044, yTop:  0.040 },
+    { z:  0.114, rx: 0.076, yBot: -0.044, yTop:  0.015 },
+    { z:  0.168, rx: 0.050, yBot: -0.038, yTop: -0.012 }
+  ];
+  const cols = 8;
+  const rings = sections.map(sp => {
+    const arr = [];
+    for (let c = 0; c < cols; c++) {
+      const th = (c / cols) * Math.PI * 2;
+      const sT = Math.sin(th);
+      const cT = Math.cos(th);
+      const x = -sT * sp.rx;
+      const y = (cT >= 0)
+        ? ((sp.yBot + sp.yTop) * 0.5 + cT * (sp.yTop - sp.yBot) * 0.52)
+        : (sp.yBot + (1 + cT) * 0.008);
+      arr.push([x, y, sp.z]);
+    }
+    return arr;
+  });
+
+  const apexBack  = [0, -0.006, -0.108];
+  const apexFront = [0, -0.026,  0.184];
+  const v = [];
+
+  for (let c = 0; c < cols; c++) {
+    const cn = (c + 1) % cols;
+    pushTriangle(v, rings[0][cn], rings[0][c], apexBack);
+    pushTriangle(v, rings[sections.length - 1][c], rings[sections.length - 1][cn], apexFront);
+  }
+  for (let r = 0; r < sections.length - 1; r++) {
+    for (let c = 0; c < cols; c++) {
+      const cn = (c + 1) % cols;
+      pushQuad(v, rings[r][c], rings[r][cn], rings[r + 1][cn], rings[r + 1][c]);
+    }
+  }
+
+  _zacFootGeo = markCachedGeo(buildBufferGeoFromTriangles(v));
+  return _zacFootGeo;
+}
+
+let _zacSandalSoleGeo = null;
+function getZacchaeusSandalSoleGeo() {
+  if (_zacSandalSoleGeo) return _zacSandalSoleGeo;
+
+  const sections = [
+    { z: -0.116, rx: 0.068, yBot: -0.022, yTop: 0.018 },
+    { z: -0.018, rx: 0.065, yBot: -0.022, yTop: 0.018 },
+    { z:  0.088, rx: 0.090, yBot: -0.022, yTop: 0.018 },
+    { z:  0.156, rx: 0.072, yBot: -0.019, yTop: 0.013 },
+    { z:  0.194, rx: 0.042, yBot: -0.012, yTop: 0.006 }
+  ];
+  const cols = 8;
+  const rings = sections.map(sp => {
+    const arr = [];
+    for (let c = 0; c < cols; c++) {
+      const th = (c / cols) * Math.PI * 2;
+      const x = -Math.sin(th) * sp.rx;
+      const y = (Math.cos(th) >= 0) ? sp.yTop : sp.yBot;
+      arr.push([x, y, sp.z]);
+    }
+    return arr;
+  });
+
+  const apexBack  = [0, 0.000, -0.128];
+  const apexFront = [0, -0.002, 0.204];
+  const v = [];
+
+  for (let c = 0; c < cols; c++) {
+    const cn = (c + 1) % cols;
+    pushTriangle(v, rings[0][cn], rings[0][c], apexBack);
+    pushTriangle(v, rings[sections.length - 1][c], rings[sections.length - 1][cn], apexFront);
+  }
+  for (let r = 0; r < sections.length - 1; r++) {
+    for (let c = 0; c < cols; c++) {
+      const cn = (c + 1) % cols;
+      pushQuad(v, rings[r][c], rings[r][cn], rings[r + 1][cn], rings[r + 1][c]);
+    }
+  }
+
+  _zacSandalSoleGeo = markCachedGeo(buildBufferGeoFromTriangles(v));
+  return _zacSandalSoleGeo;
+}
+
+const _zacArchStrapGeoCache = {};
+function getZacchaeusArchStrapGeo(halfW = 0.080, archH = 0.036, sideDrop = -0.024, depthZ = 0.046, thick = 0.014) {
+  const key = `${halfW}_${archH}_${sideDrop}_${depthZ}_${thick}`;
+  if (_zacArchStrapGeoCache[key]) return _zacArchStrapGeoCache[key];
+
+  const xs = [-halfW, -halfW * 0.54, 0, halfW * 0.54, halfW];
+  const ys = [sideDrop, archH * 0.68, archH, archH * 0.68, sideDrop];
+  const hZ = depthZ * 0.5;
+  const outF = [], outB = [], inF = [], inB = [];
+
+  for (let i = 0; i < xs.length; i++) {
+    const t = i / (xs.length - 1);
+    const nx = (t - 0.5) * 0.72;
+    const ny = 1.0 - Math.abs(t - 0.5) * 0.55;
+    const nLen = Math.hypot(nx, ny) || 1;
+    const ox = (nx / nLen) * thick;
+    const oy = (ny / nLen) * thick;
+    outF.push([xs[i] + ox, ys[i] + oy,  hZ]);
+    outB.push([xs[i] + ox, ys[i] + oy, -hZ]);
+    inF.push( [xs[i],      ys[i],       hZ]);
+    inB.push( [xs[i],      ys[i],      -hZ]);
+  }
+
+  const v = [];
+  for (let i = 0; i < xs.length - 1; i++) {
+    pushQuad(v, outB[i], outF[i], outF[i + 1], outB[i + 1]); // 상부 아치 외면
+    pushQuad(v, inF[i],  inB[i],  inB[i + 1],  inF[i + 1]);  // 하부 아치 내면
+    pushQuad(v, outF[i], inF[i],  inF[i + 1],  outF[i + 1]); // 전면 두께
+    pushQuad(v, inB[i],  outB[i], outB[i + 1], inB[i + 1]);  // 후면 두께
+  }
+  pushQuad(v, outB[0], inB[0], inF[0], outF[0]);
+  const last = xs.length - 1;
+  pushQuad(v, outF[last], inF[last], inB[last], outB[last]);
+
+  const geo = markCachedGeo(buildBufferGeoFromTriangles(v));
+  _zacArchStrapGeoCache[key] = geo;
+  return geo;
+}
+
+function createZacchaeusLeg(isLeft) {
+  const zp = ZACCHAEUS_CLAY_PALETTE;
+  const legGrp = new THREE.Group();
+  legGrp.position.set(isLeft ? -0.135 : 0.135, 0.72, 0);
+
+  const skinOpt  = { roughness: 0.84, metalness: 0.02 };
+  const strapOpt = { roughness: 0.80, metalness: 0.05 };
+  const soleOpt  = { roughness: 0.88, metalness: 0.04 };
+
+  const thigh = createHeroClayMesh(new THREE.CylinderGeometry(0.078, 0.068, 0.34, 8), zp.skin, 0, -0.17, 0, skinOpt);
+  const kneePivot = new THREE.Group();
+  kneePivot.name = 'kneePivot';
+  kneePivot.position.set(0, -0.32, 0);
+
+  const shin       = createHeroClayMesh(new THREE.CylinderGeometry(0.068, 0.060, 0.31, 8), zp.skin, 0, -0.135, 0, skinOpt);
+  const ankleStrap = createHeroClayMesh(new THREE.CylinderGeometry(0.073, 0.070, 0.064, 8), zp.sandalStrap, 0, -0.138, 0, strapOpt);
+
+  // 경사진 발끝(y=-0.312)과 윤곽이 딱 맞는 아담한 소프트 로우폴리 밑창 (bottom: 0.72 - 0.32 - 0.378 - 0.022 = 0.000)
+  const foot       = createHeroClayMesh(getZacchaeusFootGeo(), zp.skin, 0, -0.312, 0.048, skinOpt);
+  const sole       = createHeroClayMesh(getZacchaeusSandalSoleGeo(), zp.sandalSole, 0, -0.378, 0.048, soleOpt);
+
+  // 발등 경사에 맞춘 곡면 가죽 스트랩
+  const foreStrap  = createHeroClayMesh(getZacchaeusArchStrapGeo(0.082, 0.022, -0.022, 0.044, 0.015), zp.sandalStrap, 0, -0.332, 0.168, { ...strapOpt, castShadow: false });
+  foreStrap.rotation.x = 0.24;
+  const midStrap   = createHeroClayMesh(getZacchaeusArchStrapGeo(0.074, 0.044, -0.024, 0.046, 0.015), zp.sandalStrap, 0, -0.312, 0.068, { ...strapOpt, castShadow: false });
+  midStrap.rotation.x = 0.14;
+  const tBridge    = createHeroClayMesh(new THREE.CylinderGeometry(0.015, 0.018, 0.135, 5), zp.sandalStrap, 0, -0.258, 0.078, { ...strapOpt, castShadow: false });
+  tBridge.rotation.x = 0.42;
+  const heelStrap  = createHeroClayMesh(new THREE.CylinderGeometry(0.070, 0.074, 0.068, 8, 1, false, Math.PI * 0.55, Math.PI * 0.90), zp.sandalStrap, 0, -0.326, -0.040, { ...strapOpt, castShadow: false });
+
+  kneePivot.add(shin, ankleStrap, foot, sole, foreStrap, midStrap, tBridge, heelStrap);
+  legGrp.add(thigh, kneePivot);
+  return legGrp;
+}
+
 window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
   const lodGroup = new THREE.LOD();
 
@@ -4024,14 +4518,24 @@ window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
     };
     sc = 1.0;
   } else if (preset === 'zacchaeus') {
+    // [턴어라운드 레퍼런스 기반] 매우 작은 키(0.66배)의 여리고 세리장 삭개오
     isFemale = false;
     cfg = {
-      ...ISRAELITE_MALE_VARIANTS[2],
-      robe: '#581c87', sleeve: '#581c87', shawl: '#f5efe6',
-      stripe1: '#eab308', stripe2: '#7e22ce',
-      beardStyle: 'trimmed', headwear: 'none'
+      robe: ZACCHAEUS_CLAY_PALETTE.tunic,
+      sleeve: ZACCHAEUS_CLAY_PALETTE.tunic,
+      shawl: ZACCHAEUS_CLAY_PALETTE.tunicHem,
+      stripe1: ZACCHAEUS_CLAY_PALETTE.tunicHem,
+      stripe2: ZACCHAEUS_CLAY_PALETTE.belt,
+      headcloth: null, agal1: null, agal2: null,
+      belt: ZACCHAEUS_CLAY_PALETTE.belt,
+      beltSub: ZACCHAEUS_CLAY_PALETTE.pouch,
+      hair: ZACCHAEUS_CLAY_PALETTE.hair,
+      skin: ZACCHAEUS_CLAY_PALETTE.skin,
+      sandal: ZACCHAEUS_CLAY_PALETTE.sandalStrap,
+      beardStyle: 'full',
+      headwear: 'none'
     };
-    sc = 0.82;
+    sc = 0.66;
   } else if (preset === 'child') {
     isFemale = (idx % 2 === 1);
     cfg = isFemale
@@ -4064,9 +4568,8 @@ window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
     cfg = { ...ISRAELITE_MALE_VARIANTS[idx % 3] };
   }
 
-  // ----------------------------------------------------
-  // 고해상도(근거리용) 모델 (gHigh) 조립
-  // ----------------------------------------------------
+  // High Mesh 기준 관절 포인터 (hero·zacchaeus·jesus·일반 NPC 모두 인덱스 불일치 방지)
+  let customUserData = null;
   const gHigh = new THREE.Group();
 
   if (preset === 'jesus') {
@@ -4266,6 +4769,94 @@ window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
     head.add(faceMesh, facialFeatures, earL, earR, createHeroBoyHairGroup());
 
     gHigh.add(lLeg, rLeg, tunicSkirtGrp, tunicBodiceGrp, neck, capeGroup, gearGroup, lArm, rArm, head);
+    customUserData = {
+      lLeg, rLeg,
+      lKnee: lLeg.getObjectByName('kneePivot') || null,
+      rKnee: rLeg.getObjectByName('kneePivot') || null,
+      lArm, rArm,
+      lElbow: lArm.getObjectByName('elbowPivot') || null,
+      rElbow: rArm.getObjectByName('elbowPivot') || null,
+      head,
+      walkPhase: idx * 0.9
+    };
+  } else if (preset === 'zacchaeus') {
+    const zp = ZACCHAEUS_CLAY_PALETTE;
+    const lLeg = createZacchaeusLeg(true);
+    const rLeg = createZacchaeusLeg(false);
+
+    // 크림색 무릎 길이 튜닉 치마 + 하단 황토금색 띠
+    const tunicSkirtGrp = new THREE.Group();
+    tunicSkirtGrp.name = 'zacTunicSkirt';
+    tunicSkirtGrp.add(
+      createHeroClayMesh(getHeroTunicSkirtGeo(), zp.tunic, 0, 0, 0, { roughness: 0.88, metalness: 0.02 }),
+      createHeroClayMesh(getHeroSkirtBandGeo(0.845, 0.985, 0.007), zp.tunicHem, 0, 0, 0, { roughness: 0.80, metalness: 0.06, castShadow: false })
+    );
+
+    // 크림색 반팔 튜닉 상체 + 앞목 V자 슬릿 피부 표현
+    const tunicBodiceGrp = new THREE.Group();
+    tunicBodiceGrp.name = 'zacTunicBodice';
+    tunicBodiceGrp.add(
+      createHeroClayMesh(getHeroTunicBodiceGeo(), zp.tunic, 0, 0, 0, { roughness: 0.88, metalness: 0.02 })
+    );
+    const vNeckWedge = createHeroClayMesh(new THREE.ConeGeometry(0.054, 0.142, 3), zp.skin, 0, 1.445, 0.128, { roughness: 0.84, metalness: 0.02, castShadow: false });
+    vNeckWedge.rotation.x = Math.PI;
+    vNeckWedge.scale.set(1.0, 1.0, 0.55);
+    const collarRimL = createHeroClayMesh(new THREE.CylinderGeometry(0.014, 0.016, 0.145, 5), zp.tunicTrim, -0.034, 1.452, 0.156, { roughness: 0.86, metalness: 0.02, castShadow: false });
+    collarRimL.rotation.set(0.32, 0, -0.36);
+    const collarRimR = createHeroClayMesh(new THREE.CylinderGeometry(0.014, 0.016, 0.145, 5), zp.tunicTrim,  0.034, 1.452, 0.156, { roughness: 0.86, metalness: 0.02, castShadow: false });
+    collarRimR.rotation.set(0.32, 0,  0.36);
+    tunicBodiceGrp.add(vNeckWedge, collarRimL, collarRimR);
+
+    const neck = createHeroClayMesh(new THREE.CylinderGeometry(0.088, 0.108, 0.22, 10), zp.skin, 0, 1.59, 0, { roughness: 0.84, metalness: 0.02, castShadow: false });
+    const gearGroup = createZacchaeusGearGroup();
+    const lArm = createZacchaeusArm(true);
+    const rArm = createZacchaeusArm(false);
+
+    // 짧은 키(0.66)에서도 이목구비·수염·미소가 돋보이도록 친근한 턴어라운드 비율(머리 ~1.08배)
+    const head = new THREE.Group();
+    head.position.set(0, 1.85, 0);
+    head.scale.set(1.08, 1.04, 1.06);
+
+    const faceMesh = createHeroClayMesh(getHeroBoyHeadGeo(), zp.skin, 0, 0, 0, { roughness: 0.84, metalness: 0.02 });
+    faceMesh.name = 'headBase';
+    const facialFeatures = new THREE.Group();
+    facialFeatures.name = 'facialFeatures';
+    const eyeOpt   = { roughness: 0.48, metalness: 0.05, castShadow: false };
+    const browOpt  = { roughness: 0.86, metalness: 0.03, castShadow: false };
+    const noseOpt  = { roughness: 0.84, metalness: 0.02, castShadow: false };
+    const mouthOpt = { roughness: 0.78, metalness: 0.02, castShadow: false };
+
+    const eyeL = createHeroClayMesh(getHeroEyeGeo(), zp.eye, -0.098, -0.028, 0.243, eyeOpt);
+    eyeL.rotation.y = -0.11;
+    const eyeR = createHeroClayMesh(getHeroEyeGeo(), zp.eye,  0.098, -0.028, 0.243, eyeOpt);
+    eyeR.rotation.y =  0.11;
+    const browL = createHeroClayMesh(getHeroBrowGeo(true),  zp.brow, -0.102, 0.062, 0.244, browOpt);
+    browL.rotation.set(0, -0.11, 0);
+    const browR = createHeroClayMesh(getHeroBrowGeo(false), zp.brow,  0.102, 0.062, 0.244, browOpt);
+    browR.rotation.set(0,  0.11, 0);
+    const nose = createHeroClayMesh(getSculptedNoseGeo(false), zp.skin, 0, -0.068, 0.249, noseOpt);
+    nose.scale.set(0.80, 0.68, 0.64);
+    const smileMesh = createHeroClayMesh(getHeroSmileGeo(), zp.mouth, 0, -0.140, 0.236, mouthOpt);
+    smileMesh.rotation.x = 0.26;
+    facialFeatures.add(eyeL, eyeR, browL, browR, nose, smileMesh);
+
+    const earL = createHeroClayMesh(getSculptedEarGeo(true),  zp.skin, -0.282, -0.042, -0.018, { roughness: 0.84, metalness: 0.02, castShadow: false });
+    const earR = createHeroClayMesh(getSculptedEarGeo(false), zp.skin,  0.282, -0.042, -0.018, { roughness: 0.84, metalness: 0.02, castShadow: false });
+    earL.name = 'ear'; earR.name = 'ear';
+
+    head.add(faceMesh, facialFeatures, earL, earR, createZacchaeusHairGroup(), createZacchaeusBeardGroup());
+    gHigh.add(lLeg, rLeg, tunicSkirtGrp, tunicBodiceGrp, neck, gearGroup, lArm, rArm, head);
+
+    customUserData = {
+      lLeg, rLeg,
+      lKnee: lLeg.getObjectByName('kneePivot') || null,
+      rKnee: rLeg.getObjectByName('kneePivot') || null,
+      lArm, rArm,
+      lElbow: lArm.getObjectByName('elbowPivot') || null,
+      rElbow: rArm.getObjectByName('elbowPivot') || null,
+      head,
+      walkPhase: idx * 0.9
+    };
   } else {
     const buildLeg = (isLeft) => {
       const legGrp = new THREE.Group();
@@ -4425,7 +5016,7 @@ window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
   lodGroup.scale.set(sc, sc, sc);
 
   // High Mesh 기준으로 관절 제어 포인터 맵핑 (업데이트 함수용)
-  lodGroup.userData = {
+  lodGroup.userData = customUserData || {
     lLeg: preset === 'jesus' ? gHigh.children[0] : gHigh.children[0],
     rLeg: preset === 'jesus' ? gHigh.children[1] : gHigh.children[1],
     lArm: preset === 'jesus' ? gHigh.children[8] : gHigh.children[7],
@@ -4453,10 +5044,11 @@ const _lowPolySilhouetteGeoCache = {};
 function getMergedLowPolySilhouetteGeo(preset, cfg, isFemale) {
   const isJesus = (preset === 'jesus');
   const isHero  = (preset === 'hero');
+  const isZac   = (preset === 'zacchaeus');
   const isClubKid = (preset === 'pathfinder' || preset === 'adventurer');
   const isHelmet = (!isJesus && !isFemale && cfg.headwear === 'helmet');
   const isHeadband = (!isJesus && !isFemale && cfg.headwear === 'headband');
-  const isHooded = (!isJesus && !isHelmet && !isHeadband && !isClubKid) && (isFemale || cfg.headwear !== 'none');
+  const isHooded = (!isJesus && !isZac && !isHelmet && !isHeadband && !isClubKid) && (isFemale || cfg.headwear !== 'none');
 
   const skinCol   = isJesus ? '#f2cfb4' : cfg.skin;
   const hairCol   = isJesus ? '#4e2f1e' : cfg.hair;
@@ -4464,13 +5056,13 @@ function getMergedLowPolySilhouetteGeo(preset, cfg, isFemale) {
   const bodiceCol = isJesus ? '#e8e6e2' : (isClubKid ? cfg.shirt : (isFemale ? cfg.bodice : cfg.robe));
   const skirtCol  = isJesus ? '#e8e6e2' : (isClubKid ? cfg.shorts : (isFemale ? cfg.skirt : cfg.robe));
   const shawlCol  = isJesus ? '#c83228' : (isClubKid ? cfg.scarf : cfg.shawl);
-  const sleeveCol = isJesus ? '#e8e6e2' : ((isClubKid || isHero) ? cfg.shirt || cfg.robe : cfg.shawl);
+  const sleeveCol = isJesus ? '#e8e6e2' : ((isClubKid || isHero || isZac) ? (cfg.shirt || cfg.robe) : cfg.shawl);
   const beltCol   = isJesus ? '#9c846b' : cfg.belt;
   const shoeCol   = isJesus ? '#3b2416' : (isClubKid ? cfg.shoe : (isFemale ? cfg.shoe : cfg.sandal));
   const hasWings  = Boolean(cfg.hasWings);
 
   const key = [
-    isJesus ? 'J' : (isHero ? 'E' : (isClubKid ? 'C' : (isFemale ? 'F' : 'M'))),
+    isJesus ? 'J' : (isHero ? 'E' : (isZac ? 'Z' : (isClubKid ? 'C' : (isFemale ? 'F' : 'M')))),
     isClubKid ? preset : '',
     isHooded ? 'H' : (isHelmet ? 'K' : (isHeadband ? 'B' : 'U')),
     hasWings ? 'W' : 'N',
@@ -4531,7 +5123,7 @@ function getMergedLowPolySilhouetteGeo(preset, cfg, isFemale) {
   appendPart(new THREE.CylinderGeometry(0.265, 0.21, 0.56, 6), bodiceCol, 0, 1.28, 0, 1.12, 1.0, 0.66);
   if (isJesus) {
     appendPart(new THREE.CylinderGeometry(0.085, 0.105, 0.88, 5), shawlCol, 0.0, 1.16, 0.15, 1.0, 1.0, 0.45, 0, 0, -0.44);
-  } else {
+  } else if (!isZac) {
     appendPart(new THREE.CylinderGeometry(0.19, 0.35, 0.22, 6), shawlCol, 0, 1.46, -0.01, 1.08, 1.0, 0.72);
   }
   appendPart(new THREE.CylinderGeometry(0.24, 0.25, 0.09, 6), beltCol, 0, 0.98, 0, 1.02, 1.0, 0.72);
@@ -4539,6 +5131,9 @@ function getMergedLowPolySilhouetteGeo(preset, cfg, isFemale) {
   if (isHero) {
     appendPart(new THREE.BoxGeometry(0.14, 0.20, 0.20), HERO_CLAY_PALETTE.pouchLeather, 0.30, 0.89, 0.05);
     appendPart(new THREE.CylinderGeometry(0.36, 0.42, 0.62, 6, 1, false, Math.PI * 0.55, Math.PI * 0.90), shawlCol, 0, 0.88, -0.05, 1.0, 1.0, 0.85);
+  } else if (isZac) {
+    appendPart(new THREE.BoxGeometry(0.14, 0.20, 0.20), ZACCHAEUS_CLAY_PALETTE.pouch, 0.30, 0.89, 0.05);
+    appendPart(new THREE.IcosahedronGeometry(0.16, 0), ZACCHAEUS_CLAY_PALETTE.beard, 0, 1.72, 0.11);
   }
 
   // 4) 자연스럽게 내려온 양팔 & 손
