@@ -1063,22 +1063,241 @@
       .miracle-mini-nav .nav-arrow { width: 11px; height: 11px; }
     }
 
-    /* [에피소드 4 낮/밤 30분 순환 한 줄 미니멀 게이지] 내비게이터 바로 아래 배치 */
-    .miracle-time-row {
-      display: inline-flex;
+    /* [에피소드 4 낮/밤 30분 순환 2단계 확장형 원형→캡슐 시간 게이지 UI] 메뉴 버튼 우측 배치 */
+    #miracle-time-anchor {
+      --tc-size: 36px;
+      --tc-expanded-w: 248px;
+      position: relative;
+      width: var(--tc-size);
+      height: var(--tc-size);
+      flex-shrink: 0;
+    }
+    #miracle-time-anchor.hidden { display: none !important; }
+    .miracle-time-ctrl {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: var(--tc-size);
+      height: var(--tc-size);
+      border-radius: 9999px;
+      background: rgba(15, 23, 42, 0.86);
+      border: 1.5px solid rgba(251, 191, 36, 0.82);
+      box-shadow: 0 2px 0 rgba(120, 53, 15, 0.38), 0 4px 10px rgba(0, 0, 0, 0.28);
+      backdrop-filter: blur(5px);
+      -webkit-backdrop-filter: blur(5px);
+      display: flex;
+      align-items: center;
+      overflow: visible;
+      z-index: 32;
+      transition: width 0.28s cubic-bezier(0.22, 1.15, 0.36, 1), background 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+    }
+    .miracle-time-ctrl.is-night {
+      border-color: rgba(147, 197, 253, 0.85);
+      box-shadow: 0 2px 0 rgba(30, 58, 138, 0.42), 0 4px 12px rgba(15, 23, 42, 0.38);
+    }
+    .miracle-time-ctrl.is-expanded {
+      width: var(--tc-expanded-w);
+      z-index: 46;
+      background: rgba(15, 23, 42, 0.94);
+      border-color: rgba(251, 191, 36, 0.92);
+      box-shadow: 0 3px 0 rgba(120, 53, 15, 0.42), 0 8px 20px rgba(0, 0, 0, 0.45);
+    }
+    .miracle-time-ctrl.is-night.is-expanded {
+      border-color: rgba(147, 197, 253, 0.92);
+    }
+    .miracle-time-toggle {
+      position: relative;
+      width: calc(var(--tc-size) - 3px);
+      height: calc(var(--tc-size) - 3px);
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 9999px;
+      background: transparent;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .tc-ring-svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      transform: rotate(-90deg);
+      pointer-events: none;
+    }
+    .tc-ring-bg {
+      fill: none;
+      stroke: rgba(148, 163, 184, 0.24);
+      stroke-width: 3.1;
+    }
+    .tc-ring-arc {
+      fill: none;
+      stroke: url(#tc-grad-day);
+      stroke-width: 3.1;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.14s linear;
+    }
+    .miracle-time-ctrl.is-dragging .tc-ring-arc {
+      transition: none;
+    }
+    .miracle-time-ctrl.is-night .tc-ring-arc {
+      stroke: url(#tc-grad-night);
+    }
+    .tc-icon-sun,
+    .tc-icon-moon {
+      position: absolute;
+      width: 54%;
+      height: 54%;
+      pointer-events: none;
+      transition: opacity 0.22s ease, transform 0.25s ease;
+    }
+    .tc-icon-sun {
+      opacity: 1;
+      transform: scale(1) rotate(0deg);
+    }
+    .tc-icon-moon {
+      opacity: 0;
+      transform: scale(0.55) rotate(-25deg);
+    }
+    .miracle-time-ctrl.is-night .tc-icon-sun {
+      opacity: 0;
+      transform: scale(0.55) rotate(25deg);
+    }
+    .miracle-time-ctrl.is-night .tc-icon-moon {
+      opacity: 1;
+      transform: scale(1) rotate(0deg);
+    }
+    .tc-mini-speed {
+      position: absolute;
+      right: -4px;
+      bottom: -3px;
+      padding: 0.5px 4px;
+      border-radius: 9999px;
+      background: linear-gradient(180deg, #60a5fa, #2563eb);
+      border: 1px solid rgba(255, 255, 255, 0.85);
+      color: #ffffff;
+      font-family: 'Jua', sans-serif;
+      font-size: 8.5px;
+      line-height: 1.15;
+      pointer-events: none;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+      transition: opacity 0.16s ease;
+    }
+    .tc-mini-speed.hidden { display: none !important; }
+    .miracle-time-ctrl.is-expanded .tc-mini-speed { opacity: 0; }
+    .miracle-time-tray {
+      flex: 1 1 auto;
+      min-width: 0;
+      height: 100%;
+      display: flex;
       align-items: center;
       gap: 6px;
-      padding: 3px 8px;
-      border-radius: 9999px;
-      background: rgba(15, 23, 42, 0.80);
-      border: 1.5px solid rgba(148, 163, 184, 0.72);
-      backdrop-filter: blur(4px);
-      -webkit-backdrop-filter: blur(4px);
-      color: #f8fafc;
-      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
-      white-space: nowrap;
+      padding: 0 4px 0 3px;
+      overflow: hidden;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateX(-8px);
+      transition: opacity 0.20s ease, transform 0.24s cubic-bezier(0.22, 1.15, 0.36, 1);
     }
-    .miracle-time-row.hidden { display: none !important; }
+    .miracle-time-ctrl.is-expanded .miracle-time-tray {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateX(0);
+      transition-delay: 0.05s;
+    }
+    .miracle-time-track-wrap {
+      position: relative;
+      flex: 1 1 auto;
+      min-width: 56px;
+      height: 26px;
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      touch-action: none;
+    }
+    .miracle-time-rail {
+      position: relative;
+      width: 100%;
+      height: 7px;
+      border-radius: 9999px;
+      background: linear-gradient(90deg, #fbbf24 0%, #fde047 56%, #f97316 69%, #312e81 76%, #4338ca 90%, #fb923c 97%, #fbbf24 100%);
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.45);
+    }
+    .miracle-time-thumb {
+      position: absolute;
+      top: 50%;
+      left: 28%;
+      width: 13px;
+      height: 13px;
+      transform: translate(-50%, -50%);
+      border-radius: 9999px;
+      background: radial-gradient(circle at 38% 35%, #ffffff 0%, #fef08a 55%, #f59e0b 100%);
+      border: 1.5px solid #ffffff;
+      box-shadow: 0 0 8px rgba(254, 240, 138, 0.9), 0 1px 3px rgba(0, 0, 0, 0.5);
+      pointer-events: none;
+    }
+    .miracle-time-ctrl.is-night .miracle-time-thumb {
+      background: radial-gradient(circle at 38% 35%, #ffffff 0%, #bae6fd 55%, #6366f1 100%);
+      box-shadow: 0 0 8px rgba(147, 197, 253, 0.95), 0 1px 3px rgba(0, 0, 0, 0.5);
+    }
+    .miracle-time-speed-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      height: calc(var(--tc-size) - 9px);
+      padding: 0 8px;
+      border-radius: 9999px;
+      background: linear-gradient(180deg, #60a5fa 0%, #3b82f6 54%, #2563eb 100%);
+      border: 1px solid rgba(219, 234, 254, 0.72);
+      color: #ffffff;
+      font-family: 'Jua', sans-serif;
+      font-size: 11px;
+      line-height: 1;
+      white-space: nowrap;
+      flex-shrink: 0;
+      cursor: pointer;
+      box-shadow: 0 2px 5px rgba(15, 23, 42, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.38);
+      transition: transform 0.08s ease, filter 0.12s ease;
+    }
+    .miracle-time-speed-btn:hover { filter: brightness(1.08); }
+    .miracle-time-speed-btn:active { transform: scale(0.95); }
+    @media (max-width: 640px) {
+      #miracle-time-anchor {
+        --tc-size: 32px;
+        --tc-expanded-w: 206px;
+      }
+      .miracle-time-speed-btn {
+        font-size: 10px;
+        padding: 0 6.5px;
+      }
+      .miracle-time-thumb {
+        width: 12px;
+        height: 12px;
+      }
+    }
+    @media (max-width: 380px) {
+      #miracle-time-anchor {
+        --tc-size: 30px;
+        --tc-expanded-w: 192px;
+      }
+    }
+    @media (orientation: landscape) and (max-height: 500px) {
+      #miracle-time-anchor {
+        --tc-size: 30px;
+        --tc-expanded-w: 214px;
+      }
+      .miracle-time-speed-btn {
+        font-size: 10px;
+        padding: 0 6.5px;
+      }
+      .miracle-time-rail { height: 6px; }
+      .miracle-time-thumb { width: 11px; height: 11px; }
+    }
 
     /* ================================================================
        [최상위 레이어 보장] 탐험수첩·모든 퀴즈·인증서·모험의 증표가
@@ -1632,74 +1851,134 @@
     </div>
   </div>
 
-  <!-- 상단 HUD (좌측: ☰ 플레이어 이름 ▾ 펼침/접힘 메뉴 + 우측: 진행 정보창 · 구석 발광 미션안내 버튼 · 아래 내비게이터) -->
+  <!-- 상단 HUD (좌측: ☰ 플레이어 이름 ▾ 메뉴 + 2단계 원형/캡슐 시간 컨트롤러 · 우측: 진행 정보창 · 발광 미션안내 버튼 · 아래 내비게이터) -->
   <div id="hud-top" class="hidden fixed top-1.5 left-2 right-2 z-[25] flex items-start justify-between gap-1.5 pointer-events-none">
-    <!-- 좌측 상단: 메뉴 버튼(☰ 플레이어 이름 ▾) & 아래로 탐험수첩 위로 펼쳐지는 메뉴 패널 -->
-    <div id="hud-menu-wrap" class="relative flex flex-col items-start pointer-events-auto z-30 shrink-0">
-      <button id="hud-menu-btn" type="button" onclick="toggleHudMenu()" aria-expanded="false" aria-controls="hud-menu-dropdown"
-              class="mc-panel px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl flex items-center gap-1 sm:gap-1.5 text-amber-100 hover:brightness-110 active:translate-y-[1px] transition-all cursor-pointer shrink-0 overflow-hidden">
-        <span class="text-xs sm:text-sm leading-none shrink-0">☰</span>
-        <span id="hud-avatar-icon" class="hidden" aria-hidden="true">🧔🏻</span>
-        <span id="hud-player-tag" class="font-jua text-xs sm:text-sm text-white leading-none truncate min-w-0 flex-1 text-left">대원</span>
-        <span id="hud-menu-chevron" class="text-[10px] text-amber-300 leading-none transition-transform duration-200 shrink-0">▾</span>
-      </button>
+    <!-- 좌측 상단: 메뉴 버튼(☰ 플레이어 이름 ▾) + 우측 인접 원형/확장 캡슐 시간 게이지 -->
+    <div id="hud-top-left" class="flex items-center gap-1.5 sm:gap-2 shrink-0 pointer-events-none z-30">
+      <div id="hud-menu-wrap" class="relative flex flex-col items-start pointer-events-auto z-40 shrink-0">
+        <button id="hud-menu-btn" type="button" onclick="toggleHudMenu()" aria-expanded="false" aria-controls="hud-menu-dropdown"
+                class="mc-panel px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl flex items-center gap-1 sm:gap-1.5 text-amber-100 hover:brightness-110 active:translate-y-[1px] transition-all cursor-pointer shrink-0 overflow-hidden">
+          <span class="text-xs sm:text-sm leading-none shrink-0">☰</span>
+          <span id="hud-avatar-icon" class="hidden" aria-hidden="true">🧔🏻</span>
+          <span id="hud-player-tag" class="font-jua text-xs sm:text-sm text-white leading-none truncate min-w-0 flex-1 text-left">대원</span>
+          <span id="hud-menu-chevron" class="text-[10px] text-amber-300 leading-none transition-transform duration-200 shrink-0">▾</span>
+        </button>
 
-      <!-- 메뉴 버튼을 누르면 탐험수첩 버튼 위로 펼쳐지고, 다시 누르면 접히는 메뉴 목록 -->
-      <div id="hud-menu-dropdown" class="hud-menu-dropdown menu-closed hidden absolute left-0 top-full mt-1.5 w-[212px] sm:w-[232px] p-1.5 rounded-2xl bg-slate-900/95 border-2 border-amber-400/90 shadow-2xl backdrop-blur-md flex flex-col gap-1 z-40">
-        <!-- 1. 현재 맵(스테이지 1-3) 이름 -->
-        <div class="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-slate-800/85 border border-slate-700/80">
-          <span class="text-sm leading-none shrink-0">📍</span>
-          <div class="min-w-0 flex-1">
-            <div class="text-[9px] text-amber-300/85 font-bold leading-none mb-0.5">현재 맵</div>
-            <div id="hud-stage-badge" class="font-jua text-amber-300 text-xs sm:text-sm truncate leading-tight">스테이지 1</div>
+        <!-- 메뉴 버튼을 누르면 탐험수첩 버튼 위로 펼쳐지고, 다시 누르면 접히는 메뉴 목록 -->
+        <div id="hud-menu-dropdown" class="hud-menu-dropdown menu-closed hidden absolute left-0 top-full mt-1.5 w-[212px] sm:w-[232px] p-1.5 rounded-2xl bg-slate-900/95 border-2 border-amber-400/90 shadow-2xl backdrop-blur-md flex flex-col gap-1 z-50">
+          <!-- 1. 현재 맵(스테이지 1-3) 이름 -->
+          <div class="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-slate-800/85 border border-slate-700/80">
+            <span class="text-sm leading-none shrink-0">📍</span>
+            <div class="min-w-0 flex-1">
+              <div class="text-[9px] text-amber-300/85 font-bold leading-none mb-0.5">현재 맵</div>
+              <div id="hud-stage-badge" class="font-jua text-amber-300 text-xs sm:text-sm truncate leading-tight">스테이지 1</div>
+            </div>
+          </div>
+
+          <!-- 2. 월드 맵 -->
+          <button id="hud-mode-btn" type="button" onclick="openWorldMapFromGame()"
+                  class="mc-btn-slim w-full px-2.5 py-1 rounded-xl bg-amber-500/95 hover:bg-amber-400 text-slate-950 font-jua text-xs sm:text-sm flex items-center justify-between">
+            <span>🗺️ 월드 맵</span>
+            <span class="text-[10px] opacity-80">이동 ▶</span>
+          </button>
+
+          <!-- 3. 유치반, 유년반, 소년반 등 레벨 정보 -->
+          <div class="flex items-center justify-between gap-2 px-2.5 py-1 rounded-xl bg-slate-800/85 border border-slate-700/80">
+            <span class="text-[10px] text-slate-300 font-bold shrink-0">🎖️ 레벨</span>
+            <span id="hud-level-badge" class="font-jua text-emerald-300 text-xs truncate">🌱 유년반</span>
+          </div>
+
+          <!-- 4. 모험의 증표 (에피소드별 수집한 인증 카드 횡스크롤 컬렉션) -->
+          <button id="hud-badges-btn" type="button" onclick="openAdventureBadgesModal()"
+                  class="mc-btn-slim w-full px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-300 via-yellow-300 to-amber-400 hover:brightness-105 text-amber-950 font-jua text-xs sm:text-sm flex items-center justify-between">
+            <span>🏅 모험의 증표</span>
+            <span id="hud-badges-count" class="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-amber-950/15">0 / 9</span>
+          </button>
+
+          <!-- 5. 화면 안내 (현재 스테이지 인터페이스 튜토리얼 다시 보기) -->
+          <button id="hud-tutorial-btn" type="button" onclick="openInterfaceTutorialFromMenu()"
+                  class="mc-btn-slim w-full px-2.5 py-1 rounded-xl bg-sky-500/90 hover:bg-sky-400 text-slate-950 font-jua text-xs sm:text-sm flex items-center justify-between">
+            <span>❓ 화면 안내</span>
+            <span class="text-[10px] opacity-85">보기 ▶</span>
+          </button>
+
+          <!-- 6. 음악끄기, 전체화면 -->
+          <div class="grid grid-cols-2 gap-1 pt-0.5">
+            <button id="bgm-btn" type="button" onclick="toggleBgm()"
+                    class="mc-btn-slim px-2 py-1 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-amber-100 font-jua text-[11px] flex items-center justify-center gap-1 whitespace-nowrap" title="배경음악 켜기/끄기">
+              🎵 음악 끄기
+            </button>
+            <button id="fullscreen-btn" type="button" onclick="toggleGameFullscreen()"
+                    class="mc-btn-slim px-2 py-1 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-amber-100 font-jua text-[11px] flex items-center justify-center gap-1 whitespace-nowrap" title="전체화면 전환">
+              ⛶ 전체화면
+            </button>
+          </div>
+
+          <!-- 7. 게임 종료 -->
+          <button id="hud-exit-game-btn" type="button" onclick="openGameExitConfirmModal()"
+                  class="mc-btn-slim w-full px-2.5 py-1 rounded-xl bg-rose-600/95 hover:bg-rose-500 text-white font-jua text-xs sm:text-sm flex items-center justify-between">
+            <span>🚪 게임 종료</span>
+            <span class="text-[10px] opacity-90">닫기 ✕</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 메뉴 버튼 바로 우측: 1단계 원형 게이지 -> 2단계 우측 캡슐 확장형 시간 컨트롤러 (에피소드 4 전용) -->
+      <div id="miracle-time-anchor" class="hidden pointer-events-auto">
+        <div id="miracle-time-ctrl" class="miracle-time-ctrl" role="region" aria-label="낮과 밤 시간 조절">
+          <button id="miracle-time-toggle-btn" type="button" class="miracle-time-toggle" aria-expanded="false" title="하루 시간 조절 열기/접기">
+            <svg class="tc-ring-svg" viewBox="0 0 40 40" aria-hidden="true">
+              <defs>
+                <linearGradient id="tc-grad-day" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#fef08a" />
+                  <stop offset="55%" stop-color="#fbbf24" />
+                  <stop offset="100%" stop-color="#f59e0b" />
+                </linearGradient>
+                <linearGradient id="tc-grad-night" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#e0f2fe" />
+                  <stop offset="55%" stop-color="#93c5fd" />
+                  <stop offset="100%" stop-color="#6366f1" />
+                </linearGradient>
+              </defs>
+              <circle class="tc-ring-bg" cx="20" cy="20" r="17.5" />
+              <circle id="miracle-time-ring-arc" class="tc-ring-arc" cx="20" cy="20" r="17.5" stroke-dasharray="109.96" stroke-dashoffset="79.17" />
+            </svg>
+            <!-- 낮 아이콘 (해) -->
+            <svg id="miracle-time-icon-sun" class="tc-icon-sun" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="5" fill="#fde047" stroke="#f59e0b" stroke-width="1.2" />
+              <circle cx="11.2" cy="11.2" r="2.2" fill="#fef9c3" opacity="0.85" />
+              <g stroke="#fde047" stroke-width="2" stroke-linecap="round">
+                <line x1="12" y1="2.2" x2="12" y2="4.4" />
+                <line x1="12" y1="19.6" x2="12" y2="21.8" />
+                <line x1="2.2" y1="12" x2="4.4" y2="12" />
+                <line x1="19.6" y1="12" x2="21.8" y2="12" />
+                <line x1="5.07" y1="5.07" x2="6.63" y2="6.63" />
+                <line x1="17.37" y1="17.37" x2="18.93" y2="18.93" />
+                <line x1="18.93" y1="5.07" x2="17.37" y2="6.63" />
+                <line x1="6.63" y1="17.37" x2="5.07" y2="18.93" />
+              </g>
+            </svg>
+            <!-- 밤 아이콘 (초승달 + 별빛) -->
+            <svg id="miracle-time-icon-moon" class="tc-icon-moon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M19.8 14.3A7.8 7.8 0 0 1 9.7 4.2a7.8 7.8 0 1 0 10.1 10.1Z" fill="#fef08a" stroke="#fde047" stroke-width="1.1" stroke-linejoin="round" />
+              <path d="M17.2 5.2l.65 1.45 1.45.65-1.45.65-.65 1.45-.65-1.45-1.45-.65 1.45-.65.65-1.45Z" fill="#e0f2fe" />
+              <circle cx="14.5" cy="9.2" r="0.8" fill="#fef9c3" />
+            </svg>
+            <span id="miracle-time-mini-speed" class="tc-mini-speed hidden">2x</span>
+          </button>
+
+          <div id="miracle-time-tray" class="miracle-time-tray">
+            <div id="miracle-time-track" class="miracle-time-track-wrap" title="드래그 또는 탭하여 시간대 이동">
+              <div class="miracle-time-rail">
+                <div id="miracle-time-thumb" class="miracle-time-thumb" style="left: 28%;"></div>
+              </div>
+            </div>
+            <button id="miracle-time-speed-btn" type="button" class="miracle-time-speed-btn" title="배속 전환 (1x → 2x → 4x)">
+              <span class="text-[9px] leading-none tracking-tighter opacity-95" aria-hidden="true">▶▶</span>
+              <span id="miracle-time-speed-val">1x</span>
+            </button>
           </div>
         </div>
-
-        <!-- 2. 월드 맵 -->
-        <button id="hud-mode-btn" type="button" onclick="openWorldMapFromGame()"
-                class="mc-btn-slim w-full px-2.5 py-1 rounded-xl bg-amber-500/95 hover:bg-amber-400 text-slate-950 font-jua text-xs sm:text-sm flex items-center justify-between">
-          <span>🗺️ 월드 맵</span>
-          <span class="text-[10px] opacity-80">이동 ▶</span>
-        </button>
-
-        <!-- 3. 유치반, 유년반, 소년반 등 레벨 정보 -->
-        <div class="flex items-center justify-between gap-2 px-2.5 py-1 rounded-xl bg-slate-800/85 border border-slate-700/80">
-          <span class="text-[10px] text-slate-300 font-bold shrink-0">🎖️ 레벨</span>
-          <span id="hud-level-badge" class="font-jua text-emerald-300 text-xs truncate">🌱 유년반</span>
-        </div>
-
-        <!-- 4. 모험의 증표 (에피소드별 수집한 인증 카드 횡스크롤 컬렉션) -->
-        <button id="hud-badges-btn" type="button" onclick="openAdventureBadgesModal()"
-                class="mc-btn-slim w-full px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-300 via-yellow-300 to-amber-400 hover:brightness-105 text-amber-950 font-jua text-xs sm:text-sm flex items-center justify-between">
-          <span>🏅 모험의 증표</span>
-          <span id="hud-badges-count" class="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-amber-950/15">0 / 9</span>
-        </button>
-
-        <!-- 5. 화면 안내 (현재 스테이지 인터페이스 튜토리얼 다시 보기) -->
-        <button id="hud-tutorial-btn" type="button" onclick="openInterfaceTutorialFromMenu()"
-                class="mc-btn-slim w-full px-2.5 py-1 rounded-xl bg-sky-500/90 hover:bg-sky-400 text-slate-950 font-jua text-xs sm:text-sm flex items-center justify-between">
-          <span>❓ 화면 안내</span>
-          <span class="text-[10px] opacity-85">보기 ▶</span>
-        </button>
-
-        <!-- 6. 음악끄기, 전체화면 -->
-        <div class="grid grid-cols-2 gap-1 pt-0.5">
-          <button id="bgm-btn" type="button" onclick="toggleBgm()"
-                  class="mc-btn-slim px-2 py-1 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-amber-100 font-jua text-[11px] flex items-center justify-center gap-1 whitespace-nowrap" title="배경음악 켜기/끄기">
-            🎵 음악 끄기
-          </button>
-          <button id="fullscreen-btn" type="button" onclick="toggleGameFullscreen()"
-                  class="mc-btn-slim px-2 py-1 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-amber-100 font-jua text-[11px] flex items-center justify-center gap-1 whitespace-nowrap" title="전체화면 전환">
-            ⛶ 전체화면
-          </button>
-        </div>
-
-        <!-- 7. 게임 종료 -->
-        <button id="hud-exit-game-btn" type="button" onclick="openGameExitConfirmModal()"
-                class="mc-btn-slim w-full px-2.5 py-1 rounded-xl bg-rose-600/95 hover:bg-rose-500 text-white font-jua text-xs sm:text-sm flex items-center justify-between">
-          <span>🚪 게임 종료</span>
-          <span class="text-[10px] opacity-90">닫기 ✕</span>
-        </button>
       </div>
     </div>
 
@@ -1745,21 +2024,6 @@
         </div>
         <span id="miracle-nav-target" class="font-jua text-[10px] sm:text-[11px] text-amber-100 truncate flex-1">목표 탐색</span>
         <span id="miracle-nav-dist" class="font-jua text-[10px] sm:text-[11px] text-emerald-300 shrink-0">0m</span>
-      </div>
-
-      <!-- 내비게이터 바로 아래 한 줄 미니멀 시간 순환 게이지 ([해] ──바── [달] [⏩] [1x]) -->
-      <div id="miracle-time-row" class="hidden miracle-time-row pointer-events-auto" title="하루 시간 순환">
-        <span class="text-xs leading-none shrink-0" aria-hidden="true">☀️</span>
-        <div class="relative w-20 sm:w-28 h-2 rounded-full bg-slate-700/90 overflow-hidden shrink-0 border border-slate-500/60">
-          <div id="miracle-time-bar" class="h-full bg-gradient-to-r from-amber-300 via-orange-400 to-indigo-400 transition-all duration-100" style="width: 28%;"></div>
-          <div id="miracle-time-dot" class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-white shadow" style="left: 28%;"></div>
-        </div>
-        <span class="text-xs leading-none shrink-0" aria-hidden="true">🌙</span>
-        <button id="miracle-time-speed-btn" type="button" onclick="if(window.MiracleDayNight){window.MiracleDayNight.cycleSpeed(1);}"
-                class="px-1.5 py-0.5 rounded-full bg-indigo-500/85 hover:bg-indigo-400 text-[10px] font-jua text-white leading-none shrink-0 cursor-pointer" title="빨리감기 배속">
-          ⏩
-        </button>
-        <span id="miracle-time-speed-val" class="font-jua text-[10px] sm:text-[11px] text-amber-200 leading-none shrink-0 min-w-[24px] text-right">1x</span>
       </div>
     </div>
 
@@ -2365,22 +2629,22 @@
     </div>
   </div>
 
-<!-- 게임 스크립트 로드 (전체 스크립트 캐시 강제 갱신 ?v=41 및 버전 일관성 자동 검증 적용) -->
-  <script src="core.js?v=41"></script>
-  <script src="ep1_noah.js?v=41"></script>
-  <script src="ep2_exodus.js?v=41"></script>
-  <script src="ep3_david_base.js?v=41"></script>
-  <script src="ep3_david_st1_2.js?v=41"></script>
-  <script src="ep3_david_st3_end.js?v=41"></script>
-  <script src="ep4_miracle_base.js?v=41"></script>
-  <script src="ep4_miracle_assets.js?v=41"></script>
-  <script src="ep4_miracle_world.js?v=41"></script>
-  <script src="ep4_miracle_stages.js?v=41"></script>
-  <script src="ep4_multiplayer.js?v=41"></script>
+<!-- 게임 스크립트 로드 (전체 스크립트 캐시 강제 갱신 ?v=44 및 버전 일관성 자동 검증 적용) -->
+  <script src="core.js?v=44"></script>
+  <script src="ep1_noah.js?v=44"></script>
+  <script src="ep2_exodus.js?v=44"></script>
+  <script src="ep3_david_base.js?v=44"></script>
+  <script src="ep3_david_st1_2.js?v=44"></script>
+  <script src="ep3_david_st3_end.js?v=44"></script>
+  <script src="ep4_miracle_base.js?v=44"></script>
+  <script src="ep4_miracle_assets.js?v=44"></script>
+  <script src="ep4_miracle_world.js?v=44"></script>
+  <script src="ep4_miracle_stages.js?v=44"></script>
+  <script src="ep4_multiplayer.js?v=44"></script>
   <script>
     // GitHub Pages CDN·브라우저 부분 캐시로 신·구버전 스크립트가 뒤섞여 로드되는 현상을 자동 감지해 1회 강제 새로고침
     (function verifyScriptBuildConsistency() {
-      const EXPECTED = '20261125_v41';
+      const EXPECTED = '20261125_v44';
       const vers = window.__GAME_BUILD_VERSIONS__ || {};
       const keys = ['core', 'ep4_base', 'ep4_assets', 'ep4_world', 'ep4_stages', 'ep4_mp'];
       const mismatch = keys.some(k => vers[k] !== EXPECTED);

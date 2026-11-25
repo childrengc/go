@@ -6,14 +6,16 @@
 // =========================================================================
 
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_assets = '20261125_v41';
+window.__GAME_BUILD_VERSIONS__.ep4_assets = '20261125_v44';
 
 const _miracleDoubleSideMatCache = {};
 function matLowPolyDouble(hexColor) {
   if (!_miracleDoubleSideMatCache[hexColor]) {
-    const m = new THREE.MeshLambertMaterial({
+    const m = new THREE.MeshPhongMaterial({
       color: hexColor,
       flatShading: true,
+      shininess: 0,
+      specular: 0x000000,
       side: THREE.DoubleSide
     });
     m.userData = { _cached: true };
@@ -66,22 +68,26 @@ const EP4_DAY_NIGHT_CONFIG = {
   SUNRISE_END: 1.0,                 // 0.9333 ~ 1.0000 (2분 일출)
   DAY_RATIO: 20 / 30,
   INITIAL_TIME: 0.28,
-  SPEED_PRESETS: [1, 10, 60, 180],
+  SPEED_PRESETS: [1, 2, 4],
   STAR_COUNT_DESKTOP: 3400,
   STAR_COUNT_MOBILE: 1700,
-  METEOR_COUNT: 4,
+  METEOR_COUNT: 6,
   SKY_DOME_RADIUS: 650,
   STAR_RADIUS_MIN: 560,
   STAR_RADIUS_MAX: 625,
   POINT_LIGHT_POOL_DESKTOP: 6,
-  POINT_LIGHT_POOL_MOBILE: 4
+  POINT_LIGHT_POOL_MOBILE: 4,
+  POINT_SHADOW_POOL_DESKTOP: 2,
+  POINT_SHADOW_POOL_MOBILE: 1,
+  POINT_SHADOW_MAP_DESKTOP: 512,
+  POINT_SHADOW_MAP_MOBILE: 256
 };
 window.EP4_DAY_NIGHT_CONFIG = EP4_DAY_NIGHT_CONFIG;
 
 // 20분(낮) -> 2분(일몰) -> 6분(밤) -> 2분(일출) 하늘·안개·구름 색상 키프레임
 const EP4_SKY_KEYFRAMES = [
   { t: 0.0000, bg: new THREE.Color('#7dd3fc'), fog: new THREE.Color('#bae6fd'), cloud: new THREE.Color('#ffffff') },
-  { t: 0.6200, bg: new THREE.Color('#7dd3fc'), fog: new THREE.Color('#bae6fd'), cloud: new THREE.Color('#ffffff') },
+  { t: 0.6350, bg: new THREE.Color('#7dd3fc'), fog: new THREE.Color('#bae6fd'), cloud: new THREE.Color('#ffffff') },
   { t: 0.6667, bg: new THREE.Color('#f59e0b'), fog: new THREE.Color('#fed7aa'), cloud: new THREE.Color('#ffedd5') },
   { t: 0.7000, bg: new THREE.Color('#dc531e'), fog: new THREE.Color('#fb923c'), cloud: new THREE.Color('#fdba74') },
   { t: 0.7333, bg: new THREE.Color('#0d1c42'), fog: new THREE.Color('#1b325c'), cloud: new THREE.Color('#283a5c') },
@@ -101,6 +107,14 @@ const _dnStormCloudCol = new THREE.Color('#334155');
 const _dnMeteorDir = new THREE.Vector3();
 const _dnMeteorQuat = new THREE.Quaternion();
 const _dnZAxis = new THREE.Vector3(0, 0, 1);
+const _dnLightDirVec = new THREE.Vector3();
+const _dnCamFwdVec = new THREE.Vector3();
+const _dnWarmFillTint = new THREE.Color('#ffd59e');
+const _dnMoonWarmCol = new THREE.Color('#ffe4b5');
+const _dnMoonCoolCol = new THREE.Color('#ffffff');
+const _dnCullBoxTmp = new THREE.Box3();
+const _dnCullCenterTmp = new THREE.Vector3();
+const _dnCullSizeTmp = new THREE.Vector3();
 
 function ep4Smoothstep(edge0, edge1, x) {
   const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0 || 1e-6)));
@@ -183,6 +197,9 @@ const MiracleDayNight = {
   birdRatio: 1,
   lightSources: [],
   pointLightPool: [],
+  pointShadowPool: [],
+  pointShadowFillPool: [],
+  activeShadowFires: [],
   _hudSyncTimer: 0,
   isNight() {
     return (this.time >= EP4_DAY_NIGHT_CONFIG.SUNSET_END - 0.008 && this.time <= EP4_DAY_NIGHT_CONFIG.NIGHT_END + 0.012) || this.nightFactor > 0.35;
@@ -252,6 +269,25 @@ const MiracleDayNight = {
   },
   clearNightLightSources() {
     this.lightSources = [];
+    this.activeShadowFires = [];
+  },
+  disposeLightPools() {
+    const pools = [this.pointShadowPool, this.pointShadowFillPool, this.pointLightPool];
+    for (let p = 0; p < pools.length; p++) {
+      const arr = pools[p];
+      if (!Array.isArray(arr)) continue;
+      for (let i = 0; i < arr.length; i++) {
+        const pl = arr[i];
+        if (pl && pl.shadow && pl.shadow.map && typeof pl.shadow.map.dispose === 'function') {
+          try { pl.shadow.map.dispose(); } catch (e) {}
+          pl.shadow.map = null;
+        }
+      }
+    }
+    this.pointShadowPool = [];
+    this.pointShadowFillPool = [];
+    this.pointLightPool = [];
+    this.activeShadowFires = [];
   },
   registerNightLightSource(src) {
     if (src) this.lightSources.push(src);
@@ -270,8 +306,10 @@ let miracleSunSystem = {
   moonCoreMat: null,
   moonHaloMats: [],
   nightSkyGroup: null,
+  meteorGroup: null,
   starLayers: [],
   meteors: [],
+  meteorShowerState: null,
   sunCoronaMesh: null,
   sunRaysGroup: null,
   flareGroup: null,
@@ -280,6 +318,10 @@ let miracleSunSystem = {
   cullTimer: 0,
   cullEntries: [],
   cullBuilt: false,
+  lastSunDir: new THREE.Vector3(0, 0.5, -0.866),
+  lastLightDir: new THREE.Vector3(0, 0.5, -0.866),
+  lastMoonElevDeg: 0,
+  lastMoonScale: 0,
   flareEls: null,
   isMobile: /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (Math.min(window.innerWidth, window.innerHeight) <= 760)
 };
@@ -304,7 +346,13 @@ function buildMiracleShadowCullCache() {
   const isMob = miracleSunSystem.isMobile;
 
   worldGroup.children.forEach(rootObj => {
-    if (!rootObj || rootObj === miracleSunSystem.sunVisualGroup || rootObj === miracleSunSystem.moonVisualGroup || rootObj === miracleSunSystem.nightSkyGroup) return;
+    if (
+      !rootObj ||
+      rootObj === miracleSunSystem.sunVisualGroup ||
+      rootObj === miracleSunSystem.moonVisualGroup ||
+      rootObj === miracleSunSystem.nightSkyGroup ||
+      rootObj === miracleSunSystem.meteorGroup
+    ) return;
     if (
       (rootObj.userData && rootObj.userData._isGroundSurface) ||
       (rootObj.isMesh && rootObj.geometry && rootObj.geometry.type === 'PlaneGeometry')
@@ -314,6 +362,14 @@ function buildMiracleShadowCullCache() {
           ch.castShadow = false;
           ch.receiveShadow = true;
         }
+      });
+      return;
+    }
+
+    // 화롯불·모닥불 자체 구조물은 점광원 셀프 섀도우 방지를 위해 그림자 투사 제외
+    if (rootObj.userData && rootObj.userData._isNightFireProp) {
+      rootObj.traverse(ch => {
+        if (ch.isMesh) ch.castShadow = false;
       });
       return;
     }
@@ -331,9 +387,30 @@ function buildMiracleShadowCullCache() {
     });
 
     if (shadowMeshes.length > 0) {
+      let cx = rootObj.position.x;
+      let cz = rootObj.position.z;
+      let rad = 2.0;
+      let isDynamic = false;
+      try {
+        rootObj.updateMatrixWorld(true);
+        _dnCullBoxTmp.setFromObject(rootObj);
+        if (!_dnCullBoxTmp.isEmpty()) {
+          _dnCullBoxTmp.getCenter(_dnCullCenterTmp);
+          _dnCullBoxTmp.getSize(_dnCullSizeTmp);
+          cx = _dnCullCenterTmp.x;
+          cz = _dnCullCenterTmp.z;
+          rad = Math.max(1.5, Math.hypot(_dnCullSizeTmp.x, _dnCullSizeTmp.z) * 0.5);
+          // 이동하는 NPC·군인 등은 매 체크마다 position 기준으로 갱신
+          isDynamic = rad < 4.5 && (Math.hypot(cx - rootObj.position.x, cz - rootObj.position.z) < 2.2);
+        }
+      } catch (e) {}
       miracleSunSystem.cullEntries.push({
         root: rootObj,
         meshes: shadowMeshes,
+        cx,
+        cz,
+        rad,
+        isDynamic,
         active: true
       });
     }
@@ -342,19 +419,33 @@ function buildMiracleShadowCullCache() {
   miracleSunSystem.cullBuilt = true;
 }
 
-function updateMiracleShadowDistanceCulling(focusX, focusZ) {
+function updateMiracleShadowDistanceCulling(focusX, focusZ, nightFactor = 0) {
   if (!miracleSunSystem.cullBuilt) {
     buildMiracleShadowCullCache();
   }
   const maxShadowDist = miracleSunSystem.isMobile ? 28.0 : 58.0;
+  const isNightNoGlobalShadow = nightFactor >= 0.70;
+  const activeFires = isNightNoGlobalShadow ? (MiracleDayNight.activeShadowFires || []) : null;
   const entries = miracleSunSystem.cullEntries;
 
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
     if (!entry.root || !entry.root.parent) continue;
-    const rx = entry.root.position.x;
-    const rz = entry.root.position.z;
-    const shouldCast = Math.hypot(rx - focusX, rz - focusZ) <= maxShadowDist;
+    const rx = entry.isDynamic ? entry.root.position.x : entry.cx;
+    const rz = entry.isDynamic ? entry.root.position.z : entry.cz;
+
+    let shouldCast = false;
+    if (!isNightNoGlobalShadow) {
+      shouldCast = (Math.hypot(rx - focusX, rz - focusZ) - entry.rad) <= maxShadowDist;
+    } else if (activeFires && activeFires.length > 0) {
+      for (let f = 0; f < activeFires.length; f++) {
+        const af = activeFires[f];
+        if ((Math.hypot(rx - af.x, rz - af.z) - entry.rad) <= (af.dist + 4.5)) {
+          shouldCast = true;
+          break;
+        }
+      }
+    }
 
     if (entry.active !== shouldCast) {
       entry.active = shouldCast;
@@ -368,28 +459,54 @@ function updateMiracleShadowDistanceCulling(focusX, focusZ) {
 
 function createMiracleMoonVisualGroup() {
   const moonGrp = new THREE.Group();
-  const rawGeo = new THREE.IcosahedronGeometry(6.8, 1);
+  // 거대한 판타지 슈퍼문 (낮의 해보다 크고 밤하늘에서 밝게 빛나는 은백색 다면체 슈퍼문)
+  const rawGeo = new THREE.IcosahedronGeometry(17.5, 2);
   const geo = rawGeo.index ? rawGeo.toNonIndexed() : rawGeo;
   if (geo !== rawGeo && typeof rawGeo.dispose === 'function') rawGeo.dispose();
 
   const cPos = geo.attributes.position;
   const colCenter = new THREE.Color('#ffffff');
-  const colMid = new THREE.Color('#e2e8f0');
-  const colRim = new THREE.Color('#94a3b8');
+  const colMid = new THREE.Color('#f2f8ff');
+  const colRim = new THREE.Color('#cfe2ff');
+  const colMare = new THREE.Color('#b8c9e4');
   const tmpCol = new THREE.Color();
   const fCols = new Float32Array(cPos.count * 3);
+
+  // 달 표면 크레이터(바다) 패치 4개 (밝기 보존을 위해 은은한 농도로 적용)
+  const marePatches = [
+    { x: -0.34, y:  0.26, z: 0.90, r: 0.44, w: 0.22 },
+    { x:  0.28, y:  0.14, z: 0.94, r: 0.36, w: 0.18 },
+    { x: -0.10, y: -0.32, z: 0.94, r: 0.32, w: 0.16 },
+    { x:  0.42, y: -0.22, z: 0.88, r: 0.26, w: 0.14 }
+  ];
+
   for (let i = 0; i + 2 < cPos.count; i += 3) {
     const mx = (cPos.getX(i) + cPos.getX(i + 1) + cPos.getX(i + 2)) / 3;
     const my = (cPos.getY(i) + cPos.getY(i + 1) + cPos.getY(i + 2)) / 3;
     const mz = (cPos.getZ(i) + cPos.getZ(i + 1) + cPos.getZ(i + 2)) / 3;
     const len = Math.hypot(mx, my, mz) || 1;
+    const nx = mx / len, ny = my / len, nz = mz / len;
     const radialT = Math.max(0, Math.min(1, Math.hypot(mx, my) / len));
-    if (radialT < 0.5) {
-      tmpCol.copy(colCenter).lerp(colMid, radialT / 0.5);
+    if (radialT < 0.52) {
+      tmpCol.copy(colCenter).lerp(colMid, radialT / 0.52);
     } else {
-      tmpCol.copy(colMid).lerp(colRim, Math.min(1, (radialT - 0.5) / 0.5));
+      tmpCol.copy(colMid).lerp(colRim, Math.min(1, (radialT - 0.52) / 0.48));
     }
-    const facetVar = 0.92 + (((Math.floor(i / 3) * 19) % 7) / 6) * 0.11;
+
+    let mareMix = 0;
+    for (let p = 0; p < marePatches.length; p++) {
+      const mp = marePatches[p];
+      const d = Math.hypot(nx - mp.x, ny - mp.y, nz - mp.z);
+      if (d < mp.r) {
+        const k = 1.0 - d / mp.r;
+        mareMix = Math.max(mareMix, k * k * mp.w);
+      }
+    }
+    if (mareMix > 0.005) {
+      tmpCol.lerp(colMare, mareMix);
+    }
+
+    const facetVar = 0.96 + (((Math.floor(i / 3) * 19) % 7) / 6) * 0.06;
     for (let k = 0; k < 3; k++) {
       fCols[(i + k) * 3] = Math.min(1, tmpCol.r * facetVar);
       fCols[(i + k) * 3 + 1] = Math.min(1, tmpCol.g * facetVar);
@@ -409,11 +526,16 @@ function createMiracleMoonVisualGroup() {
     fog: false
   });
   const moonMesh = new THREE.Mesh(geo, moonMat);
-  moonMesh.renderOrder = -6;
+  moonMesh.renderOrder = -5;
+  moonMesh.frustumCulled = false;
+
+  // 3겹 밝은 판타지 달무리 + 은빛 코로나 링
   const haloMats = [];
   const haloSpecs = [
-    { r: 10.6, col: 0xbae6fd, op: 0.24, z: -1.5 },
-    { r: 15.8, col: 0x93c5fd, op: 0.10, z: -3.0 }
+    { kind: 'circle', r: 23.5, col: 0xf8fcff, op: 0.44, z: -1.8, seg: 20 },
+    { kind: 'ring',   rIn: 26.0, rOut: 28.0, col: 0xdbeafe, op: 0.22, z: -2.6, seg: 26 },
+    { kind: 'circle', r: 34.0, col: 0x93c5fd, op: 0.24, z: -3.5, seg: 22 },
+    { kind: 'circle', r: 46.5, col: 0xc4b5fd, op: 0.13, z: -5.2, seg: 24 }
   ];
   haloSpecs.forEach(hs => {
     const hMat = new THREE.MeshBasicMaterial({
@@ -426,19 +548,25 @@ function createMiracleMoonVisualGroup() {
       side: THREE.DoubleSide,
       blending: THREE.AdditiveBlending
     });
-    const hMesh = new THREE.Mesh(new THREE.CircleGeometry(hs.r, 12), hMat);
+    const hGeo = hs.kind === 'ring'
+      ? new THREE.RingGeometry(hs.rIn, hs.rOut, hs.seg)
+      : new THREE.CircleGeometry(hs.r, hs.seg);
+    const hMesh = new THREE.Mesh(hGeo, hMat);
     hMesh.position.z = hs.z;
     hMesh.renderOrder = -6;
+    hMesh.frustumCulled = false;
     moonGrp.add(hMesh);
     haloMats.push({ mat: hMat, baseOp: hs.op });
   });
 
   moonGrp.add(moonMesh);
-  moonGrp.scale.setScalar(2.45);
-  moonGrp.renderOrder = -6;
+  moonGrp.scale.setScalar(2.5);
+  moonGrp.userData.baseScale = 2.5;
+  moonGrp.renderOrder = -5;
   moonGrp.visible = false;
   miracleSunSystem.moonCoreMat = moonMat;
   miracleSunSystem.moonHaloMats = haloMats;
+  miracleSunSystem.lastMoonScale = 2.5;
   return moonGrp;
 }
 
@@ -560,9 +688,33 @@ function createMiracleNightSkyGroup(isMob) {
     starLayers.push({ pts, mat, speed: 1.4 + l * 0.85, phase: l * 2.15 });
   }
 
-  // 3) 밤하늘 원경 별똥별 (유성 4기, 산맥 뒤 r=495~545m)
+  skyGrp.renderOrder = -10;
+  skyGrp.visible = false;
+  miracleSunSystem.skyDomeMesh = skyDomeMesh;
+  miracleSunSystem.skyDomeMat = domeMat;
+  miracleSunSystem.starLayers = starLayers;
+  return skyGrp;
+}
+
+// 별도 비회전 원경 별똥별 그룹 (카메라 전방 시야 기준 스폰 + 단발/2~3개 연속 유성우)
+function createMiracleMeteorGroup() {
+  const metRoot = new THREE.Group();
   const meteors = [];
-  for (let m = 0; m < EP4_DAY_NIGHT_CONFIG.METEOR_COUNT; m++) {
+  const count = EP4_DAY_NIGHT_CONFIG.METEOR_COUNT || 6;
+
+  // 꼬리 원뿔: 굵은 밑면이 머리(z=0), 뾰족한 끝이 꼬리 뒤쪽(z=-L)을 향하도록 정렬
+  const innerTailGeo = new THREE.ConeGeometry(1.15, 46.0, 5);
+  innerTailGeo.rotateX(-Math.PI * 0.5);
+  innerTailGeo.translate(0, 0, -23.0);
+
+  const outerTailGeo = new THREE.ConeGeometry(2.35, 78.0, 6);
+  outerTailGeo.rotateX(-Math.PI * 0.5);
+  outerTailGeo.translate(0, 0, -39.0);
+
+  const headCoreGeo = new THREE.OctahedronGeometry(2.3, 0);
+  const headHaloGeo = new THREE.OctahedronGeometry(4.5, 0);
+
+  for (let m = 0; m < count; m++) {
     const mGrp = new THREE.Group();
     const headMat = new THREE.MeshBasicMaterial({
       color: 0xffffff,
@@ -573,10 +725,8 @@ function createMiracleNightSkyGroup(isMob) {
       fog: false,
       blending: THREE.AdditiveBlending
     });
-    const head = new THREE.Mesh(new THREE.OctahedronGeometry(1.45, 0), headMat);
-
-    const tailMat = new THREE.MeshBasicMaterial({
-      color: 0xa6d1ff,
+    const headHaloMat = new THREE.MeshBasicMaterial({
+      color: 0xe0f2fe,
       transparent: true,
       opacity: 0,
       depthTest: true,
@@ -584,34 +734,66 @@ function createMiracleNightSkyGroup(isMob) {
       fog: false,
       blending: THREE.AdditiveBlending
     });
-    const tailGeo = new THREE.ConeGeometry(0.85, 34.0, 5);
-    tailGeo.translate(0, -17.0, 0);
-    tailGeo.rotateX(Math.PI * 0.5);
-    const tail = new THREE.Mesh(tailGeo, tailMat);
+    const innerTailMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0,
+      depthTest: true,
+      depthWrite: false,
+      fog: false,
+      blending: THREE.AdditiveBlending
+    });
+    const tailMat = new THREE.MeshBasicMaterial({
+      color: 0x93c5fd,
+      transparent: true,
+      opacity: 0,
+      depthTest: true,
+      depthWrite: false,
+      fog: false,
+      blending: THREE.AdditiveBlending
+    });
 
-    mGrp.add(tail, head);
+    const head = new THREE.Mesh(headCoreGeo, headMat);
+    const headHalo = new THREE.Mesh(headHaloGeo, headHaloMat);
+    const innerTail = new THREE.Mesh(innerTailGeo, innerTailMat);
+    const outerTail = new THREE.Mesh(outerTailGeo, tailMat);
+    head.renderOrder = -7;
+    headHalo.renderOrder = -7;
+    innerTail.renderOrder = -7;
+    outerTail.renderOrder = -7;
+
+    mGrp.add(outerTail, innerTail, headHalo, head);
     mGrp.renderOrder = -7;
     mGrp.visible = false;
-    skyGrp.add(mGrp);
+    metRoot.add(mGrp);
     meteors.push({
       grp: mGrp,
       headMat,
+      headHaloMat,
+      innerTailMat,
       tailMat,
       active: false,
-      timer: 0.9 + m * 1.4,
       age: 0,
-      maxDur: 1.15,
+      maxDur: 1.05,
       pos: new THREE.Vector3(),
       vel: new THREE.Vector3()
     });
   }
 
-  skyGrp.visible = false;
-  miracleSunSystem.skyDomeMesh = skyDomeMesh;
-  miracleSunSystem.skyDomeMat = domeMat;
-  miracleSunSystem.starLayers = starLayers;
+  metRoot.renderOrder = -7;
+  metRoot.visible = false;
+  miracleSunSystem.meteorGroup = metRoot;
   miracleSunSystem.meteors = meteors;
-  return skyGrp;
+  miracleSunSystem.meteorShowerState = {
+    nextEventTimer: 1.3 + Math.random() * 1.1,
+    burstRemaining: 0,
+    burstGapTimer: 0,
+    burstBaseAzim: 0,
+    burstBaseElev: 0.27,
+    burstSlopeSign: 1,
+    burstCountTotal: 0
+  };
+  return metRoot;
 }
 
 function setupMiracleDynamicSunAndShadows() {
@@ -660,9 +842,9 @@ function setupMiracleDynamicSunAndShadows() {
   dirLight.shadow.camera.right = d;
   dirLight.shadow.camera.top = d;
   dirLight.shadow.camera.bottom = -d;
-  dirLight.shadow.bias = -0.00025;
+  dirLight.shadow.bias = -0.00035;
   if (dirLight.shadow.normalBias !== undefined) {
-    dirLight.shadow.normalBias = 0.020;
+    dirLight.shadow.normalBias = 0.025;
   }
   dirLight.shadow.camera.updateProjectionMatrix();
 
@@ -725,6 +907,7 @@ function setupMiracleDynamicSunAndShadows() {
     core.renderOrder = -6;
 
     const flareGrp = new THREE.Group();
+    flareGrp.renderOrder = -6;
     const sunHaloMats = [];
     const haloSpecs = [
       { r: 12.8, col: 0xfef08a, sunsetCol: 0xfb923c, op: 0.30, z: -1.6 },
@@ -743,7 +926,7 @@ function setupMiracleDynamicSunAndShadows() {
       const hMesh = new THREE.Mesh(new THREE.CircleGeometry(hs.r, 10), hMat);
       hMesh.rotation.z = Math.PI / 10;
       hMesh.position.z = hs.z;
-      hMesh.renderOrder = -6;
+      hMesh.renderOrder = -7;
       flareGrp.add(hMesh);
       sunHaloMats.push({ mat: hMat, baseCol: new THREE.Color(hs.col), sunsetCol: new THREE.Color(hs.sunsetCol), baseOp: hs.op });
     });
@@ -759,7 +942,7 @@ function setupMiracleDynamicSunAndShadows() {
     miracleSunSystem.sunRaysGroup = null;
     miracleSunSystem.flareGroup = flareGrp;
 
-    // 달(Moon) + 밤하늘 별·유성 + 점광원 풀 초기화
+    // 달(Supermoon) + 밤하늘 별 + 비회전 별똥별 그룹 + 점광원/그림자 풀 초기화
     const moonGrp = createMiracleMoonVisualGroup();
     worldGroup.add(moonGrp);
     miracleSunSystem.moonVisualGroup = moonGrp;
@@ -768,10 +951,46 @@ function setupMiracleDynamicSunAndShadows() {
     worldGroup.add(nightSkyGrp);
     miracleSunSystem.nightSkyGroup = nightSkyGrp;
 
+    const meteorGrp = createMiracleMeteorGroup();
+    worldGroup.add(meteorGrp);
+    miracleSunSystem.meteorGroup = meteorGrp;
+
+    if (typeof MiracleDayNight.disposeLightPools === 'function') {
+      MiracleDayNight.disposeLightPools();
+    }
+    MiracleDayNight.pointShadowPool = [];
+    MiracleDayNight.pointShadowFillPool = [];
     MiracleDayNight.pointLightPool = [];
+    MiracleDayNight.activeShadowFires = [];
+
+    const shadowPoolSize = isMob ? (EP4_DAY_NIGHT_CONFIG.POINT_SHADOW_POOL_MOBILE || 1) : (EP4_DAY_NIGHT_CONFIG.POINT_SHADOW_POOL_DESKTOP || 2);
+    const shadowMapRes = isMob ? (EP4_DAY_NIGHT_CONFIG.POINT_SHADOW_MAP_MOBILE || 256) : (EP4_DAY_NIGHT_CONFIG.POINT_SHADOW_MAP_DESKTOP || 512);
+    for (let i = 0; i < shadowPoolSize; i++) {
+      const spl = new THREE.PointLight(0xff9a3c, 0, 1.0, 1.55);
+      spl.castShadow = true;
+      spl.shadow.mapSize.width = shadowMapRes;
+      spl.shadow.mapSize.height = shadowMapRes;
+      spl.shadow.camera.near = 0.75;
+      spl.shadow.camera.far = 1.0;
+      spl.shadow.bias = -0.0024;
+      if (spl.shadow.normalBias !== undefined) spl.shadow.normalBias = 0.035;
+      spl.shadow.camera.updateProjectionMatrix();
+      spl.position.set(0, -300, 0);
+      worldGroup.add(spl);
+      MiracleDayNight.pointShadowPool.push(spl);
+
+      // 같은 위치의 따뜻한 난반사 보조 점광원(castShadow=false)으로 그림자 내부가 시커멓지 않고 밝고 따뜻하게 표현
+      const fpl = new THREE.PointLight(0xffbe6b, 0, 1.0, 1.55);
+      fpl.castShadow = false;
+      fpl.position.set(0, -300, 0);
+      worldGroup.add(fpl);
+      MiracleDayNight.pointShadowFillPool.push(fpl);
+    }
+
     const poolSize = isMob ? EP4_DAY_NIGHT_CONFIG.POINT_LIGHT_POOL_MOBILE : EP4_DAY_NIGHT_CONFIG.POINT_LIGHT_POOL_DESKTOP;
     for (let i = 0; i < poolSize; i++) {
       const pl = new THREE.PointLight(0xff9a3c, 0, 15, 1.65);
+      pl.castShadow = false;
       pl.position.set(0, -100, 0);
       worldGroup.add(pl);
       MiracleDayNight.pointLightPool.push(pl);
@@ -781,11 +1000,33 @@ function setupMiracleDynamicSunAndShadows() {
 
 function updateMiraclePooledNightLights(focusX, focusZ, nightFactor, now) {
   const pool = MiracleDayNight.pointLightPool;
-  if (!pool || pool.length === 0) return;
+  const shadowPool = MiracleDayNight.pointShadowPool || [];
+  const fillPool = MiracleDayNight.pointShadowFillPool || [];
+  MiracleDayNight.activeShadowFires = [];
+
+  const parkShadowSlot = (idx) => {
+    const spl = shadowPool[idx];
+    if (spl) {
+      spl.intensity = 0;
+      spl.distance = 1.0;
+      spl.position.set(0, -300, 0);
+      if (spl.shadow && spl.shadow.camera && Math.abs(spl.shadow.camera.far - 1.0) > 0.1) {
+        spl.shadow.camera.far = 1.0;
+        spl.shadow.camera.updateProjectionMatrix();
+      }
+    }
+    const fpl = fillPool[idx];
+    if (fpl) {
+      fpl.intensity = 0;
+      fpl.distance = 1.0;
+      fpl.position.set(0, -300, 0);
+    }
+  };
 
   if (nightFactor <= 0.06 || !MiracleDayNight.lightSources || MiracleDayNight.lightSources.length === 0) {
-    for (let i = 0; i < pool.length; i++) {
-      pool[i].intensity = 0;
+    for (let i = 0; i < shadowPool.length; i++) parkShadowSlot(i);
+    if (pool) {
+      for (let i = 0; i < pool.length; i++) pool[i].intensity = 0;
     }
     return;
   }
@@ -803,23 +1044,79 @@ function updateMiraclePooledNightLights(focusX, focusZ, nightFactor, now) {
     const dz = pos.z - focusZ;
     const dSq = dx * dx + dz * dz;
     if (dSq > maxRangeSq) continue;
-    candidates.push({ src, pos, dSq });
+    candidates.push({ src, pos, dSq, dist: Math.sqrt(dSq) });
   }
 
-  candidates.sort((a, b) => a.dSq - b.dSq);
+  // 거리 우선 + 밝은 불(화롯불·모닥불) 우선 보정 정렬
+  candidates.sort((a, b) => (a.dist - (a.src.intensity || 1.5) * 1.1) - (b.dist - (b.src.intensity || 1.5) * 1.1));
   const tNow = now * 0.0075;
-  for (let i = 0; i < pool.length; i++) {
-    const pl = pool[i];
-    if (i < candidates.length) {
+  const usedForShadow = new Set();
+
+  // 1) 가장 가까운 활성 불빛 1~2기에 실시간 그림자 + 따뜻한 밝은 난반사 보조광 할당
+  let sIdx = 0;
+  for (let i = 0; i < candidates.length && sIdx < shadowPool.length; i++) {
+    const c = candidates[i];
+    const lightDist = c.src.distance || 14;
+    if (c.src.castShadow === false) continue;
+    if (c.dist > lightDist + 16.0) continue;
+
+    const phase = c.src.phase || (i * 1.7);
+    const flicker = 0.89 + Math.sin(tNow + phase) * 0.07 + Math.cos(tNow * 1.9 + phase * 1.3) * 0.04;
+    const baseIntensity = c.src.intensity || 1.8;
+    const totalInt = baseIntensity * nightFactor * flicker;
+
+    // 밝은 불(화롯불/대형 모닥불)일수록 넓은 범위·선명한 그림자 + 풍부한 따뜻한 밝은 난반사
+    const brightNorm = THREE.MathUtils.clamp((baseIntensity - 0.9) / 2.5, 0.0, 1.0);
+    const shadowShare = THREE.MathUtils.lerp(0.56, 0.72, brightNorm);
+    const fillShare = 1.0 - shadowShare;
+
+    const px = c.pos.x;
+    const py = (c.pos.y !== undefined ? c.pos.y : 0) + (c.src.yOffset !== undefined ? c.src.yOffset : 1.25);
+    const pz = c.pos.z;
+
+    const spl = shadowPool[sIdx];
+    spl.color.setHex(c.src.color || 0xff9a3c);
+    spl.distance = lightDist;
+    spl.intensity = totalInt * shadowShare;
+    spl.position.set(px, py, pz);
+    if (spl.shadow && spl.shadow.camera && Math.abs(spl.shadow.camera.far - lightDist) > 0.35) {
+      spl.shadow.camera.far = lightDist;
+      spl.shadow.camera.updateProjectionMatrix();
+    }
+
+    const fpl = fillPool[sIdx];
+    if (fpl) {
+      fpl.color.setHex(c.src.color || 0xff9a3c).lerp(_dnWarmFillTint, 0.28 + brightNorm * 0.14);
+      fpl.distance = lightDist * 1.08;
+      fpl.intensity = totalInt * fillShare;
+      fpl.position.set(px, py, pz);
+    }
+
+    MiracleDayNight.activeShadowFires.push({ x: px, z: pz, dist: lightDist, intensity: totalInt });
+    usedForShadow.add(i);
+    sIdx++;
+  }
+  for (let i = sIdx; i < shadowPool.length; i++) {
+    parkShadowSlot(i);
+  }
+
+  // 2) 나머지 근접 불빛은 일반 점광원 풀(비그림자)로 처리
+  if (pool && pool.length > 0) {
+    let pIdx = 0;
+    for (let i = 0; i < candidates.length && pIdx < pool.length; i++) {
+      if (usedForShadow.has(i)) continue;
       const c = candidates[i];
+      const pl = pool[pIdx];
       const phase = c.src.phase || (i * 1.7);
       const flicker = 0.88 + Math.sin(tNow + phase) * 0.08 + Math.cos(tNow * 1.9 + phase * 1.3) * 0.05;
       pl.color.setHex(c.src.color || 0xff9a3c);
       pl.distance = c.src.distance || 14;
       pl.intensity = (c.src.intensity || 1.8) * nightFactor * flicker;
       pl.position.set(c.pos.x, (c.pos.y !== undefined ? c.pos.y : 0) + (c.src.yOffset !== undefined ? c.src.yOffset : 1.0), c.pos.z);
-    } else {
-      pl.intensity = 0;
+      pIdx++;
+    }
+    for (let i = pIdx; i < pool.length; i++) {
+      pool[i].intensity = 0;
     }
   }
 }
@@ -876,32 +1173,40 @@ function updateMiracleDynamicSun(rawDt, now) {
     if (typeof window.updateHeroClayEmissiveForNight === 'function') window.updateHeroClayEmissiveForNight(0);
     if (miracleSunSystem.moonVisualGroup) miracleSunSystem.moonVisualGroup.visible = false;
     if (miracleSunSystem.nightSkyGroup) miracleSunSystem.nightSkyGroup.visible = false;
+    if (miracleSunSystem.meteorGroup) miracleSunSystem.meteorGroup.visible = false;
     if (miracleSunSystem.sunVisualGroup) miracleSunSystem.sunVisualGroup.visible = true;
     updateMiraclePooledNightLights(focusX, focusZ, 0, now);
 
     miracleSunSystem.angle += dt * miracleSunSystem.angularSpeed;
     const azim = Math.sin(miracleSunSystem.angle) * 1.18;
-    const elevShadow = 0.64 + Math.cos(miracleSunSystem.angle * 2.0) * 0.12;
-    const elevVisual = 0.28 + Math.cos(miracleSunSystem.angle * 2.0) * 0.06;
+    const elev = 0.44 + Math.cos(miracleSunSystem.angle * 2.0) * 0.08;
+
+    _sunDirVec.set(
+      Math.sin(azim) * Math.cos(elev),
+      Math.sin(elev),
+      -Math.cos(azim) * Math.cos(elev)
+    ).normalize();
+    miracleSunSystem.lastSunDir.copy(_sunDirVec);
+    miracleSunSystem.lastLightDir.copy(_sunDirVec);
 
     const sunDist = 85.0;
     light.color.setHex(0xfff8dc);
     light.intensity = 0.88;
     light.position.set(
-      focusX + Math.sin(azim) * Math.cos(elevShadow) * sunDist,
-      focusY + Math.sin(elevShadow) * sunDist,
-      focusZ + Math.cos(azim) * Math.cos(elevShadow) * sunDist * 0.75 + 18.0
+      focusX + _sunDirVec.x * sunDist,
+      focusY + _sunDirVec.y * sunDist,
+      focusZ + _sunDirVec.z * sunDist
     );
     if (miracleSunSystem.lightTarget) {
       miracleSunSystem.lightTarget.position.set(focusX, focusY, focusZ);
       miracleSunSystem.lightTarget.updateMatrixWorld();
     }
     if (miracleSunSystem.sunVisualGroup) {
-      const visDist = 195.0;
+      const visDist = 420.0;
       miracleSunSystem.sunVisualGroup.position.set(
-        focusX + Math.sin(azim) * Math.cos(elevVisual) * visDist,
-        focusY + Math.sin(elevVisual) * visDist,
-        focusZ + Math.cos(azim) * Math.cos(elevVisual) * visDist * 0.78 + 24.0
+        focusX + _sunDirVec.x * visDist,
+        focusY + _sunDirVec.y * visDist,
+        focusZ + _sunDirVec.z * visDist
       );
       if (camera) miracleSunSystem.sunVisualGroup.lookAt(camera.position);
     }
@@ -925,7 +1230,7 @@ function updateMiracleDynamicSun(rawDt, now) {
     const rf = factors.sunriseFactor;
     const warmFactor = Math.max(sf, rf);
 
-    // 1) 해 궤도 (일출 28분 -> 낮 0~20분 -> 일몰 22분 동->서 연속 호)
+    // 1) 해 궤도 (일출 28분 -> 낮 0~20분 -> 일몰 22분: 동(+X) -> 북쪽 하늘(-Z) -> 서(-X) 단일 방향 벡터)
     const riseStart = EP4_DAY_NIGHT_CONFIG.NIGHT_END; // 0.9333
     const setEnd = EP4_DAY_NIGHT_CONFIG.SUNSET_END;   // 0.7333
     const sunSpan = (1.0 - riseStart) + setEnd;       // 0.8000
@@ -933,27 +1238,35 @@ function updateMiracleDynamicSun(rawDt, now) {
     if (t >= riseStart) uSun = (t - riseStart) / sunSpan;
     else if (t <= setEnd) uSun = (t + (1.0 - riseStart)) / sunSpan;
     const uSunClamped = Math.max(0, Math.min(1, uSun < 0 ? 0.5 : uSun));
-    const sunElev = Math.sin(uSunClamped * Math.PI) * 1.10 - 0.10;
-    const sunAzim = (1.0 - uSunClamped * 2.0) * 1.18;
+    const sunElev = Math.sin(uSunClamped * Math.PI) * 0.72 - 0.04; // -2.3° ~ +38.9°
+    const sunAzim = (1.0 - uSunClamped * 2.0) * 1.24;
 
-    // 2) 달 궤도 (일몰 끝 0.72 -> 밤 6분 -> 일출 중 0.96)
-    const moonStart = 0.715;
-    const moonSpan = 0.245;
+    _sunDirVec.set(
+      Math.sin(sunAzim) * Math.cos(sunElev),
+      Math.sin(sunElev),
+      -Math.cos(sunAzim) * Math.cos(sunElev)
+    ).normalize();
+    miracleSunSystem.lastSunDir.copy(_sunDirVec);
+
+    // 2) 초대형 판타지 슈퍼문 궤도 (낮의 해와 동일한 동(+X)->북(-Z)->서(-X) 아치 패턴, 정점 고도 +28.6°)
+    const moonStart = EP4_DAY_NIGHT_CONFIG.DAY_END; // 20/30 = 0.6667 (일몰 시작)
+    const moonSpan = 1.0 - moonStart;               // 10/30 = 0.3333 (정점 = 자정 0.8333)
     const vMoon = THREE.MathUtils.clamp((t - moonStart) / moonSpan, 0, 1);
-    const moonElev = Math.sin(vMoon * Math.PI) * 0.88 + 0.12;
-    const moonAzim = (1.0 - vMoon * 2.0) * 1.15;
+    const moonElev = Math.sin(vMoon * Math.PI) * 0.52 - 0.02; // -1.1° -> 자정 +28.6° -> -1.1°
+    const moonAzim = (1.0 - vMoon * 2.0) * 1.24;              // 해와 동일: 동(+71°) -> 북(0°) -> 서(-71°)
+    miracleSunSystem.lastMoonElevDeg = +(moonElev * 180 / Math.PI).toFixed(1);
 
-    // 해/달은 산맥보다 뒤쪽(r = 470m)에 배치해 원경 지형을 가리지 않도록 처리
-    const visDist = 470.0;
-    const sunVisY = Math.sin(sunElev) * visDist;
+    // 해/달은 산맥보다 뒤쪽(r = 415~450m)에 배치해 원경 지형을 가리지 않도록 처리
+    const visDist = 450.0;
+    const sunVisY = _sunDirVec.y * visDist;
     if (miracleSunSystem.sunVisualGroup) {
       const sunVisible = (uSun >= 0 && uSun <= 1.0) && (sunVisY > -36);
       miracleSunSystem.sunVisualGroup.visible = sunVisible;
       if (sunVisible) {
         miracleSunSystem.sunVisualGroup.position.set(
-          focusX + Math.sin(sunAzim) * Math.cos(sunElev) * visDist,
+          focusX + _sunDirVec.x * visDist,
           focusY + sunVisY,
-          focusZ - Math.abs(Math.cos(sunAzim)) * 110.0 - 235.0
+          focusZ + _sunDirVec.z * visDist
         );
         if (camera) miracleSunSystem.sunVisualGroup.lookAt(camera.position);
         if (miracleSunSystem.sunCoreMat) {
@@ -972,19 +1285,26 @@ function updateMiracleDynamicSun(rawDt, now) {
       }
     }
 
-    const moonVisY = Math.sin(moonElev) * visDist;
+    const moonDist = 415.0;
+    const moonVisY = Math.sin(moonElev) * moonDist;
     if (miracleSunSystem.moonVisualGroup) {
-      const moonVisible = (t >= moonStart && t <= moonStart + moonSpan) && (moonVisY > -20);
+      const twilightVis = Math.max(nf, sf * 0.55, rf * 0.55);
+      const moonVisible = (t >= moonStart && t <= 1.0) && (moonVisY > -28) && (twilightVis > 0.04);
       miracleSunSystem.moonVisualGroup.visible = moonVisible;
       if (moonVisible) {
         miracleSunSystem.moonVisualGroup.position.set(
-          focusX + Math.sin(moonAzim) * Math.cos(moonElev) * visDist,
+          focusX + Math.sin(moonAzim) * Math.cos(moonElev) * moonDist,
           focusY + moonVisY,
-          focusZ - Math.abs(Math.cos(moonAzim)) * 105.0 - 230.0
+          focusZ - Math.cos(moonAzim) * Math.cos(moonElev) * moonDist
         );
         if (camera) miracleSunSystem.moonVisualGroup.lookAt(camera.position);
-        const moonFade = Math.max(0, Math.min(1, nf * 1.15)) * Math.max(0, Math.min(1, (moonVisY + 20) / 48));
-        if (miracleSunSystem.moonCoreMat) miracleSunSystem.moonCoreMat.opacity = moonFade;
+        const horizonElevFade = ep4Smoothstep(-0.02, 0.08, moonElev);
+        const moonFade = ep4Smoothstep(0.04, 0.30, twilightVis) * horizonElevFade;
+        const horizonWarm = 1.0 - ep4Smoothstep(0.02, 0.18, moonElev);
+        if (miracleSunSystem.moonCoreMat) {
+          miracleSunSystem.moonCoreMat.color.copy(_dnMoonCoolCol).lerp(_dnMoonWarmCol, horizonWarm * 0.28);
+          miracleSunSystem.moonCoreMat.opacity = moonFade;
+        }
         if (miracleSunSystem.moonHaloMats) {
           miracleSunSystem.moonHaloMats.forEach(hm => {
             hm.mat.opacity = hm.baseOp * moonFade;
@@ -993,15 +1313,23 @@ function updateMiracleDynamicSun(rawDt, now) {
       }
     }
 
-    // 3) DirectionalLight + AmbientLight + HemisphereLight 부드러운 전환
+    // 3) DirectionalLight (원본 낮 조명 색감/선명도 완전 복원 + 밤에는 강도 0으로 전역 그림자 제거)
     const sunDist = 88.0;
-    const useMoonLight = nf > 0.55;
-    const activeAzim = useMoonLight ? moonAzim : sunAzim;
-    const activeElev = Math.max(0.32, useMoonLight ? Math.max(0.38, moonElev) : Math.max(0.36, sunElev));
+    const minDayElevY = THREE.MathUtils.lerp(0.48, 0.24, Math.max(warmFactor, nf));
+    const lightElevY = Math.max(minDayElevY, _sunDirVec.y);
+    const sunHorizLen = Math.max(0.0001, Math.hypot(_sunDirVec.x, _sunDirVec.z));
+    const lightHorizLen = Math.sqrt(Math.max(0.0001, 1.0 - lightElevY * lightElevY));
+    _dnLightDirVec.set(
+      (_sunDirVec.x / sunHorizLen) * lightHorizLen,
+      lightElevY,
+      (_sunDirVec.z / sunHorizLen) * lightHorizLen
+    ).normalize();
+    miracleSunSystem.lastLightDir.copy(_dnLightDirVec);
+
     light.position.set(
-      focusX + Math.sin(activeAzim) * Math.cos(activeElev) * sunDist,
-      focusY + Math.sin(activeElev) * sunDist,
-      focusZ + Math.cos(activeAzim) * Math.cos(activeElev) * sunDist * 0.72 + 16.0
+      focusX + _dnLightDirVec.x * sunDist,
+      focusY + _dnLightDirVec.y * sunDist,
+      focusZ + _dnLightDirVec.z * sunDist
     );
     if (miracleSunSystem.lightTarget) {
       miracleSunSystem.lightTarget.position.set(focusX, focusY, focusZ);
@@ -1010,42 +1338,48 @@ function updateMiracleDynamicSun(rawDt, now) {
 
     _dnColorTmpA.setHex(0xfff8dc);
     _dnColorTmpB.setHex(0xfb923c);
-    _dnColorTmpA.lerp(_dnColorTmpB, warmFactor * 0.90);
+    _dnColorTmpA.lerp(_dnColorTmpB, warmFactor * 0.88);
     _dnColorTmpC.setHex(0x93c5fd);
-    light.color.copy(_dnColorTmpA).lerp(_dnColorTmpC, nf);
+    light.color.copy(_dnColorTmpA).lerp(_dnColorTmpC, nf * 0.5);
     const stormScale = 1.0 - (MiracleDayNight.stormDarkness || 0) * 0.45;
-    const baseDirInt = THREE.MathUtils.lerp(0.88, 0.70, warmFactor);
-    light.intensity = THREE.MathUtils.lerp(baseDirInt, 0.34, nf) * stormScale;
+    // 낮에는 원본과 동일한 0.88 밝기 유지, 밤(nf >= 0.72)에는 평행광 강도 0으로 전역 그림자 제거
+    const sunShadowFade = 1.0 - ep4Smoothstep(0.42, 0.72, nf);
+    const baseDirInt = THREE.MathUtils.lerp(0.88, 0.72, warmFactor);
+    light.intensity = baseDirInt * sunShadowFade * stormScale;
 
     if (window.coreAmbientLight) {
       _dnColorTmpA.setHex(0xffffff);
       _dnColorTmpB.setHex(0xfed7aa);
-      _dnColorTmpA.lerp(_dnColorTmpB, warmFactor * 0.75);
-      _dnColorTmpC.setHex(0x2e426e);
+      _dnColorTmpA.lerp(_dnColorTmpB, warmFactor * 0.72);
+      _dnColorTmpC.setHex(0x2c406c);
       window.coreAmbientLight.color.copy(_dnColorTmpA).lerp(_dnColorTmpC, nf);
-      const dayAmb = THREE.MathUtils.lerp(0.38, 0.34, warmFactor);
-      window.coreAmbientLight.intensity = THREE.MathUtils.lerp(dayAmb, 0.24, nf) * (1.0 - (MiracleDayNight.stormDarkness || 0) * 0.25);
+      const dayAmb = THREE.MathUtils.lerp(0.62, 0.42, warmFactor);
+      window.coreAmbientLight.intensity = THREE.MathUtils.lerp(dayAmb, 0.25, nf) * (1.0 - (MiracleDayNight.stormDarkness || 0) * 0.25);
     }
 
     if (window.coreHemiLight) {
       _dnColorTmpA.setHex(0x87ceeb);
       _dnColorTmpB.setHex(0xfb923c);
-      _dnColorTmpA.lerp(_dnColorTmpB, warmFactor * 0.80);
-      _dnColorTmpC.setHex(0x1e3b6e);
+      _dnColorTmpA.lerp(_dnColorTmpB, warmFactor * 0.78);
+      _dnColorTmpC.setHex(0x284a8a);
       window.coreHemiLight.color.copy(_dnColorTmpA).lerp(_dnColorTmpC, nf);
 
-      _dnColorTmpA.setHex(0xc9b372);
+      _dnColorTmpA.setHex(0xc4ae72);
       _dnColorTmpB.setHex(0x9a5a32);
-      _dnColorTmpA.lerp(_dnColorTmpB, warmFactor * 0.75);
-      _dnColorTmpC.setHex(0x162033);
+      _dnColorTmpA.lerp(_dnColorTmpB, warmFactor * 0.72);
+      _dnColorTmpC.setHex(0x121b2e);
       window.coreHemiLight.groundColor.copy(_dnColorTmpA).lerp(_dnColorTmpC, nf);
 
-      const dayHemi = THREE.MathUtils.lerp(0.42, 0.38, warmFactor);
-      window.coreHemiLight.intensity = THREE.MathUtils.lerp(dayHemi, 0.32, nf) * (1.0 - (MiracleDayNight.stormDarkness || 0) * 0.28);
+      // 낮(nf=0, warmFactor=0)에는 반구광 0.0으로 원본 순백 채도 유지, 일몰/밤에만 자연스럽게 활성화
+      const dayHemi = THREE.MathUtils.lerp(0.0, 0.18, warmFactor);
+      window.coreHemiLight.intensity = THREE.MathUtils.lerp(dayHemi, 0.44, nf) * (1.0 - (MiracleDayNight.stormDarkness || 0) * 0.28);
     }
 
     // 4) 하늘 배경, 안개, 구름 색조 보간 (오픈월드·모든 스테이지 공용)
     sampleEp4SkyGradient(t, _dnColorTmpA, _dnColorTmpB, _dnColorTmpC);
+    if (nf < 0.01 && warmFactor < 0.01 && typeof miracleIsPostResurrection !== 'undefined' && miracleIsPostResurrection) {
+      _dnColorTmpA.setHex(0x60a5fa);
+    }
     if (MiracleDayNight.stormDarkness > 0.01) {
       const sd = Math.min(1, MiracleDayNight.stormDarkness);
       _dnColorTmpA.lerp(_dnStormBgCol, sd * 0.65);
@@ -1066,9 +1400,10 @@ function updateMiracleDynamicSun(rawDt, now) {
       tintMiracleCloudCollection(stMini.skyClouds, _dnColorTmpC, true);
     }
 
-    // 5) 밤하늘 그라데이션 돔 + 4색 촘촘한 별 반짝임 + 별똥별(유성) (산/맵 외곽 뒤 r=560..650)
+    // 5) 밤하늘 그라데이션 돔 + 4색 촘촘한 별 반짝임 (산/맵 외곽 뒤 r=560..650)
+    const showSky = nf > 0.08;
+    const starVis = ep4Smoothstep(0.12, 0.52, nf) * (1.0 - (MiracleDayNight.stormDarkness || 0) * 0.45);
     if (miracleSunSystem.nightSkyGroup) {
-      const showSky = nf > 0.08;
       miracleSunSystem.nightSkyGroup.visible = showSky;
       miracleSunSystem.nightSkyGroup.position.set(focusX, focusY * 0.2, focusZ);
       if (showSky) {
@@ -1076,7 +1411,6 @@ function updateMiracleDynamicSun(rawDt, now) {
           const domeOp = ep4Smoothstep(0.08, 0.56, nf) * (1.0 - (MiracleDayNight.stormDarkness || 0) * 0.35);
           miracleSunSystem.skyDomeMat.opacity = Math.max(0, Math.min(1, domeOp));
         }
-        const starVis = ep4Smoothstep(0.12, 0.52, nf) * (1.0 - (MiracleDayNight.stormDarkness || 0) * 0.45);
         const layers = miracleSunSystem.starLayers || [];
         for (let l = 0; l < layers.length; l++) {
           const ly = layers[l];
@@ -1084,50 +1418,125 @@ function updateMiracleDynamicSun(rawDt, now) {
           ly.mat.opacity = Math.max(0, Math.min(1, starVis * twinkle));
         }
         miracleSunSystem.nightSkyGroup.rotation.y = (now * 0.000010) % (Math.PI * 2);
+      }
+    }
 
+    // 5-B) 카메라 전방 시야 별똥별 + 2~3개 연속 유성우 버스트 (비회전 그룹)
+    if (miracleSunSystem.meteorGroup) {
+      miracleSunSystem.meteorGroup.visible = showSky;
+      miracleSunSystem.meteorGroup.position.set(focusX, focusY * 0.2, focusZ);
+      if (showSky) {
         const meteors = miracleSunSystem.meteors || [];
-        for (let m = 0; m < meteors.length; m++) {
-          const mt = meteors[m];
-          if (!mt.active) {
-            if (nf > 0.32) {
-              mt.timer -= dt;
-              if (mt.timer <= 0) {
-                mt.active = true;
-                mt.age = 0;
-                mt.maxDur = 0.90 + Math.random() * 0.55;
-                const ang = Math.random() * Math.PI * 2;
-                const rad = 485 + Math.random() * 55;
-                mt.pos.set(Math.cos(ang) * rad, 155 + Math.random() * 145, Math.sin(ang) * rad);
-                const dirAng = ang + (Math.random() > 0.5 ? 1.85 : -1.85);
-                mt.vel.set(Math.cos(dirAng) * 215, -(72 + Math.random() * 55), Math.sin(dirAng) * 215);
-                _dnMeteorDir.copy(mt.vel).normalize();
-                _dnMeteorQuat.setFromUnitVectors(_dnZAxis, _dnMeteorDir);
-                mt.grp.quaternion.copy(_dnMeteorQuat);
-                mt.grp.position.copy(mt.pos);
-                mt.grp.visible = true;
-              }
+        const ms = miracleSunSystem.meteorShowerState;
+        const canSpawnMeteor = (nf > 0.28) && ((MiracleDayNight.stormDarkness || 0) < 0.65);
+
+        const spawnSingleMeteor = (baseAzim, baseElev, slopeSign, isBurstMember) => {
+          let slot = null;
+          for (let m = 0; m < meteors.length; m++) {
+            if (!meteors[m].active) { slot = meteors[m]; break; }
+          }
+          if (!slot) return false;
+
+          const az = baseAzim + (isBurstMember ? (Math.random() - 0.5) * 0.18 : 0);
+          const el = THREE.MathUtils.clamp(baseElev + (isBurstMember ? (Math.random() - 0.5) * 0.065 : 0), 0.17, 0.58);
+          const rad = 415 + Math.random() * 40;
+          const cosEl = Math.cos(el);
+          slot.pos.set(
+            Math.sin(az) * cosEl * rad,
+            Math.sin(el) * rad,
+            Math.cos(az) * cosEl * rad
+          );
+
+          // 하늘을 가로질러 대각선 아래로 낙하하는 접선 속도 (연속 유성우는 평행 궤적 공유)
+          const tangX = Math.cos(az) * slopeSign;
+          const tangZ = -Math.sin(az) * slopeSign;
+          const hSpeed = 235 + Math.random() * 75;
+          const vDrop = -(66 + Math.random() * 38);
+          slot.vel.set(tangX * hSpeed, vDrop, tangZ * hSpeed);
+
+          _dnMeteorDir.copy(slot.vel).normalize();
+          _dnMeteorQuat.setFromUnitVectors(_dnZAxis, _dnMeteorDir);
+          slot.grp.quaternion.copy(_dnMeteorQuat);
+          slot.grp.position.copy(slot.pos);
+
+          const trailPalette = [0x93c5fd, 0xc4b5fd, 0xfef08a, 0xbae6fd];
+          const trailCol = trailPalette[Math.floor(Math.random() * trailPalette.length)];
+          slot.tailMat.color.setHex(trailCol);
+          slot.headHaloMat.color.setHex(trailCol);
+
+          slot.active = true;
+          slot.age = 0;
+          slot.maxDur = 0.85 + Math.random() * 0.45;
+          slot.grp.visible = true;
+          return true;
+        };
+
+        if (canSpawnMeteor && ms && dt > 0) {
+          if (ms.burstRemaining > 0) {
+            ms.burstGapTimer -= dt;
+            if (ms.burstGapTimer <= 0) {
+              spawnSingleMeteor(ms.burstBaseAzim, ms.burstBaseElev, ms.burstSlopeSign, true);
+              ms.burstRemaining--;
+              ms.burstGapTimer = 0.18 + Math.random() * 0.24;
             }
           } else {
-            mt.age += dt;
-            if (mt.age >= mt.maxDur) {
-              mt.active = false;
-              mt.grp.visible = false;
-              mt.headMat.opacity = 0;
-              mt.tailMat.opacity = 0;
-              mt.timer = 1.6 + Math.random() * 3.0;
-            } else {
-              mt.pos.addScaledVector(mt.vel, dt);
-              mt.grp.position.copy(mt.pos);
-              const lifeFade = Math.sin((mt.age / mt.maxDur) * Math.PI) * Math.max(0.2, starVis);
-              mt.headMat.opacity = lifeFade;
-              mt.tailMat.opacity = lifeFade * 0.82;
+            ms.nextEventTimer -= dt;
+            if (ms.nextEventTimer <= 0) {
+              let camAzim = Math.PI; // 기본 북쪽(-Z)
+              let camPitch = 0;
+              if (camera && typeof camera.getWorldDirection === 'function') {
+                camera.getWorldDirection(_dnCamFwdVec);
+                camAzim = Math.atan2(_dnCamFwdVec.x, _dnCamFwdVec.z);
+                camPitch = Math.asin(THREE.MathUtils.clamp(_dnCamFwdVec.y, -0.9, 0.9));
+              }
+              const baseAzim = camAzim + (Math.random() - 0.5) * 1.45;
+              const baseElev = camPitch > 0.14
+                ? THREE.MathUtils.clamp(camPitch + 0.06 + Math.random() * 0.22, 0.22, 0.55)
+                : (0.20 + Math.random() * 0.14); // 11.5° ~ 19.5° (기본 카메라 상단 시야 최적화)
+              const slopeSign = Math.random() < 0.5 ? 1 : -1;
+
+              // 45% 확률로 2~3개 연달아 떨어지는 연속 유성우 버스트, 55% 확률로 단발 별똥별
+              const isBurst = Math.random() < 0.45;
+              const burstTotal = isBurst ? (Math.random() < 0.52 ? 2 : 3) : 1;
+              ms.burstBaseAzim = baseAzim;
+              ms.burstBaseElev = baseElev;
+              ms.burstSlopeSign = slopeSign;
+              ms.burstCountTotal = burstTotal;
+
+              spawnSingleMeteor(baseAzim, baseElev, slopeSign, false);
+              ms.burstRemaining = burstTotal - 1;
+              ms.burstGapTimer = 0.18 + Math.random() * 0.24;
+              ms.nextEventTimer = isBurst ? (3.8 + Math.random() * 3.2) : (2.6 + Math.random() * 3.2);
             }
+          }
+        }
+
+        for (let m = 0; m < meteors.length; m++) {
+          const mt = meteors[m];
+          if (!mt.active) continue;
+          mt.age += dt;
+          if (mt.age >= mt.maxDur) {
+            mt.active = false;
+            mt.grp.visible = false;
+            mt.headMat.opacity = 0;
+            mt.headHaloMat.opacity = 0;
+            mt.innerTailMat.opacity = 0;
+            mt.tailMat.opacity = 0;
+          } else {
+            mt.pos.addScaledVector(mt.vel, dt);
+            mt.grp.position.copy(mt.pos);
+            const prog = mt.age / mt.maxDur;
+            const lifeFade = Math.sin(prog * Math.PI) * Math.max(0.35, starVis);
+            mt.headMat.opacity = Math.min(1, lifeFade * 1.15);
+            mt.headHaloMat.opacity = lifeFade * 0.52;
+            mt.innerTailMat.opacity = lifeFade * 0.92;
+            mt.tailMat.opacity = lifeFade * 0.68;
           }
         }
       }
     }
 
-    // 6) 점토 캐릭터 자가발광 밤 보정 + 점광원 풀 갱신 + HUD 동기화
+    // 6) 점토 캐릭터 자가발광 밤 보정 + 점광원/그림자 풀 갱신 + HUD 동기화
     if (typeof window.updateHeroClayEmissiveForNight === 'function') {
       window.updateHeroClayEmissiveForNight(nf);
     }
@@ -1139,13 +1548,14 @@ function updateMiracleDynamicSun(rawDt, now) {
     }
   }
 
+  const curNf = isDayNightActive ? MiracleDayNight.nightFactor : 0;
   if (!miracleSunSystem.cullBuilt) {
-    updateMiracleShadowDistanceCulling(focusX, focusZ);
+    updateMiracleShadowDistanceCulling(focusX, focusZ, curNf);
   } else {
     miracleSunSystem.cullTimer += dt;
     if (miracleSunSystem.cullTimer >= 0.25) {
       miracleSunSystem.cullTimer = 0;
-      updateMiracleShadowDistanceCulling(focusX, focusZ);
+      updateMiracleShadowDistanceCulling(focusX, focusZ, curNf);
     }
   }
 }
@@ -2764,11 +3174,13 @@ function getClubShoulderLogoMaterial(clubKey) {
   if (blankCanvas) tex.needsUpdate = true;
   tex.userData = { _cached: true };
 
-  const mat = new THREE.MeshLambertMaterial({
+  const mat = new THREE.MeshPhongMaterial({
     color: 0xffffff,
     map: tex,
     emissive: new THREE.Color(0x2e2e2e),
     emissiveMap: tex,
+    shininess: 0,
+    specular: 0x000000,
     transparent: true,
     alphaTest: 0.15,
     side: THREE.FrontSide,
@@ -5030,10 +5442,12 @@ window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
 let _sharedLowPolySilhouetteMat = null;
 function getSharedLowPolySilhouetteMat() {
   if (!_sharedLowPolySilhouetteMat) {
-    _sharedLowPolySilhouetteMat = new THREE.MeshLambertMaterial({
+    _sharedLowPolySilhouetteMat = new THREE.MeshPhongMaterial({
       color: 0xffffff,
       vertexColors: true,
-      flatShading: true
+      flatShading: true,
+      shininess: 0,
+      specular: 0x000000
     });
     _sharedLowPolySilhouetteMat.userData = { _cached: true };
   }
@@ -6857,9 +7271,10 @@ function createNightFlameCluster(scale = 1.0) {
 
 window.createTempleBrazierProp = function (scale = 1.0) {
   const grp = new THREE.Group();
-  const pedestal = createHeroClayMesh(new THREE.CylinderGeometry(0.32, 0.44, 0.78, 6), '#d6cbb5', 0, 0.39, 0, { roughness: 0.90, metalness: 0.04 });
-  const ring = createHeroClayMesh(new THREE.CylinderGeometry(0.38, 0.34, 0.12, 8), '#c29b58', 0, 0.80, 0, { roughness: 0.55, metalness: 0.28 });
-  const bowl = createHeroClayMesh(new THREE.CylinderGeometry(0.56, 0.32, 0.32, 8), '#6b5344', 0, 0.98, 0, { roughness: 0.68, metalness: 0.25 });
+  grp.userData._isNightFireProp = true;
+  const pedestal = createHeroClayMesh(new THREE.CylinderGeometry(0.32, 0.44, 0.78, 6), '#d6cbb5', 0, 0.39, 0, { roughness: 0.90, metalness: 0.04, castShadow: false });
+  const ring = createHeroClayMesh(new THREE.CylinderGeometry(0.38, 0.34, 0.12, 8), '#c29b58', 0, 0.80, 0, { roughness: 0.55, metalness: 0.28, castShadow: false });
+  const bowl = createHeroClayMesh(new THREE.CylinderGeometry(0.56, 0.32, 0.32, 8), '#6b5344', 0, 0.98, 0, { roughness: 0.68, metalness: 0.25, castShadow: false });
   const coals = createHeroClayMesh(new THREE.DodecahedronGeometry(0.36, 0), '#2b2421', 0, 1.08, 0, { roughness: 0.95, metalness: 0.02, castShadow: false });
   coals.scale.set(1.05, 0.36, 1.05);
 
@@ -6889,6 +7304,7 @@ window.createTempleBrazierProp = function (scale = 1.0) {
 
 window.createVillageCampfireProp = function (scale = 1.0) {
   const grp = new THREE.Group();
+  grp.userData._isNightFireProp = true;
   const stoneCols = ['#94a3b8', '#78716c', '#a8a29e'];
   for (let i = 0; i < 7; i++) {
     const ang = (i / 7) * Math.PI * 2;
@@ -6898,7 +7314,7 @@ window.createVillageCampfireProp = function (scale = 1.0) {
       Math.cos(ang) * 0.50,
       0.10,
       Math.sin(ang) * 0.50,
-      { roughness: 0.92, metalness: 0.02 }
+      { roughness: 0.92, metalness: 0.02, castShadow: false }
     );
     st.scale.set(1.15, 0.72, 0.95);
     st.rotation.y = ang;
@@ -6912,7 +7328,7 @@ window.createVillageCampfireProp = function (scale = 1.0) {
       Math.cos(ang) * 0.16,
       0.20,
       Math.sin(ang) * 0.16,
-      { roughness: 0.88, metalness: 0.02 }
+      { roughness: 0.88, metalness: 0.02, castShadow: false }
     );
     log.rotation.z = Math.cos(ang) * 1.15;
     log.rotation.x = Math.sin(ang) * 1.15;

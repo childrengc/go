@@ -5,7 +5,19 @@
 // =========================================================================
 
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.core = '20261125_v41';
+window.__GAME_BUILD_VERSIONS__.core = '20261125_v44';
+
+function installEp4MattePhongSpecGuard() {
+  if (typeof THREE !== 'undefined' && THREE.ShaderChunk && THREE.ShaderChunk.lights_phong_pars_fragment) {
+    if (!THREE.ShaderChunk.lights_phong_pars_fragment.includes('__EP4_MATTE_SPEC_GUARD__')) {
+      THREE.ShaderChunk.lights_phong_pars_fragment = THREE.ShaderChunk.lights_phong_pars_fragment.replace(
+        'reflectedLight.directSpecular +=',
+        '/* __EP4_MATTE_SPEC_GUARD__ */ float _ep4SpecOn = step(0.0005, material.specularShininess + material.specularColor.r + material.specularColor.g + material.specularColor.b);\n\treflectedLight.directSpecular += _ep4SpecOn *'
+      );
+    }
+  }
+}
+installEp4MattePhongSpecGuard();
 
 // 퀴즈 선택지 순서 무작위 셔플 공용 헬퍼 (정답이 항상 1번에 고정되지 않도록 보장)
 function shuffleQuizOptions(opts, ansIdx = 0) {
@@ -634,6 +646,9 @@ function setHudMenuOpen(open) {
   if (!dd) return;
   if (dd._hideTimer) { clearTimeout(dd._hideTimer); dd._hideTimer = null; }
   if (isHudMenuOpen) {
+    if (typeof window.setMiracleTimeExpanded === 'function') {
+      window.setMiracleTimeExpanded(false);
+    }
     syncHudMenuInfo();
     dd.classList.remove('hidden');
     void dd.offsetWidth;
@@ -874,12 +889,13 @@ function setInGameHudControlsVisible(visible) {
   const actZone = document.getElementById('action-zone');
   if (!visible) {
     setHudMenuOpen(false);
+    if (typeof window.setMiracleTimeExpanded === 'function') window.setMiracleTimeExpanded(false);
     hideMissionGuideBubbleImmediately();
     if (hudTop) hudTop.classList.add('hidden');
     if (joy) joy.style.display = 'none';
     if (camBar) camBar.style.display = 'none';
     if (actZone) actZone.style.display = 'none';
-    ['miracle-hud-left', 'miracle-mini-nav', 'miracle-guide-btn', 'miracle-return-openworld-btn', 'david-st1-panel', 'david-st3-quest-tracker'].forEach(id => {
+    ['miracle-hud-left', 'miracle-time-anchor', 'miracle-mini-nav', 'miracle-guide-btn', 'miracle-return-openworld-btn', 'david-st1-panel', 'david-st3-quest-tracker'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.classList.add('hidden');
     });
@@ -897,6 +913,7 @@ function setInGameHudControlsVisible(visible) {
       const retBtn = document.getElementById('miracle-return-openworld-btn');
       if (retBtn) retBtn.classList.add('hidden');
     }
+    if (typeof window.syncMiracleTimeHUD === 'function') window.syncMiracleTimeHUD();
     if (currentEpisode === 'david') {
       if (currentStage === 1 && typeof updateDavidStage1UI === 'function') updateDavidStage1UI();
       if (currentStage === 3 && typeof updateDavidStage3QuestTrackerUI === 'function') updateDavidStage3QuestTrackerUI();
@@ -3033,7 +3050,7 @@ function openWorldMapFromGame() {
   if (labelsEl) labelsEl.style.visibility = 'hidden';
 
   [
-    'miracle-hud-left', 'miracle-s1-ui', 'miracle-sower-btn-wrap', 'miracle-breakfast-ui',
+    'miracle-hud-left', 'miracle-time-anchor', 'miracle-s1-ui', 'miracle-sower-btn-wrap', 'miracle-breakfast-ui',
     'miracle-zacchaeus-ui', 'miracle-zac-drag-layer',
     'david-st1-panel', 'david-st3-quest-tracker',
     'mp-online-badge', 'miracle-mp-hud', 'mp-harvest-btn-wrap', 'mp-local-bubble'
@@ -3041,6 +3058,7 @@ function openWorldMapFromGame() {
     const el = document.getElementById(id);
     if (el) el.classList.add('hidden');
   });
+  if (typeof window.setMiracleTimeExpanded === 'function') window.setMiracleTimeExpanded(false);
 
   // 월드맵 화면 표시 & [◀ 돌아가기] 버튼 활성화
   ['screen-opening', 'screen-class', 'screen-map'].forEach(id => {
@@ -3128,6 +3146,7 @@ function resumeGameFromWorldMap() {
     restoreVis('miracle-zacchaeus-ui', v.miracleZacchaeus);
     restoreVis('miracle-zac-drag-layer', v.miracleZacDrag);
     if (typeof updateMiracleNotebookHudBadge === 'function') updateMiracleNotebookHudBadge();
+    if (typeof window.syncMiracleTimeHUD === 'function') window.syncMiracleTimeHUD();
     if (snap.wasMultiplayer) {
       restoreVis('mp-online-badge', v.mpOnlineBadge);
       restoreVis('miracle-mp-hud', v.mpHud);
@@ -3213,6 +3232,9 @@ function openScreen(screenId) {
       window.MiracleMultiplayer.leaveRoom();
     }
     document.getElementById('hud-top').classList.add('hidden');
+    if (typeof window.setMiracleTimeExpanded === 'function') window.setMiracleTimeExpanded(false);
+    const timeAnchor = document.getElementById('miracle-time-anchor');
+    if (timeAnchor) timeAnchor.classList.add('hidden');
     const guideBtn = document.getElementById('miracle-guide-btn');
     if (guideBtn) guideBtn.classList.add('hidden');
     const miniNav = document.getElementById('miracle-mini-nav');
@@ -5528,10 +5550,12 @@ function _getFadedVersionOfMat(origMat) {
   const sideVal = origMat.side !== undefined ? origMat.side : THREE.FrontSide;
   const key = origMat.color.getHexString() + '_' + (origMat.flatShading ? '1' : '0') + '_' + (origMat.vertexColors ? '1' : '0') + '_' + sideVal;
   if (!_wallFadeMatCache[key]) {
-    const m = new THREE.MeshLambertMaterial({
+    const m = new THREE.MeshPhongMaterial({
       color: origMat.color.getHex(),
       flatShading: Boolean(origMat.flatShading),
       vertexColors: Boolean(origMat.vertexColors),
+      shininess: 0,
+      specular: 0x000000,
       side: sideVal,
       transparent: true,
       opacity: 0.24,
@@ -8145,6 +8169,7 @@ function buildRandomOpeningPreviewWorld(forcedId = null) {
 window.buildRandomOpeningPreviewWorld = buildRandomOpeningPreviewWorld;
 
 function initEngine(skipInitialPreview = false) {
+  installEp4MattePhongSpecGuard();
   const container = document.getElementById('canvas-container');
   const isMobDevice = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (Math.min(window.innerWidth, window.innerHeight) <= 768);
   scene = new THREE.Scene(); scene.background = new THREE.Color(0x7dd3fc);
@@ -8207,10 +8232,10 @@ function initEngine(skipInitialPreview = false) {
     if (typeof showToast === 'function') showToast('✅ 화면이 정상적으로 복구되었습니다!');
   }, false);
 
-  const ambLight = new THREE.AmbientLight(0xffffff, 0.38);
+  const ambLight = new THREE.AmbientLight(0xffffff, 0.62);
   scene.add(ambLight);
   window.coreAmbientLight = ambLight;
-  const hemiLight = new THREE.HemisphereLight(0x87ceeb, 0xb89c6e, 0.42);
+  const hemiLight = new THREE.HemisphereLight(0x87ceeb, 0xb89c6e, 0.0);
   scene.add(hemiLight);
   window.coreHemiLight = hemiLight;
   const dirLight = new THREE.DirectionalLight(0xfffbeb, 0.72);
@@ -8235,6 +8260,7 @@ function initEngine(skipInitialPreview = false) {
     
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, mobNow ? 1.25 : 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
+    if (typeof window.syncMiracleTimeControllerLayout === 'function') window.syncMiracleTimeControllerLayout();
     if (typeof positionMiracleLeftHudBelowTopBar === 'function') positionMiracleLeftHudBelowTopBar();
     if (typeof positionDavidStage3QuestTrackerBelowHUD === 'function') positionDavidStage3QuestTrackerBelowHUD();
     if (typeof window.positionMultiplayerRightHud === 'function') window.positionMultiplayerRightHud();

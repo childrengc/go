@@ -4,7 +4,7 @@
 // - 계단으로 건물 2층 등반 후 인접한 옆 건물 옥상·2층으로 점프 이동할 수 있는 근접 마을 배치
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_world = '20261125_v41';
+window.__GAME_BUILD_VERSIONS__.ep4_world = '20261125_v44';
 
 window.miracleOpenWorldIntroFlyover = {
   active: false,
@@ -763,9 +763,11 @@ function buildSoftLowPolyWorldTerrain() {
   geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   geo.computeVertexNormals();
 
-  const terrainMat = new THREE.MeshLambertMaterial({
+  const terrainMat = new THREE.MeshPhongMaterial({
     vertexColors: true,
-    flatShading: true
+    flatShading: true,
+    shininess: 0,
+    specular: 0x000000
   });
   const terrainMesh = new THREE.Mesh(geo, terrainMat);
   terrainMesh.receiveShadow = true;
@@ -781,7 +783,7 @@ function buildSoftLowPolyWorldTerrain() {
     ? createIrregularLowPolyWaterMesh(320, 580, 40, 64, 29, { shoreRightEdgeX: 150, shallowBandW: 44, opacity: 0.84, isStorm: false })
     : (() => {
         const g = new THREE.PlaneGeometry(310, 580, 34, 64); g.rotateX(-Math.PI / 2);
-        return new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: 0x0284c7, transparent: true, opacity: 0.84, flatShading: true }));
+        return new THREE.Mesh(g, new THREE.MeshPhongMaterial({ color: 0x0284c7, transparent: true, opacity: 0.84, flatShading: true, shininess: 0, specular: 0x000000 }));
       })();
   wideWestSea.position.set(-242, -0.40, 0);
   wideWestSea.receiveShadow = true;
@@ -3013,11 +3015,11 @@ function spawnPersistentSowerGrowingField(fx, fz, initialAgeSec = 0) {
       const stalkGrp = new THREE.Group();
       stalkGrp.position.set(sx, 0.26, sz);
 
-      const stemMat = new THREE.MeshLambertMaterial({ color: 0x84cc16, flatShading: true });
+      const stemMat = new THREE.MeshPhongMaterial({ color: 0x84cc16, flatShading: true, shininess: 0, specular: 0x000000 });
       const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.052, 1.05, 5), stemMat);
       stem.position.y = 0.52;
 
-      const leafMat = new THREE.MeshLambertMaterial({ color: 0x4ade80, flatShading: true });
+      const leafMat = new THREE.MeshPhongMaterial({ color: 0x4ade80, flatShading: true, shininess: 0, specular: 0x000000 });
       const leafL = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.44, 4), leafMat);
       leafL.position.set(-0.14, 0.46, 0);
       leafL.rotation.z = 0.72;
@@ -3025,7 +3027,7 @@ function spawnPersistentSowerGrowingField(fx, fz, initialAgeSec = 0) {
       leafR.position.set(0.14, 0.56, 0.06);
       leafR.rotation.z = -0.68;
 
-      const earMat = new THREE.MeshLambertMaterial({ color: 0xfacc15, flatShading: true });
+      const earMat = new THREE.MeshPhongMaterial({ color: 0xfacc15, flatShading: true, shininess: 0, specular: 0x000000 });
       const ear = new THREE.Mesh(new THREE.DodecahedronGeometry(0.16, 0), earMat);
       ear.position.set(0, 1.08, 0);
       ear.scale.set(0.75, 1.85, 0.75);
@@ -5033,7 +5035,7 @@ function startMiracleFieldEvent(evSpot) {
     miracleActiveFieldEvent.required = seedTotal;
 
     const plotGrp = new THREE.Group();
-    const soilMat = new THREE.MeshLambertMaterial({ color: 0xa68a64, flatShading: true });
+    const soilMat = new THREE.MeshPhongMaterial({ color: 0xa68a64, flatShading: true, shininess: 0, specular: 0x000000 });
     const soilBed = new THREE.Mesh(createOrganicBoxGeo(7.6, 0.22, 6.4, 881, 0.04, 0.99, 1), soilMat);
     soilBed.position.set(0, 0.08, 0);
     soilBed.receiveShadow = true;
@@ -8693,12 +8695,16 @@ function createTempleBowlFlameProp(scale = 0.82) {
 
 function buildMiracleNightEnvironmentProps() {
   window.miracleNightFireProps = [];
-  const registerFire = (prop, x, y, z, colHex, intensity, distance, phase) => {
+  const registerFire = (prop, x, y, z, colHex, intensity, distance, phase, yOffset = 1.22) => {
     window.miracleNightFireProps.push({ prop, phase });
+    if (prop && prop.group) {
+      prop.group.userData = prop.group.userData || {};
+      prop.group.userData._isNightFireProp = true;
+    }
     if (window.MiracleDayNight && typeof window.MiracleDayNight.registerNightLightSource === 'function') {
       window.MiracleDayNight.registerNightLightSource({
         pos: new THREE.Vector3(x, y, z),
-        yOffset: 1.15,
+        yOffset,
         color: colHex,
         intensity,
         distance,
@@ -8721,7 +8727,7 @@ function buildMiracleNightEnvironmentProps() {
     const fl = createTempleBowlFlameProp(0.95);
     fl.group.position.set(b.x, b.y, b.z);
     worldGroup.add(fl.group);
-    registerFire(fl, b.x, b.y, b.z, 0xff8c2b, 2.25, 16.0, idx * 1.1);
+    registerFire(fl, b.x, b.y, b.z, 0xff8c2b, 2.50, 16.5, idx * 1.1, 0.55);
   });
 
   const standaloneBraziers = [
@@ -8737,7 +8743,7 @@ function buildMiracleNightEnvironmentProps() {
     br.group.position.set(sp.x, py, sp.z);
     worldGroup.add(br.group);
     colliders.push({ minX: sp.x - 0.48, maxX: sp.x + 0.48, minZ: sp.z - 0.48, maxZ: sp.z + 0.48 });
-    registerFire(br, sp.x, py, sp.z, 0xff8c2b, 2.35, 16.5, (idx + 4) * 1.15);
+    registerFire(br, sp.x, py, sp.z, 0xff8c2b, 2.75, 17.5, (idx + 4) * 1.15, 1.58);
   });
 
   // 2) 마을 집 앞마당 모닥불 8기 (낮에는 장작, 밤에만 활활 타오름)
@@ -8753,7 +8759,7 @@ function buildMiracleNightEnvironmentProps() {
     cf.group.position.set(sp.x, py, sp.z);
     worldGroup.add(cf.group);
     colliders.push({ minX: sp.x - 0.58, maxX: sp.x + 0.58, minZ: sp.z - 0.58, maxZ: sp.z + 0.58 });
-    registerFire(cf, sp.x, py, sp.z, 0xff7b24, 2.05, 14.5, idx * 1.45);
+    registerFire(cf, sp.x, py, sp.z, 0xff7b24, 2.20, 15.0, idx * 1.45, 1.22);
   });
 }
 

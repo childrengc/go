@@ -4,7 +4,7 @@
 // - 스테이지 3(십자가 사건): 넓어진 골고다 언덕 정상 고원과 세 십자가 등장 연출 적용
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_stages = '20261125_v41';
+window.__GAME_BUILD_VERSIONS__.ep4_stages = '20261125_v44';
 
 // 스테이지 3: 십자가를 지고 힘겹게 오르시는 예수님 보행 속도(더 천천히) 및 플레이어 대신 짊어졌을 때의 보행 속도
 const MIRACLE_STAGE3_JESUS_WALK_SPEED = 1.05;
@@ -814,7 +814,7 @@ function buildMiracleMainStage1Galilee() {
   const seaFloor = (typeof createIrregularLowPolyWaterMesh === 'function')
     ? createIrregularLowPolyWaterMesh(380, 380, 44, 44, 17, { shoreRightEdgeX: 28, shallowBandW: 54, opacity: 0.85, isStorm: false })
     : (() => {
-        const m = new THREE.Mesh(new THREE.PlaneGeometry(380, 380, 32, 32), new THREE.MeshLambertMaterial({ color: 0x0284c7, flatShading: true }));
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(380, 380, 32, 32), new THREE.MeshPhongMaterial({ color: 0x0284c7, flatShading: true, shininess: 0, specular: 0x000000 }));
         m.rotation.x = -Math.PI / 2;
         return m;
       })();
@@ -859,7 +859,7 @@ function buildMiracleMainStage1Galilee() {
           outCol.copy(cS1Meadow).lerp(cS1Ochre, 0.28 + patch * 0.52);
         }
       }, 0.85)
-    : new THREE.Mesh(new THREE.PlaneGeometry(120, 260, 24, 36), new THREE.MeshLambertMaterial({ color: '#9ec164', flatShading: true }));
+    : new THREE.Mesh(new THREE.PlaneGeometry(120, 260, 24, 36), new THREE.MeshPhongMaterial({ color: '#9ec164', flatShading: true, shininess: 0, specular: 0x000000 }));
   shoreMesh.position.set(78, 0, 0);
   worldGroup.add(shoreMesh);
 
@@ -1009,12 +1009,12 @@ function buildMiracleMainStage1Galilee() {
   tearingNetGrp.position.set(5.45, -0.35, -1.2);
   const netOuterWire = new THREE.Mesh(
     new THREE.IcosahedronGeometry(1.75, 1),
-    new THREE.MeshLambertMaterial({ color: 0xe7d3a7, wireframe: true })
+    new THREE.MeshPhongMaterial({ color: 0xe7d3a7, wireframe: true, shininess: 0, specular: 0x000000 })
   );
   netOuterWire.scale.set(1.02, 1.15, 1.25);
   const netInnerBag = new THREE.Mesh(
     new THREE.IcosahedronGeometry(1.66, 1),
-    new THREE.MeshLambertMaterial({ color: 0x0f766e, transparent: true, opacity: 0.40, flatShading: true })
+    new THREE.MeshPhongMaterial({ color: 0x0f766e, transparent: true, opacity: 0.40, flatShading: true, shininess: 0, specular: 0x000000 })
   );
   netInnerBag.scale.set(0.96, 1.10, 1.20);
   tearingNetGrp.add(netInnerBag, netOuterWire);
@@ -1040,7 +1040,7 @@ function buildMiracleMainStage1Galilee() {
   miracleActiveMiniState.tearingNetGroup = tearingNetGrp;
   miracleActiveMiniState.tearingNetFishes = tearingFishes;
 
-  const tearingRopeMat = new THREE.MeshLambertMaterial({ color: 0xd6b88d, emissive: 0x000000 });
+  const tearingRopeMat = new THREE.MeshPhongMaterial({ color: 0xd6b88d, emissive: 0x000000, shininess: 0, specular: 0x000000 });
   miracleActiveMiniState.tearingNetRopeMat = tearingRopeMat;
   const ropeAnchorDefs = [
     { start: new THREE.Vector3(3.45, 1.15, -2.2), netOff: new THREE.Vector3(-0.7, 0.9, -1.0) },
@@ -1117,11 +1117,11 @@ function buildMiracleMainStage1Galilee() {
   const netGrp = new THREE.Group();
   const netCone = new THREE.Mesh(
     new THREE.ConeGeometry(1.85, 1.15, 8, 1, true),
-    new THREE.MeshLambertMaterial({ color: 0xe7d3a7, wireframe: true })
+    new THREE.MeshPhongMaterial({ color: 0xe7d3a7, wireframe: true, shininess: 0, specular: 0x000000 })
   );
   const netRim = new THREE.Mesh(
     new THREE.TorusGeometry(1.85, 0.09, 5, 12),
-    new THREE.MeshLambertMaterial({ color: 0xb45309, flatShading: true })
+    new THREE.MeshPhongMaterial({ color: 0xb45309, flatShading: true, shininess: 0, specular: 0x000000 })
   );
   netRim.rotation.x = Math.PI / 2;
   netRim.position.y = -0.55;
@@ -1844,7 +1844,7 @@ function buildMiracleMainStage2Loaves() {
           outCol.copy(cS2Meadow).lerp(cS2Ochre, 0.28 + patch * 0.54);
         }
       }, 0.78)
-    : new THREE.Mesh(new THREE.PlaneGeometry(180, 180, 48, 48), new THREE.MeshLambertMaterial({ color: '#9ec164', flatShading: true }));
+    : new THREE.Mesh(new THREE.PlaneGeometry(180, 180, 48, 48), new THREE.MeshPhongMaterial({ color: '#9ec164', flatShading: true, shininess: 0, specular: 0x000000 }));
   worldGroup.add(hillMesh);
 
   if (typeof buildStageDryStoneTerraceWalls === 'function') {
@@ -1861,7 +1861,7 @@ function buildMiracleMainStage2Loaves() {
 
   const distantSea = new THREE.Mesh(
     new THREE.PlaneGeometry(180, 260),
-    new THREE.MeshLambertMaterial({ color: 0x0284c7, transparent: true, opacity: 0.86, flatShading: true })
+    new THREE.MeshPhongMaterial({ color: 0x0284c7, transparent: true, opacity: 0.86, flatShading: true, shininess: 0, specular: 0x000000 })
   );
   distantSea.rotation.x = -Math.PI / 2;
   distantSea.position.set(-115, -0.35, 30);
@@ -1985,7 +1985,7 @@ function buildMiracleMainStage2Loaves() {
       miracleActiveMiniState.campfires.push(cf);
       if (window.MiracleDayNight && typeof window.MiracleDayNight.registerNightLightSource === 'function') {
         window.MiracleDayNight.registerNightLightSource({
-          pos: new THREE.Vector3(fx, fy + 1.0, fz),
+          pos: new THREE.Vector3(fx, fy + 1.25, fz),
           yOffset: 0,
           color: 0xff9238,
           intensity: 3.4,
@@ -2604,7 +2604,7 @@ function buildMiracleMainStage3Cross() {
           outCol.copy(cS3Meadow).lerp(cS3Ochre, 0.28 + patch * 0.50);
         }
       }, 0.62)
-    : new THREE.Mesh(new THREE.PlaneGeometry(176, 192, 52, 58), new THREE.MeshLambertMaterial({ color: '#d6ccc2', flatShading: true }));
+    : new THREE.Mesh(new THREE.PlaneGeometry(176, 192, 52, 58), new THREE.MeshPhongMaterial({ color: '#d6ccc2', flatShading: true, shininess: 0, specular: 0x000000 }));
   worldGroup.add(roadMesh);
 
   // 남쪽 예루살렘 거리 + 중앙 차단 건물 뒤로 펼쳐지는 넓은 1세기 이스라엘 석조 광장(z ∈ [-12.5, +3.5]) 포장!
@@ -2836,7 +2836,7 @@ function buildMiracleMainStage3Cross() {
       miracleActiveMiniState.campfires.push(cf);
       if (window.MiracleDayNight && typeof window.MiracleDayNight.registerNightLightSource === 'function') {
         window.MiracleDayNight.registerNightLightSource({
-          pos: new THREE.Vector3(fx, fy + 1.0, fz),
+          pos: new THREE.Vector3(fx, fy + 1.25, fz),
           yOffset: 0,
           color: 0xff9238,
           intensity: 3.4,
@@ -3842,7 +3842,7 @@ function buildMiracleMainStage4Tomb() {
           outCol.copy(cS4Village).lerp(cS4Ochre, patch * 0.55);
         }
       }, 0.65)
-    : new THREE.Mesh(new THREE.PlaneGeometry(150, 140, 44, 40), new THREE.MeshLambertMaterial({ color: '#dfc49a', flatShading: true }));
+    : new THREE.Mesh(new THREE.PlaneGeometry(150, 140, 44, 40), new THREE.MeshPhongMaterial({ color: '#dfc49a', flatShading: true, shininess: 0, specular: 0x000000 }));
   worldGroup.add(terrainMesh);
 
   // 마을 입구~동산 성문까지 비정형 큰벽돌 바닥 + 동산 가장자리 언덕 돌담
@@ -4477,7 +4477,7 @@ function buildMiracleEndingWorld() {
           outCol.copy(cAscOlive).lerp(cAscMeadow, 0.25 + patch * 0.45);
         }
       }, 0.72)
-    : new THREE.Mesh(new THREE.PlaneGeometry(160, 160, 44, 44), new THREE.MeshLambertMaterial({ color: '#82a84d', flatShading: true }));
+    : new THREE.Mesh(new THREE.PlaneGeometry(160, 160, 44, 44), new THREE.MeshPhongMaterial({ color: '#82a84d', flatShading: true, shininess: 0, specular: 0x000000 }));
   worldGroup.add(mountMesh);
 
   if (typeof buildStageDryStoneTerraceWalls === 'function') {
@@ -4581,9 +4581,11 @@ function buildMiracleEndingWorld() {
       { x:  0.00, y: -0.46, z: -0.15, r: 1.35, sx: 2.85, sy: 0.46, sz: 1.44, col: 0xe0f2fe, delay: 1.65, riseY: 0.22 }
     ];
     puffSpecs.forEach((p, idx) => {
-      const pMat = new THREE.MeshLambertMaterial({
+      const pMat = new THREE.MeshPhongMaterial({
         color: p.col,
         flatShading: true,
+        shininess: 0,
+        specular: 0x000000,
         transparent: true,
         opacity: 0.0,
         depthWrite: false
@@ -4618,9 +4620,11 @@ function buildMiracleEndingWorld() {
     ];
     surroundSpecs.forEach((scSpec, sIdx) => {
       const bankGrp = new THREE.Group();
-      const sMat = new THREE.MeshLambertMaterial({
+      const sMat = new THREE.MeshPhongMaterial({
         color: scSpec.col,
         flatShading: true,
+        shininess: 0,
+        specular: 0x000000,
         transparent: true,
         opacity: 0.0,
         depthWrite: false
@@ -4684,7 +4688,7 @@ function buildMiracleEndingWorld() {
       endingCampfires.push(cf);
       if (window.MiracleDayNight && typeof window.MiracleDayNight.registerNightLightSource === 'function') {
         window.MiracleDayNight.registerNightLightSource({
-          pos: new THREE.Vector3(fx, fy + 1.0, fz),
+          pos: new THREE.Vector3(fx, fy + 1.25, fz),
           yOffset: 0,
           color: 0xff9238,
           intensity: 3.6,
@@ -5384,10 +5388,16 @@ REGISTER_EPISODE('miracle', {
       window.MiracleDayNight.freezeForNightMission = false;
       window.MiracleDayNight.stormDarkness = 0;
       window.MiracleDayNight.clearNightLightSources();
+      if (typeof window.MiracleDayNight.disposeLightPools === 'function') {
+        window.MiracleDayNight.disposeLightPools();
+      }
     }
     const stAlert = document.getElementById('miracle-stealth-alert');
     if (stAlert) stAlert.style.opacity = '0';
     if (typeof miracleSunSystem !== 'undefined') {
+      if (miracleSunSystem.light) {
+        miracleSunSystem.light.castShadow = true;
+      }
       miracleSunSystem.sunVisualGroup = null;
       miracleSunSystem.sunCoreMat = null;
       miracleSunSystem.sunHaloMats = [];
@@ -5395,10 +5405,12 @@ REGISTER_EPISODE('miracle', {
       miracleSunSystem.moonCoreMat = null;
       miracleSunSystem.moonHaloMats = [];
       miracleSunSystem.nightSkyGroup = null;
+      miracleSunSystem.meteorGroup = null;
       miracleSunSystem.skyDomeMesh = null;
       miracleSunSystem.skyDomeMat = null;
       miracleSunSystem.starLayers = [];
       miracleSunSystem.meteors = [];
+      miracleSunSystem.meteorShowerState = null;
       miracleSunSystem.cullEntries = [];
       miracleSunSystem.cullBuilt = false;
     }

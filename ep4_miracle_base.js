@@ -4,7 +4,7 @@
 // - 확장된 오픈월드 지형 고도 계산기(넓어진 골고다 언덕 포함) 및 소프트 로우 폴리곤 자연물 팩토리
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_base = '20261125_v41';
+window.__GAME_BUILD_VERSIONS__.ep4_base = '20261125_v44';
 
 // =========================================================================
 // 🎬 [에피소드 4 오프닝 · 엔딩 영상 주소 설정]
@@ -846,7 +846,9 @@ function matLowPoly(hexColor, isEmissive = false, opacity = 1.0) {
   if (!miracleLowPolyMatCache[key]) {
     const params = {
       color: hexColor,
-      flatShading: true
+      flatShading: true,
+      shininess: 0,
+      specular: 0x000000
     };
     if (isEmissive) {
       params.emissive = hexColor;
@@ -856,7 +858,7 @@ function matLowPoly(hexColor, isEmissive = false, opacity = 1.0) {
       params.transparent = true;
       params.opacity = opacity;
     }
-    const m = new THREE.MeshLambertMaterial(params);
+    const m = new THREE.MeshPhongMaterial(params);
     m.userData = { _cached: true };
     miracleLowPolyMatCache[key] = m;
   }
@@ -2158,24 +2160,30 @@ function getMiracleMergedVColorMat(bucket) {
   if (!_miracleMergedVColorMats[bucket]) {
     let m;
     if (bucket === 'emissive') {
-      m = new THREE.MeshLambertMaterial({
+      m = new THREE.MeshPhongMaterial({
         color: 0xffffff,
         emissive: 0x452c08,
         vertexColors: true,
-        flatShading: true
+        flatShading: true,
+        shininess: 0,
+        specular: 0x000000
       });
     } else if (bucket === 'doubleSide') {
-      m = new THREE.MeshLambertMaterial({
+      m = new THREE.MeshPhongMaterial({
         color: 0xffffff,
         vertexColors: true,
         flatShading: true,
+        shininess: 0,
+        specular: 0x000000,
         side: THREE.DoubleSide
       });
     } else {
-      m = new THREE.MeshLambertMaterial({
+      m = new THREE.MeshPhongMaterial({
         color: 0xffffff,
         vertexColors: true,
-        flatShading: true
+        flatShading: true,
+        shininess: 0,
+        specular: 0x000000
       });
     }
     m.userData = { _cached: true };
@@ -4151,9 +4159,11 @@ function createIrregularLowPolyWaterMesh(width, depth, segsX = 36, segsZ = 54, s
 
   const mesh = new THREE.Mesh(
     geo,
-    new THREE.MeshLambertMaterial({
+    new THREE.MeshPhongMaterial({
       vertexColors: true,
       flatShading: true,
+      shininess: 0,
+      specular: 0x000000,
       transparent: true,
       opacity: opts.opacity !== undefined ? opts.opacity : 0.84
     })
@@ -4457,7 +4467,7 @@ function createGalileeCampfireMesh(extinguished = false, scale = 1.0) {
   g.add(spitRod);
 
   const roastFishGrp = new THREE.Group();
-  const roastFishMat = new THREE.MeshLambertMaterial({ color: 0x93c5fd, flatShading: true });
+  const roastFishMat = new THREE.MeshPhongMaterial({ color: 0x93c5fd, flatShading: true, shininess: 0, specular: 0x000000 });
   const fishBody = new THREE.Mesh(new THREE.IcosahedronGeometry(0.28 * s, 0), roastFishMat);
   fishBody.scale.set(1.75, 0.72, 0.46);
   const fishHead = new THREE.Mesh(new THREE.ConeGeometry(0.16 * s, 0.32 * s, 5), roastFishMat);
@@ -5124,7 +5134,7 @@ function createCrispLowPolyFacetedTerrain(width, depth, segX, segZ, heightFn, co
 
   geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   geo.computeVertexNormals();
-  const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+  const mesh = new THREE.Mesh(geo, new THREE.MeshPhongMaterial({ vertexColors: true, flatShading: true, shininess: 0, specular: 0x000000 }));
   mesh.receiveShadow = true;
   mesh.userData._isGroundSurface = true;
   return mesh;
@@ -5924,11 +5934,17 @@ function positionMiracleLeftHudBelowTopBar() {
   const leftHud = document.getElementById('miracle-hud-left');
   if (!leftHud || leftHud.classList.contains('hidden')) return;
   const menuBtn = document.getElementById('hud-menu-btn');
-  let safeY = 44;
+  const timeAnchor = document.getElementById('miracle-time-anchor');
+  let maxBottom = 0;
   if (menuBtn) {
     const r = menuBtn.getBoundingClientRect();
-    if (r && r.bottom > 0) safeY = Math.max(40, Math.ceil(r.bottom) + 8);
+    if (r && r.bottom > maxBottom) maxBottom = r.bottom;
   }
+  if (timeAnchor && !timeAnchor.classList.contains('hidden')) {
+    const rt = timeAnchor.getBoundingClientRect();
+    if (rt && rt.bottom > maxBottom) maxBottom = rt.bottom;
+  }
+  const safeY = maxBottom > 0 ? Math.max(40, Math.ceil(maxBottom) + 8) : 44;
   leftHud.style.top = `${safeY}px`;
   positionMiracleGuideButton();
 }
@@ -5957,10 +5973,12 @@ function updateMiracleNotebookHudBadge() {
     if (leftHud) leftHud.classList.add('hidden');
     if (retBtn) retBtn.classList.add('hidden');
     updateMiracleGuideButtonVisibility();
+    if (typeof window.syncMiracleTimeHUD === 'function') window.syncMiracleTimeHUD();
     return;
   }
 
   if (leftHud) leftHud.classList.remove('hidden');
+  if (typeof window.syncMiracleTimeHUD === 'function') window.syncMiracleTimeHUD();
   positionMiracleLeftHudBelowTopBar();
   updateMiracleGuideButtonVisibility();
 
@@ -6331,7 +6349,7 @@ function hideAllMiracleCustomUI() {
 
   const leftHud = document.getElementById('miracle-hud-left');
   const retBtn = document.getElementById('miracle-return-openworld-btn');
-  const timeRow = document.getElementById('miracle-time-row');
+  const timeAnchor = document.getElementById('miracle-time-anchor');
   const msBox = document.getElementById('miracle-mission-status-box');
   const vidModal = document.getElementById('ep4-opening-video-modal');
   const vidSlot = document.getElementById('ep4-opening-video-slot');
@@ -6347,7 +6365,8 @@ function hideAllMiracleCustomUI() {
   if (flySkip) flySkip.classList.add('hidden');
   if (leftHud) leftHud.classList.add('hidden');
   if (retBtn) retBtn.classList.add('hidden');
-  if (timeRow) timeRow.classList.add('hidden');
+  if (timeAnchor) timeAnchor.classList.add('hidden');
+  if (typeof window.setMiracleTimeExpanded === 'function') window.setMiracleTimeExpanded(false);
   if (msBox) msBox.classList.add('hidden');
   if (vidSlot) vidSlot.innerHTML = '';
   if (vidModal) { vidModal.classList.add('hidden'); vidModal.classList.remove('flex'); }
@@ -6372,31 +6391,244 @@ function hideAllMiracleCustomUI() {
   }
 }
 
+const _miracleTimeUiState = {
+  expanded: false,
+  dragging: false,
+  dragWarned: false,
+  autoTimer: null,
+  bound: false,
+  ringCircumference: 2 * Math.PI * 17.5
+};
+
+window.syncMiracleTimeControllerLayout = function () {
+  const anchor = document.getElementById('miracle-time-anchor');
+  const ctrl = document.getElementById('miracle-time-ctrl');
+  const rightHud = document.getElementById('hud-top-right');
+  if (!anchor || !ctrl || anchor.classList.contains('hidden')) return;
+
+  const vw = window.innerWidth || document.documentElement.clientWidth || 390;
+  const vh = window.innerHeight || document.documentElement.clientHeight || 844;
+  const isPortrait = vw < vh;
+  const isShortLandscape = (!isPortrait && vh <= 500);
+  const anchorRect = anchor.getBoundingClientRect();
+  if (!anchorRect || anchorRect.width <= 0) return;
+
+  let rightRowLeft = vw - 10;
+  if (rightHud && rightHud.firstElementChild) {
+    const firstRow = rightHud.firstElementChild;
+    let minChildLeft = vw;
+    for (let i = 0; i < firstRow.children.length; i++) {
+      const ch = firstRow.children[i];
+      if (!ch || ch.classList.contains('hidden')) continue;
+      const cr = ch.getBoundingClientRect();
+      if (cr && cr.width > 0 && cr.left < minChildLeft) {
+        minChildLeft = cr.left;
+      }
+    }
+    if (minChildLeft < vw) {
+      rightRowLeft = minChildLeft;
+    }
+  }
+
+  const openGap = rightRowLeft - anchorRect.left - 10;
+  const maxViewportW = Math.max(168, vw - anchorRect.left - 10);
+  let targetW;
+  if (!isPortrait) {
+    const cap = isShortLandscape ? 220 : 256;
+    const avail = openGap >= 186 ? Math.min(cap, openGap) : Math.min(cap, maxViewportW);
+    targetW = Math.max(192, avail);
+  } else {
+    targetW = openGap >= 180 ? Math.min(228, openGap) : Math.min(220, maxViewportW);
+  }
+  ctrl.style.setProperty('--tc-expanded-w', `${Math.round(targetW)}px`);
+};
+
+window.resetMiracleTimeAutoCollapse = function () {
+  if (_miracleTimeUiState.autoTimer) {
+    clearTimeout(_miracleTimeUiState.autoTimer);
+    _miracleTimeUiState.autoTimer = null;
+  }
+  if (_miracleTimeUiState.expanded && !_miracleTimeUiState.dragging) {
+    _miracleTimeUiState.autoTimer = setTimeout(() => {
+      _miracleTimeUiState.autoTimer = null;
+      if (_miracleTimeUiState.expanded && !_miracleTimeUiState.dragging) {
+        window.setMiracleTimeExpanded(false);
+      }
+    }, 3500);
+  }
+};
+
+window.setMiracleTimeExpanded = function (open) {
+  const nextExpanded = Boolean(open);
+  _miracleTimeUiState.expanded = nextExpanded;
+  const ctrl = document.getElementById('miracle-time-ctrl');
+  const toggleBtn = document.getElementById('miracle-time-toggle-btn');
+  if (!nextExpanded) {
+    _miracleTimeUiState.dragging = false;
+    if (ctrl) ctrl.classList.remove('is-dragging');
+  }
+  if (ctrl) ctrl.classList.toggle('is-expanded', nextExpanded);
+  if (toggleBtn) toggleBtn.setAttribute('aria-expanded', nextExpanded ? 'true' : 'false');
+
+  if (nextExpanded) {
+    if (typeof window.setHudMenuOpen === 'function') {
+      window.setHudMenuOpen(false);
+    }
+    window.syncMiracleTimeControllerLayout();
+    window.resetMiracleTimeAutoCollapse();
+  } else {
+    if (_miracleTimeUiState.autoTimer) {
+      clearTimeout(_miracleTimeUiState.autoTimer);
+      _miracleTimeUiState.autoTimer = null;
+    }
+  }
+};
+
+function initMiracleTimeController() {
+  if (_miracleTimeUiState.bound) return;
+  const ctrl = document.getElementById('miracle-time-ctrl');
+  const toggleBtn = document.getElementById('miracle-time-toggle-btn');
+  const track = document.getElementById('miracle-time-track');
+  const speedBtn = document.getElementById('miracle-time-speed-btn');
+  if (!ctrl || !toggleBtn || !track || !speedBtn) return;
+  _miracleTimeUiState.bound = true;
+
+  toggleBtn.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+  });
+  toggleBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (typeof playSfx === 'function') playSfx('switch');
+    window.setMiracleTimeExpanded(!_miracleTimeUiState.expanded);
+  });
+
+  speedBtn.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+  });
+  speedBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (typeof playSfx === 'function') playSfx('switch');
+    if (window.MiracleDayNight) {
+      window.MiracleDayNight.cycleSpeed(1);
+    }
+    window.resetMiracleTimeAutoCollapse();
+  });
+
+  const applyTrackClientX = (clientX) => {
+    const dn = window.MiracleDayNight;
+    if (!dn) return;
+    if (dn.stageControlled || dn.freezeForNightMission) {
+      if (!_miracleTimeUiState.dragWarned) {
+        _miracleTimeUiState.dragWarned = true;
+        if (typeof showToast === 'function') {
+          showToast('지금은 이벤트 시간으로 고정되어 있어요!');
+        }
+      }
+      return;
+    }
+    const rect = track.getBoundingClientRect();
+    if (!rect || rect.width <= 0) return;
+    const ratio = Math.max(0, Math.min(0.999, (clientX - rect.left) / Math.max(1, rect.width)));
+    dn.setTime(ratio);
+  };
+
+  track.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    _miracleTimeUiState.dragging = true;
+    _miracleTimeUiState.dragWarned = false;
+    ctrl.classList.add('is-dragging');
+    if (_miracleTimeUiState.autoTimer) {
+      clearTimeout(_miracleTimeUiState.autoTimer);
+      _miracleTimeUiState.autoTimer = null;
+    }
+    if (typeof track.setPointerCapture === 'function') {
+      try { track.setPointerCapture(e.pointerId); } catch (err) {}
+    }
+    applyTrackClientX(e.clientX);
+  });
+
+  track.addEventListener('pointermove', (e) => {
+    if (!_miracleTimeUiState.dragging) return;
+    e.preventDefault();
+    e.stopPropagation();
+    applyTrackClientX(e.clientX);
+  });
+
+  const finishTrackDrag = (e) => {
+    if (!_miracleTimeUiState.dragging) return;
+    e.stopPropagation();
+    _miracleTimeUiState.dragging = false;
+    _miracleTimeUiState.dragWarned = false;
+    ctrl.classList.remove('is-dragging');
+    if (typeof track.hasPointerCapture === 'function' && typeof track.releasePointerCapture === 'function') {
+      try {
+        if (track.hasPointerCapture(e.pointerId)) track.releasePointerCapture(e.pointerId);
+      } catch (err) {}
+    }
+    window.resetMiracleTimeAutoCollapse();
+  };
+  track.addEventListener('pointerup', finishTrackDrag);
+  track.addEventListener('pointercancel', finishTrackDrag);
+
+  document.addEventListener('pointerdown', (e) => {
+    if (!_miracleTimeUiState.expanded) return;
+    if (!ctrl.contains(e.target)) {
+      window.setMiracleTimeExpanded(false);
+    }
+  });
+}
+
 window.syncMiracleTimeHUD = function () {
-  const row = document.getElementById('miracle-time-row');
-  const bar = document.getElementById('miracle-time-bar');
-  const dot = document.getElementById('miracle-time-dot');
+  initMiracleTimeController();
+  const anchor = document.getElementById('miracle-time-anchor');
+  const ctrl = document.getElementById('miracle-time-ctrl');
+  const ringArc = document.getElementById('miracle-time-ring-arc');
+  const thumb = document.getElementById('miracle-time-thumb');
   const speedVal = document.getElementById('miracle-time-speed-val');
-  if (!row || !window.MiracleDayNight) return;
+  const miniSpeed = document.getElementById('miracle-time-mini-speed');
+  if (!anchor || !ctrl || !window.MiracleDayNight) return;
 
   const epOk = (typeof currentEpisode !== 'undefined' && currentEpisode === 'miracle');
   const introHidden = (typeof isMiracleIntroHidingHud === 'function') ? isMiracleIntroHidingHud() : false;
   if (!epOk || introHidden) {
-    row.classList.add('hidden');
+    anchor.classList.add('hidden');
+    if (_miracleTimeUiState.expanded) window.setMiracleTimeExpanded(false);
     return;
   }
-  row.classList.remove('hidden');
 
-  const tPct = Math.max(0, Math.min(100, (Number(window.MiracleDayNight.time) || 0) * 100));
-  if (bar) {
-    bar.style.width = `${tPct.toFixed(1)}%`;
+  const wasHidden = anchor.classList.contains('hidden');
+  anchor.classList.remove('hidden');
+  if (wasHidden) {
+    window.syncMiracleTimeControllerLayout();
+    positionMiracleLeftHudBelowTopBar();
   }
-  if (dot) {
-    dot.style.left = `${tPct.toFixed(1)}%`;
+
+  const t = ((Number(window.MiracleDayNight.time) || 0) % 1 + 1) % 1;
+  const tPct = Math.max(0, Math.min(100, t * 100));
+  const isNight = (typeof window.MiracleDayNight.isNight === 'function') ? window.MiracleDayNight.isNight() : false;
+  ctrl.classList.toggle('is-night', Boolean(isNight));
+
+  if (ringArc) {
+    const c = _miracleTimeUiState.ringCircumference;
+    ringArc.style.strokeDasharray = c.toFixed(2);
+    ringArc.style.strokeDashoffset = (c * (1 - t)).toFixed(2);
   }
+  if (thumb) {
+    thumb.style.left = `${tPct.toFixed(1)}%`;
+  }
+
+  const sp = window.MiracleDayNight.paused ? 0 : (window.MiracleDayNight.speedMultiplier || 1);
   if (speedVal) {
-    const sp = window.MiracleDayNight.paused ? 0 : (window.MiracleDayNight.speedMultiplier || 1);
     speedVal.textContent = `${sp}x`;
+  }
+  if (miniSpeed) {
+    if (sp > 1) {
+      miniSpeed.textContent = `${sp}x`;
+      miniSpeed.classList.remove('hidden');
+    } else {
+      miniSpeed.classList.add('hidden');
+    }
   }
 };
 
@@ -6465,7 +6697,14 @@ if (!window.__ep4DayNightKeysBound) {
       const ms = (typeof miracleActiveMiniState !== 'undefined') ? miracleActiveMiniState : null;
       const asc = (typeof miracleAscensionState !== 'undefined') ? miracleAscensionState : null;
       const pool = (window.MiracleDayNight && Array.isArray(window.MiracleDayNight.pointLightPool)) ? window.MiracleDayNight.pointLightPool : [];
+      const shadowPool = (window.MiracleDayNight && Array.isArray(window.MiracleDayNight.pointShadowPool)) ? window.MiracleDayNight.pointShadowPool : [];
       const sunSys = (typeof miracleSunSystem !== 'undefined') ? miracleSunSystem : {};
+      let sunDirDotLightDir = null;
+      if (sunSys.lastSunDir && sunSys.lastLightDir) {
+        const sH = Math.hypot(sunSys.lastSunDir.x, sunSys.lastSunDir.z) || 1;
+        const lH = Math.hypot(sunSys.lastLightDir.x, sunSys.lastLightDir.z) || 1;
+        sunDirDotLightDir = +(((sunSys.lastSunDir.x / sH) * (sunSys.lastLightDir.x / lH) + (sunSys.lastSunDir.z / sH) * (sunSys.lastLightDir.z / lH))).toFixed(3);
+      }
       const skyBirds = Array.isArray(window.miracleSkyBirds) ? window.miracleSkyBirds : [];
       const seaBirds = (ms && Array.isArray(ms.seaBirds)) ? ms.seaBirds : [];
       const allBirds = skyBirds.length > 0 ? skyBirds : seaBirds;
@@ -6481,11 +6720,18 @@ if (!window.__ep4DayNightKeysBound) {
         birdRatio: window.MiracleDayNight.getBirdActivityRatio(),
         visibleBirds,
         totalBirds: allBirds.length,
+        sunDirDotLightDir,
+        dirLightIntensity: sunSys.light ? +(sunSys.light.intensity || 0).toFixed(3) : null,
         activePointLights: pool.filter(l => l && l.intensity > 0.01).length,
+        activeShadowPointLights: shadowPool.filter(l => l && l.intensity > 0.01).length,
         stars: Array.isArray(sunSys.starLayers) ? sunSys.starLayers.length : 0,
         skyDomeRadius: (sunSys.skyDomeMesh && sunSys.skyDomeMesh.geometry && sunSys.skyDomeMesh.geometry.parameters) ? sunSys.skyDomeMesh.geometry.parameters.radius : 0,
         meteors: Array.isArray(sunSys.meteors) ? sunSys.meteors.length : 0,
+        activeMeteors: Array.isArray(sunSys.meteors) ? sunSys.meteors.filter(m => m && m.active).length : 0,
+        meteorBurstTotal: sunSys.meteorShowerState ? (sunSys.meteorShowerState.burstCountTotal || 0) : 0,
         moonVisible: Boolean(sunSys.moonVisualGroup && sunSys.moonVisualGroup.visible),
+        moonElevDeg: sunSys.lastMoonElevDeg || 0,
+        moonScale: sunSys.lastMoonScale || 0,
         fireProps: Array.isArray(window.miracleNightFireProps) ? window.miracleNightFireProps.length : 0,
         patrols: Array.isArray(window.miracleNightPatrolSoldiers) ? window.miracleNightPatrolSoldiers.length : 0,
         sleepingDisciples,
