@@ -1568,6 +1568,10 @@ function buildExodusStage2World() {
     });
   });
 
+  // 이전 스테이지에서 카메라 시점을 변경했더라도 스테이지 2는 항상 '내려봄(topdown)' 카메라로 시작
+  if (typeof window.setGlobalCameraViewMode === 'function') {
+    window.setGlobalCameraViewMode('topdown');
+  }
   if (guideArrowGroup) guideArrowGroup.visible = (currentMode !== 'senior');
   snapCameraToPlayer();
   if (renderer && scene && camera) {

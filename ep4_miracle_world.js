@@ -4,7 +4,7 @@
 // - 계단으로 건물 2층 등반 후 인접한 옆 건물 옥상·2층으로 점프 이동할 수 있는 근접 마을 배치
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_world = '20261126_v49';
+window.__GAME_BUILD_VERSIONS__.ep4_world = '20261126_v50';
 
 window.miracleOpenWorldIntroFlyover = {
   active: false,
@@ -51,6 +51,8 @@ let miracleTombCoverGroup = null; // 스테이지 3 클리어 전까지 돌 무�
 window.miracleSkyBirds = []; // 하늘을 날아다니는 소프트 로우 폴리곤 새 배열
 window.miracleGrowingFields = []; // 씨 뿌리기 미션 완료 후 시간이 지남에 따라 실시간으로 자라나는 곡식 밭 배열
 window.miracleSowerHistory = window.miracleSowerHistory || []; // 모든 단계 완료 시에만 저장되는 파종 이력
+window.miracleMustardShrubs = []; // 겨자씨 미션 완료 후 시간이 지남에 따라 굵은 줄기·넓은 잎·노란 꽃 관목으로 자라나는 식물 배열
+window.miracleMustardHistory = window.miracleMustardHistory || []; // 모든 단계 완료 시에만 저장되는 겨자씨 파종 이력
 window.miracleBurntCampfires = window.miracleBurntCampfires || []; // 아침식사 미션 완료 후 영구 유지되는 불꺼진 모닥불(숯나무) 좌표
 window.miracleBurntCampfireMeshes = [];
 window.miracleReturningNpcs = []; // 미션 완료 후 제자리로 직접 걸어 돌아가는 NPC 목록(수가성 여인·엠마오 제자)
@@ -137,6 +139,52 @@ function clearAllMiracleGrowingFields() {
   saveMiracleSowerHistoryToStorage();
 }
 window.clearAllMiracleGrowingFields = clearAllMiracleGrowingFields;
+
+// 겨자씨 관목 완전 성장 소요 시간 (초) — 타임스탬프 기반 300초(5분) 실시간 성장
+const MIRACLE_MUSTARD_GROW_DURATION_SEC = 300;
+window.MIRACLE_MUSTARD_GROW_DURATION_SEC = MIRACLE_MUSTARD_GROW_DURATION_SEC;
+const MIRACLE_MUSTARD_STORAGE_KEY = 'ep4_mustard_planted_v1';
+const MIRACLE_MUSTARD_PLOT_POS = { x: 46, z: -20 };
+window.MIRACLE_MUSTARD_PLOT_POS = MIRACLE_MUSTARD_PLOT_POS;
+
+function isNearMustardPlot(x, z, pad = 6.0) {
+  return Math.hypot(x - MIRACLE_MUSTARD_PLOT_POS.x, z - MIRACLE_MUSTARD_PLOT_POS.z) < pad;
+}
+window.isNearMustardPlot = isNearMustardPlot;
+
+function loadMiracleMustardHistoryFromStorage() {
+  try {
+    const raw = localStorage.getItem(MIRACLE_MUSTARD_STORAGE_KEY);
+    if (!raw) return;
+    const arr = JSON.parse(raw);
+    if (Array.isArray(arr)) {
+      window.miracleMustardHistory = arr.filter(it => it && it.allStepsCompleted === true && typeof it.x === 'number' && typeof it.z === 'number');
+    }
+  } catch (e) {}
+}
+
+function saveMiracleMustardHistoryToStorage() {
+  try {
+    const valid = (window.miracleMustardHistory || []).filter(it => it && it.allStepsCompleted === true);
+    if (valid.length === 0) localStorage.removeItem(MIRACLE_MUSTARD_STORAGE_KEY);
+    else localStorage.setItem(MIRACLE_MUSTARD_STORAGE_KEY, JSON.stringify(valid));
+  } catch (e) {}
+}
+
+function clearAllMiracleMustardShrubs() {
+  if (Array.isArray(window.miracleMustardShrubs)) {
+    window.miracleMustardShrubs.forEach(s => {
+      if (s && s.group && typeof worldGroup !== 'undefined' && worldGroup) {
+        worldGroup.remove(s.group);
+      }
+    });
+  }
+  window.miracleMustardShrubs = [];
+  window.miracleMustardHistory = [];
+  window.miracleMustardTreeGrown = false;
+  saveMiracleMustardHistoryToStorage();
+}
+window.clearAllMiracleMustardShrubs = clearAllMiracleMustardShrubs;
 
 function loadMiracleBurntCampfiresFromStorage() {
   try {
@@ -962,6 +1010,7 @@ function buildMiracleRoadsideVillagesAndForests() {
   if (typeof addLowPolyCanopyTree === 'function') {
     [[74, -92, 1.35], [98, -76, 1.35], [-48, -32, 1.25], [58, -22, 1.25], [94, 68, 1.30]].forEach(([tx, tz, sc]) => {
       if (isNearSowerFarmPlot(tx, tz, 9.0)) return;
+      if (isNearMustardPlot(tx, tz, 6.5)) return;
       const m = addLowPolyCanopyTree(tx, tz, sc, true);
       if (typeof recordMiracleWorldTree === 'function') recordMiracleWorldTree(tx, tz, 'canopy', sc);
       registerMiracleHarvestNode('wood', tx, tz, m, sc);
@@ -985,6 +1034,7 @@ function buildMiracleRoadsideVillagesAndForests() {
     // 예수님 동산 무덤(-22, 91) 반경 13m, 씨 뿌리기 산기슭 밭 반경 9m, 확장 반석 부지(63, 18) 반경 12m 이내에는 배치 금지
     if (Math.hypot(tx + 22, tz - 91) < 13.0) return;
     if (isNearSowerFarmPlot(tx, tz, 9.0)) return;
+    if (isNearMustardPlot(tx, tz, 6.2)) return;
     if (Math.hypot(tx - 63, tz - 18) < 12.5) return;
     const sc = 1.0 + (i % 3) * 0.18;
     const m = addLowPolyOliveTree(tx, tz, sc, true);
@@ -1003,6 +1053,7 @@ function buildMiracleRoadsideVillagesAndForests() {
   cypressSpots.forEach(([cx, cz], i) => {
     if (Math.hypot(cx + 22, cz - 91) < 13.0) return;
     if (isNearSowerFarmPlot(cx, cz, 9.0)) return;
+    if (isNearMustardPlot(cx, cz, 6.2)) return;
     if (Math.hypot(cx - 63, cz - 18) < 12.5) return;
     const sc = 0.95 + (i % 3) * 0.22;
     const m = addLowPolyCypressPineTree(cx, cz, sc, true);
@@ -1016,6 +1067,7 @@ function buildMiracleRoadsideVillagesAndForests() {
   palmSpots.forEach(([px, pz], i) => {
     if (Math.hypot(px + 22, pz - 91) < 13.0) return;
     if (isNearSowerFarmPlot(px, pz, 9.0)) return;
+    if (isNearMustardPlot(px, pz, 6.2)) return;
     if (Math.hypot(px - 63, pz - 18) < 12.5) return;
     const sc = 1.05 + (i % 2) * 0.18;
     const m = addLowPolyPalmTree(px, pz, sc, true);
@@ -1028,6 +1080,7 @@ function buildMiracleRoadsideVillagesAndForests() {
   ];
   cactusSpots.forEach(([sx, sz], i) => {
     if (isNearSowerFarmPlot(sx, sz, 8.0)) return;
+    if (isNearMustardPlot(sx, sz, 6.0)) return;
     if (Math.hypot(sx - 63, sz - 18) < 12.0) return;
     addLowPolyCactusAndScrub(sx, sz, 0.9 + (i % 3) * 0.15);
   });
@@ -1040,6 +1093,7 @@ function buildMiracleRoadsideVillagesAndForests() {
   ];
   rockSpots.forEach(([rx, rz, rad], idx) => {
     if (isNearSowerFarmPlot(rx, rz, 8.0)) return;
+    if (isNearMustardPlot(rx, rz, 6.0)) return;
     if (Math.hypot(rx - 63, rz - 18) < 12.0) return;
     if (Math.abs(rx - getMiracleMainRoadCenterX(rz)) < 7.2) return;
     if (Math.hypot(rx - 10.0, rz - 19.0) < 6.0 || Math.hypot(rx + 9.6, rz - 2.5) < 5.5) return;
@@ -1058,6 +1112,7 @@ function buildMiracleRoadsideVillagesAndForests() {
   ];
   outerGiantBoulders.forEach(([bx, bz, brad], idx) => {
     if (isNearSowerFarmPlot(bx, bz, 9.5)) return;
+    if (isNearMustardPlot(bx, bz, 6.2)) return;
     if (Math.hypot(bx + 22, bz - 91) < 13.0) return;
     if (Math.hypot(bx - 63, bz - 18) < 12.5) return;
     const col = idx % 3 === 0 ? '#94a3b8' : (idx % 3 === 1 ? '#78716c' : '#a8a29e');
@@ -1191,6 +1246,7 @@ function buildMiracleOuterMountainIsraelFlora() {
     if (Math.hypot(x + 62, z - 78) < 11.5) return false;   // 골고다 세 십자가 주변
     if (Math.hypot(x - 63, z - 18) < 13.5) return false;   // 반석 건축지
     if (typeof isNearSowerFarmPlot === 'function' && isNearSowerFarmPlot(x, z, 10.5)) return false;
+    if (typeof isNearMustardPlot === 'function' && isNearMustardPlot(x, z, 6.2)) return false;
     const bethZ = -52 - Math.max(0, Math.min(1, (x - 6) / 82)) * 30 + Math.sin(x * 0.08) * 3.2;
     if (x >= 2 && x <= 92 && Math.abs(z - bethZ) < 5.2) return false;
     if (x >= 10 && x <= 92 && Math.abs(z - (58 + (x - 10) * 0.2)) < 5.2) return false;
@@ -1881,6 +1937,7 @@ function buildMiracleRegionalLandmarks() {
     // 예수님 동산 무덤(-22, 91) 반경 13m, 씨 뿌리기 산기슭 밭 반경 9.5m, 확장 반석 부지(63, 18) 반경 13m 이내 스킵
     if (Math.hypot(tx + 22, tz - 91) < 13.0) continue;
     if (isNearSowerFarmPlot(tx, tz, 9.5)) continue;
+    if (isNearMustardPlot(tx, tz, 6.2)) continue;
     if (Math.hypot(tx - 63, tz - 18) < 13.0) continue;
     let outerTree = null;
     if (i % 3 === 0) outerTree = addLowPolyCypressPineTree(tx, tz, 1.15, true);
@@ -2087,7 +2144,10 @@ function spawnMiracleMainStageSpots() {
       title: '⛵ [메인 스테이지 1] 갈릴리 바다: 물고기 잡기와 폭풍우',
       introSpeaker: '어부 시몬 베드로',
       introText: '"선생님께서 배에 오르셨네! 함께 갈릴리 바다 깊은 곳으로 나가 그물을 내리고 항해를 시작해 볼까?"',
-      greetingText: '"할렐루야! 그때 거센 폭풍우를 말씀 한마디로 잠잠하게 하신 예수님의 권능은 정말 놀라웠어! 다음 여정도 힘내서 다녀오게!"'
+      audioUrl: 'assets/voice/ep4_stage01_petro01.mp3',
+      greetingText: '"할렐루야! 그때 거센 폭풍우를 말씀 한마디로 잠잠하게 하신 예수님의 권능은 정말 놀라웠어! 다음 여정도 힘내서 다녀오게!"',
+      greetingAudioUrl: 'assets/voice/ep4_stage01_petro02.mp3',
+      verseAudioUrl: 'assets/voice/ep4_stage01_bible.mp3'
     },
     {
       stageNum: 2,
@@ -2098,7 +2158,10 @@ function spawnMiracleMainStageSpots() {
       title: '🍞 [메인 스테이지 2] 오병이어 사건: 마을이 내려다보이는 벳새다 언덕',
       introSpeaker: '제자 빌립과 안드레',
       introText: '"이 높은 언덕 위에서 내려다보니 마을과 갈릴리 바다가 한눈에 보이는구나! 예수님의 말씀을 들으러 모인 큰 무리를 먹이시는 오병이어 기적을 시작해 볼까?"',
-      greetingText: '"반가워! 어린아이의 작은 도시락 하나로 오천 명이 배불리 먹고 열두 광주리나 남았던 기적을 우리 모두 잊지 못할 거야!"'
+      audioUrl: 'assets/voice/ep4_stage02_philip01.mp3',
+      greetingText: '"반가워! 어린아이의 작은 도시락 하나로 오천 명이 배불리 먹고 열두 광주리나 남았던 기적을 우리 모두 잊지 못할 거야!"',
+      greetingAudioUrl: 'assets/voice/ep4_stage02_philip02.mp3',
+      verseAudioUrl: 'assets/voice/ep4_stage02_bible.mp3'
     },
     {
       stageNum: 3,
@@ -2109,7 +2172,10 @@ function spawnMiracleMainStageSpots() {
       title: '✝️ [메인 스테이지 3] 십자가 사건: 골고다로 가는 길',
       introSpeaker: '예루살렘 여인들',
       introText: '"예수님께서 무거운 십자가를 지고 골고다 언덕으로 가고 계셔! 어서 그분이 가시는 길을 찾아가 도와드리자!"',
-      greetingText: '"구레네 시몬처럼 예수님과 함께 골고다 언덕까지 십자가를 지고 올라가 주어서 정말 고마워요! 우리를 향한 예수님의 크신 사랑을 기억해요."'
+      audioUrl: 'assets/voice/ep4_stage03_girls01.mp3',
+      greetingText: '"구레네 시몬처럼 예수님과 함께 골고다 언덕까지 십자가를 지고 올라가 주어서 정말 고마워요! 우리를 향한 예수님의 크신 사랑을 기억해요."',
+      greetingAudioUrl: 'assets/voice/ep4_stage03_girls02.mp3',
+      verseAudioUrl: 'assets/voice/ep4_stage03_bible.mp3'
     },
     {
       stageNum: 4,
@@ -2120,7 +2186,10 @@ function spawnMiracleMainStageSpots() {
       title: '🌅 [메인 스테이지 4] 빈 무덤 찾기: 안식일 후 첫날 새벽',
       introSpeaker: '막달라 마리아',
       introText: '"안식일이 지나고 새벽이 밝았어요! 마을 사람들의 단서를 따라 예수님이 묻히신 동산 무덤을 찾아가요!"',
-      greetingText: '"예수님께서 말씀하시던 대로 다시 살아나셨어요! 이제 부활하신 예수님의 증언들을 만나고 동남쪽 감람산으로 올라가 보세요!"'
+      audioUrl: 'assets/voice/ep4_stage04_maria01.mp3',
+      greetingText: '"예수님께서 말씀하시던 대로 다시 살아나셨어요! 이제 부활하신 예수님의 증언들을 만나고 동남쪽 감람산으로 올라가 보세요!"',
+      greetingAudioUrl: 'assets/voice/ep4_stage04_maria02.mp3',
+      verseAudioUrl: 'assets/voice/ep4_stage04_bible.mp3'
     }
   ];
 
@@ -2178,7 +2247,11 @@ function spawnMiracleMainStageSpots() {
       introText: isPostAsc
         ? '"예수님께서 구름을 타고 하늘로 승천하셨어요! 천사들이 \'하늘로 가심을 본 그대로 다시 오시리라\'고 약속해 주었답니다. 승천 이후의 감람산 엔딩 세상으로 가보시겠어요?"'
         : '"하늘과 땅의 모든 권세를 내게 주셨으니, 그러므로 너희는 가서 모든 민족을 제자로 삼으라! 볼지어다 내가 세상 끝날까지 너희와 항상 함께 있으리라!"',
+      audioUrl: isPostAsc
+        ? 'assets/voice/ep4_stage05_diciples.mp3'
+        : 'assets/voice/ep4_stage05_jesus01.mp3',
       greetingText: '"볼지어다 내가 세상 끝날까지 너희와 항상 함께 있으리라!"',
+      greetingAudioUrl: 'assets/voice/ep4_stage05_greeting.mp3',
       ...ascMarker,
       cleared: false,
       _requireLeaveZone: false
@@ -2594,19 +2667,19 @@ function getMiracleOptionalEventsCatalog() {
     {
       id: 'par_mustard',
       category: 'parable',
-      title: '🌳 [비유 미니게임 4] 겨자씨 비유: 작은 씨앗의 성장',
+      title: '🌼 [비유 미니게임 4] 겨자씨 비유: 작은 씨앗의 성장',
       x: 42, z: -20,
       color: 0xa3e635,
       npcPreset: 'child',
       speaker: '천국 겨자씨 비유',
-      introText: '"[📖 예수님이 들려주신 비유] 모든 씨보다 작은 겨자씨 한 알이 자라나 새들이 깃드는 큰 나무가 되도록, 주변의 생명수 물방울 3개를 모아 새싹에 주세요!"',
-      greetingText: '"작은 겨자씨 한 알이 이렇게 큰 나무로 자라났어요! 우리 마음속 천국의 믿음도 이렇게 무럭무럭 자라날 거예요!"',
-      missionType: 'collect_deliver',
-      itemCount: 3,
-      itemColor: '#38bdf8',
-      itemLabel: '💧 새싹을 키우는 물방울',
+      introText: '"[📖 예수님이 들려주신 비유] 모든 씨보다 아주 작은 겨자씨 한 알을 찾아 흙밭에 심고, 맑은 물 항아리를 찾아 물을 부어 주세요! 시간이 지나면 굵은 줄기와 넓은 잎, 노란 꽃이 달린 풍성한 관목으로 자라날 거예요!"',
+      greetingText: '"아주 작은 겨자씨 한 알이 이렇게 굵고 단단한 줄기와 넓은 잎, 노란 꽃이 가득한 풍성한 관목으로 자라났어요! 우리 마음속 천국의 믿음도 이렇게 무럭무럭 자라날 거예요!"',
+      missionType: 'mustard_grow',
+      itemCount: 1,
+      itemColor: '#facc15',
+      itemLabel: '🔍 아주 작은 겨자씨',
       targetOffset: { x: 4, z: 0 },
-      targetLabel: '🌱 작은 겨자씨 새싹',
+      targetLabel: '🌱 겨자씨 흙밭',
       completeSpeaker: '예수님',
       completeText: '"천국은 마치 사람이 자기 밭에 갖다 심은 겨자씨 한 알 같으니 이는 모든 씨보다 작은 것이로되 자란 후에는 풀보다 커서 나무가 되매 공중의 새들이 와서 그 가지에 깃들이느니라!" (마 13:31~32)',
       unlockNotebookIds: ['par_mustard'],
@@ -3120,6 +3193,379 @@ function updateMiracleGrowingFields(dt, now) {
         st.earMat.color.copy(colGreen).lerp(colRipe, ripen);
       }
     });
+  });
+}
+
+// [겨자씨 비유 미니게임 완료 후] 시간이 지나면서 작은 새싹 → 굵고 단단한 다줄기 → 넓은 잎 → 노란 꽃 풍성한 관목으로 자라나는 영구 식물 생성기
+function spawnPersistentMustardShrub(fx = 46, fz = -20, initialAgeSec = 0) {
+  const by = getMiracleOpenWorldGroundHeight(fx, fz);
+  if (Array.isArray(window.miracleMustardShrubs)) {
+    for (let i = window.miracleMustardShrubs.length - 1; i >= 0; i--) {
+      const old = window.miracleMustardShrubs[i];
+      if (Math.hypot(old.x - fx, old.z - fz) < 3.5) {
+        if (old.group && typeof worldGroup !== 'undefined' && worldGroup) worldGroup.remove(old.group);
+        window.miracleMustardShrubs.splice(i, 1);
+      }
+    }
+  }
+
+  const grp = new THREE.Group();
+
+  // 1) 돌멩이 테두리가 있는 촉촉한 원형 흙밭
+  const soilMound = createLowPolyMesh(
+    new THREE.CylinderGeometry(1.42, 1.66, 0.24, 10),
+    '#4a2e16', 0, 0.11, 0, false
+  );
+  grp.add(soilMound);
+
+  for (let p = 0; p < 10; p++) {
+    const ang = (p / 10) * Math.PI * 2 + 0.18;
+    const pr = 1.56 + (p % 2) * 0.07;
+    const stone = createLowPolyMesh(
+      new THREE.DodecahedronGeometry(0.22 + (p % 3) * 0.03, 0),
+      p % 2 === 0 ? '#94a3b8' : '#a8a29e',
+      Math.cos(ang) * pr, 0.12, Math.sin(ang) * pr, false
+    );
+    stone.scale.set(1.22, 0.56, 0.95);
+    stone.rotation.y = ang + p * 0.4;
+    grp.add(stone);
+  }
+
+  const shrubRoot = new THREE.Group();
+  shrubRoot.position.set(0, 0.18, 0);
+  grp.add(shrubRoot);
+
+  // 2) 초기 작은 새싹 (떡잎 2장)
+  const sproutGrp = new THREE.Group();
+  const sStem = createLowPolyMesh(new THREE.CylinderGeometry(0.035, 0.055, 0.42, 5), '#84cc16', 0, 0.21, 0, false);
+  const cotL = createLowPolyMesh(new THREE.DodecahedronGeometry(0.18, 0), '#4ade80', -0.15, 0.36, 0, false);
+  cotL.scale.set(1.45, 0.32, 0.95);
+  cotL.rotation.z = 0.28;
+  const cotR = createLowPolyMesh(new THREE.DodecahedronGeometry(0.18, 0), '#84cc16', 0.15, 0.36, 0.02, false);
+  cotR.scale.set(1.45, 0.32, 0.95);
+  cotR.rotation.z = -0.28;
+  sproutGrp.add(sStem, cotL, cotR);
+  shrubRoot.add(sproutGrp);
+
+  // 3) 굵고 단단한 다줄기 목질 관목 뼈대
+  const woodyGrp = new THREE.Group();
+  shrubRoot.add(woodyGrp);
+
+  const makeWoodBranch = (p1Arr, p2Arr, rBot, rTop, colHex, seed, flare = false) => {
+    const p1 = new THREE.Vector3(p1Arr[0], p1Arr[1], p1Arr[2]);
+    const p2 = new THREE.Vector3(p2Arr[0], p2Arr[1], p2Arr[2]);
+    if (typeof createOrganicWoodSegmentMesh === 'function') {
+      return createOrganicWoodSegmentMesh(p1, p2, rBot, rTop, colHex, seed, 0.15, flare);
+    }
+    const dir = new THREE.Vector3().subVectors(p2, p1);
+    const len = Math.max(0.1, dir.length());
+    const cyl = createLowPolyMesh(new THREE.CylinderGeometry(rTop, rBot, len, 6), colHex, 0, 0, 0, true);
+    cyl.position.copy(p1).addScaledVector(dir, 0.5);
+    cyl.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+    return cyl;
+  };
+
+  const barkCols = ['#5c3a21', '#6b4423', '#4d311a', '#714928'];
+  woodyGrp.add(makeWoodBranch([0, -0.02, 0], [0.05, 1.38, -0.04], 0.28, 0.16, barkCols[0], 701, true));
+  woodyGrp.add(makeWoodBranch([0.05, 1.32, -0.04], [-0.08, 2.42, 0.07], 0.16, 0.085, barkCols[1], 702, false));
+
+  const leafAnchorNodes = [];
+  const flowerAnchorNodes = [];
+  const birdPerchSpots = [];
+
+  for (let i = 0; i < 6; i++) {
+    const ang = (i / 6) * Math.PI * 2 + 0.22;
+    const baseY = 0.22 + (i % 3) * 0.14;
+    const rMid = 0.72 + (i % 2) * 0.16;
+    const yMid = 1.15 + (i % 3) * 0.18;
+    const rTip = 1.35 + (i % 2) * 0.24;
+    const yTip = 1.62 + (i % 3) * 0.22;
+
+    const pStart = [Math.cos(ang) * 0.06, baseY, Math.sin(ang) * 0.06];
+    const pMid = [Math.cos(ang) * rMid, yMid, Math.sin(ang) * rMid];
+    const pTip = [Math.cos(ang + 0.12) * rTip, yTip, Math.sin(ang + 0.12) * rTip];
+
+    woodyGrp.add(makeWoodBranch(pStart, pMid, 0.17, 0.105, barkCols[(i + 1) % barkCols.length], 710 + i * 7, false));
+    woodyGrp.add(makeWoodBranch(pMid, pTip, 0.105, 0.058, barkCols[(i + 2) % barkCols.length], 730 + i * 7, false));
+
+    // 2차 상단 관목 가지 (사방으로 풍성하게 퍼지며 올라감)
+    const ang2 = ang - 0.26;
+    const rUp = 1.48 + ((i + 1) % 2) * 0.30;
+    const yUp = 2.38 + (i % 3) * 0.24;
+    const pUp = [Math.cos(ang2) * rUp, yUp, Math.sin(ang2) * rUp];
+    woodyGrp.add(makeWoodBranch(pMid, pUp, 0.095, 0.048, barkCols[i % barkCols.length], 760 + i * 11, false));
+
+    leafAnchorNodes.push(
+      { pos: pMid, ang, scale: 1.05 },
+      { pos: pTip, ang: ang + 0.12, scale: 1.18 },
+      { pos: pUp, ang: ang2, scale: 1.12 }
+    );
+    flowerAnchorNodes.push(
+      { pos: [pTip[0], pTip[1] + 0.18, pTip[2]], ang: ang + 0.12 },
+      { pos: [pUp[0], pUp[1] + 0.20, pUp[2]], ang: ang2 },
+      { pos: [pUp[0] * 0.85, pUp[1] + 0.34, pUp[2] * 0.85], ang: ang2 + 0.3 }
+    );
+    if (i % 2 === 0 && birdPerchSpots.length < 3) {
+      birdPerchSpots.push({ pos: [pUp[0] * 0.92, pUp[1] + 0.08, pUp[2] * 0.92], rotY: ang2 + Math.PI * 0.7 });
+    }
+  }
+
+  // 상단 중앙 왕관 가지 3개
+  for (let c = 0; c < 3; c++) {
+    const cAng = (c / 3) * Math.PI * 2 + 0.6;
+    const cBase = [0.02, 1.45 + c * 0.12, 0.02];
+    const cTip = [Math.cos(cAng) * 0.78, 2.75 + (c % 2) * 0.26, Math.sin(cAng) * 0.78];
+    woodyGrp.add(makeWoodBranch(cBase, cTip, 0.105, 0.052, barkCols[c % barkCols.length], 800 + c * 13, false));
+    leafAnchorNodes.push({ pos: cTip, ang: cAng, scale: 1.15 });
+    flowerAnchorNodes.push(
+      { pos: [cTip[0], cTip[1] + 0.22, cTip[2]], ang: cAng },
+      { pos: [cTip[0] * 0.65, cTip[1] + 0.36, cTip[2] * 0.65], ang: cAng + 0.5 }
+    );
+  }
+  leafAnchorNodes.push({ pos: [-0.08, 2.55, 0.07], ang: 0.4, scale: 1.24 });
+  flowerAnchorNodes.push(
+    { pos: [-0.08, 2.88, 0.07], ang: 0.4 },
+    { pos: [0.22, 2.76, -0.18], ang: 1.9 },
+    { pos: [-0.28, 2.72, -0.16], ang: 3.1 }
+  );
+
+  // 4) 넓고 풍성한 초록 잎 (단순 공 덩어리가 아닌 넓게 펼쳐진 관목 잎사귀 패드)
+  const leafClusters = [];
+  const leafCols = ['#2f7d32', '#3f9142', '#4d7c0f', '#65a30d', '#3a873d'];
+  leafAnchorNodes.forEach((node, idx) => {
+    const lHolder = new THREE.Group();
+    lHolder.position.set(node.pos[0], node.pos[1], node.pos[2]);
+    lHolder.rotation.y = node.ang;
+
+    const mainBlade = createLowPolyMesh(
+      new THREE.DodecahedronGeometry(0.56, 0),
+      leafCols[idx % leafCols.length], 0.18, 0.05, 0, true
+    );
+    mainBlade.scale.set(1.58, 0.34, 1.24);
+    mainBlade.rotation.z = -0.16;
+
+    const subBlade = createLowPolyMesh(
+      new THREE.DodecahedronGeometry(0.44, 0),
+      leafCols[(idx + 2) % leafCols.length], -0.16, 0.12, 0.22, false
+    );
+    subBlade.scale.set(1.42, 0.32, 1.15);
+    subBlade.rotation.y = 0.72;
+    subBlade.rotation.x = 0.18;
+
+    lHolder.add(mainBlade, subBlade);
+    lHolder.scale.setScalar(0.01);
+    lHolder.visible = false;
+    woodyGrp.add(lHolder);
+
+    leafClusters.push({
+      group: lHolder,
+      targetScale: node.scale,
+      growStart: 0.14 + (idx % 6) * 0.045,
+      growEnd: 0.62 + (idx % 5) * 0.06
+    });
+  });
+
+  // 5) 하단 기저부 넓은 잎 4쌍 (땅 가까이부터 풍성한 관목 실루엣)
+  for (let b = 0; b < 4; b++) {
+    const bAng = (b / 4) * Math.PI * 2 + 0.55;
+    const bHolder = new THREE.Group();
+    bHolder.position.set(Math.cos(bAng) * 0.62, 0.62 + (b % 2) * 0.14, Math.sin(bAng) * 0.62);
+    bHolder.rotation.y = bAng;
+    const bLeaf = createLowPolyMesh(new THREE.DodecahedronGeometry(0.48, 0), leafCols[(b + 1) % leafCols.length], 0.14, 0, 0, false);
+    bLeaf.scale.set(1.52, 0.32, 1.18);
+    bLeaf.rotation.z = -0.22;
+    bHolder.add(bLeaf);
+    bHolder.scale.setScalar(0.01);
+    bHolder.visible = false;
+    woodyGrp.add(bHolder);
+    leafClusters.push({
+      group: bHolder,
+      targetScale: 0.96,
+      growStart: 0.18 + b * 0.04,
+      growEnd: 0.55 + b * 0.05
+    });
+  }
+
+  // 6) 가지 끝과 잎 위로 만개하는 노란 겨자꽃 송이들
+  const flowerClusters = [];
+  const flowerCols = ['#facc15', '#fde047', '#eab308'];
+  flowerAnchorNodes.forEach((fn, idx) => {
+    const fGrp = new THREE.Group();
+    fGrp.position.set(fn.pos[0], fn.pos[1], fn.pos[2]);
+    fGrp.rotation.y = fn.ang;
+
+    const pedicel = createLowPolyMesh(new THREE.CylinderGeometry(0.022, 0.030, 0.24, 4), '#65a30d', 0, 0.11, 0, false);
+    fGrp.add(pedicel);
+
+    const floretOffsets = [[0, 0.26, 0], [0.13, 0.21, 0.08], [-0.12, 0.22, 0.09], [0.02, 0.20, -0.13]];
+    floretOffsets.forEach(([ox, oy, oz], fi) => {
+      const petal = createLowPolyMesh(
+        new THREE.DodecahedronGeometry(fi === 0 ? 0.135 : 0.105, 0),
+        flowerCols[(idx + fi) % flowerCols.length],
+        ox, oy, oz, false
+      );
+      petal.scale.set(1.18, 0.84, 1.18);
+      fGrp.add(petal);
+    });
+
+    fGrp.scale.setScalar(0.01);
+    fGrp.visible = false;
+    woodyGrp.add(fGrp);
+
+    flowerClusters.push({
+      group: fGrp,
+      bloomStart: 0.52 + (idx % 7) * 0.045,
+      bloomSpan: 0.24
+    });
+  });
+
+  // 7) 다 자란 가지에 앉는 공중의 작은 새 3마리 (마 13:32)
+  const perchedBirds = [];
+  if (typeof window.createFlyingBirdMesh === 'function') {
+    const birdPalettes = [
+      ['#fef3c7', '#b45309'],
+      ['#f8fafc', '#94a3b8'],
+      ['#e0f2fe', '#64748b']
+    ];
+    birdPerchSpots.forEach((ps, bi) => {
+      const bMesh = window.createFlyingBirdMesh(birdPalettes[bi][0], birdPalettes[bi][1], 1.0);
+      if (bMesh.userData && bMesh.userData.wingL && bMesh.userData.wingR) {
+        bMesh.userData.wingL.rotation.z = -0.35;
+        bMesh.userData.wingR.rotation.z = 0.35;
+      }
+      const bHolder = new THREE.Group();
+      bHolder.position.set(ps.pos[0], ps.pos[1], ps.pos[2]);
+      bHolder.rotation.y = ps.rotY;
+      bHolder.add(bMesh);
+      bHolder.visible = false;
+      bHolder.scale.setScalar(0.01);
+      woodyGrp.add(bHolder);
+      perchedBirds.push({
+        group: bHolder,
+        baseRotY: ps.rotY,
+        baseScale: 0.64 + (bi % 2) * 0.08,
+        phase: bi * 1.9
+      });
+    });
+  }
+
+  grp.position.set(fx, by, fz);
+  worldGroup.add(grp);
+
+  const shrubObj = {
+    x: fx,
+    y: by,
+    z: fz,
+    group: grp,
+    shrubRoot,
+    sproutGrp,
+    woodyGrp,
+    leafClusters,
+    flowerClusters,
+    perchedBirds,
+    age: initialAgeSec,
+    plantedAt: Date.now() - initialAgeSec * 1000,
+    stage: 0,
+    matureAnnounced: initialAgeSec >= (MIRACLE_MUSTARD_GROW_DURATION_SEC - 1)
+  };
+  if (!Array.isArray(window.miracleMustardShrubs)) window.miracleMustardShrubs = [];
+  window.miracleMustardShrubs.push(shrubObj);
+  window.miracleMustardTreeGrown = true;
+  if (typeof miracleSunSystem !== 'undefined' && miracleSunSystem) {
+    miracleSunSystem.cullBuilt = false;
+  }
+  updateMiracleMustardShrubs(0.016, performance.now());
+  return shrubObj;
+}
+window.spawnPersistentMustardShrub = spawnPersistentMustardShrub;
+
+function updateMiracleMustardShrubs(dt, now) {
+  if (!Array.isArray(window.miracleMustardShrubs) || window.miracleMustardShrubs.length === 0) return;
+  const tSec = now * 0.001;
+  const growDur = Math.max(10, Number(window.MIRACLE_MUSTARD_GROW_DURATION_SEC) || MIRACLE_MUSTARD_GROW_DURATION_SEC);
+  const nowWallMs = Date.now();
+
+  window.miracleMustardShrubs.forEach((shrub, sIdx) => {
+    const wallElapsed = shrub.plantedAt ? Math.max(0, (nowWallMs - shrub.plantedAt) / 1000) : 0;
+    shrub.age = Math.max(shrub.age + dt, wallElapsed);
+    const g = Math.min(1.0, shrub.age / growDur);
+    const newStage = g < 0.22 ? 1 : (g < 0.55 ? 2 : (g < 0.85 ? 3 : 4));
+    if (newStage > shrub.stage) {
+      shrub.stage = newStage;
+    }
+    if (g >= 0.995 && !shrub.matureAnnounced) {
+      shrub.matureAnnounced = true;
+      if (typeof showToast === 'function' && miracleSubMode === 'openworld') {
+        showToast('🌼✨ 작은 겨자씨가 굵은 줄기와 넓은 잎, 노란 꽃이 가득한 풍성한 관목으로 자라나 새들이 깃들었어요!');
+      }
+    }
+
+    // 1) 초기 새싹
+    if (shrub.sproutGrp) {
+      if (g < 0.42) {
+        shrub.sproutGrp.visible = true;
+        const spScale = g < 0.16 ? (0.45 + (g / 0.16) * 0.70) : Math.max(0.25, 1.15 - ((g - 0.16) / 0.26) * 0.90);
+        shrub.sproutGrp.scale.setScalar(spScale);
+      } else {
+        shrub.sproutGrp.visible = false;
+      }
+    }
+
+    // 2) 굵고 단단한 목질 줄기 성장
+    if (shrub.woodyGrp) {
+      const wRatio = Math.min(1.0, g / 0.90);
+      const wXZ = 0.08 + wRatio * 0.92;
+      const wY = 0.06 + wRatio * 0.94;
+      shrub.woodyGrp.scale.set(wXZ, wY, wXZ);
+    }
+
+    // 3) 넓은 잎 성장
+    if (Array.isArray(shrub.leafClusters)) {
+      shrub.leafClusters.forEach(lc => {
+        const lt = Math.max(0, Math.min(1, (g - lc.growStart) / Math.max(0.05, lc.growEnd - lc.growStart)));
+        if (lt <= 0.02) {
+          lc.group.visible = false;
+        } else {
+          lc.group.visible = true;
+          lc.group.scale.setScalar((0.12 + lt * 0.88) * lc.targetScale);
+        }
+      });
+    }
+
+    // 4) 노란 겨자꽃 송이 개화
+    if (Array.isArray(shrub.flowerClusters)) {
+      shrub.flowerClusters.forEach(fc => {
+        const ft = Math.max(0, Math.min(1, (g - fc.bloomStart) / fc.bloomSpan));
+        if (ft <= 0.02) {
+          fc.group.visible = false;
+        } else {
+          fc.group.visible = true;
+          fc.group.scale.setScalar(0.10 + ft * 0.90);
+        }
+      });
+    }
+
+    // 5) 만개한 관목 가지 위 작은 새
+    if (Array.isArray(shrub.perchedBirds)) {
+      shrub.perchedBirds.forEach(pb => {
+        const bt = Math.max(0, Math.min(1, (g - 0.85) / 0.12));
+        if (bt <= 0.02) {
+          pb.group.visible = false;
+        } else {
+          pb.group.visible = true;
+          pb.group.scale.setScalar((0.15 + bt * 0.85) * pb.baseScale);
+          pb.group.rotation.y = pb.baseRotY + Math.sin(tSec * 1.4 + pb.phase) * 0.28;
+          pb.group.rotation.x = Math.sin(tSec * 2.6 + pb.phase) * 0.08;
+        }
+      });
+    }
+
+    // 6) 바람에 살랑이는 관목 흔들림
+    if (shrub.shrubRoot) {
+      const swayAmp = 0.014 + g * 0.024;
+      shrub.shrubRoot.rotation.z = Math.sin(tSec * 1.5 + sIdx) * swayAmp;
+      shrub.shrubRoot.rotation.x = Math.cos(tSec * 1.2 + sIdx) * swayAmp * 0.65;
+    }
   });
 }
 
@@ -4055,6 +4501,42 @@ function syncMiracleMissionStatusPanel() {
     }
     window.updateMiracleMissionStatusUI({
       title: `🌱 ${shortTitle}`,
+      goal,
+      progressText,
+      extraText
+    });
+  } else if (fe.type === 'mustard_grow' && fe.mustardState) {
+    const ms = fe.mustardState;
+    let goal = '';
+    let progressText = '';
+    let extraText = '';
+    if (ms.phase === 'find_seed') {
+      const sd = ms.seedObj ? Math.round(Math.hypot(playerPos.x - ms.seedObj.pos.x, playerPos.z - ms.seedObj.pos.z)) : 0;
+      goal = '🔍 반짝이는 황금 빛 표시를 따라 아주 작은 겨자씨 한 알을 주우세요!';
+      progressText = '1단계: 아주 작은 겨자씨 찾기';
+      extraText = `거리 ${sd}m`;
+    } else if (ms.phase === 'plant_seed') {
+      const pd = Math.round(Math.hypot(playerPos.x - ms.fx, playerPos.z - ms.fz));
+      goal = '🌱 주운 겨자씨를 돌 테두리 흙밭에 가까이 가서 심으세요!';
+      progressText = '2단계: 흙밭에 겨자씨 심기';
+      extraText = `거리 ${pd}m`;
+    } else if (ms.phase === 'find_water') {
+      const wd = ms.waterObj ? Math.round(Math.hypot(playerPos.x - ms.waterObj.pos.x, playerPos.z - ms.waterObj.pos.z)) : 0;
+      goal = '💧 심은 겨자씨에 부어줄 맑은 물 항아리를 찾으세요!';
+      progressText = '3단계: 맑은 물 찾기';
+      extraText = `거리 ${wd}m`;
+    } else if (ms.phase === 'pour_water') {
+      const pd = Math.round(Math.hypot(playerPos.x - ms.fx, playerPos.z - ms.fz));
+      goal = '💧 맑은 물 항아리를 들고 흙밭으로 돌아가 물을 부어 주세요!';
+      progressText = '4단계: 겨자씨에 물 붓기';
+      extraText = `🎒 물 항아리 들고 있음 · 거리 ${pd}m`;
+    } else {
+      goal = '💧✨ 심은 겨자씨에 맑은 물을 듬뿍 붓고 있어요!';
+      progressText = '물 주는 중...';
+      extraText = '🌼 5분 동안 풍성한 관목으로 자라납니다!';
+    }
+    window.updateMiracleMissionStatusUI({
+      title: `🌼 ${shortTitle}`,
       goal,
       progressText,
       extraText
@@ -5203,6 +5685,197 @@ function startMiracleFieldEvent(evSpot) {
       seedParticles: []
     };
     miracleActiveFieldEvent.targetZone = plotObj;
+  } else if (evSpot.missionType === 'mustard_grow') {
+    // [겨자씨 비유 미니게임: 아주 작은 겨자씨 찾기 → 심기 → 물 찾아 붓기 → 5분 관목 성장]
+    clearAllMiracleMustardShrubs();
+    evSpot._treeGrown = false;
+
+    const fx = cx + (evSpot.targetOffset ? evSpot.targetOffset.x : 4);
+    const fz = cz + (evSpot.targetOffset ? evSpot.targetOffset.z : 0);
+    const fy = getMiracleOpenWorldGroundHeight(fx, fz);
+
+    // 1) 돌 테두리 흙밭 생성
+    const plotGrp = new THREE.Group();
+    const soilMat = new THREE.MeshPhongMaterial({ color: 0xa68a64, flatShading: true, shininess: 0, specular: 0x000000 });
+    const soilMound = new THREE.Mesh(new THREE.CylinderGeometry(1.42, 1.66, 0.24, 10), soilMat);
+    soilMound.position.set(0, 0.11, 0);
+    soilMound.receiveShadow = true;
+    plotGrp.add(soilMound);
+
+    for (let p = 0; p < 10; p++) {
+      const ang = (p / 10) * Math.PI * 2 + 0.18;
+      const pr = 1.56 + (p % 2) * 0.07;
+      const stone = createLowPolyMesh(
+        new THREE.DodecahedronGeometry(0.22 + (p % 3) * 0.03, 0),
+        p % 2 === 0 ? '#94a3b8' : '#a8a29e',
+        Math.cos(ang) * pr, 0.12, Math.sin(ang) * pr, false
+      );
+      stone.scale.set(1.22, 0.56, 0.95);
+      stone.rotation.y = ang + p * 0.4;
+      plotGrp.add(stone);
+    }
+
+    const beaconRing = new THREE.Mesh(
+      new THREE.RingGeometry(1.75, 2.25, 24),
+      new THREE.MeshBasicMaterial({ color: 0xa3e635, side: THREE.DoubleSide, transparent: true, opacity: 0.45 })
+    );
+    beaconRing.rotation.x = -Math.PI * 0.5;
+    beaconRing.position.y = 0.08;
+    plotGrp.add(beaconRing);
+
+    const plantedSeedMesh = createLowPolyMesh(new THREE.IcosahedronGeometry(0.085, 0), '#5c3a14', 0, 0.25, 0, false);
+    plantedSeedMesh.visible = false;
+    plotGrp.add(plantedSeedMesh);
+
+    const tinySproutGrp = new THREE.Group();
+    tinySproutGrp.position.set(0, 0.22, 0);
+    const spStem = createLowPolyMesh(new THREE.CylinderGeometry(0.03, 0.045, 0.34, 5), '#84cc16', 0, 0.17, 0, false);
+    const spLeafL = createLowPolyMesh(new THREE.DodecahedronGeometry(0.14, 0), '#4ade80', -0.11, 0.30, 0, false);
+    spLeafL.scale.set(1.4, 0.32, 0.9);
+    spLeafL.rotation.z = 0.26;
+    const spLeafR = createLowPolyMesh(new THREE.DodecahedronGeometry(0.14, 0), '#84cc16', 0.11, 0.30, 0.02, false);
+    spLeafR.scale.set(1.4, 0.32, 0.9);
+    spLeafR.rotation.z = -0.26;
+    tinySproutGrp.add(spStem, spLeafL, spLeafR);
+    tinySproutGrp.scale.setScalar(0.01);
+    tinySproutGrp.visible = false;
+    plotGrp.add(tinySproutGrp);
+
+    plotGrp.position.set(fx, fy, fz);
+    worldGroup.add(plotGrp);
+
+    const plotLbl = createWorldLabel('🌱 겨자씨를 심을 흙밭');
+    plotLbl.style.opacity = '0';
+    const plotObj = { mesh: plotGrp, pos: new THREE.Vector3(fx, fy + 0.8, fz), label: plotLbl };
+    miracleWorldMissionObjects.push(plotObj);
+
+    // 2) 아주 작은 겨자씨 1알 + 찾기 쉬운 주변 황금빛 강조 표식 생성
+    const seedPos = findSafeOpenWorldOutdoorPos({
+      cx, cz, minDist: 10, maxDist: 26, minSpacing: 5.5,
+      avoidList: [{ x: cx, z: cz, r: 5.0 }, { x: fx, z: fz, r: 6.5 }]
+    });
+    const seedGrp = new THREE.Group();
+    const basePad = createLowPolyMesh(new THREE.CylinderGeometry(0.18, 0.22, 0.035, 7), '#e7dcc8', 0, 0.02, 0, false);
+    const tinySeed = createLowPolyMesh(new THREE.IcosahedronGeometry(0.075, 0), '#5c3a14', 0, 0.095, 0, false);
+    const seedInnerRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.45, 0.64, 24),
+      new THREE.MeshBasicMaterial({ color: 0xfacc15, side: THREE.DoubleSide })
+    );
+    seedInnerRing.rotation.x = -Math.PI * 0.5;
+    seedInnerRing.position.y = 0.055;
+
+    const seedOuterRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.86, 1.08, 24),
+      new THREE.MeshBasicMaterial({ color: 0xfef08a, side: THREE.DoubleSide, transparent: true, opacity: 0.72 })
+    );
+    seedOuterRing.rotation.x = -Math.PI * 0.5;
+    seedOuterRing.position.y = 0.045;
+
+    const seedBeam = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.28, 0.50, 4.8, 12, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0xfde047, transparent: true, opacity: 0.24, side: THREE.DoubleSide, depthWrite: false })
+    );
+    seedBeam.position.y = 2.4;
+
+    const seedPointer = new THREE.Group();
+    seedPointer.position.y = 1.55;
+    const pCone = new THREE.Mesh(
+      new THREE.ConeGeometry(0.24, 0.46, 4),
+      new THREE.MeshBasicMaterial({ color: 0xfacc15 })
+    );
+    pCone.rotation.x = Math.PI;
+    const pHalo = new THREE.Mesh(
+      new THREE.TorusGeometry(0.32, 0.045, 5, 12),
+      new THREE.MeshBasicMaterial({ color: 0xfef08a })
+    );
+    pHalo.rotation.x = Math.PI * 0.5;
+    pHalo.position.y = 0.14;
+    seedPointer.add(pCone, pHalo);
+
+    const seedSparkles = [];
+    for (let k = 0; k < 5; k++) {
+      const spMesh = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.085, 0),
+        new THREE.MeshBasicMaterial({ color: k % 2 === 0 ? 0xfef08a : 0xfacc15 })
+      );
+      seedGrp.add(spMesh);
+      seedSparkles.push({ mesh: spMesh, phase: (k / 5) * Math.PI * 2 });
+    }
+
+    seedGrp.add(basePad, tinySeed, seedInnerRing, seedOuterRing, seedBeam, seedPointer);
+    seedGrp.position.set(seedPos.x, seedPos.y, seedPos.z);
+    worldGroup.add(seedGrp);
+
+    const seedLbl = createWorldLabel('🔍 아주 작은 겨자씨 (여기 있어요!)');
+    seedLbl.style.opacity = '0';
+    const seedObj = {
+      mesh: seedGrp,
+      pos: new THREE.Vector3(seedPos.x, seedPos.y + 0.55, seedPos.z),
+      baseY: seedPos.y,
+      done: false,
+      label: seedLbl
+    };
+    miracleWorldMissionObjects.push(seedObj);
+
+    // 3) 맑은 물 항아리 생성 (2단계 심기 완료 시 활성화)
+    const waterPos = findSafeOpenWorldOutdoorPos({
+      cx: fx, cz: fz, minDist: 12, maxDist: 30, minSpacing: 6.5,
+      avoidList: [
+        { x: cx, z: cz, r: 5.5 },
+        { x: fx, z: fz, r: 7.0 },
+        { x: seedPos.x, z: seedPos.z, r: 7.0 }
+      ]
+    });
+    const waterGrp = new THREE.Group();
+    const wJar = (typeof createWaterFilledAmphoraMesh === 'function')
+      ? createWaterFilledAmphoraMesh(1.08)
+      : createLowPolyMesh(new THREE.DodecahedronGeometry(0.45, 0), '#38bdf8', 0, 0.45, 0);
+    const wRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.75, 1.08, 20),
+      new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide })
+    );
+    wRing.rotation.x = -Math.PI * 0.5;
+    wRing.position.y = 0.06;
+    const wBeam = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.26, 0.44, 3.8, 12, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false })
+    );
+    wBeam.position.y = 1.9;
+    waterGrp.add(wJar, wRing, wBeam);
+    waterGrp.position.set(waterPos.x, waterPos.y, waterPos.z);
+    waterGrp.visible = false;
+    worldGroup.add(waterGrp);
+
+    const waterLbl = createWorldLabel('💧 맑은 물 항아리');
+    waterLbl.style.opacity = '0';
+    const waterObj = {
+      mesh: waterGrp,
+      pos: new THREE.Vector3(waterPos.x, waterPos.y + 0.65, waterPos.z),
+      baseY: waterPos.y,
+      done: false,
+      label: waterLbl
+    };
+    miracleWorldMissionObjects.push(waterObj);
+
+    miracleActiveFieldEvent.mustardState = {
+      phase: 'find_seed',
+      fx, fy, fz,
+      plotGrp,
+      soilMat,
+      beaconRing,
+      plotLbl,
+      plantedSeedMesh,
+      tinySproutGrp,
+      seedObj,
+      seedSparkles,
+      seedOuterRing,
+      seedPointer,
+      waterObj,
+      pourTimer: 0,
+      pourJarMesh: null,
+      waterParticles: []
+    };
+    miracleActiveFieldEvent.targetZone = plotObj;
   } else if (evSpot.missionType === 'escort_guide') {
     const eGrp = new THREE.Group();
     const startZ = cz + 1.5;
@@ -6290,13 +6963,7 @@ function spawnPersistentRockHouse(cx = 57, cz = 21) {
 }
 
 function spawnPersistentMustardTree(cx = 46, cz = -20) {
-  if (window.miracleMustardTreeGrown) return;
-  if (typeof addLowPolyCanopyTree === 'function') addLowPolyCanopyTree(cx, cz, 1.45, true);
-  else createLowPolySycamoreTree(cx, cz, 1.65);
-  window.miracleMustardTreeGrown = true;
-  if (typeof miracleSunSystem !== 'undefined' && miracleSunSystem) {
-    miracleSunSystem.cullBuilt = false;
-  }
+  return spawnPersistentMustardShrub(cx, cz, MIRACLE_MUSTARD_GROW_DURATION_SEC);
 }
 
 function finishMiracleFieldEvent(evSpot) {
@@ -6338,13 +7005,6 @@ function finishMiracleFieldEvent(evSpot) {
   }
   if (typeof window.recordMiracleMissionCompleted === 'function') {
     window.recordMiracleMissionCompleted(evSpot.id, { deferPopup: true });
-  }
-
-  if (evSpot.id === 'par_mustard' && !evSpot._treeGrown) {
-    evSpot._treeGrown = true;
-    const mx = evSpot.x + (evSpot.targetOffset ? evSpot.targetOffset.x : 4);
-    const mz = evSpot.z + (evSpot.targetOffset ? evSpot.targetOffset.z : 0);
-    spawnPersistentMustardTree(mx, mz);
   }
 
   playSfx('clear');
@@ -7678,6 +8338,194 @@ function updateMiracleFieldEventFrame(dt, now) {
         finishMiracleFieldEvent(evSpot);
         // 미션 정리 후 천천히 자라나는 영구 곡식 밭 배치!
         spawnPersistentSowerGrowingField(plantedX, plantedZ, 0);
+        return;
+      }
+    }
+  } else if (fe.type === 'mustard_grow' && fe.mustardState) {
+    // [겨자씨 비유 미니게임: 아주 작은 겨자씨 줍기 → 흙밭 심기 → 물 항아리 찾기 → 물 붓기 → 5분 관목 성장]
+    const ms = fe.mustardState;
+    const distPlot = Math.hypot(playerPos.x - ms.fx, playerPos.z - ms.fz);
+    if (ms.beaconRing) {
+      const bp = 1.0 + Math.sin(tSec * 3.5) * 0.08;
+      ms.beaconRing.scale.set(bp, bp, 1);
+    }
+    updateWorldLabelPos(ms.plotLbl, new THREE.Vector3(ms.fx, ms.fy + 1.05, ms.fz), distPlot < 32.0);
+
+    if (ms.phase === 'find_seed' && ms.seedObj && !ms.seedObj.done) {
+      const sObj = ms.seedObj;
+      if (ms.seedOuterRing) {
+        const sp = 1.0 + Math.sin(tSec * 4.2) * 0.16;
+        ms.seedOuterRing.scale.set(sp, sp, 1);
+      }
+      if (ms.seedPointer) {
+        ms.seedPointer.position.y = 1.45 + Math.sin(tSec * 4.5) * 0.22;
+        ms.seedPointer.rotation.y += dt * 2.4;
+      }
+      if (Array.isArray(ms.seedSparkles)) {
+        ms.seedSparkles.forEach((sp, si) => {
+          const ang = tSec * 2.2 + sp.phase;
+          sp.mesh.position.set(
+            Math.cos(ang) * 0.55,
+            0.28 + ((tSec * 0.8 + si * 0.2) % 0.65),
+            Math.sin(ang) * 0.55
+          );
+          sp.mesh.rotation.y += dt * 4.5;
+        });
+      }
+
+      const dSeed = Math.hypot(playerPos.x - sObj.pos.x, playerPos.z - sObj.pos.z);
+      const dySeed = Math.abs(playerPos.y - sObj.baseY);
+      updateWorldLabelPos(sObj.label, sObj.pos, dSeed < 44.0);
+      if (dSeed < 2.25 && dySeed < 2.1) {
+        sObj.done = true;
+        sObj.mesh.visible = false;
+        sObj.label.style.opacity = '0';
+        ms.phase = 'plant_seed';
+        if (ms.beaconRing && ms.beaconRing.material) {
+          ms.beaconRing.material.color.setHex(0xfacc15);
+          ms.beaconRing.material.opacity = 0.85;
+        }
+        ms.plotLbl.innerHTML = '🌱 다가가서 아주 작은 겨자씨를 심으세요!';
+        if (typeof carriedBlockGroup !== 'undefined' && carriedBlockGroup) {
+          while (carriedBlockGroup.children.length > 0) carriedBlockGroup.remove(carriedBlockGroup.children[0]);
+          const handSeed = new THREE.Group();
+          const saucer = createLowPolyMesh(new THREE.CylinderGeometry(0.16, 0.12, 0.04, 7), '#e7dcc8', 0, 0, 0, false);
+          const tinyHold = createLowPolyMesh(new THREE.IcosahedronGeometry(0.065, 0), '#5c3a14', 0, 0.045, 0, false);
+          const glowOrb = new THREE.Mesh(
+            new THREE.OctahedronGeometry(0.10, 0),
+            new THREE.MeshBasicMaterial({ color: 0xfde047, transparent: true, opacity: 0.65 })
+          );
+          glowOrb.position.y = 0.06;
+          handSeed.add(saucer, tinyHold, glowOrb);
+          carriedBlockGroup.add(handSeed);
+        }
+        playSfx('rescue');
+        showToast('✨ 아주 작은 겨자씨 한 알을 주웠어요! 흙밭으로 가서 심어 볼까요?');
+        syncMiracleMissionStatusPanel();
+      }
+    } else if (ms.phase === 'plant_seed') {
+      if (distPlot < 2.85 && Math.abs(playerPos.y - ms.fy) < 2.4) {
+        if (typeof carriedBlockGroup !== 'undefined' && carriedBlockGroup) {
+          while (carriedBlockGroup.children.length > 0) carriedBlockGroup.remove(carriedBlockGroup.children[0]);
+        }
+        if (ms.plantedSeedMesh) ms.plantedSeedMesh.visible = true;
+        if (ms.waterObj && ms.waterObj.mesh) ms.waterObj.mesh.visible = true;
+        ms.phase = 'find_water';
+        if (ms.beaconRing && ms.beaconRing.material) {
+          ms.beaconRing.material.color.setHex(0x38bdf8);
+          ms.beaconRing.material.opacity = 0.55;
+        }
+        ms.plotLbl.innerHTML = '💧 맑은 물 항아리를 찾아오세요!';
+        playSfx('build');
+        showToast('🌱 흙밭에 아주 작은 겨자씨를 심었어요! 이제 맑은 물 항아리를 찾아오세요!');
+        syncMiracleMissionStatusPanel();
+      }
+    } else if (ms.phase === 'find_water' && ms.waterObj && !ms.waterObj.done) {
+      const wObj = ms.waterObj;
+      wObj.mesh.rotation.y += dt * 1.6;
+      const dWater = Math.hypot(playerPos.x - wObj.pos.x, playerPos.z - wObj.pos.z);
+      const dyWater = Math.abs(playerPos.y - wObj.baseY);
+      updateWorldLabelPos(wObj.label, wObj.pos, dWater < 38.0);
+      if (dWater < 2.35 && dyWater < 2.1) {
+        wObj.done = true;
+        wObj.mesh.visible = false;
+        wObj.label.style.opacity = '0';
+        ms.phase = 'pour_water';
+        if (ms.beaconRing && ms.beaconRing.material) {
+          ms.beaconRing.material.color.setHex(0x38bdf8);
+          ms.beaconRing.material.opacity = 0.90;
+        }
+        ms.plotLbl.innerHTML = '💧 흙밭에 다가가 물을 부어 주세요!';
+        if (typeof carriedBlockGroup !== 'undefined' && carriedBlockGroup) {
+          while (carriedBlockGroup.children.length > 0) carriedBlockGroup.remove(carriedBlockGroup.children[0]);
+          const miniJar = (typeof createWaterFilledAmphoraMesh === 'function')
+            ? createWaterFilledAmphoraMesh(0.46)
+            : createLowPolyMesh(new THREE.DodecahedronGeometry(0.24, 0), '#38bdf8', 0, 0, 0, false);
+          carriedBlockGroup.add(miniJar);
+        }
+        playSfx('rescue');
+        showToast('💧 맑은 물 항아리를 찾았어요! 흙밭으로 돌아가 겨자씨에 물을 부어 주세요!');
+        syncMiracleMissionStatusPanel();
+      }
+    } else if (ms.phase === 'pour_water') {
+      if (distPlot < 2.85 && Math.abs(playerPos.y - ms.fy) < 2.4) {
+        ms.phase = 'pouring';
+        ms.pourTimer = 0;
+        if (typeof carriedBlockGroup !== 'undefined' && carriedBlockGroup) {
+          while (carriedBlockGroup.children.length > 0) carriedBlockGroup.remove(carriedBlockGroup.children[0]);
+        }
+
+        const pourJar = (typeof createWaterFilledAmphoraMesh === 'function')
+          ? createWaterFilledAmphoraMesh(0.74)
+          : createLowPolyMesh(new THREE.DodecahedronGeometry(0.32, 0), '#38bdf8', 0, 0, 0, false);
+        pourJar.position.set(ms.fx + 0.56, ms.fy + 1.38, ms.fz);
+        pourJar.rotation.z = 0.95;
+        worldGroup.add(pourJar);
+        miracleWorldMissionObjects.push({ mesh: pourJar });
+        ms.pourJarMesh = pourJar;
+
+        ms.waterParticles = [];
+        for (let i = 0; i < 24; i++) {
+          const drop = new THREE.Mesh(
+            new THREE.OctahedronGeometry(0.085, 0),
+            new THREE.MeshBasicMaterial({ color: i % 2 === 0 ? 0x38bdf8 : 0xbae6fd })
+          );
+          const ox = (Math.random() - 0.5) * 0.45;
+          const oz = (Math.random() - 0.5) * 0.45;
+          drop.position.set(ms.fx + ox * 0.4, ms.fy + 1.22 + Math.random() * 0.35, ms.fz + oz * 0.4);
+          worldGroup.add(drop);
+          miracleWorldMissionObjects.push({ mesh: drop });
+          ms.waterParticles.push({
+            mesh: drop,
+            ox, oz,
+            vy: -(1.9 + Math.random() * 1.4),
+            targetY: ms.fy + 0.24
+          });
+        }
+
+        ms.plotLbl.innerHTML = '💧✨ 심은 겨자씨에 물을 붓고 있어요!';
+        playSfx('clear');
+        showToast('💧✨ 겨자씨에 맑은 물을 듬뿍 부어 주었어요!');
+        syncMiracleMissionStatusPanel();
+      }
+    } else if (ms.phase === 'pouring') {
+      ms.pourTimer += dt;
+      const pRatio = Math.min(1.0, ms.pourTimer / 1.45);
+      if (ms.pourJarMesh) {
+        ms.pourJarMesh.rotation.z = 0.85 + Math.sin(pRatio * Math.PI) * 0.48;
+      }
+      ms.waterParticles.forEach(wp => {
+        wp.mesh.position.y += wp.vy * dt;
+        if (wp.mesh.position.y <= wp.targetY) {
+          if (pRatio < 0.80) {
+            wp.mesh.position.set(ms.fx + wp.ox * 0.35, ms.fy + 1.18 + Math.random() * 0.16, ms.fz + wp.oz * 0.35);
+          } else {
+            wp.mesh.position.y = wp.targetY;
+            wp.mesh.visible = false;
+          }
+        }
+      });
+      if (ms.soilMat) {
+        ms.soilMat.color.copy(new THREE.Color('#a68a64')).lerp(new THREE.Color('#4a2e16'), Math.min(1, pRatio * 1.25));
+      }
+      if (ms.tinySproutGrp && pRatio > 0.35) {
+        if (ms.plantedSeedMesh) ms.plantedSeedMesh.visible = false;
+        ms.tinySproutGrp.visible = true;
+        ms.tinySproutGrp.scale.setScalar(0.10 + ((pRatio - 0.35) / 0.65) * 0.90);
+      }
+
+      if (ms.pourTimer >= 1.45) {
+        const plantedX = ms.fx;
+        const plantedZ = ms.fz;
+        if (!Array.isArray(window.miracleMustardHistory)) window.miracleMustardHistory = [];
+        const existingIdx = window.miracleMustardHistory.findIndex(h => Math.hypot(h.x - plantedX, h.z - plantedZ) < 3.5);
+        const rec = { x: plantedX, z: plantedZ, plantedAt: Date.now(), allStepsCompleted: true };
+        if (existingIdx >= 0) window.miracleMustardHistory[existingIdx] = rec;
+        else window.miracleMustardHistory.push(rec);
+        saveMiracleMustardHistoryToStorage();
+
+        finishMiracleFieldEvent(evSpot);
+        spawnPersistentMustardShrub(plantedX, plantedZ, 0);
         return;
       }
     }
@@ -9253,6 +10101,7 @@ function buildMiracleOpenWorld(restoreSavedPos = false) {
   window.miracleBuildingBounds = [];
   window.miracleRooftopSpawnSpots = [];
   window.miracleGrowingFields = [];
+  window.miracleMustardShrubs = [];
   window.miracleWorldTreePositions = [];
   window.miracleZacchaeusGroveTrees = [];
   window.miracleReturningNpcs = [];
@@ -9312,14 +10161,26 @@ function buildMiracleOpenWorld(restoreSavedPos = false) {
     if (bSpot) bSpot._houseBuilt = true;
   }
 
+  // 겨자씨 비유(par_mustard) 실시간 성장 관목 영구 복원 (타임스탬프 기반 · 구버전 클리어 데이터 하위 호환)
+  loadMiracleMustardHistoryFromStorage();
   const hasMustardDone =
     (typeof miracleCompletedMissionIds !== 'undefined' && miracleCompletedMissionIds.has('par_mustard')) ||
     (typeof miracleCollectedIds !== 'undefined' && miracleCollectedIds.has('par_mustard'));
-  if (hasMustardDone) {
+  if (Array.isArray(window.miracleMustardHistory) && window.miracleMustardHistory.length > 0) {
+    window.miracleMustardHistory.forEach(item => {
+      if (item && item.allStepsCompleted === true) {
+        const elapsedSec = Math.max(0, (Date.now() - (item.plantedAt || Date.now())) / 1000);
+        spawnPersistentMustardShrub(item.x, item.z, elapsedSec);
+      }
+    });
+  } else if (hasMustardDone) {
     const mSpot = Array.isArray(miracleEventSpots) ? miracleEventSpots.find(s => s && s.id === 'par_mustard') : null;
     const mx = (mSpot ? mSpot.x : 42) + (mSpot && mSpot.targetOffset ? mSpot.targetOffset.x : 4);
     const mz = (mSpot ? mSpot.z : -20) + (mSpot && mSpot.targetOffset ? mSpot.targetOffset.z : 0);
-    spawnPersistentMustardTree(mx, mz);
+    spawnPersistentMustardShrub(mx, mz, MIRACLE_MUSTARD_GROW_DURATION_SEC);
+  }
+  if (hasMustardDone) {
+    const mSpot = Array.isArray(miracleEventSpots) ? miracleEventSpots.find(s => s && s.id === 'par_mustard') : null;
     if (mSpot) mSpot._treeGrown = true;
   }
 
@@ -9514,6 +10375,8 @@ function updateMiracleOpenWorldFrame(dt, now) {
 
   // 씨 뿌리기 미션 완료 후 시간이 지나며 점점 자라나는 곡식 실시간 업데이트
   updateMiracleGrowingFields(dt, now);
+  // 겨자씨 미션 완료 후 시간이 지나며 굵은 줄기·넓은 잎·노란 꽃 관목으로 자라나는 식물 실시간 업데이트
+  updateMiracleMustardShrubs(dt, now);
 
   // 미션 완료 후 제자리로 직접 걸어 돌아가는 NPC(수가성 여인·엠마오 제자) 실시간 보행 업데이트
   updateMiracleReturningNpcs(dt, now);
@@ -9595,6 +10458,7 @@ function updateMiracleOpenWorldFrame(dt, now) {
           speaker: sp.introSpeaker,
           category: 'story',
           text: sp.introText,
+          audioUrl: sp.audioUrl,
           showCancel: true,
           cancelText: '오픈월드 계속 둘러보기 ✕',
           btnText: '☁️ 승천 이후 엔딩 세상 보기 ▶',
@@ -9606,6 +10470,7 @@ function updateMiracleOpenWorldFrame(dt, now) {
           speaker: sp.introSpeaker,
           category: 'greeting',
           text: sp.greetingText || `"반가워요! 함께 완수했던 메인 스테이지 ${sp.stageNum}의 감동이 아직도 생생하네요!"`,
+          audioUrl: sp.greetingAudioUrl,
           btnText: '반갑게 인사 나누기 👋',
           replayText: `🔄 스테이지 ${sp.stageNum} 다시하기`,
           onReplay: launchThisStage
@@ -9624,6 +10489,7 @@ function updateMiracleOpenWorldFrame(dt, now) {
           speaker: sp.introSpeaker,
           category: 'story',
           text: sp.introText,
+          audioUrl: sp.audioUrl,
           showCancel: true,
           cancelText: '거절 (나중에 하기) ✕',
           btnText: sp.stageNum === 5 ? '👑 감람산 승천·재림 언약 보기 ▶' : `🚀 메인 스테이지 ${sp.stageNum} 시작하기 ▶`,
@@ -9834,6 +10700,18 @@ function updateMiracleOpenWorldFrame(dt, now) {
       if (!guideTarget) {
         guideTarget = new THREE.Vector3(sf.fx, sf.fy, sf.fz);
         navLabel = sf.areaName || '산기슭 밭';
+      }
+    } else if (fe.type === 'mustard_grow' && fe.mustardState) {
+      const ms = fe.mustardState;
+      if (ms.phase === 'find_seed' && ms.seedObj) {
+        guideTarget = ms.seedObj.pos;
+        navLabel = '아주 작은 겨자씨';
+      } else if (ms.phase === 'find_water' && ms.waterObj) {
+        guideTarget = ms.waterObj.pos;
+        navLabel = '맑은 물 항아리';
+      } else {
+        guideTarget = new THREE.Vector3(ms.fx, ms.fy, ms.fz);
+        navLabel = '겨자씨 흙밭';
       }
     } else if (fe.type === 'follow_messenger' && fe.messenger && fe.messenger.mesh) {
       guideTarget = fe.messenger.mesh.position;

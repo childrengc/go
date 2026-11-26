@@ -4,7 +4,7 @@
 // - 스테이지 3(십자가 사건): 넓어진 골고다 언덕 정상 고원과 세 십자가 등장 연출 적용
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_stages = '20261125_v48';
+window.__GAME_BUILD_VERSIONS__.ep4_stages = '20261126_v50';
 
 // 스테이지 3: 십자가를 지고 힘겹게 오르시는 예수님 보행 속도(더 천천히) 및 플레이어 대신 짊어졌을 때의 보행 속도
 const MIRACLE_STAGE3_JESUS_WALK_SPEED = 1.05;
@@ -5227,6 +5227,10 @@ function updateMiracleEndingFrame(dt, now) {
       if (transitioned) return;
       transitioned = true;
       clearEndingTimers();
+      if (window.__activeEndingAudio) {
+        try { window.__activeEndingAudio.pause(); } catch (e) {}
+        window.__activeEndingAudio = null;
+      }
       if (bf) bf.style.opacity = '0';
       st.active = false;
       if (st.jesusCloudGroup) st.jesusCloudGroup.visible = false;
@@ -5282,13 +5286,24 @@ function updateMiracleEndingFrame(dt, now) {
       bf.style.opacity = '1';
       
       // TTS 대신 mp3 파일 재생
-      const actsAudio = new Audio('assets/voice/voice_ending.mp3'); // 실제 파일 경로로 수정
-      actsAudio.onended = () => { markTtsDoneWithBuffer(); };
-      actsAudio.onerror = () => { 
+      if (window.__activeEndingAudio) {
+        try { window.__activeEndingAudio.pause(); } catch (e) {}
+        window.__activeEndingAudio = null;
+      }
+      const actsAudio = new Audio('assets/voice/voice_ending.mp3');
+      actsAudio.volume = window.EP4_VOICE_VOLUME ?? 0.75;
+      window.__activeEndingAudio = actsAudio;
+      actsAudio.onended = () => {
+        if (window.__activeEndingAudio === actsAudio) window.__activeEndingAudio = null;
+        markTtsDoneWithBuffer();
+      };
+      actsAudio.onerror = () => {
+        if (window.__activeEndingAudio === actsAudio) window.__activeEndingAudio = null;
         // 오디오 로드 실패 시 TTS로 폴백
-        speakText(angelPromiseLine, { onEnd: () => { markTtsDoneWithBuffer(); } }); 
+        speakText(angelPromiseLine, { onEnd: () => { markTtsDoneWithBuffer(); } });
       };
       actsAudio.play().catch(() => {
+        if (window.__activeEndingAudio === actsAudio) window.__activeEndingAudio = null;
         // 브라우저 정책 등으로 재생이 막힐 경우 TTS로 폴백
         speakText(angelPromiseLine, { onEnd: () => { markTtsDoneWithBuffer(); } });
       });
@@ -5300,7 +5315,8 @@ function updateMiracleEndingFrame(dt, now) {
     st._endMinTimer = setTimeout(() => {
       minExposureDone = true;
       // 모바일 브라우저에서 speechSynthesis.onend가 누락된 경우 안전 감지
-      const stillSpeaking = ('speechSynthesis' in window) && window.speechSynthesis && Boolean(window.speechSynthesis.speaking);
+      const audioPlaying = Boolean(window.__activeEndingAudio && !window.__activeEndingAudio.paused && !window.__activeEndingAudio.ended);
+      const stillSpeaking = audioPlaying || (('speechSynthesis' in window) && window.speechSynthesis && Boolean(window.speechSynthesis.speaking));
       if (!stillSpeaking && !ttsFinished && !st._endPostTtsTimer) {
         markTtsDoneWithBuffer();
       } else {
@@ -5311,7 +5327,8 @@ function updateMiracleEndingFrame(dt, now) {
     // onend 콜백이 누락되는 일부 모바일 브라우저 대비 450ms 주기 안전 폴링
     st._endPollTimer = setInterval(() => {
       if (transitioned || !minExposureDone) return;
-      const stillSpeaking = ('speechSynthesis' in window) && window.speechSynthesis && Boolean(window.speechSynthesis.speaking);
+      const audioPlaying = Boolean(window.__activeEndingAudio && !window.__activeEndingAudio.paused && !window.__activeEndingAudio.ended);
+      const stillSpeaking = audioPlaying || (('speechSynthesis' in window) && window.speechSynthesis && Boolean(window.speechSynthesis.speaking));
       if (!stillSpeaking && !ttsFinished && !st._endPostTtsTimer) {
         markTtsDoneWithBuffer();
       }
@@ -5384,10 +5401,12 @@ REGISTER_EPISODE('miracle', {
   },
   onCloseScreen: function () {
     if (typeof window.stopMiracleOpenWorldOgg === 'function') window.stopMiracleOpenWorldOgg(true);
+    if (typeof window.stopAllEp4VoiceAudio === 'function') window.stopAllEp4VoiceAudio();
     hideAllMiracleCustomUI();
   },
   clearState: function () {
     if (typeof window.stopMiracleOpenWorldOgg === 'function') window.stopMiracleOpenWorldOgg(true);
+    if (typeof window.stopAllEp4VoiceAudio === 'function') window.stopAllEp4VoiceAudio();
     hideAllMiracleCustomUI();
     clearMiracleFieldEventObjects();
     miracleStageSpots = [];
@@ -5399,6 +5418,7 @@ REGISTER_EPISODE('miracle', {
     window.miracleBuildingBounds = [];
     window.miracleRooftopSpawnSpots = [];
     window.miracleGrowingFields = [];
+    window.miracleMustardShrubs = [];
     window.miracleWorldTreePositions = [];
     window.miracleZacchaeusGroveTrees = [];
     miracleStageCutscene.active = false;

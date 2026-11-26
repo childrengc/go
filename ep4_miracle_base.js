@@ -4,7 +4,8 @@
 // - 확장된 오픈월드 지형 고도 계산기(넓어진 골고다 언덕 포함) 및 소프트 로우 폴리곤 자연물 팩토리
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_base = '20261125_v48';
+window.__GAME_BUILD_VERSIONS__.ep4_base = '20261126_v50';
+window.EP4_VOICE_VOLUME = 0.75;
 
 // =========================================================================
 // 🎬 [에피소드 4 오프닝 · 엔딩 영상 주소 설정]
@@ -22,6 +23,7 @@ const MIRACLE_SCRIPTURE = {
     title: '메인 스테이지 1 클리어! 바람과 바다도 순종하는 분!',
     desc: '갈릴리 바다에 그물을 던져 물고기를 가득 잡고, 거센 풍랑 속에서 배의 균형을 잡으며 주무시던 예수님을 깨워 바람과 바다를 잠잠하게 하시는 기적을 목격했어요!',
     verse: '"예수께서 깨어 바람을 꾸짖으시며 바다더러 이르시되 잠잠하라 고요하라 하시니 바람이 그치고 아주 잔잔하여지더라" (마가복음 4장 39절)',
+    audioUrl: 'assets/voice/ep4_stage01_bible.mp3',
     btnText: '🗺️ 갈릴리 오픈월드로 돌아가기 ▶',
     quiz: {
       q: '퀴즈! 거센 폭풍우가 몰아치던 갈릴리 바다를 예수님은 어떻게 잠잠하게 하셨나요?',
@@ -33,6 +35,7 @@ const MIRACLE_SCRIPTURE = {
     title: '메인 스테이지 2 클리어! 오병이어로 오천 명을 먹이셨어요!',
     desc: '벳새다 언덕에서 어린아이의 보리떡 5개와 물고기 2마리를 찾아 예수님께 드리고, 모두가 배불리 먹은 뒤 남은 조각 열두 광주리를 거두었어요!',
     verse: '"예수께서 떡을 가져 축사하신 후에 앉아 있는 자들에게 나눠 주시고 물고기도 그렇게 그들의 원대로 주시니라" (요한복음 6장 11절)',
+    audioUrl: 'assets/voice/ep4_stage02_bible.mp3',
     btnText: '🗺️ 오픈월드로 나가 다음 여정 찾기 ▶',
     quiz: {
       q: '퀴즈! 오병이어 기적에서 어린아이가 예수님께 드린 도시락은 무엇이었나요?',
@@ -44,6 +47,7 @@ const MIRACLE_SCRIPTURE = {
     title: '메인 스테이지 3 클리어! 예수님과 함께 걸은 십자가의 길!',
     desc: '예루살렘 거리에서 예수님이 가시는 길을 찾아내고, 지치신 예수님을 대신하여 골고다 언덕까지 십자가를 함께 지고 올라갔어요!',
     verse: '"마침 알렉산더와 루포의 아버지인 구레네 사람 시몬이 시골로부터 와서 지나가는데 그들이 그를 억지로 같이 가게 하여 예수의 십자가를 지우고" (마가복음 15장 21절)',
+    audioUrl: 'assets/voice/ep4_stage03_bible.mp3',
     btnText: '🌅 새벽의 빈 무덤 찾으러 가기 ▶',
     quiz: {
       q: '퀴즈! 골고다 언덕으로 가는 길에 예수님의 십자가를 대신 지고 걸어간 사람은 누구인가요?',
@@ -55,6 +59,7 @@ const MIRACLE_SCRIPTURE = {
     title: '메인 스테이지 4 클리어! 예수님이 다시 살아나셨어요!',
     desc: '안개 낀 새벽 마을 미로에서 사람들의 단서를 모아 무덤을 찾아내고, 돌문이 열린 빈 무덤에서 부활의 기쁜 소식을 들었어요!',
     verse: '"천사가 여자들에게 말하여 이르되 너희는 무서워하지 말라 십자가에 못 박히신 예수를 너희가 찾는 줄을 내가 아노라 그가 여기 계시지 않고 그가 말씀하시던 대로 살아나셨느니라" (마태복음 28장 5~6절)',
+    audioUrl: 'assets/voice/ep4_stage04_bible.mp3',
     btnText: '✨ 부활 이후의 오픈월드 체험하기! ▶',
     quiz: {
       q: '퀴즈! 빈 무덤에 있던 천사는 예수님이 어떻게 되셨다고 알려주었나요?',
@@ -523,6 +528,7 @@ function bindMiracleOggVisibilityHandlers() {
     if (canPlayMiracleOpenWorldOgg()) {
       _miracleOggBackgroundPaused = true;
     }
+    if (typeof window.stopAllEp4VoiceAudio === 'function') window.stopAllEp4VoiceAudio();
   };
 
   const resumeFromBackground = () => {
@@ -6175,6 +6181,18 @@ window.closeMiracleNotebookModal = function () {
   if (typeof window.syncOverlayModalBodyClass === 'function') window.syncOverlayModalBodyClass();
 };
 
+window.stopAllEp4VoiceAudio = function () {
+  ['__activeNpcAudio', '__activeVerseAudio', '__activeEndingAudio'].forEach(key => {
+    if (window[key]) {
+      try { window[key].pause(); } catch (e) {}
+      window[key] = null;
+    }
+  });
+  if (typeof window.speechSynthesis !== 'undefined' && window.speechSynthesis) {
+    try { window.speechSynthesis.cancel(); } catch (e) {}
+  }
+};
+
 function _hideMiracleDialogOverlay() {
   const ov = document.getElementById('miracle-dialog-overlay');
   const modal = document.getElementById('miracle-dialog-modal');
@@ -6183,6 +6201,14 @@ function _hideMiracleDialogOverlay() {
     ov.classList.remove('is-quiz-overlay');
   }
   if (modal) modal.classList.add('hidden');
+  // 대화창이 닫히면 재생 중인 NPC 음성 및 TTS 즉시 중지
+  if (window.__activeNpcAudio) {
+    try { window.__activeNpcAudio.pause(); } catch (e) {}
+    window.__activeNpcAudio = null;
+  }
+  if (typeof window.speechSynthesis !== 'undefined' && window.speechSynthesis) {
+    try { window.speechSynthesis.cancel(); } catch (e) {}
+  }
   if (typeof window.syncOverlayModalBodyClass === 'function') window.syncOverlayModalBodyClass();
 }
 
@@ -6235,7 +6261,23 @@ function openMiracleDialog(options) {
   badgeEl.textContent = options.badgeLabel || catMeta.label;
   badgeEl.className = `px-2.5 py-0.5 rounded-full font-jua text-[11px] ${options.badgeCls || catMeta.cls}`;
   textEl.textContent = options.text || '';
-  speakText(options.text || '');
+  // 기존 NPC 음성 정리 후 MP3 오디오 URL이 있으면 재생, 없으면 기존 TTS 사용
+  if (window.__activeNpcAudio) {
+    try { window.__activeNpcAudio.pause(); } catch (e) {}
+    window.__activeNpcAudio = null;
+  }
+  if (options.audioUrl) {
+    if (typeof window.speechSynthesis !== 'undefined' && window.speechSynthesis) {
+      try { window.speechSynthesis.cancel(); } catch (e) {}
+    }
+    window.__activeNpcAudio = new Audio(options.audioUrl);
+    window.__activeNpcAudio.volume = window.EP4_VOICE_VOLUME ?? 0.75;
+    window.__activeNpcAudio.play().catch(() => {
+      speakText(options.text || ''); // 재생 실패 시 TTS 폴백
+    });
+  } else {
+    speakText(options.text || '');
+  }
 
   // 완료된 미션의 인사 대화창일 때 [🔄 미션 다시하기] 버튼 표시
   if (replayBtn) {

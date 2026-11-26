@@ -5,7 +5,7 @@
 // =========================================================================
 
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.core = '20261125_v48';
+window.__GAME_BUILD_VERSIONS__.core = '20261126_v50';
 
 function installEp4MattePhongSpecGuard() {
   if (typeof THREE !== 'undefined' && THREE.ShaderChunk && THREE.ShaderChunk.lights_phong_pars_fragment) {
@@ -548,6 +548,19 @@ function bindCoreBgmVisibilityHandlers() {
     if (audioCtx && audioCtx.state === 'running' && typeof audioCtx.suspend === 'function') {
       try { audioCtx.suspend().catch(() => {}); } catch (e) {}
     }
+    if (typeof window.stopAllEp4VoiceAudio === 'function') {
+      window.stopAllEp4VoiceAudio();
+    } else {
+      ['__activeNpcAudio', '__activeVerseAudio', '__activeEndingAudio'].forEach(k => {
+        if (window[k]) {
+          try { window[k].pause(); } catch (e) {}
+          window[k] = null;
+        }
+      });
+      if (typeof window.speechSynthesis !== 'undefined' && window.speechSynthesis) {
+        try { window.speechSynthesis.cancel(); } catch (e) {}
+      }
+    }
   };
 
   const resumeCoreBgmFromBackground = () => {
@@ -736,7 +749,17 @@ function confirmExitBibleAdventureGame() {
   try {
     if (typeof stopStageBgm === 'function') stopStageBgm();
     if (typeof window.stopMiracleOpenWorldOgg === 'function') window.stopMiracleOpenWorldOgg(true);
-    if (typeof window.speechSynthesis !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel();
+    if (typeof window.stopAllEp4VoiceAudio === 'function') {
+      window.stopAllEp4VoiceAudio();
+    } else {
+      ['__activeNpcAudio', '__activeVerseAudio', '__activeEndingAudio'].forEach(k => {
+        if (window[k]) {
+          try { window[k].pause(); } catch (e) {}
+          window[k] = null;
+        }
+      });
+      if (typeof window.speechSynthesis !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel();
+    }
   } catch (e) {}
 
   try {
@@ -3231,6 +3254,19 @@ function openScreen(screenId) {
     sinaiCutscene.active = false;
     const epPlugin = getActiveEpisodePlugin();
     if (epPlugin && typeof epPlugin.onCloseScreen === 'function') epPlugin.onCloseScreen();
+    if (typeof window.stopAllEp4VoiceAudio === 'function') {
+      window.stopAllEp4VoiceAudio();
+    } else {
+      ['__activeNpcAudio', '__activeVerseAudio', '__activeEndingAudio'].forEach(k => {
+        if (window[k]) {
+          try { window[k].pause(); } catch (e) {}
+          window[k] = null;
+        }
+      });
+      if (typeof window.speechSynthesis !== 'undefined' && window.speechSynthesis) {
+        try { window.speechSynthesis.cancel(); } catch (e) {}
+      }
+    }
     if (window.MiracleMultiplayer && typeof window.MiracleMultiplayer.leaveRoom === 'function') {
       window.MiracleMultiplayer.leaveRoom();
     }
@@ -5696,6 +5732,24 @@ function openStageClearModal(st) {
   document.getElementById('modal-scripture-text').textContent = info.verse;
   if (currentEpisode === 'noah') {
     speakText(info.verse);
+  } else if (currentEpisode === 'miracle' && (info.verseAudioUrl || info.audioUrl)) {
+    if (window.__activeVerseAudio) {
+      try { window.__activeVerseAudio.pause(); } catch (e) {}
+      window.__activeVerseAudio = null;
+    }
+    if (typeof window.speechSynthesis !== 'undefined' && window.speechSynthesis) {
+      try { window.speechSynthesis.cancel(); } catch (e) {}
+    }
+    const targetAudioUrl = info.verseAudioUrl || info.audioUrl;
+    window.__activeVerseAudio = new Audio(targetAudioUrl);
+    window.__activeVerseAudio.volume = window.EP4_VOICE_VOLUME ?? 0.75;
+    window.__activeVerseAudio.play().catch(() => {
+      if (typeof speakText === 'function' && info.verse) {
+        speakText(info.verse);
+      }
+    });
+  } else if (currentEpisode === 'miracle') {
+    speakText(info.verse);
   }
 
   const qBox = document.getElementById('modal-quiz-box'), nextBtn = document.getElementById('modal-next-btn');
@@ -5741,6 +5795,14 @@ function openStageClearModal(st) {
 function proceedNextStage() {
   const modal = document.getElementById('stage-modal');
   modal.classList.add('hidden'); modal.classList.remove('flex');
+  // 모달이 닫힐 때 성경절 오디오 및 TTS 재생 중단
+  if (window.__activeVerseAudio) {
+    try { window.__activeVerseAudio.pause(); } catch (e) {}
+    window.__activeVerseAudio = null;
+  }
+  if (typeof window.speechSynthesis !== 'undefined' && window.speechSynthesis) {
+    try { window.speechSynthesis.cancel(); } catch (e) {}
+  }
   syncOverlayModalBodyClass();
   setHudMenuOpen(false);
   hideMissionGuideBubbleImmediately();
