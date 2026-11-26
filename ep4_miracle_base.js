@@ -4,7 +4,7 @@
 // - 확장된 오픈월드 지형 고도 계산기(넓어진 골고다 언덕 포함) 및 소프트 로우 폴리곤 자연물 팩토리
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_base = '20261125_v44';
+window.__GAME_BUILD_VERSIONS__.ep4_base = '20261125_v48';
 
 // =========================================================================
 // 🎬 [에피소드 4 오프닝 · 엔딩 영상 주소 설정]
@@ -5339,6 +5339,7 @@ function createLowPolyPersonMesh(preset = 'disciple', idx = 0) {
 function createMiracleHeroMesh() {
   const g = createLowPolyPersonMesh('hero', 0);
   const u = g.userData;
+  if (u) u.episodeHero = 'miracle';
   const toolGrp = new THREE.Group();
   toolGrp.visible = false;
   u.lArm.add(toolGrp);
@@ -5431,7 +5432,8 @@ window.playEp4OpeningVideoThen = function (onComplete) {
 
   if (skipBtn) {
     skipBtn.classList.toggle('hidden', !canSkipNow);
-    skipBtn.onclick = () => finishOnce(true);
+    skipBtn.style.display = canSkipNow ? '' : 'none';
+    skipBtn.onclick = canSkipNow ? () => finishOnce(true) : null;
   }
   if (playFallbackBtn) playFallbackBtn.classList.add('hidden');
   
@@ -5499,25 +5501,33 @@ window.playEp4OpeningVideoThen = function (onComplete) {
 
 const EP4_ENDING_WATCHED_STORAGE_KEY = 'bible_ep4_ending_video_watched_v1';
 
-window.getEp4EndingVideoWatchCount = function () {
+function getEp4EndingWatchedPlayerKey(playerId) {
+  const raw = String(playerId || (typeof explorerName !== 'undefined' ? explorerName : '') || 'guest').trim();
+  return 'bible_ep4_ending_video_watched_v2_' + (raw || 'guest');
+}
+
+window.getEp4EndingVideoWatchCount = function (playerId) {
   try {
-    return Math.max(0, parseInt(localStorage.getItem(EP4_ENDING_WATCHED_STORAGE_KEY) || '0', 10) || 0);
+    return Math.max(0, parseInt(localStorage.getItem(getEp4EndingWatchedPlayerKey(playerId)) || '0', 10) || 0);
   } catch (e) {
     return 0;
   }
 };
 
-window.markEp4EndingVideoWatched = function () {
+window.markEp4EndingVideoWatched = function (playerId) {
   try {
-    const prev = window.getEp4EndingVideoWatchCount();
-    localStorage.setItem(EP4_ENDING_WATCHED_STORAGE_KEY, String(prev + 1));
+    const pKey = getEp4EndingWatchedPlayerKey(playerId);
+    const prevPlayer = window.getEp4EndingVideoWatchCount(playerId);
+    localStorage.setItem(pKey, String(prevPlayer + 1));
+    const prevDev = Math.max(0, parseInt(localStorage.getItem(EP4_ENDING_WATCHED_STORAGE_KEY) || '0', 10) || 0);
+    localStorage.setItem(EP4_ENDING_WATCHED_STORAGE_KEY, String(prevDev + 1));
   } catch (e) {}
   if (typeof window.markEp4EndingCompletedForLogo === 'function') {
     window.markEp4EndingCompletedForLogo(typeof explorerName !== 'undefined' ? explorerName : '');
   }
 };
 
-window.playEp4EndingVideoThen = function (onComplete) {
+window.playEp4EndingVideoThen = function (onComplete, opts = null) {
   ensureMiracleCustomUI();
   const url = String(window.EP4_ENDING_VIDEO_URL || '').trim();
   const done = () => {
@@ -5559,7 +5569,7 @@ window.playEp4EndingVideoThen = function (onComplete) {
   if (typeof window.stopMiracleOpenWorldOgg === 'function') window.stopMiracleOpenWorldOgg(false);
 
   const watchedCount = window.getEp4EndingVideoWatchCount();
-  const canSkipNow = watchedCount >= 1; // 1회차: 건너뛰기 숨김 · 2회차부터 건너뛰기 버튼 표시!
+  const canSkipNow = (opts && typeof opts.canSkip === 'boolean') ? opts.canSkip : (watchedCount >= 1); // 1회차: 건너뛰기 숨김 · 2회차부터 건너뛰기 버튼 표시!
   let finished = false;
   const finishOnce = (markWatched = true) => {
     if (finished) return;
@@ -5571,7 +5581,8 @@ window.playEp4EndingVideoThen = function (onComplete) {
   if (skipBtn) {
     skipBtn.textContent = '⏭️ 건너뛰기';
     skipBtn.classList.toggle('hidden', !canSkipNow);
-    skipBtn.onclick = () => finishOnce(true);
+    skipBtn.style.display = canSkipNow ? '' : 'none';
+    skipBtn.onclick = canSkipNow ? () => finishOnce(true) : null;
   }
   if (playFallbackBtn) playFallbackBtn.classList.add('hidden');
   
@@ -5610,7 +5621,7 @@ window.playEp4EndingVideoThen = function (onComplete) {
         statusTxt.textContent = '✨ 엔딩 여정을 마치고 오픈월드로 돌아갑니다...';
         statusTxt.classList.remove('hidden');
       }
-      setTimeout(() => finishOnce(true), 900);
+      setTimeout(() => finishOnce(false), 900);
     };
     slot.appendChild(video);
 
@@ -6342,6 +6353,7 @@ window.replayMiracleDialogMission = function () {
 function hideAllMiracleCustomUI() {
   MiracleGuideUI.activeFieldInfo = null;
   window.__ep4OpeningVideoActive = false;
+  window.__ep4EndingVideoActive = false;
 
   if (typeof hideMissionGuideBubbleImmediately === 'function') {
     hideMissionGuideBubbleImmediately();
@@ -6732,6 +6744,10 @@ if (!window.__ep4DayNightKeysBound) {
         moonVisible: Boolean(sunSys.moonVisualGroup && sunSys.moonVisualGroup.visible),
         moonElevDeg: sunSys.lastMoonElevDeg || 0,
         moonScale: sunSys.lastMoonScale || 0,
+        visibleClouds: sunSys.lastVisibleClouds ?? 0,
+        cloudOpacity: +(sunSys.lastCloudOpacity ?? 1).toFixed(2),
+        heroEpisode: (typeof playerGroup !== 'undefined' && playerGroup && playerGroup.userData && playerGroup.userData.episodeHero) ? playerGroup.userData.episodeHero : 'legacy_voxel',
+        endingVideoWatchCount: (typeof window.getEp4EndingVideoWatchCount === 'function') ? window.getEp4EndingVideoWatchCount() : 0,
         fireProps: Array.isArray(window.miracleNightFireProps) ? window.miracleNightFireProps.length : 0,
         patrols: Array.isArray(window.miracleNightPatrolSoldiers) ? window.miracleNightPatrolSoldiers.length : 0,
         sleepingDisciples,

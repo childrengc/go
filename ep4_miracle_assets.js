@@ -6,7 +6,7 @@
 // =========================================================================
 
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_assets = '20261125_v44';
+window.__GAME_BUILD_VERSIONS__.ep4_assets = '20261125_v48';
 
 const _miracleDoubleSideMatCache = {};
 function matLowPolyDouble(hexColor) {
@@ -90,10 +90,10 @@ const EP4_SKY_KEYFRAMES = [
   { t: 0.6350, bg: new THREE.Color('#7dd3fc'), fog: new THREE.Color('#bae6fd'), cloud: new THREE.Color('#ffffff') },
   { t: 0.6667, bg: new THREE.Color('#f59e0b'), fog: new THREE.Color('#fed7aa'), cloud: new THREE.Color('#ffedd5') },
   { t: 0.7000, bg: new THREE.Color('#dc531e'), fog: new THREE.Color('#fb923c'), cloud: new THREE.Color('#fdba74') },
-  { t: 0.7333, bg: new THREE.Color('#0d1c42'), fog: new THREE.Color('#1b325c'), cloud: new THREE.Color('#283a5c') },
-  { t: 0.7600, bg: new THREE.Color('#081432'), fog: new THREE.Color('#1a315e'), cloud: new THREE.Color('#1e2d4d') },
-  { t: 0.9050, bg: new THREE.Color('#081432'), fog: new THREE.Color('#1a315e'), cloud: new THREE.Color('#1e2d4d') },
-  { t: 0.9333, bg: new THREE.Color('#1c2a56'), fog: new THREE.Color('#4a3c66'), cloud: new THREE.Color('#64748b') },
+  { t: 0.7333, bg: new THREE.Color('#0d1c42'), fog: new THREE.Color('#1b325c'), cloud: new THREE.Color('#5c77a6') },
+  { t: 0.7600, bg: new THREE.Color('#081432'), fog: new THREE.Color('#1a315e'), cloud: new THREE.Color('#6987b8') },
+  { t: 0.9050, bg: new THREE.Color('#081432'), fog: new THREE.Color('#1a315e'), cloud: new THREE.Color('#6987b8') },
+  { t: 0.9333, bg: new THREE.Color('#1c2a56'), fog: new THREE.Color('#4a3c66'), cloud: new THREE.Color('#7b93b8') },
   { t: 0.9667, bg: new THREE.Color('#f97316'), fog: new THREE.Color('#fdba74'), cloud: new THREE.Color('#fed7aa') },
   { t: 1.0000, bg: new THREE.Color('#7dd3fc'), fog: new THREE.Color('#bae6fd'), cloud: new THREE.Color('#ffffff') }
 ];
@@ -239,7 +239,7 @@ const MiracleDayNight = {
     this.sunsetFactor = f.sunsetFactor;
     this.sunriseFactor = f.sunriseFactor;
     this.birdRatio = f.birdRatio;
-    if (typeof updateMiracleDynamicSun === 'function' && miracleSunSystem && miracleSunSystem.light) {
+    if ((typeof currentEpisode === 'undefined' || currentEpisode === 'miracle') && typeof updateMiracleDynamicSun === 'function' && miracleSunSystem && miracleSunSystem.light) {
       updateMiracleDynamicSun(0, typeof performance !== 'undefined' ? performance.now() : 0);
     }
     if (typeof window.syncMiracleTimeHUD === 'function') window.syncMiracleTimeHUD();
@@ -322,6 +322,8 @@ let miracleSunSystem = {
   lastLightDir: new THREE.Vector3(0, 0.5, -0.866),
   lastMoonElevDeg: 0,
   lastMoonScale: 0,
+  lastVisibleClouds: 0,
+  lastCloudOpacity: 1,
   flareEls: null,
   isMobile: /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (Math.min(window.innerWidth, window.innerHeight) <= 760)
 };
@@ -457,10 +459,42 @@ function updateMiracleShadowDistanceCulling(focusX, focusZ, nightFactor = 0) {
   }
 }
 
+const _ep4MoonHaloTexCache = {};
+function getEp4MoonHaloGradientTexture(kind) {
+  if (_ep4MoonHaloTexCache[kind]) return _ep4MoonHaloTexCache[kind];
+  const c = document.createElement('canvas');
+  c.width = 256;
+  c.height = 256;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(128, 128, 0, 128, 128, 124);
+  if (kind === 'inner') {
+    g.addColorStop(0.00, 'rgba(255, 255, 255, 0.95)');
+    g.addColorStop(0.38, 'rgba(248, 252, 255, 0.78)');
+    g.addColorStop(0.62, 'rgba(219, 234, 254, 0.34)');
+    g.addColorStop(0.84, 'rgba(186, 220, 255, 0.09)');
+    g.addColorStop(1.00, 'rgba(186, 220, 255, 0.00)');
+  } else {
+    g.addColorStop(0.00, 'rgba(219, 234, 254, 0.75)');
+    g.addColorStop(0.35, 'rgba(191, 219, 254, 0.48)');
+    g.addColorStop(0.65, 'rgba(147, 197, 253, 0.18)');
+    g.addColorStop(0.86, 'rgba(147, 197, 253, 0.04)');
+    g.addColorStop(1.00, 'rgba(147, 197, 253, 0.00)');
+  }
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 256, 256);
+  const tex = new THREE.CanvasTexture(c);
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.generateMipmaps = false;
+  tex.needsUpdate = true;
+  _ep4MoonHaloTexCache[kind] = tex;
+  return tex;
+}
+
 function createMiracleMoonVisualGroup() {
   const moonGrp = new THREE.Group();
-  // 거대한 판타지 슈퍼문 (낮의 해보다 크고 밤하늘에서 밝게 빛나는 은백색 다면체 슈퍼문)
-  const rawGeo = new THREE.IcosahedronGeometry(17.5, 2);
+  // 낮의 태양(겉보기 각지름 기준)보다 +20% 큰 은백색 다면체 달
+  const rawGeo = new THREE.IcosahedronGeometry(9.5, 2);
   const geo = rawGeo.index ? rawGeo.toNonIndexed() : rawGeo;
   if (geo !== rawGeo && typeof rawGeo.dispose === 'function') rawGeo.dispose();
 
@@ -529,17 +563,16 @@ function createMiracleMoonVisualGroup() {
   moonMesh.renderOrder = -5;
   moonMesh.frustumCulled = false;
 
-  // 3겹 밝은 판타지 달무리 + 은빛 코로나 링
+  // 2단계 부드러운 방사형 그라데이션 달무리 (태양 해무리와 동일한 2단계 수준)
   const haloMats = [];
   const haloSpecs = [
-    { kind: 'circle', r: 23.5, col: 0xf8fcff, op: 0.44, z: -1.8, seg: 20 },
-    { kind: 'ring',   rIn: 26.0, rOut: 28.0, col: 0xdbeafe, op: 0.22, z: -2.6, seg: 26 },
-    { kind: 'circle', r: 34.0, col: 0x93c5fd, op: 0.24, z: -3.5, seg: 22 },
-    { kind: 'circle', r: 46.5, col: 0xc4b5fd, op: 0.13, z: -5.2, seg: 24 }
+    { kind: 'inner', r: 14.2, op: 0.36, z: -1.4 },
+    { kind: 'outer', r: 19.8, op: 0.16, z: -2.8 }
   ];
   haloSpecs.forEach(hs => {
     const hMat = new THREE.MeshBasicMaterial({
-      color: hs.col,
+      map: getEp4MoonHaloGradientTexture(hs.kind),
+      color: 0xffffff,
       transparent: true,
       opacity: hs.op,
       depthTest: true,
@@ -548,9 +581,7 @@ function createMiracleMoonVisualGroup() {
       side: THREE.DoubleSide,
       blending: THREE.AdditiveBlending
     });
-    const hGeo = hs.kind === 'ring'
-      ? new THREE.RingGeometry(hs.rIn, hs.rOut, hs.seg)
-      : new THREE.CircleGeometry(hs.r, hs.seg);
+    const hGeo = new THREE.PlaneGeometry(hs.r * 2, hs.r * 2);
     const hMesh = new THREE.Mesh(hGeo, hMat);
     hMesh.position.z = hs.z;
     hMesh.renderOrder = -6;
@@ -560,13 +591,13 @@ function createMiracleMoonVisualGroup() {
   });
 
   moonGrp.add(moonMesh);
-  moonGrp.scale.setScalar(2.5);
-  moonGrp.userData.baseScale = 2.5;
+  moonGrp.scale.setScalar(2.45);
+  moonGrp.userData.baseScale = 2.45;
   moonGrp.renderOrder = -5;
   moonGrp.visible = false;
   miracleSunSystem.moonCoreMat = moonMat;
   miracleSunSystem.moonHaloMats = haloMats;
-  miracleSunSystem.lastMoonScale = 2.5;
+  miracleSunSystem.lastMoonScale = 2.45;
   return moonGrp;
 }
 
@@ -1121,31 +1152,135 @@ function updateMiraclePooledNightLights(focusX, focusZ, nightFactor, now) {
   }
 }
 
-function tintMiracleCloudCollection(list, targetCol, isRawMeshList = false) {
-  if (!Array.isArray(list)) return;
+let _ep4CloudDepthPrepassMat = null;
+function getEp4CloudDepthPrepassMat() {
+  if (!_ep4CloudDepthPrepassMat) {
+    _ep4CloudDepthPrepassMat = new THREE.MeshBasicMaterial({
+      colorWrite: false,
+      depthWrite: true,
+      depthTest: true,
+      transparent: true,
+      polygonOffset: true,
+      polygonOffsetFactor: 1,
+      polygonOffsetUnits: 1
+    });
+  }
+  return _ep4CloudDepthPrepassMat;
+}
+
+function tintMiracleCloudCollection(list, targetCol, isRawMeshList = false, nightFactor = 0, stormDarkness = 0) {
+  const res = { visibleCount: 0, maxVisibleOp: 0 };
+  if (!Array.isArray(list) || list.length === 0) return res;
+
+  let totalClouds = 0;
+  for (let i = 0; i < list.length; i++) {
+    const item = list[i];
+    const mesh = isRawMeshList ? item : (item && item.kind === 'cloud' ? item.mesh : null);
+    if (mesh) totalClouds++;
+  }
+  if (totalClouds === 0) return res;
+
+  const nf = Math.max(0, Math.min(1, nightFactor || 0));
+  const sd = Math.max(0, Math.min(1, stormDarkness || 0));
+  const calmNight = nf * (1.0 - sd * 0.75);
+  const baseNightOp = THREE.MathUtils.lerp(1.0, 0.54, ep4Smoothstep(0.05, 0.72, nf));
+  const stormAwareOp = THREE.MathUtils.lerp(baseNightOp, 0.80, sd);
+
+  let cloudIdx = 0;
   for (let i = 0; i < list.length; i++) {
     const item = list[i];
     const mesh = isRawMeshList ? item : (item && item.kind === 'cloud' ? item.mesh : null);
     if (!mesh) continue;
+
+    let keepAtNight;
+    if (!isRawMeshList && typeof item.keepAtNight === 'boolean') {
+      keepAtNight = item.keepAtNight;
+    } else if (mesh.userData && typeof mesh.userData.keepAtNight === 'boolean') {
+      keepAtNight = mesh.userData.keepAtNight;
+    } else if (totalClouds <= 3) {
+      keepAtNight = true;
+    } else if (totalClouds <= 6) {
+      keepAtNight = (cloudIdx % 2 === 0);
+    } else {
+      keepAtNight = (cloudIdx % 3 === 0);
+    }
+    cloudIdx++;
+
+    mesh.renderOrder = -3;
     const holder = isRawMeshList ? mesh : item;
-    if (!holder._cloudMats) {
-      const cMats = [];
+    const matsValid = Array.isArray(holder._cloudMats) && holder._cloudMats.length > 0 && holder._cloudMats.every(m => m && m._isCloudMatCloned);
+    if (!matsValid || !Array.isArray(holder._cloudDepthMeshes)) {
+      const puffMeshes = [];
       mesh.traverse(ch => {
-        if (ch.isMesh && ch.material) {
-          if (!ch.material._isCloudMatCloned) {
-            const clonedMat = ch.material.clone();
-            clonedMat._isCloudMatCloned = true;
-            ch.material = clonedMat;
-          }
-          cMats.push(ch.material);
+        if (ch.isMesh && ch.material && !(ch.userData && ch.userData._isCloudDepthPrepass)) {
+          puffMeshes.push(ch);
         }
       });
+      const cMats = [];
+      const dMeshes = [];
+      for (let p = 0; p < puffMeshes.length; p++) {
+        const ch = puffMeshes[p];
+        if (!ch.material._isCloudMatCloned) {
+          const clonedMat = ch.material.clone();
+          clonedMat._isCloudMatCloned = true;
+          ch.material = clonedMat;
+        }
+        ch.renderOrder = -2;
+        cMats.push(ch.material);
+
+        let dp = ch.userData ? ch.userData._depthPrepassMesh : null;
+        if (!dp && ch.parent) {
+          dp = new THREE.Mesh(ch.geometry, getEp4CloudDepthPrepassMat());
+          dp.position.copy(ch.position);
+          dp.rotation.copy(ch.rotation);
+          dp.scale.copy(ch.scale);
+          dp.userData._isCloudDepthPrepass = true;
+          dp.renderOrder = -3;
+          dp.frustumCulled = ch.frustumCulled;
+          dp.visible = false;
+          ch.parent.add(dp);
+          ch.userData._depthPrepassMesh = dp;
+        }
+        if (dp) dMeshes.push(dp);
+      }
       holder._cloudMats = cMats;
+      holder._cloudDepthMeshes = dMeshes;
     }
-    for (let j = 0; j < holder._cloudMats.length; j++) {
-      holder._cloudMats[j].color.copy(targetCol);
+
+    const cullFade = keepAtNight ? 1.0 : (1.0 - ep4Smoothstep(0.14, 0.76, calmNight));
+    const finalOp = stormAwareOp * cullFade;
+    if (finalOp <= 0.015) {
+      mesh.visible = false;
+      continue;
+    }
+
+    mesh.visible = true;
+    res.visibleCount++;
+    if (finalOp > res.maxVisibleOp) res.maxVisibleOp = finalOp;
+
+    const isTranslucent = finalOp < 0.99;
+    const mats = holder._cloudMats;
+    for (let j = 0; j < mats.length; j++) {
+      const m = mats[j];
+      m.color.copy(targetCol);
+      if (m.emissive) {
+        m.emissive.setHex(0x3a5485);
+        m.emissiveIntensity = calmNight * 0.52;
+      }
+      if (m.transparent !== isTranslucent) {
+        m.transparent = isTranslucent;
+        m.needsUpdate = true;
+      }
+      m.opacity = finalOp;
+      m.depthWrite = !isTranslucent;
+      m.depthFunc = isTranslucent ? THREE.LessEqualDepth : THREE.LessDepth;
+    }
+    const dMeshes = holder._cloudDepthMeshes;
+    for (let j = 0; j < dMeshes.length; j++) {
+      dMeshes[j].visible = isTranslucent;
     }
   }
+  return res;
 }
 
 function updateMiracleDynamicSun(rawDt, now) {
@@ -1395,10 +1530,19 @@ function updateMiracleDynamicSun(rawDt, now) {
       scene.fog.color.copy(_dnColorTmpB);
     }
 
-    tintMiracleCloudCollection(miracleAmbientProps, _dnColorTmpC, false);
+    const sdCloud = MiracleDayNight.stormDarkness || 0;
+    const ambRes = tintMiracleCloudCollection(miracleAmbientProps, _dnColorTmpC, false, nf, sdCloud);
+    let totalVisClouds = ambRes ? ambRes.visibleCount : 0;
+    let maxCloudOp = ambRes ? ambRes.maxVisibleOp : 0;
     if (stMini && Array.isArray(stMini.skyClouds)) {
-      tintMiracleCloudCollection(stMini.skyClouds, _dnColorTmpC, true);
+      const stageRes = tintMiracleCloudCollection(stMini.skyClouds, _dnColorTmpC, true, nf, sdCloud);
+      if (stageRes) {
+        totalVisClouds += stageRes.visibleCount;
+        if (stageRes.maxVisibleOp > maxCloudOp) maxCloudOp = stageRes.maxVisibleOp;
+      }
     }
+    miracleSunSystem.lastVisibleClouds = totalVisClouds;
+    miracleSunSystem.lastCloudOpacity = totalVisClouds > 0 ? maxCloudOp : 0;
 
     // 5) 밤하늘 그라데이션 돔 + 4색 촘촘한 별 반짝임 (산/맵 외곽 뒤 r=560..650)
     const showSky = nf > 0.08;
@@ -5639,6 +5783,7 @@ window.createMiracleHeroMesh = function () {
     axeTool: toolGrp,
     baseScale: g.scale.clone()
   };
+  u.episodeHero = 'miracle';
   heroGrp.userData = u;
   if (window.ep4CharacterAnimator) window.ep4CharacterAnimator.reset();
   return heroGrp;

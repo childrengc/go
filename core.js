@@ -5,7 +5,7 @@
 // =========================================================================
 
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.core = '20261125_v44';
+window.__GAME_BUILD_VERSIONS__.core = '20261125_v48';
 
 function installEp4MattePhongSpecGuard() {
   if (typeof THREE !== 'undefined' && THREE.ShaderChunk && THREE.ShaderChunk.lights_phong_pars_fragment) {
@@ -524,9 +524,10 @@ function startStageBgm(st) {
 
 function stopStageBgm() {
   if (bgmTimeout) { clearTimeout(bgmTimeout); bgmTimeout = null; }
-  // 영상 재생 중(__ep4OpeningVideoActive)일 때도 오픈월드 BGM을 확실히 정지하도록 조건 추가
-  if (typeof window.stopMiracleOpenWorldOgg === 'function' && (!isPlaying || isMenuBgmActive || !bgmEnabled || window.__ep4OpeningVideoActive)) {
-    window.stopMiracleOpenWorldOgg(isMenuBgmActive || !isPlaying || window.__ep4OpeningVideoActive);
+  const ep4VideoPlaying = Boolean(window.__ep4OpeningVideoActive || window.__ep4EndingVideoActive);
+  // 영상 재생 중(__ep4OpeningVideoActive / __ep4EndingVideoActive)일 때도 오픈월드 BGM을 확실히 정지
+  if (typeof window.stopMiracleOpenWorldOgg === 'function' && (!isPlaying || isMenuBgmActive || !bgmEnabled || ep4VideoPlaying)) {
+    window.stopMiracleOpenWorldOgg(isMenuBgmActive || !isPlaying || ep4VideoPlaying);
   }
 }
 
@@ -557,7 +558,7 @@ function bindCoreBgmVisibilityHandlers() {
     if (audioCtx && audioCtx.state === 'suspended' && typeof audioCtx.resume === 'function') {
       try { audioCtx.resume().catch(() => {}); } catch (e) {}
     }
-    if ((isPlaying || isMenuBgmActive) && !bgmTimeout && !window.__ep4OpeningVideoActive) {
+    if ((isPlaying || isMenuBgmActive) && !bgmTimeout && !window.__ep4OpeningVideoActive && !window.__ep4EndingVideoActive) {
       scheduleNextBgmBeat();
     }
   };
@@ -2930,7 +2931,9 @@ window.updateMapReturnButtonVisibility = updateMapReturnButtonVisibility;
 function discardPausedGameSession(runPluginCleanup = true) {
   const wasActive = Boolean(pausedGameSession.active);
   const wasMp = Boolean(pausedGameSession.wasMultiplayer);
+  const prevEpisode = pausedGameSession.episode;
   pausedGameSession.active = false;
+  pausedGameSession.episode = null;
   pausedGameSession.wasMultiplayer = false;
   updateMapReturnButtonVisibility();
 
@@ -2938,7 +2941,7 @@ function discardPausedGameSession(runPluginCleanup = true) {
   if (labelsEl) labelsEl.style.visibility = '';
 
   if (wasActive && runPluginCleanup) {
-    const epPlugin = getActiveEpisodePlugin();
+    const epPlugin = (prevEpisode && EPISODE_REGISTRY[prevEpisode]) ? EPISODE_REGISTRY[prevEpisode] : getActiveEpisodePlugin();
     if (epPlugin && typeof epPlugin.onCloseScreen === 'function') epPlugin.onCloseScreen();
     if (wasMp && window.MiracleMultiplayer && typeof window.MiracleMultiplayer.leaveRoom === 'function') {
       window.MiracleMultiplayer.leaveRoom();
@@ -4355,6 +4358,50 @@ function disposeObject3DResources(root) {
   });
 }
 
+function resetCoreSceneLighting() {
+  if (window.coreAmbientLight) {
+    window.coreAmbientLight.color.setHex(0xffffff);
+    window.coreAmbientLight.intensity = 0.62;
+  }
+  if (window.coreHemiLight) {
+    window.coreHemiLight.color.setHex(0x87ceeb);
+    window.coreHemiLight.groundColor.setHex(0xb89c6e);
+    window.coreHemiLight.intensity = 0.0;
+  }
+  if (window.coreDirLight) {
+    const dl = window.coreDirLight;
+    dl.color.setHex(0xfffbeb);
+    dl.intensity = 0.72;
+    dl.position.set(25, 45, 25);
+    dl.castShadow = true;
+    if (window.coreDirLightDefaultTarget) {
+      window.coreDirLightDefaultTarget.position.set(0, 0, 0);
+      window.coreDirLightDefaultTarget.updateMatrixWorld();
+      dl.target = window.coreDirLightDefaultTarget;
+    }
+    if (dl.shadow) {
+      if (dl.shadow.camera) {
+        dl.shadow.camera.left = -5;
+        dl.shadow.camera.right = 5;
+        dl.shadow.camera.top = 5;
+        dl.shadow.camera.bottom = -5;
+        dl.shadow.camera.near = 0.5;
+        dl.shadow.camera.far = 500;
+        dl.shadow.camera.updateProjectionMatrix();
+      }
+      dl.shadow.bias = 0;
+      if (dl.shadow.normalBias !== undefined) {
+        dl.shadow.normalBias = 0;
+      }
+    }
+  }
+  if (typeof renderer !== 'undefined' && renderer && renderer.shadowMap) {
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.needsUpdate = true;
+  }
+}
+window.resetCoreSceneLighting = resetCoreSceneLighting;
+
 function clearWorld() {
   if (Array.isArray(fadedMaterials) && fadedMaterials.length > 0) {
     fadedMaterials.forEach(item => {
@@ -4404,6 +4451,7 @@ function clearWorld() {
   Object.values(EPISODE_REGISTRY).forEach(plugin => {
     if (plugin && typeof plugin.clearState === 'function') plugin.clearState();
   });
+  resetCoreSceneLighting();
 
   document.getElementById('labels-container').innerHTML = '';
   document.getElementById('context-action-btn').classList.add('hidden');
@@ -8242,6 +8290,7 @@ function initEngine(skipInitialPreview = false) {
   dirLight.position.set(25, 45, 25); dirLight.castShadow = true;
   scene.add(dirLight);
   window.coreDirLight = dirLight;
+  window.coreDirLightDefaultTarget = dirLight.target;
 
   rebuildPlayerAppearance();
   if (!skipInitialPreview) {

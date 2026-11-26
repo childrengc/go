@@ -4,7 +4,7 @@
 // - 스테이지 3(십자가 사건): 넓어진 골고다 언덕 정상 고원과 세 십자가 등장 연출 적용
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_stages = '20261125_v44';
+window.__GAME_BUILD_VERSIONS__.ep4_stages = '20261125_v48';
 
 // 스테이지 3: 십자가를 지고 힘겹게 오르시는 예수님 보행 속도(더 천천히) 및 플레이어 대신 짊어졌을 때의 보행 속도
 const MIRACLE_STAGE3_JESUS_WALK_SPEED = 1.05;
@@ -75,6 +75,12 @@ window.startMiracleDirectSubStage = function (subId) {
   const timerBox = document.getElementById('hud-timer-box');
   if (timerBox) { timerBox.classList.add('hidden'); timerBox.classList.remove('flex'); }
   if (typeof loadMiracleNotebookProgress === 'function') loadMiracleNotebookProgress();
+  if (typeof window.setGlobalCameraViewMode === 'function') {
+    window.setGlobalCameraViewMode('default');
+  }
+  if (typeof rebuildPlayerAppearance === 'function') {
+    rebuildPlayerAppearance();
+  }
   if (typeof guideArrowGroup !== 'undefined' && guideArrowGroup) {
     const isEffSenior = (typeof isEffectiveSeniorMode === 'function')
       ? isEffectiveSeniorMode('miracle', currentMode)
@@ -1151,6 +1157,7 @@ function buildMiracleMainStage1Galilee() {
   playerFacing = Math.PI * 0.5;
   cameraYaw = -Math.PI * 0.5;
   cameraTargetYaw = -Math.PI * 0.5;
+  if (typeof rebuildPlayerAppearance === 'function') rebuildPlayerAppearance();
   snapCameraToPlayer();
 
   if (typeof updateMiracleDynamicSun === 'function') {
@@ -1212,8 +1219,9 @@ function startGalileeStormPhase() {
   if (st.skyClouds) {
     st.skyClouds.forEach(cl => {
       cl.traverse(ch => {
-        if (ch.isMesh) ch.material = matLowPoly('#1e293b');
+        if (ch.isMesh && !ch.userData._isCloudDepthPrepass) ch.material = matLowPoly('#1e293b');
       });
+      cl._cloudMats = null;
     });
   }
 
@@ -1294,8 +1302,9 @@ function triggerGalileeCalmStormCutscene() {
     if (st.skyClouds) {
       st.skyClouds.forEach(cl => {
         cl.traverse(ch => {
-          if (ch.isMesh) ch.material = matLowPoly('#475569');
+          if (ch.isMesh && !ch.userData._isCloudDepthPrepass) ch.material = matLowPoly('#475569');
         });
+        cl._cloudMats = null;
       });
     }
     if (wf) wf.style.opacity = '0';
@@ -2136,6 +2145,7 @@ function buildMiracleMainStage2Loaves() {
   playerFacing = Math.PI;
   cameraYaw = 0;
   cameraTargetYaw = 0;
+  if (typeof rebuildPlayerAppearance === 'function') rebuildPlayerAppearance();
   snapCameraToPlayer();
 
   if (typeof updateMiracleDynamicSun === 'function') {
@@ -2972,6 +2982,7 @@ function buildMiracleMainStage3Cross() {
   playerFacing = Math.PI;
   cameraYaw = 0;
   cameraTargetYaw = 0;
+  if (typeof rebuildPlayerAppearance === 'function') rebuildPlayerAppearance();
   snapCameraToPlayer();
 
   if (typeof updateMiracleDynamicSun === 'function') {
@@ -4212,6 +4223,10 @@ function buildMiracleMainStage4Tomb() {
     });
   }
 
+  window.globalCameraViewMode = 'default';
+  const camLbl4 = document.getElementById('global-camera-view-label');
+  if (camLbl4) camLbl4.textContent = '기본';
+
   playerPos.set(0, 0, 40);
   lastGroundedY = 0;
   playerVelY = 0;
@@ -4219,6 +4234,7 @@ function buildMiracleMainStage4Tomb() {
   playerFacing = Math.PI;
   cameraYaw = 0;
   cameraTargetYaw = 0;
+  if (typeof rebuildPlayerAppearance === 'function') rebuildPlayerAppearance();
   snapCameraToPlayer();
 
   if (typeof updateMiracleDynamicSun === 'function') {
@@ -4672,7 +4688,7 @@ function buildMiracleEndingWorld() {
     highCloud.scale.set(1.55, 0.85, 1.0);
     highCloud.position.set(0, summitPadY + 21.0, -8.5);
     worldGroup.add(skyBeam, highCloud);
-    miracleAmbientProps.push({ kind: 'cloud', mesh: highCloud });
+    miracleAmbientProps.push({ kind: 'cloud', mesh: highCloud, keepAtNight: true });
   }
 
   // 감람산 들판 야간 모닥불 2개 (밤 시간대 제자들이 곁에 누워 잠들 때 따뜻하게 비춤)
@@ -5175,6 +5191,11 @@ function updateMiracleEndingFrame(dt, now) {
   // [3단계: 10.2초] 현재 상태에서 암전 → 두 천사의 말씀 출력 → 엔딩 영상(2회차부터 건너뛰기) → 오픈월드 복귀 & 인증서!
   if (t >= 10.2 && !st.modalShown) {
     st.modalShown = true;
+    const wasCompletedBeforeAscension = Boolean(
+      (typeof window.getEp4EndingVideoWatchCount === 'function' && window.getEp4EndingVideoWatchCount() >= 1) ||
+      (typeof miracleAscensionSeen !== 'undefined' && miracleAscensionSeen) ||
+      (typeof playerProgressData !== 'undefined' && playerProgressData.miracle && (playerProgressData.miracle.completed || playerProgressData.miracle.certIssued))
+    );
     // 승천 완료 상태 기록 & 저장 → 이후 오픈월드 감람산 언덕 & 엔딩 세상 모두 승천 이후 상태 반영!
     miracleAscensionSeen = true;
     miracleMainStagesCleared[1] = true;
@@ -5229,7 +5250,7 @@ function updateMiracleEndingFrame(dt, now) {
       };
 
       if (typeof window.playEp4EndingVideoThen === 'function') {
-        window.playEp4EndingVideoThen(afterEndingVideo);
+        window.playEp4EndingVideoThen(afterEndingVideo, { canSkip: wasCompletedBeforeAscension });
       } else {
         afterEndingVideo();
       }
@@ -5252,12 +5273,24 @@ function updateMiracleEndingFrame(dt, now) {
     };
 
     if (bf) {
+      // 1. 요청하신 새로운 문구로 변수 텍스트 수정
+      const newAngelPromiseLine = "하늘로 올라가신 예수님께서는 여러분이 본 그대로 다시 오실것입니다.";
       document.getElementById('black-fade-icon').textContent = '☁️';
-      document.getElementById('black-fade-title').textContent = `"${angelPromiseLine}"`;
+      // 2. 화면에 수정된 문구 반영
+      document.getElementById('black-fade-title').textContent = `"${newAngelPromiseLine}"`;
       document.getElementById('black-fade-sub').textContent = '사도행전 1장 11절';
       bf.style.opacity = '1';
-      speakText(angelPromiseLine, {
-        onEnd: () => { markTtsDoneWithBuffer(); }
+      
+      // TTS 대신 mp3 파일 재생
+      const actsAudio = new Audio('assets/voice/voice_ending.mp3'); // 실제 파일 경로로 수정
+      actsAudio.onended = () => { markTtsDoneWithBuffer(); };
+      actsAudio.onerror = () => { 
+        // 오디오 로드 실패 시 TTS로 폴백
+        speakText(angelPromiseLine, { onEnd: () => { markTtsDoneWithBuffer(); } }); 
+      };
+      actsAudio.play().catch(() => {
+        // 브라우저 정책 등으로 재생이 막힐 경우 TTS로 폴백
+        speakText(angelPromiseLine, { onEnd: () => { markTtsDoneWithBuffer(); } });
       });
     } else {
       ttsFinished = true;
@@ -5395,9 +5428,13 @@ REGISTER_EPISODE('miracle', {
     const stAlert = document.getElementById('miracle-stealth-alert');
     if (stAlert) stAlert.style.opacity = '0';
     if (typeof miracleSunSystem !== 'undefined') {
+      if (miracleSunSystem.lightTarget && miracleSunSystem.lightTarget.parent) {
+        miracleSunSystem.lightTarget.parent.remove(miracleSunSystem.lightTarget);
+      }
       if (miracleSunSystem.light) {
         miracleSunSystem.light.castShadow = true;
       }
+      miracleSunSystem.light = null;
       miracleSunSystem.sunVisualGroup = null;
       miracleSunSystem.sunCoreMat = null;
       miracleSunSystem.sunHaloMats = [];

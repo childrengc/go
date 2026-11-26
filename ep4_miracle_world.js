@@ -4,7 +4,7 @@
 // - 계단으로 건물 2층 등반 후 인접한 옆 건물 옥상·2층으로 점프 이동할 수 있는 근접 마을 배치
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_world = '20261125_v44';
+window.__GAME_BUILD_VERSIONS__.ep4_world = '20261126_v49';
 
 window.miracleOpenWorldIntroFlyover = {
   active: false,
@@ -1895,7 +1895,7 @@ function buildMiracleRegionalLandmarks() {
     const cl = createLowPolyCloudGroup(1.15 + (c % 3) * 0.28, false);
     cl.position.set(cx, 28 + (c % 4) * 2.5, cz);
     worldGroup.add(cl);
-    miracleAmbientProps.push({ kind: 'cloud', mesh: cl, baseX: cx, speed: 0.35 + (c % 3) * 0.12 });
+    miracleAmbientProps.push({ kind: 'cloud', mesh: cl, baseX: cx, speed: 0.35 + (c % 3) * 0.12, keepAtNight: (c % 3 === 0) });
   }
 
   window.miracleSkyBirds = [];
@@ -8767,93 +8767,83 @@ function buildMiracleNightPatrolSoldiers() {
   window.miracleNightPatrolSoldiers = [];
   if (typeof window.createRomanSoldierMesh !== 'function') return;
 
+  // 예루살렘 성전 전용 경비 병력 4명 (외곽 성문 앞 1명 + 성전 본관 동·서·남 벽 각 1명)
   const routeSpecs = [
     {
-      post: { x: 12.0, z: 42.0 },
-      speed: 3.35,
-      waypoints: [
-        { x: 14.0, z: 38.0 },
-        { x: 2.0, z: 37.5 },
-        { x: -7.5, z: 38.5 },
-        { x: 3.5, z: 41.0 }
-      ]
-    },
-    {
-      post: { x: -4.0, z: 42.5 },
-      speed: 3.55,
-      waypoints: [
-        { x: 3.0, z: 40.5 },
-        { x: -10.5, z: 40.0 },
-        { x: -16.5, z: 37.5 },
-        { x: -6.5, z: 36.0 }
-      ]
-    },
-    {
-      post: { x: -18.5, z: 41.5 },
-      speed: 3.45,
-      waypoints: [
-        { x: -12.0, z: 33.0 },
-        { x: -21.0, z: 33.5 },
-        { x: -22.5, z: 41.5 },
-        { x: -14.5, z: 37.0 }
-      ]
-    },
-    {
-      post: { x: -14.0, z: 54.0 },
+      role: 'temple_gate',
+      post: { x: 3.5, z: 37.6 },
+      postHeading: Math.PI, // 북쪽(-Z, 성문 밖) 경계
       speed: 3.25,
       waypoints: [
-        { x: -14.5, z: 50.0 },
-        { x: -14.5, z: 62.5 },
-        { x: 0.0, z: 54.5 },
-        { x: 14.5, z: 53.5 }
+        { x: 9.5, z: 37.6 },
+        { x: -7.5, z: 37.6 }
       ]
     },
     {
-      post: { x: 0.5, z: 24.0 },
-      speed: 3.45,
+      role: 'temple_east_wall',
+      post: { x: 15.0, z: 71.5 },
+      postHeading: Math.PI * 0.5, // 동쪽(+X) 경계
+      speed: 3.15,
       waypoints: [
-        { x: 0.5, z: 26.0 },
-        { x: 0.0, z: 10.0 },
-        { x: -4.0, z: -6.0 },
-        { x: 2.0, z: 10.0 }
+        { x: 15.0, z: 60.0 },
+        { x: 15.0, z: 83.0 }
       ]
     },
     {
-      post: { x: -16.0, z: -10.0 },
-      speed: 3.50,
+      role: 'temple_west_wall',
+      post: { x: -14.0, z: 71.5 },
+      postHeading: -Math.PI * 0.5, // 서쪽(-X) 경계
+      speed: 3.15,
       waypoints: [
-        { x: -4.0, z: -10.0 },
-        { x: -16.0, z: -11.0 },
-        { x: -26.0, z: -11.0 },
-        { x: -24.5, z: -4.0 },
-        { x: -11.0, z: -5.0 }
+        { x: -14.0, z: 82.5 },
+        { x: -14.0, z: 60.0 }
       ]
     },
     {
-      post: { x: -12.0, z: 14.0 },
-      speed: 3.35,
+      role: 'temple_south_wall',
+      post: { x: 0.0, z: 84.2 },
+      postHeading: 0, // 남쪽(+Z) 경계
+      speed: 3.15,
       waypoints: [
-        { x: -18.0, z: 14.0 },
-        { x: -2.0, z: 14.0 },
-        { x: 10.0, z: 16.0 },
-        { x: -3.0, z: 4.0 }
+        { x: -11.0, z: 84.2 },
+        { x: 11.0, z: 84.2 }
       ]
     }
   ];
 
   routeSpecs.forEach((spec, idx) => {
-    const safePost = findSafeOpenWorldOutdoorPoint(spec.post.x, spec.post.z, 0.85);
-    const safeWps = spec.waypoints.map(wp => findSafeOpenWorldOutdoorPoint(wp.x, wp.z, 0.85));
+    const safePost = findSafeOpenWorldOutdoorPoint(spec.post.x, spec.post.z, 0.90);
+    const rawSafeWps = spec.waypoints.map(wp => findSafeOpenWorldOutdoorPoint(wp.x, wp.z, 0.90));
+
+    // 인접 웨이포인트 구간이 건물·벽·소품과 겹치면 A* 우회 경유지를 자동 확장해 경로상 관통 차단
+    const safeWps = [];
+    for (let i = 0; i < rawSafeWps.length; i++) {
+      const a = rawSafeWps[i];
+      const b = rawSafeWps[(i + 1) % rawSafeWps.length];
+      safeWps.push(a);
+      if (
+        typeof isMiracleNpcLineClear === 'function' &&
+        !isMiracleNpcLineClear(a.x, a.z, b.x, b.z, 0.70) &&
+        typeof computeMiracleNpcAStarPath === 'function'
+      ) {
+        const detour = computeMiracleNpcAStarPath(a.x, a.z, b.x, b.z, 0.72);
+        for (let j = 0; j < detour.length - 1; j++) {
+          safeWps.push(detour[j]);
+        }
+      }
+    }
+
     const py = getMiracleOpenWorldGroundHeight(safePost.x, safePost.z);
 
     const mesh = window.createRomanSoldierMesh(idx);
     mesh.position.set(safePost.x, py, safePost.z);
+    mesh.rotation.y = spec.postHeading;
 
-    // 시야 범위 바닥 경고 부채꼴 (+Z 방향 정면 ±0.52 rad)
+    // 시야 범위 바닥 경고 부채꼴 (+Z 방향 정면 ±0.52 rad) — 니고데모 미션 중에만 표시
     const coneMat = new THREE.MeshBasicMaterial({
       color: 0xef4444,
       transparent: true,
-      opacity: 0.20,
+      opacity: 0.24,
       side: THREE.DoubleSide,
       depthWrite: false,
       fog: false
@@ -8883,17 +8873,162 @@ function buildMiracleNightPatrolSoldiers() {
 
     window.miracleNightPatrolSoldiers.push({
       idx,
+      role: spec.role,
       mesh,
       coneMesh,
       coneMat,
       postPos: safePost,
+      postHeading: spec.postHeading,
       waypoints: safeWps,
       wpIdx: 0,
       speed: spec.speed,
-      heading: 0,
+      heading: spec.postHeading,
+      pauseTimer: 0,
+      navPath: null,
+      navPathKey: '',
+      navPathIdx: 0,
+      bestTargetDist: Infinity,
+      noProgressTimer: 0,
+      recomputeCount: 0,
       phase: idx * 1.35
     });
   });
+}
+
+function stepMiraclePatrolSoldier(s, targetX, targetZ, dt) {
+  const m = s && s.mesh;
+  if (!m) return { distToTarget: 999, movedSpeed: 0 };
+
+  const safeDt = Math.min(0.06, Math.max(0.001, dt || 0.016));
+  const curX = m.position.x;
+  const curZ = m.position.z;
+  const dTarget = Math.hypot(targetX - curX, targetZ - curZ);
+  if (dTarget < 0.05) return { distToTarget: dTarget, movedSpeed: 0 };
+
+  const pathKey = `${Math.round(targetX * 2)},${Math.round(targetZ * 2)}`;
+  if (!Array.isArray(s.navPath) || s.navPath.length === 0 || s.navPathKey !== pathKey) {
+    s.navPath = (typeof computeMiracleNpcAStarPath === 'function')
+      ? computeMiracleNpcAStarPath(curX, curZ, targetX, targetZ, 0.70)
+      : [{ x: targetX, z: targetZ }];
+    s.navPathKey = pathKey;
+    s.navPathIdx = 0;
+    s.bestTargetDist = dTarget;
+    s.noProgressTimer = 0;
+    s.recomputeCount = 0;
+  }
+
+  if (typeof s.bestTargetDist !== 'number') s.bestTargetDist = dTarget;
+  if (dTarget < s.bestTargetDist - 0.35) {
+    s.bestTargetDist = dTarget;
+    s.noProgressTimer = 0;
+  } else {
+    s.noProgressTimer = (s.noProgressTimer || 0) + safeDt;
+    if (s.noProgressTimer >= 2.0) {
+      s.noProgressTimer = 0;
+      s.recomputeCount = (s.recomputeCount || 0) + 1;
+      if (s.recomputeCount <= 2 && typeof computeMiracleNpcAStarPath === 'function') {
+        s.navPath = computeMiracleNpcAStarPath(curX, curZ, targetX, targetZ, 0.82);
+        s.navPathIdx = 0;
+      } else if (s.navPath && s.navPathIdx < s.navPath.length - 1) {
+        s.navPathIdx++;
+      }
+      s.bestTargetDist = dTarget;
+    }
+  }
+
+  while (s.navPathIdx < s.navPath.length - 1) {
+    const wp = s.navPath[s.navPathIdx];
+    const dWp = Math.hypot(wp.x - curX, wp.z - curZ);
+    const nextWp = s.navPath[s.navPathIdx + 1];
+    if (
+      dWp < 1.15 ||
+      (dWp < 2.6 && typeof isMiracleNpcLineClear === 'function' && isMiracleNpcLineClear(curX, curZ, nextWp.x, nextWp.z, 0.70))
+    ) {
+      s.navPathIdx++;
+    } else {
+      break;
+    }
+  }
+
+  const activeWp = s.navPath[Math.min(s.navPathIdx, s.navPath.length - 1)] || { x: targetX, z: targetZ };
+  const wpDx = activeWp.x - curX;
+  const wpDz = activeWp.z - curZ;
+  const dWp = Math.hypot(wpDx, wpDz);
+  if (dWp < 0.001) return { distToTarget: dTarget, movedSpeed: 0 };
+
+  const wpAng = Math.atan2(wpDx, wpDz);
+  const moveStep = Math.min(dWp, (s.speed || 3.2) * safeDt);
+  let chosenAng = wpAng;
+
+  const candX = curX + Math.sin(wpAng) * moveStep;
+  const candZ = curZ + Math.cos(wpAng) * moveStep;
+  if (typeof isMiracleNpcPointClear === 'function' && !isMiracleNpcPointClear(candX, candZ, 0.62)) {
+    let foundSlip = null;
+    const slipOffsets = [0.32, -0.32, 0.65, -0.65, 1.0, -1.0];
+    for (let i = 0; i < slipOffsets.length; i++) {
+      const a = wpAng + slipOffsets[i];
+      if (isMiracleNpcPointClear(curX + Math.sin(a) * moveStep, curZ + Math.cos(a) * moveStep, 0.56)) {
+        foundSlip = a;
+        break;
+      }
+    }
+    if (foundSlip !== null) {
+      chosenAng = foundSlip;
+    } else {
+      if (typeof computeMiracleNpcAStarPath === 'function') {
+        s.navPath = computeMiracleNpcAStarPath(curX, curZ, targetX, targetZ, 0.82);
+        s.navPathIdx = 0;
+      }
+      return { distToTarget: dTarget, movedSpeed: 0 };
+    }
+  }
+
+  const nx = curX + Math.sin(chosenAng) * moveStep;
+  const nz = curZ + Math.cos(chosenAng) * moveStep;
+  const ny = getMiracleOpenWorldGroundHeight(nx, nz);
+  m.position.set(nx, ny, nz);
+  s.heading = lerpAngle(s.heading, chosenAng, Math.min(1, safeDt * 8.0));
+  m.rotation.y = s.heading;
+
+  return {
+    distToTarget: Math.hypot(targetX - nx, targetZ - nz),
+    movedSpeed: Math.hypot(nx - curX, nz - curZ) / safeDt
+  };
+}
+
+function isMiraclePatrolSightBlocked(x1, z1, x2, z2) {
+  const bList = Array.isArray(window.miracleBuildingBounds) ? window.miracleBuildingBounds : [];
+  if (bList.length === 0) return false;
+
+  const rects = [];
+  for (let i = 0; i < bList.length; i++) {
+    const b = bList[i];
+    if (!b) continue;
+    // 외곽 성문(cx=0, cz=46)은 중앙 아치 통로(x ∈ [-2.6, +2.6])를 개방하고 좌·우 벽체만 시야 차폐로 반영
+    if (b.cx === 0 && b.cz === 46) {
+      rects.push(
+        { minX: -11.8, maxX: -2.6, minZ: 42.4, maxZ: 47.8 },
+        { minX:   2.6, maxX: 11.8, minZ: 42.4, maxZ: 47.8 }
+      );
+    } else {
+      rects.push({ minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ });
+    }
+  }
+  if (rects.length === 0) return false;
+
+  const dist = Math.hypot(x2 - x1, z2 - z1);
+  if (dist < 0.05) return false;
+  const steps = Math.max(6, Math.ceil(dist / 0.65));
+  for (let s = 1; s < steps; s++) {
+    const t = s / steps;
+    const px = x1 + (x2 - x1) * t;
+    const pz = z1 + (z2 - z1) * t;
+    for (let i = 0; i < rects.length; i++) {
+      const r = rects[i];
+      if (px >= r.minX && px <= r.maxX && pz >= r.minZ && pz <= r.maxZ) return true;
+    }
+  }
+  return false;
 }
 
 function showStealthDetectionAlertFlash() {
@@ -8903,7 +9038,7 @@ function showStealthDetectionAlertFlash() {
     el.id = 'miracle-stealth-alert';
     el.className = 'fixed inset-0 pointer-events-none z-50 flex items-start justify-center pt-20 transition-opacity duration-300';
     el.style.background = 'radial-gradient(circle, rgba(239,68,68,0.08) 25%, rgba(185,28,28,0.48) 100%)';
-    el.innerHTML = `<div class="px-5 py-3 rounded-2xl bg-rose-950/92 border-2 border-rose-400 text-rose-100 font-jua text-sm sm:text-base shadow-2xl text-center">🚨 로마 군인 순찰에 발각되었습니다!<br><span class="text-xs text-amber-200">획득한 미션 아이템을 모두 압수당하고 미션이 처음부터 초기화됩니다!</span></div>`;
+    el.innerHTML = `<div class="px-5 py-3 rounded-2xl bg-rose-950/92 border-2 border-rose-400 text-rose-100 font-jua text-sm sm:text-base shadow-2xl text-center">🚨 로마 군인 순찰에 발각되었습니다!<br><span class="text-xs text-amber-200">획득한 성경 두루마리를 압수당하고 니고데모 미션이 처음부터 초기화됩니다!</span></div>`;
     document.body.appendChild(el);
   }
   el.style.opacity = '1';
@@ -8914,29 +9049,29 @@ function showStealthDetectionAlertFlash() {
 }
 
 function resetActiveNightMissionOnDetection(evSpot, now) {
+  if (!evSpot || evSpot.id !== 'ev_nicodemus') return;
+
   window._miracleNightDetectGraceUntil = now + 2600;
   playSfx('crumble');
   showStealthDetectionAlertFlash();
   if (typeof showToast === 'function') {
-    showToast('🚨 로마 군인에게 발각! 획득한 미션 아이템을 모두 압수당하고 미션이 처음부터 초기화됩니다!');
+    showToast('🚨 로마 군인에게 발각! 획득한 성경 두루마리를 압수당하고 니고데모 미션이 처음부터 초기화됩니다!');
   }
 
-  // 모든 진행 중 미션의 수집/운반 아이템 압수 및 미션 오브젝트 정리
+  // 니고데모 미션 수집 두루마리 압수 및 미션 오브젝트 정리
   clearMiracleFieldEventObjects();
 
-  // 시작 지점(의뢰 NPC 곁 안전한 야외)으로 플레이어 복귀 후 0부터 미션 재시작
-  if (evSpot) {
-    const startPt = findSafeOpenWorldOutdoorPoint(evSpot.x, evSpot.z + 3.2, 1.0);
-    const gy = getMiracleOpenWorldGroundHeight(startPt.x, startPt.z);
-    playerPos.set(startPt.x, gy, startPt.z);
-    lastGroundedY = gy;
-    if (typeof playerVelY !== 'undefined') playerVelY = 0;
-    if (typeof playerGroup !== 'undefined' && playerGroup) {
-      playerGroup.position.copy(playerPos);
-    }
-    if (typeof snapCameraToPlayer === 'function') snapCameraToPlayer();
-    startMiracleFieldEvent(evSpot);
+  // 시작 지점(니고데모 NPC 곁 안전한 야외)으로 플레이어 복귀 후 0부터 미션 재시작
+  const startPt = findSafeOpenWorldOutdoorPoint(evSpot.x, evSpot.z + 3.2, 1.0);
+  const gy = getMiracleOpenWorldGroundHeight(startPt.x, startPt.z);
+  playerPos.set(startPt.x, gy, startPt.z);
+  lastGroundedY = gy;
+  if (typeof playerVelY !== 'undefined') playerVelY = 0;
+  if (typeof playerGroup !== 'undefined' && playerGroup) {
+    playerGroup.position.copy(playerPos);
   }
+  if (typeof snapCameraToPlayer === 'function') snapCameraToPlayer();
+  startMiracleFieldEvent(evSpot);
 }
 
 function updateMiracleNightPatrolSoldiers(dt, now) {
@@ -8945,13 +9080,17 @@ function updateMiracleNightPatrolSoldiers(dt, now) {
 
   const nf = (window.MiracleDayNight) ? window.MiracleDayNight.nightFactor : 0;
   const isNight = nf > 0.15;
-  // 밤 시간대에 진행 중인 모든 필드 미션에 대해 로마 군인 순찰 발각·압수 판정 적용!
-  const activeNightEv = (
+
+  // 발각 모드 및 빨간 시야 부채꼴은 오직 니고데모 미션(ev_nicodemus) 진행 중에만 적용
+  const isNicodemusMissionActive = Boolean(
     miracleActiveFieldEvent &&
+    miracleActiveFieldEvent.type === 'nicodemus_stealth' &&
     miracleActiveFieldEvent.spot &&
+    miracleActiveFieldEvent.spot.id === 'ev_nicodemus' &&
     !miracleDialogState.active &&
     !miracleActiveFieldEvent.cutsceneActive
-  ) ? miracleActiveFieldEvent.spot : null;
+  );
+  const activeNicodemusEv = isNicodemusMissionActive ? miracleActiveFieldEvent.spot : null;
 
   for (let i = 0; i < list.length; i++) {
     const s = list[i];
@@ -8960,17 +9099,36 @@ function updateMiracleNightPatrolSoldiers(dt, now) {
     const u = m.userData || {};
 
     if (!isNight) {
-      // 낮: 초소 위치 대기 (횃불 OFF, 창 ON, 경고 콘 OFF)
-      const py = getMiracleOpenWorldGroundHeight(s.postPos.x, s.postPos.z);
-      m.position.lerp(new THREE.Vector3(s.postPos.x, py, s.postPos.z), Math.min(1, dt * 4));
+      // 낮: 담당 초소로 안전하게 복귀해 창을 들고 대기 (횃불 OFF, 경고 콘 OFF)
       if (u.spearGrp) u.spearGrp.visible = true;
       if (u.torchProp) {
         u.torchProp.group.visible = false;
         u.torchProp.setLit(false, now, s.phase);
       }
       if (s.coneMesh) s.coneMesh.visible = false;
-      if (u.lLeg && u.rLeg) { u.lLeg.rotation.x = 0; u.rLeg.rotation.x = 0; }
-      if (u.lArm && u.rArm) { u.lArm.rotation.x = 0; u.rArm.rotation.x = -0.35; }
+      s.pauseTimer = 0;
+
+      const distToPost = Math.hypot(s.postPos.x - m.position.x, s.postPos.z - m.position.z);
+      if (distToPost > 0.35) {
+        const res = stepMiraclePatrolSoldier(s, s.postPos.x, s.postPos.z, dt);
+        if (res.movedSpeed > 0.12) {
+          const swing = Math.sin(now * 0.011 + s.phase) * 0.52;
+          if (u.lLeg && u.rLeg) { u.lLeg.rotation.x = swing; u.rLeg.rotation.x = -swing; }
+          if (u.lArm && u.rArm) { u.lArm.rotation.x = -swing * 0.45; u.rArm.rotation.x = -0.35; }
+        } else {
+          if (u.lLeg && u.rLeg) { u.lLeg.rotation.x = 0; u.rLeg.rotation.x = 0; }
+          if (u.lArm && u.rArm) { u.lArm.rotation.x = 0; u.rArm.rotation.x = -0.35; }
+        }
+      } else {
+        const py = getMiracleOpenWorldGroundHeight(s.postPos.x, s.postPos.z);
+        m.position.set(s.postPos.x, py, s.postPos.z);
+        s.navPath = null;
+        s.navPathKey = '';
+        s.heading = lerpAngle(s.heading, s.postHeading || 0, Math.min(1, dt * 6.0));
+        m.rotation.y = s.heading;
+        if (u.lLeg && u.rLeg) { u.lLeg.rotation.x = 0; u.rLeg.rotation.x = 0; }
+        if (u.lArm && u.rArm) { u.lArm.rotation.x = 0; u.rArm.rotation.x = -0.35; }
+      }
       continue;
     }
 
@@ -8981,60 +9139,69 @@ function updateMiracleNightPatrolSoldiers(dt, now) {
       u.torchProp.setLit(true, now, s.phase);
     }
     if (s.coneMesh) {
-      s.coneMesh.visible = true;
-      if (s.coneMat) {
-        s.coneMat.opacity = activeNightEv ? (0.24 + Math.sin(now * 0.008 + s.phase) * 0.05) : 0.12;
+      s.coneMesh.visible = Boolean(activeNicodemusEv);
+      if (activeNicodemusEv && s.coneMat) {
+        s.coneMat.opacity = 0.24 + Math.sin(now * 0.008 + s.phase) * 0.05;
       }
     }
 
-    const wp = s.waypoints[s.wpIdx % s.waypoints.length];
-    const dx = wp.x - m.position.x;
-    const dz = wp.z - m.position.z;
-    const dWp = Math.hypot(dx, dz);
-    if (dWp < 0.65) {
-      s.wpIdx = (s.wpIdx + 1) % s.waypoints.length;
+    let isWalking = false;
+    if (s.pauseTimer > 0) {
+      s.pauseTimer -= dt;
     } else {
-      const step = Math.min(dWp, s.speed * dt);
-      const nx = m.position.x + (dx / dWp) * step;
-      const nz = m.position.z + (dz / dWp) * step;
-      const ny = getMiracleOpenWorldGroundHeight(nx, nz);
-      m.position.set(nx, ny, nz);
-      const targetAng = Math.atan2(dx, dz);
-      s.heading = lerpAngle(s.heading, targetAng, dt * 7.5);
-      m.rotation.y = s.heading;
+      const wp = s.waypoints[s.wpIdx % s.waypoints.length];
+      const dWp = Math.hypot(wp.x - m.position.x, wp.z - m.position.z);
+      if (dWp < 0.65) {
+        s.wpIdx = (s.wpIdx + 1) % s.waypoints.length;
+        s.navPath = null;
+        s.navPathKey = '';
+        s.pauseTimer = 0.55;
+      } else {
+        const res = stepMiraclePatrolSoldier(s, wp.x, wp.z, dt);
+        isWalking = res.movedSpeed > 0.12;
+      }
     }
 
-    const swing = Math.sin(now * 0.011 + s.phase) * 0.58;
-    if (u.lLeg && u.rLeg) {
-      u.lLeg.rotation.x = swing;
-      u.rLeg.rotation.x = -swing;
-    }
-    if (u.lArm && u.rArm) {
-      u.lArm.rotation.x = -swing * 0.52;
-      u.rArm.rotation.x = -0.88 + Math.sin(now * 0.009 + s.phase) * 0.06;
+    if (isWalking) {
+      const swing = Math.sin(now * 0.011 + s.phase) * 0.58;
+      if (u.lLeg && u.rLeg) {
+        u.lLeg.rotation.x = swing;
+        u.rLeg.rotation.x = -swing;
+      }
+      if (u.lArm && u.rArm) {
+        u.lArm.rotation.x = -swing * 0.52;
+        u.rArm.rotation.x = -0.88 + Math.sin(now * 0.009 + s.phase) * 0.06;
+      }
+    } else {
+      if (u.lLeg && u.rLeg) { u.lLeg.rotation.x = 0; u.rLeg.rotation.x = 0; }
+      if (u.lArm && u.rArm) {
+        u.lArm.rotation.x = 0;
+        u.rArm.rotation.x = -0.88 + Math.sin(now * 0.009 + s.phase) * 0.06;
+      }
     }
 
-    // 밤 미션 진행 중일 때만 발각 판정 (횃불 밀착 반경 3.2m 또는 정면 시야 부채꼴 9.2m / 건물 차폐 판정)
-    if (activeNightEv && now >= (window._miracleNightDetectGraceUntil || 0)) {
+    // 오직 니고데모 미션 진행 중일 때만 발각 판정 (밀착 반경 3.1m 또는 정면 시야 부채꼴 9.1m / 건물 차폐 판정)
+    if (activeNicodemusEv && now >= (window._miracleNightDetectGraceUntil || 0)) {
       const pdx = playerPos.x - m.position.x;
       const pdz = playerPos.z - m.position.z;
       const pDist = Math.hypot(pdx, pdz);
       let detected = false;
       if (pDist < 3.1) {
-        detected = true;
+        if (!isMiraclePatrolSightBlocked(m.position.x, m.position.z, playerPos.x, playerPos.z)) {
+          detected = true;
+        }
       } else if (pDist < 9.1) {
         const fwdX = Math.sin(m.rotation.y);
         const fwdZ = Math.cos(m.rotation.y);
         const dot = (pdx / pDist) * fwdX + (pdz / pDist) * fwdZ;
         if (dot > Math.cos(0.52)) {
-          const blocked = (typeof window.isStage4SightBlockedByHouses === 'function')
-            ? window.isStage4SightBlockedByHouses(m.position.x, m.position.z, playerPos.x, playerPos.z)
-            : false;
-          if (!blocked) detected = true;
+          if (!isMiraclePatrolSightBlocked(m.position.x, m.position.z, playerPos.x, playerPos.z)) {
+            detected = true;
+          }
         }
       }
       if (detected) {
-        resetActiveNightMissionOnDetection(activeNightEv, now);
+        resetActiveNightMissionOnDetection(activeNicodemusEv, now);
         break;
       }
     }
