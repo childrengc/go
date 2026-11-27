@@ -23,7 +23,10 @@
   <div id="login-screen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 p-4">
     <div class="mc-card max-w-sm w-full rounded-2xl p-6 text-center border-4 border-amber-500">
       <div class="text-5xl mb-3">🔐</div>
-      <h1 class="font-jua text-2xl text-amber-300 mb-1">어린이부 관리자 페이지</h1>
+      <div class="flex items-center justify-center gap-2 mb-1">
+        <h1 class="font-jua text-2xl text-amber-300">어린이부 관리자 페이지</h1>
+        <span id="admin-login-version-badge" class="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/50 text-amber-300 font-jua text-[11px]">v3.12.3</span>
+      </div>
       <p class="text-xs text-slate-300 mb-4">광릉내 재림교회 어린이부 · 선생님 전용 비밀번호를 입력하세요</p>
       <input id="admin-pw-input" type="password" placeholder="비밀번호 입력"
         class="w-full px-4 py-3 rounded-xl bg-slate-900 border-2 border-slate-600 text-center font-jua text-xl text-white focus:outline-none focus:border-amber-400 mb-3"
@@ -43,11 +46,15 @@
       <div class="flex items-center gap-3">
         <span class="text-3xl">🛠️</span>
         <div>
-          <h1 class="font-jua text-xl sm:text-2xl text-amber-300">출발! 탐험대! 관리자 시스템</h1>
-          <p class="text-xs text-slate-400">광릉내 재림교회 어린이부 · 스테이지 즉시 이동 및 플레이어 기록 조회</p>
+          <div class="flex flex-wrap items-center gap-2">
+            <h1 class="font-jua text-xl sm:text-2xl text-amber-300">출발! 탐험대! 관리자 시스템</h1>
+            <span id="admin-version-badge" class="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/50 text-amber-300 font-jua text-xs">v3.12.3</span>
+          </div>
+          <p class="text-xs text-slate-400">광릉내 재림교회 어린이부 · 스테이지 즉시 이동, 탐험수첩·발자취 조회/수정 및 접속 기록 관리</p>
         </div>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 flex-wrap">
+        <button type="button" onclick="openAppsScriptGuideModal()" class="mc-btn px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold">⚙️ 구글 시트 연동 설정</button>
         <a href="index.html" class="mc-btn px-3.5 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-xs font-bold">🎮 게임 홈으로</a>
         <button onclick="logoutAdmin()" class="mc-btn px-3.5 py-2 rounded-xl bg-rose-700 hover:bg-rose-600 text-xs font-bold">🔒 잠금</button>
       </div>
@@ -107,17 +114,101 @@
       </div>
     </section>
 
-    <!-- 섹션 B: 접속자 및 플레이 기록 조회 -->
+    <!-- 섹션 B: 플레이어 탐험수첩 · 에피소드 · 예수님의 발자취 조회 및 수정 -->
+    <section id="section-profiles" class="mc-card rounded-2xl p-4 sm:p-5 space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-700 pb-3">
+        <div>
+          <h2 class="font-jua text-lg sm:text-xl text-amber-300">📖 플레이어 탐험수첩 · 에피소드 · 예수님의 발자취 관리</h2>
+          <p class="text-xs text-slate-400">어린이별 에피소드 인증서, 탐험수첩 수집 내역, 완료 미션, 예수님의 발자취(1~5단계)를 조회하고 직접 수정·지급·회수할 수 있습니다.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <button type="button" onclick="openNewProfileEditor()" class="mc-btn px-3.5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold">➕ 신규 플레이어 추가</button>
+          <button type="button" onclick="downloadProfilesCsv()" class="mc-btn px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold">📥 탐험기록 CSV</button>
+          <button type="button" onclick="fetchSheetRecords()" class="mc-btn px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-bold">🔄 새로고침</button>
+        </div>
+      </div>
+
+      <!-- Apps Script 미업데이트 안내 배너 -->
+      <div id="profiles-upgrade-banner" class="hidden rounded-xl border-2 border-amber-400/70 bg-amber-950/50 p-3 flex flex-wrap items-center justify-between gap-2">
+        <div class="text-xs text-amber-200 leading-relaxed">
+          ⚠️ <b>구글 Apps Script가 아직 통합 저장 버전으로 업데이트되지 않았습니다.</b><br/>
+          현재는 기존 접속 로그에서 추론한 진행도만 보이며, 탐험수첩·발자취 영구 저장/수정을 사용하려면 <b>구글 시트 연동 설정</b>의 새 코드를 Apps Script에 반영해 주세요.
+        </div>
+        <button type="button" onclick="openAppsScriptGuideModal()" class="mc-btn px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-jua text-xs">
+          ⚙️ Apps Script 코드 보기
+        </button>
+      </div>
+
+      <!-- 카탈로그 로드/버전 불일치 안내 배너 -->
+      <div id="catalog-status-banner" class="hidden rounded-xl border-2 border-amber-400/70 bg-amber-950/50 p-3 text-xs text-amber-200 leading-relaxed"></div>
+
+      <!-- 요약 통계 카드 -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="bg-slate-900/90 border border-slate-700 rounded-xl p-3 text-center">
+          <div class="text-xs text-slate-400">전체 등록 대원</div>
+          <div id="stat-prof-count" class="font-jua text-2xl text-white mt-1">0명</div>
+        </div>
+        <div class="bg-slate-900/90 border border-slate-700 rounded-xl p-3 text-center">
+          <div class="text-xs text-slate-400">EP 4 완주 대원</div>
+          <div id="stat-prof-ep4-clear" class="font-jua text-2xl text-emerald-400 mt-1">0명</div>
+        </div>
+        <div class="bg-slate-900/90 border border-slate-700 rounded-xl p-3 text-center">
+          <div class="text-xs text-slate-400">평균 수첩 수집</div>
+          <div id="stat-prof-nb-avg" class="font-jua text-2xl text-amber-300 mt-1">0 / 37</div>
+        </div>
+        <div class="bg-slate-900/90 border border-slate-700 rounded-xl p-3 text-center">
+          <div class="text-xs text-slate-400">발자취 카드 총 발급</div>
+          <div id="stat-prof-fp-total" class="font-jua text-2xl text-cyan-300 mt-1">0장</div>
+        </div>
+      </div>
+
+      <!-- 검색 및 필터 -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <input id="profile-filter-name" type="text" placeholder="🔍 대원 이름(생일) 검색..." oninput="renderProfilesTable()"
+          class="px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white" />
+        <select id="profile-filter-type" onchange="renderProfilesTable()" class="px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white">
+          <option value="all">모든 대원</option>
+          <option value="synced">☁️ 마스터 시트 저장됨</option>
+          <option value="ep4_clear">🕊️ EP4 완주자</option>
+          <option value="has_footsteps">👣 발자취 카드 1장 이상</option>
+          <option value="has_notebook">📖 탐험수첩 1개 이상</option>
+          <option value="log_only">📄 기존 로그 기반(미동기화)</option>
+        </select>
+        <div id="profile-action-status" class="flex items-center text-xs text-emerald-300 font-bold px-2"></div>
+      </div>
+
+      <!-- 프로필 테이블 -->
+      <div class="overflow-x-auto rounded-xl border border-slate-700 bg-slate-900/70 max-h-96">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-800 text-slate-300 sticky top-0">
+            <tr>
+              <th class="p-3">이름(생일)</th>
+              <th class="p-3">에피소드 (EP1~EP4)</th>
+              <th class="p-3">탐험수첩</th>
+              <th class="p-3">EP4 미션</th>
+              <th class="p-3">예수님의 발자취</th>
+              <th class="p-3">최종 갱신 · 출처</th>
+              <th class="p-3 text-center">관리</th>
+            </tr>
+          </thead>
+          <tbody id="profiles-tbody" class="divide-y divide-slate-800">
+            <tr><td colspan="7" class="p-6 text-center text-slate-400">데이터를 불러오는 중입니다...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 섹션 C: 접속자 및 플레이 기록 조회 -->
     <section class="mc-card rounded-2xl p-4 sm:p-5 space-y-4">
       <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-700 pb-3">
         <div>
-          <h2 class="font-jua text-lg sm:text-xl text-emerald-300">📊 플레이어 접속 및 클리어 기록 조회</h2>
+          <h2 class="font-jua text-lg sm:text-xl text-emerald-300">📊 플레이어 접속 및 클리어 이력 로그</h2>
           <p class="text-xs text-slate-400">구글 스프레드시트에 실시간 저장된 광릉내 재림교회 어린이부 참여 내역입니다.</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <button onclick="fetchSheetRecords()" class="mc-btn px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-bold">🔄 기록 새로고침</button>
           <button onclick="downloadCsv()" class="mc-btn px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold">📥 엑셀(CSV) 저장</button>
-          <button onclick="openAppsScriptGuideModal()" class="mc-btn px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold">⚙️ 시트 영구삭제 설정</button>
+          <button onclick="openAppsScriptGuideModal()" class="mc-btn px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold">⚙️ 시트 연동·삭제 설정</button>
         </div>
       </div>
 
@@ -130,6 +221,10 @@
           </select>
           <input id="delete-target-input" type="text" placeholder="또는 이름 직접 입력"
             class="px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-600 text-xs text-white w-36" />
+          <label class="inline-flex items-center gap-1 text-[11px] text-amber-200 cursor-pointer">
+            <input id="delete-include-profile" type="checkbox" checked class="accent-rose-500" />
+            <span>탐험수첩·발자취도 함께 삭제</span>
+          </label>
           <button type="button" onclick="deleteRecordsByPerson()" class="mc-btn px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-jua text-xs">
             🗑️ 선택한 사람 기록 모두 삭제
           </button>
@@ -212,62 +307,786 @@
     </section>
   </div>
 
-  <!-- 구글 Apps Script 영구 삭제 연동 안내 모달 -->
+  <!-- 플레이어 탐험기록 상세 조회 및 수정 모달 -->
+  <div id="profile-editor-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-3 sm:p-4">
+    <div class="mc-card max-w-4xl w-full rounded-2xl p-4 sm:p-5 border-2 border-amber-400 max-h-[92vh] flex flex-col gap-3">
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-700 pb-3">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-2xl">📖</span>
+          <div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <h3 class="font-jua text-lg text-amber-300">플레이어 탐험기록 조회 · 수정</h3>
+              <span id="pe-rev-badge" class="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-600 text-[10px] text-slate-300 font-mono">rev 0</span>
+            </div>
+            <p class="text-[11px] text-slate-400">저장 시 관리자 우선 버전이 올라가서, 대원이 다음 접속할 때 수정 내용이 기기로 즉시 반영됩니다.</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeProfileEditorModal()" class="mc-btn px-3 py-1.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-xs font-bold">닫기 ✕</button>
+      </div>
+
+      <!-- 이름(생일) 영역 -->
+      <div class="bg-slate-900/90 border border-slate-700 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2 flex-wrap">
+          <label class="font-jua text-xs text-amber-200">대원 ID (이름(생일)):</label>
+          <input id="pe-player-id-input" type="text" placeholder="예: 김믿음(0504)"
+            class="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-600 text-xs font-bold text-white w-48" />
+          <span id="pe-player-id-readonly" class="hidden px-3 py-1 rounded-lg bg-amber-500/20 border border-amber-400/50 text-amber-200 font-jua text-sm"></span>
+        </div>
+        <div class="text-[11px] text-slate-400" id="pe-last-updated-info"></div>
+      </div>
+
+      <!-- 3개 탭 버튼 -->
+      <div class="flex flex-wrap gap-2">
+        <button id="pe-tab-btn-episodes" type="button" onclick="switchProfileEditorTab('episodes')"
+          class="mc-btn px-3.5 py-2 rounded-xl bg-amber-500 text-slate-950 font-jua text-xs sm:text-sm">
+          🏅 에피소드 & 인증서 (EP1~4)
+        </button>
+        <button id="pe-tab-btn-footsteps" type="button" onclick="switchProfileEditorTab('footsteps')"
+          class="mc-btn px-3.5 py-2 rounded-xl bg-slate-700 text-slate-200 font-jua text-xs sm:text-sm">
+          👣 예수님의 발자취 & 미션 (<span id="pe-tab-mission-count">0</span>)
+        </button>
+        <button id="pe-tab-btn-notebook" type="button" onclick="switchProfileEditorTab('notebook')"
+          class="mc-btn px-3.5 py-2 rounded-xl bg-slate-700 text-slate-200 font-jua text-xs sm:text-sm">
+          📖 탐험수첩 (<span id="pe-tab-nb-count">0</span>)
+        </button>
+      </div>
+
+      <!-- 탭 본문 스크롤 영역 -->
+      <div class="flex-1 overflow-y-auto pr-1 space-y-4">
+        <!-- 탭 1: 에피소드 & 인증서 -->
+        <div id="pe-tab-episodes" class="space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2 bg-slate-900/70 p-2.5 rounded-xl border border-slate-700">
+            <span class="text-xs text-slate-300">각 에피소드별 진행 단계, 완주/인증서 여부, 인증코드, 클리어 반을 수정합니다.</span>
+            <div class="flex gap-2">
+              <button type="button" onclick="peSetAllEpisodesClear()" class="mc-btn px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold">✨ 전체 완주 설정</button>
+              <button type="button" onclick="peResetAllEpisodes()" class="mc-btn px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold">🧹 전체 초기화</button>
+            </div>
+          </div>
+          <div id="pe-episodes-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+        </div>
+
+        <!-- 탭 2: 예수님의 발자취 & EP4 미션 -->
+        <div id="pe-tab-footsteps" class="hidden space-y-4">
+          <div class="bg-slate-900/80 border border-amber-500/40 rounded-xl p-3 space-y-2.5">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h4 class="font-jua text-sm text-amber-300">👣 예수님의 발자취 카드 (1~5단계)</h4>
+                <p class="text-[11px] text-slate-400">누적 완료 미션(3·5·7·10·전체)마다 발급되는 카드를 직접 부여·수정·회수할 수 있습니다.</p>
+              </div>
+              <button type="button" onclick="peSyncFootstepsFromMissions()" class="mc-btn px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-jua text-xs">
+                🔄 완료 미션 수로 발자취 자동 맞추기
+              </button>
+            </div>
+            <div id="pe-footsteps-list" class="space-y-2"></div>
+          </div>
+
+          <div class="bg-slate-900/80 border border-emerald-500/40 rounded-xl p-3 space-y-2.5">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h4 class="font-jua text-sm text-emerald-300">✅ 에피소드 4 완료 미션 및 해금 플래그</h4>
+                <p class="text-[11px] text-slate-400">미션 완료 개수가 발자취 카드 달성 기준에 반영됩니다.</p>
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <label class="inline-flex items-center gap-1.5 text-xs text-cyan-200 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-600 cursor-pointer">
+                  <input id="pe-flag-post-res" type="checkbox" class="accent-cyan-400" />
+                  <span>부활 이후 오픈월드</span>
+                </label>
+                <label class="inline-flex items-center gap-1.5 text-xs text-amber-200 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-600 cursor-pointer">
+                  <input id="pe-flag-ascension" type="checkbox" class="accent-amber-400" />
+                  <span>감람산 승천 완료</span>
+                </label>
+                <button type="button" onclick="peToggleAllMissions(true)" class="mc-btn px-2 py-1 rounded-lg bg-emerald-700 text-[11px] font-bold">전체선택</button>
+                <button type="button" onclick="peToggleAllMissions(false)" class="mc-btn px-2 py-1 rounded-lg bg-slate-700 text-[11px] font-bold">전체해제</button>
+              </div>
+            </div>
+            <div id="pe-missions-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-1.5"></div>
+          </div>
+        </div>
+
+        <!-- 탭 3: 탐험수첩 -->
+        <div id="pe-tab-notebook" class="hidden space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2 bg-slate-900/70 p-2.5 rounded-xl border border-slate-700">
+            <span class="text-xs text-slate-300">수첩에 수집된 소문·기적·비유·말씀·부활증언 항목을 선택하거나 해제할 수 있습니다.</span>
+            <div class="flex gap-2">
+              <button type="button" onclick="peToggleAllNotebook(true)" class="mc-btn px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold">📖 수첩 전체선택</button>
+              <button type="button" onclick="peToggleAllNotebook(false)" class="mc-btn px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold">🧹 수첩 전체해제</button>
+            </div>
+          </div>
+          <div id="pe-notebook-categories" class="space-y-3"></div>
+        </div>
+      </div>
+
+      <!-- 모달 하단 저장 바 -->
+      <div class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-700 pt-3">
+        <span id="pe-save-status" class="text-xs text-amber-200 font-bold"></span>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="closeProfileEditorModal()" class="mc-btn px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-xs font-bold">취소</button>
+          <button id="pe-save-btn" type="button" onclick="saveProfileFromEditor()" class="mc-btn px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-jua text-sm">
+            💾 구글 시트에 저장
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 구글 Apps Script 통합 연동 및 영구 삭제 안내 모달 -->
   <div id="apps-script-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4">
-    <div class="mc-card max-w-2xl w-full rounded-2xl p-5 space-y-3 border-2 border-indigo-400 max-h-[88vh] overflow-y-auto">
+    <div class="mc-card max-w-3xl w-full rounded-2xl p-5 space-y-3 border-2 border-indigo-400 max-h-[90vh] overflow-y-auto">
       <div class="flex items-center justify-between border-b border-slate-700 pb-2">
-        <h3 class="font-jua text-lg text-indigo-300">⚙️ 구글 스프레드시트 원본 영구 삭제 연동 방법</h3>
+        <h3 class="font-jua text-lg text-indigo-300">⚙️ 구글 스프레드시트 통합 연동 코드 (탐험수첩 · 발자취 · 에피소드 · 영구삭제)</h3>
         <button type="button" onclick="closeAppsScriptGuideModal()" class="mc-btn px-3 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs">닫기 ✕</button>
       </div>
-      <p class="text-xs text-slate-300 leading-relaxed">
-        현재 관리자 페이지에서 삭제 버튼을 누르면 <b>① 구글 시트 서버로 삭제 요청을 전송</b>하고, <b>② 즉시 관리자 화면·통계·CSV에서도 제거</b>됩니다.<br/>
-        구글 스프레드시트 원본 시트의 행까지 영구적으로 지우려면, 사용 중인 Google Apps Script의 <code>doPost(e)</code> 상단에 아래 코드를 추가한 뒤 <b>[배포 → 배포 관리 → 새 버전]</b>으로 저장해 주세요.
-      </p>
-      <pre id="apps-script-snippet" class="bg-slate-950 border border-slate-700 rounded-xl p-3 text-[11px] text-emerald-300 overflow-x-auto leading-relaxed">function doPost(e) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  var body = JSON.parse(e.postData.contents);
+      <div class="text-xs text-slate-300 leading-relaxed space-y-1">
+        <p>아래 전체 코드를 Google Apps Script 편집기(<code>Code.gs</code>)에 그대로 붙여넣고 저장한 뒤, <b>[배포 → 배포 관리 → ✏️ 수정 → 새 버전 → 배포]</b>를 눌러 주세요. (기존 웹 앱 URL은 그대로 유지됩니다!)</p>
+        <p class="text-amber-300">• 기존 플레이 로그 시트(첫 번째 탭)는 그대로 유지되며, 통합 마스터 탭(<b>PlayerProgress</b>)이 자동 생성되어 기기 간 동기화 및 관리자 조회·수정이 동작합니다.</p>
+      </div>
+      <pre id="apps-script-snippet" class="bg-slate-950 border border-slate-700 rounded-xl p-3 text-[11px] text-emerald-300 overflow-x-auto leading-relaxed">var ADMIN_PASSWORD = '3412';
+var PROGRESS_SHEET_NAME = 'PlayerProgress';
+var PROGRESS_HEADERS = [
+  'playerId', 'updatedAt', 'epSummary', 'notebookCount', 'missionCount',
+  'footstepsSummary', 'episodesJson', 'notebookJson', 'footstepsJson',
+  'revision', 'adminOverrideRev', 'lastModifiedBy'
+];
 
-  // [추가] 관리자 기록 삭제 처리 (특정인 일괄 삭제 / 개별 행 삭제)
-  if (body.action === 'delete' &amp;&amp; String(body.password) === '0504') {
-    var rows = sheet.getDataRange().getValues();
-    var deleted = 0;
-    for (var i = rows.length - 1; i &gt;= 1; i--) {
-      var rTime = String(rows[i][0] || '');
-      var rName = String(rows[i][1] || '');
-      var rStatus = String(rows[i][5] || '');
-      if (body.deleteBy === 'name' &amp;&amp; rName === String(body.name)) {
-        sheet.deleteRow(i + 1);
-        deleted++;
-      } else if (body.deleteBy === 'row' &amp;&amp; rName === String(body.name) &amp;&amp;
-                 (rTime === String(body.rawTime) || rStatus === String(body.status))) {
-        sheet.deleteRow(i + 1);
-        deleted++;
+function getLogSheet_(ss) {
+  var sheets = ss.getSheets();
+  for (var i = 0; i &lt; sheets.length; i++) {
+    if (sheets[i].getName() !== PROGRESS_SHEET_NAME) return sheets[i];
+  }
+  return sheets[0];
+}
+
+function getOrCreateProgressSheet_(ss) {
+  var sheet = ss.getSheetByName(PROGRESS_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(PROGRESS_SHEET_NAME);
+    sheet.appendRow(PROGRESS_HEADERS);
+    sheet.setFrozenRows(1);
+    sheet.getRange(1, 1, 1, PROGRESS_HEADERS.length)
+      .setFontWeight('bold')
+      .setBackground('#1e293b')
+      .setFontColor('#fde047');
+    sheet.setColumnWidths(1, 6, 150);
+    sheet.setColumnWidths(7, 3, 240);
+  } else if (sheet.getLastRow() === 0) {
+    sheet.appendRow(PROGRESS_HEADERS);
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function kstNow_() {
+  return Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss');
+}
+
+function parseJsonSafe_(raw, fallback) {
+  try {
+    if (!raw) return fallback;
+    var parsed = JSON.parse(String(raw));
+    return parsed &amp;&amp; typeof parsed === 'object' ? parsed : fallback;
+  } catch (err) {
+    return fallback;
+  }
+}
+
+function rowToProfile_(row) {
+  return {
+    playerId: String(row[0] || '').trim(),
+    updatedAt: String(row[1] || ''),
+    episodes: parseJsonSafe_(row[6], { progress: {}, certs: {} }),
+    notebook: parseJsonSafe_(row[7], { collected: [], completedMissions: [], clearedStages: {}, postResurrection: false, ascensionSeen: false }),
+    footsteps: parseJsonSafe_(row[8], {}),
+    revision: Number(row[9] || 0),
+    adminOverrideRev: Number(row[10] || 0),
+    lastModifiedBy: String(row[11] || 'player')
+  };
+}
+
+function collectOrderedKeys_(baseOrder, objList) {
+  var out = [];
+  var seen = {};
+  var i, j, k;
+  for (i = 0; i &lt; baseOrder.length; i++) {
+    k = String(baseOrder[i] || '').trim();
+    if (k &amp;&amp; !seen[k]) { seen[k] = true; out.push(k); }
+  }
+  var extra = [];
+  var list = Array.isArray(objList) ? objList : [];
+  for (i = 0; i &lt; list.length; i++) {
+    var obj = list[i];
+    if (!obj || typeof obj !== 'object') continue;
+    var keys = Object.keys(obj);
+    for (j = 0; j &lt; keys.length; j++) {
+      k = String(keys[j] || '').trim();
+      if (k &amp;&amp; !seen[k]) { seen[k] = true; extra.push(k); }
+    }
+  }
+  extra.sort();
+  return out.concat(extra);
+}
+
+function buildSummaries_(profile) {
+  var epLabels = { noah: 'EP1', exodus: 'EP2', david: 'EP3', miracle: 'EP4' };
+  var eps = profile.episodes || {};
+  var prog = eps.progress || {};
+  var certs = eps.certs || {};
+  var epOrder = collectOrderedKeys_(['noah', 'exodus', 'david', 'miracle'], [prog, certs]);
+  var epParts = [];
+  for (var i = 0; i &lt; epOrder.length; i++) {
+    var k = epOrder[i];
+    var epLbl = epLabels[k] || String(k).toUpperCase();
+    var p = prog[k] || {};
+    var c = certs[k];
+    if (c &amp;&amp; c.code) {
+      epParts.push(epLbl + ':완주(' + c.code + ')');
+    } else if (p.completed || p.certIssued) {
+      epParts.push(epLbl + ':완주');
+    } else if (Number(p.maxClearedStage || 0) &gt; 0) {
+      epParts.push(epLbl + ':ST' + p.maxClearedStage);
+    }
+  }
+  var nb = profile.notebook || {};
+  var nbLen = Array.isArray(nb.collected) ? nb.collected.length : 0;
+  var msLen = Array.isArray(nb.completedMissions) ? nb.completedMissions.length : 0;
+  var fp = profile.footsteps || {};
+  var fpOrder = collectOrderedKeys_(['fp_1', 'fp_2', 'fp_3', 'fp_4', 'fp_5'], [fp]);
+  var fpCodes = [];
+  for (var j = 0; j &lt; fpOrder.length; j++) {
+    var fk = fpOrder[j];
+    if (fp[fk] &amp;&amp; fp[fk].code) fpCodes.push(fp[fk].code);
+  }
+  return {
+    epSummary: epParts.length ? epParts.join(' | ') : '-',
+    notebookCount: nbLen,
+    missionCount: msLen,
+    footstepsSummary: fpCodes.length ? fpCodes.join(', ') : '-'
+  };
+}
+
+function uniqueStrings_(a, b) {
+  var map = {};
+  var out = [];
+  var arrA = Array.isArray(a) ? a : [];
+  var arrB = Array.isArray(b) ? b : [];
+  var combined = arrA.concat(arrB);
+  for (var i = 0; i &lt; combined.length; i++) {
+    var v = String(combined[i] || '').trim();
+    if (v &amp;&amp; !map[v]) {
+      map[v] = true;
+      out.push(v);
+    }
+  }
+  return out;
+}
+
+function mergeProfilesUnion_(existing, incoming) {
+  var eEp = (existing &amp;&amp; existing.episodes) || {};
+  var iEp = (incoming &amp;&amp; incoming.episodes) || {};
+  var epOrder = collectOrderedKeys_(['noah', 'exodus', 'david', 'miracle'], [eEp.progress, iEp.progress, eEp.certs, iEp.certs]);
+  var mergedProg = {};
+  var mergedCerts = {};
+  for (var i = 0; i &lt; epOrder.length; i++) {
+    var ep = epOrder[i];
+    var lp = (eEp.progress &amp;&amp; eEp.progress[ep]) || {};
+    var rp = (iEp.progress &amp;&amp; iEp.progress[ep]) || {};
+    var maxSt = Math.max(Number(lp.maxClearedStage || 0), Number(rp.maxClearedStage || 0));
+    mergedProg[ep] = {
+      maxClearedStage: maxSt,
+      completed: Boolean(lp.completed || rp.completed),
+      certIssued: Boolean(lp.certIssued || rp.certIssued),
+      attempts: Math.max(Number(lp.attempts || 0), Number(rp.attempts || 0))
+    };
+    var lc = eEp.certs &amp;&amp; eEp.certs[ep];
+    var rc = iEp.certs &amp;&amp; iEp.certs[ep];
+    if (lc || rc) {
+      var baseC = lc || rc;
+      var modes = uniqueStrings_(lc &amp;&amp; lc.clearedModes, rc &amp;&amp; rc.clearedModes);
+      mergedCerts[ep] = {
+        epId: ep,
+        code: String((lc &amp;&amp; lc.code &amp;&amp; lc.code !== '-') ? lc.code : ((rc &amp;&amp; rc.code) || '')),
+        playerName: String((rc &amp;&amp; rc.playerName) || (lc &amp;&amp; lc.playerName) || incoming.playerId || ''),
+        issuedAt: String((lc &amp;&amp; lc.issuedAt) || (rc &amp;&amp; rc.issuedAt) || ''),
+        updatedAt: String((rc &amp;&amp; rc.updatedAt) || (lc &amp;&amp; lc.updatedAt) || ''),
+        clearedModes: modes
+      };
+      if (!mergedCerts[ep].code) delete mergedCerts[ep];
+    }
+  }
+
+  var eNb = (existing &amp;&amp; existing.notebook) || {};
+  var iNb = (incoming &amp;&amp; incoming.notebook) || {};
+  var mergedStages = {};
+  for (var st = 1; st &lt;= 4; st++) {
+    mergedStages[st] = Boolean((eNb.clearedStages &amp;&amp; eNb.clearedStages[st]) || (iNb.clearedStages &amp;&amp; iNb.clearedStages[st]));
+  }
+  var mergedNb = {
+    collected: uniqueStrings_(eNb.collected, iNb.collected),
+    completedMissions: uniqueStrings_(eNb.completedMissions, iNb.completedMissions),
+    clearedStages: mergedStages,
+    postResurrection: Boolean(eNb.postResurrection || iNb.postResurrection),
+    ascensionSeen: Boolean(eNb.ascensionSeen || iNb.ascensionSeen)
+  };
+
+  var eFp = (existing &amp;&amp; existing.footsteps) || {};
+  var iFp = (incoming &amp;&amp; incoming.footsteps) || {};
+  var fpOrder = collectOrderedKeys_(['fp_1', 'fp_2', 'fp_3', 'fp_4', 'fp_5'], [eFp, iFp]);
+  var mergedFp = {};
+  for (var f = 0; f &lt; fpOrder.length; f++) {
+    var fk = fpOrder[f];
+    var lf = eFp[fk];
+    var rf = iFp[fk];
+    if (lf &amp;&amp; lf.code) mergedFp[fk] = lf;
+    else if (rf &amp;&amp; rf.code) mergedFp[fk] = rf;
+  }
+
+  return {
+    playerId: String((incoming &amp;&amp; incoming.playerId) || (existing &amp;&amp; existing.playerId) || '').trim(),
+    updatedAt: kstNow_(),
+    episodes: { progress: mergedProg, certs: mergedCerts },
+    notebook: mergedNb,
+    footsteps: mergedFp
+  };
+}
+
+function findProgressRowIndex_(sheet, playerId) {
+  var norm = String(playerId || '').trim().toLowerCase();
+  if (!norm || sheet.getLastRow() &lt; 2) return -1;
+  var values = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues();
+  for (var i = 0; i &lt; values.length; i++) {
+    if (String(values[i][0] || '').trim().toLowerCase() === norm) {
+      return i + 2;
+    }
+  }
+  return -1;
+}
+
+function writeProfileRow_(sheet, rowIndex, profile) {
+  var s = buildSummaries_(profile);
+  var rowValues = [
+    profile.playerId,
+    profile.updatedAt,
+    s.epSummary,
+    s.notebookCount,
+    s.missionCount,
+    s.footstepsSummary,
+    JSON.stringify(profile.episodes || { progress: {}, certs: {} }),
+    JSON.stringify(profile.notebook || {}),
+    JSON.stringify(profile.footsteps || {}),
+    Number(profile.revision || 1),
+    Number(profile.adminOverrideRev || 0),
+    String(profile.lastModifiedBy || 'player')
+  ];
+  if (rowIndex &gt;= 2) {
+    sheet.getRange(rowIndex, 1, 1, rowValues.length).setValues([rowValues]);
+  } else {
+    sheet.appendRow(rowValues);
+  }
+}
+
+function doGet(e) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var logSheet = getLogSheet_(ss);
+  var progSheet = getOrCreateProgressSheet_(ss);
+  var params = (e &amp;&amp; e.parameter) || {};
+  var mode = String(params.mode || '').trim();
+  var filterName = String(params.name || '').trim().toLowerCase();
+
+  var logRows = logSheet.getDataRange().getValues();
+  var list = [];
+  for (var i = 1; i &lt; logRows.length; i++) {
+    var r = logRows[i];
+    var rName = String(r[1] || '');
+    if (mode === 'player' &amp;&amp; filterName &amp;&amp; rName.trim().toLowerCase() !== filterName) continue;
+    list.push({
+      time: r[0],
+      name: rName,
+      mode: r[2],
+      episode: r[3],
+      stage: r[4],
+      status: r[5],
+      playCount: r[6],
+      certCode: r[7]
+    });
+  }
+
+  var progRows = progSheet.getDataRange().getValues();
+  if (mode === 'player') {
+    var foundProfile = null;
+    for (var j = 1; j &lt; progRows.length; j++) {
+      if (String(progRows[j][0] || '').trim().toLowerCase() === filterName) {
+        foundProfile = rowToProfile_(progRows[j]);
         break;
       }
     }
-    return ContentService.createTextOutput(JSON.stringify({ ok: true, deleted: deleted }))
-      .setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({
+      ok: true,
+      profileSupported: true,
+      list: list,
+      profile: foundProfile
+    })).setMimeType(ContentService.MimeType.JSON);
   }
 
-  // 기존 기록 추가 로직 (한국 시간 KST 포맷 저장)
-  var kstTime = body.time || Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss');
-  sheet.appendRow([kstTime, body.name, body.mode, body.episode, body.stage, body.status, body.playCount, body.certCode]);
-  return ContentService.createTextOutput(JSON.stringify({ ok: true }))
-    .setMimeType(ContentService.MimeType.JSON);
+  var profiles = [];
+  for (var k = 1; k &lt; progRows.length; k++) {
+    if (String(progRows[k][0] || '').trim()) {
+      profiles.push(rowToProfile_(progRows[k]));
+    }
+  }
+  return ContentService.createTextOutput(JSON.stringify({
+    ok: true,
+    profileSupported: true,
+    list: list,
+    profiles: profiles
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
+function doPost(e) {
+  var lock = LockService.getScriptLock();
+  lock.tryLock(10000);
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var logSheet = getLogSheet_(ss);
+    var body = JSON.parse(e.postData.contents || '{}');
+
+    // 1) 플레이어 통합 진행도 동기화 (합집합 병합 + 관리자 우선 제어)
+    if (body.action === 'sync_profile') {
+      var progSheet = getOrCreateProgressSheet_(ss);
+      var incoming = body.profile || {};
+      var pid = String(body.playerId || incoming.playerId || '').trim();
+      if (!pid) {
+        return ContentService.createTextOutput(JSON.stringify({ ok: false, error: 'missing_playerId' }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+      incoming.playerId = pid;
+      var rowIndex = findProgressRowIndex_(progSheet, pid);
+      var existing = null;
+      if (rowIndex &gt;= 2) {
+        existing = rowToProfile_(progSheet.getRange(rowIndex, 1, 1, PROGRESS_HEADERS.length).getValues()[0]);
+        var clientAppliedAdminRev = Number(body.appliedAdminRev || 0);
+        if (Number(existing.adminOverrideRev || 0) &gt; clientAppliedAdminRev) {
+          return ContentService.createTextOutput(JSON.stringify({
+            ok: true,
+            adminOverride: true,
+            profile: existing
+          })).setMimeType(ContentService.MimeType.JSON);
+        }
+      }
+      var merged = mergeProfilesUnion_(existing, incoming);
+      merged.revision = (existing ? Number(existing.revision || 0) : 0) + 1;
+      merged.adminOverrideRev = existing ? Number(existing.adminOverrideRev || 0) : 0;
+      merged.lastModifiedBy = 'player';
+      writeProfileRow_(progSheet, rowIndex, merged);
+      return ContentService.createTextOutput(JSON.stringify({
+        ok: true,
+        revision: merged.revision,
+        adminOverrideRev: merged.adminOverrideRev,
+        profile: merged
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 2) 관리자 상세 수정 / 신규 등록
+    if (body.action === 'admin_upsert_profile') {
+      if (String(body.password) !== ADMIN_PASSWORD) {
+        return ContentService.createTextOutput(JSON.stringify({ ok: false, error: 'unauthorized' }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+      var progSheetAdmin = getOrCreateProgressSheet_(ss);
+      var adminProf = body.profile || {};
+      var targetPid = String(body.playerId || adminProf.playerId || '').trim();
+      if (!targetPid) {
+        return ContentService.createTextOutput(JSON.stringify({ ok: false, error: 'missing_playerId' }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+      var adminRowIdx = findProgressRowIndex_(progSheetAdmin, targetPid);
+      var prevRev = 0;
+      if (adminRowIdx &gt;= 2) {
+        prevRev = Number(progSheetAdmin.getRange(adminRowIdx, 10).getValue() || 0);
+      }
+      var nextRev = prevRev + 1;
+      adminProf.playerId = targetPid;
+      adminProf.updatedAt = kstNow_();
+      adminProf.revision = nextRev;
+      adminProf.adminOverrideRev = nextRev;
+      adminProf.lastModifiedBy = 'admin';
+      writeProfileRow_(progSheetAdmin, adminRowIdx, adminProf);
+      return ContentService.createTextOutput(JSON.stringify({
+        ok: true,
+        revision: nextRev,
+        adminOverrideRev: nextRev,
+        profile: adminProf
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 3) 관리자 통합 프로필 삭제
+    if (body.action === 'admin_delete_profile') {
+      if (String(body.password) !== ADMIN_PASSWORD) {
+        return ContentService.createTextOutput(JSON.stringify({ ok: false, error: 'unauthorized' }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+      var progSheetDel = getOrCreateProgressSheet_(ss);
+      var delIdx = findProgressRowIndex_(progSheetDel, body.playerId || body.name);
+      var deletedProf = 0;
+      if (delIdx &gt;= 2) {
+        progSheetDel.deleteRow(delIdx);
+        deletedProf = 1;
+      }
+      return ContentService.createTextOutput(JSON.stringify({ ok: true, deleted: deletedProf }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 4) 기존 플레이 로그 삭제 (+ 선택 시 통합 프로필 동시 삭제)
+    if (body.action === 'delete' &amp;&amp; String(body.password) === ADMIN_PASSWORD) {
+      var rows = logSheet.getDataRange().getValues();
+      var deleted = 0;
+      for (var i = rows.length - 1; i &gt;= 1; i--) {
+        var rTime = String(rows[i][0] || '');
+        var rName = String(rows[i][1] || '');
+        var rStatus = String(rows[i][5] || '');
+        if (body.deleteBy === 'name' &amp;&amp; rName === String(body.name)) {
+          logSheet.deleteRow(i + 1);
+          deleted++;
+        } else if (body.deleteBy === 'row' &amp;&amp; rName === String(body.name) &amp;&amp;
+                   (rTime === String(body.rawTime) || rStatus === String(body.status))) {
+          logSheet.deleteRow(i + 1);
+          deleted++;
+          break;
+        }
+      }
+      if (body.deleteBy === 'name' &amp;&amp; body.includeProfile) {
+        var ps = getOrCreateProgressSheet_(ss);
+        var pIdx = findProgressRowIndex_(ps, body.name);
+        if (pIdx &gt;= 2) ps.deleteRow(pIdx);
+      }
+      return ContentService.createTextOutput(JSON.stringify({ ok: true, deleted: deleted }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 5) 기존 플레이 이벤트 로그 추가
+    var kstTime = body.time || kstNow_();
+    logSheet.appendRow([kstTime, body.name, body.mode, body.episode, body.stage, body.status, body.playCount, body.certCode]);
+    return ContentService.createTextOutput(JSON.stringify({ ok: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    try { lock.releaseLock(); } catch (err) {}
+  }
 }</pre>
       <div class="flex justify-end gap-2">
-        <button type="button" onclick="copyAppsScriptSnippet()" class="mc-btn px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-bold">📋 코드 복사하기</button>
+        <button type="button" onclick="copyAppsScriptSnippet()" class="mc-btn px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-bold">📋 전체 코드 복사하기</button>
         <button type="button" onclick="closeAppsScriptGuideModal()" class="mc-btn px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-xs font-bold">확인</button>
       </div>
     </div>
   </div>
 
+  <script src="game_catalog.js?v=3.12.3"></script>
   <script>
     const ADMIN_PASSWORD = '3412';
     const GOOGLE_SHEET_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbxAcGwFLUxFM-BLZGQpUjWMRhQklklXFXdGILvD-SbMgvGulElPgJ0ynyabd-tsC5ex/exec';
+    const DEFAULT_INCLUDE_NICODEMUS = true;
 
     let allRecords = [];
+    let allProfiles = [];
+    let profilesSupported = false;
     const LOCAL_DELETE_STORAGE_KEY = 'bible_admin_deleted_filters_v1';
+
+    const FALLBACK_ADMIN_EPISODE_CATALOG = [
+      { key: 'noah',    num: 1, icon: '⛵', title: '에피소드 1 · 노아의 방주',       prefix: 'ARK-' },
+      { key: 'exodus',  num: 2, icon: '🌊', title: '에피소드 2 · 출애굽과 시내산',   prefix: 'EXO-' },
+      { key: 'david',   num: 3, icon: '👑', title: '에피소드 3 · 다윗과 골리앗',     prefix: 'DAV-' },
+      { key: 'miracle', num: 4, icon: '🕊️', title: '에피소드 4 · 예수님의 기적',     prefix: 'JES-' }
+    ];
+
+    const FALLBACK_ADMIN_FOOTSTEPS_CATALOG = [
+      { id: 'fp_1', stageNum: 1, stageLabel: '1단계', requiredCount: 3,  isAllClear: false, title: '갈릴리의 길벗',    icon: '🍃', prefix: 'GLB-' },
+      { id: 'fp_2', stageNum: 2, stageLabel: '2단계', requiredCount: 5,  isAllClear: false, title: '기적의 목격자',    icon: '🌊', prefix: 'MRW-' },
+      { id: 'fp_3', stageNum: 3, stageLabel: '3단계', requiredCount: 7,  isAllClear: false, title: '말씀을 품은 제자', icon: '🌾', prefix: 'WRD-' },
+      { id: 'fp_4', stageNum: 4, stageLabel: '4단계', requiredCount: 10, isAllClear: false, title: '신실한 동행자',    icon: '🌿', prefix: 'FTH-' },
+      { id: 'fp_5', stageNum: 5, stageLabel: '5단계', requiredCount: 22, isAllClear: true,  title: '부활의 기쁜 증인', icon: '👑', prefix: 'RES-' }
+    ];
+
+    const FALLBACK_ADMIN_MISSION_CATALOG = [
+      { id: 'main_1',       group: '메인',   title: '메인1 · 깊은 곳으로 / 풍랑' },
+      { id: 'main_2',       group: '메인',   title: '메인2 · 오병이어의 기적' },
+      { id: 'main_3',       group: '메인',   title: '메인3 · 골고다 십자가의 길' },
+      { id: 'main_4',       group: '메인',   title: '메인4 · 빈 무덤과 부활' },
+      { id: 'ev_cana',      group: '사건',   title: '가나 혼인잔치 물항아리' },
+      { id: 'ev_paralytic', group: '사건',   title: '중풍병자 지붕 뚫기' },
+      { id: 'ev_children',  group: '사건',   title: '어린아이 축복' },
+      { id: 'ev_well',      group: '사건',   title: '수가성 우물가 여인' },
+      { id: 'ev_zacchaeus', group: '사건',   title: '삭개오 돌무화과나무' },
+      { id: 'ev_samaritan', group: '사건',   title: '선한 사마리아인' },
+      { id: 'ev_lepers',    group: '사건',   title: '돌아온 한 명의 나병환자' },
+      { id: 'ev_palm',      group: '사건',   title: '호산나 예루살렘 입성' },
+      { id: 'ev_washfeet',  group: '사건',   title: '제자들의 발을 씻기심' },
+      { id: 'ev_widow',     group: '사건',   title: '과부의 두 렙돈 헌금' },
+      { id: 'par_sower',    group: '비유',   title: '[비유] 씨 뿌리는 사람' },
+      { id: 'par_sheep',    group: '비유',   title: '[비유] 잃어버린 어린양' },
+      { id: 'par_builder',  group: '비유',   title: '[비유] 반석 위의 집' },
+      { id: 'par_mustard',  group: '비유',   title: '[비유] 겨자씨 한 알' },
+      { id: 'ev_nicodemus', group: '밤미션', title: '🌙 밤에 찾아온 니고데모', extraOnly: !DEFAULT_INCLUDE_NICODEMUS },
+      { id: 'post_emmaus',  group: '부활후', title: '엠마오로 가는 두 제자' },
+      { id: 'post_thomas',  group: '부활후', title: '도마의 부활 신앙 고백' },
+      { id: 'post_breakfast', group: '부활후', title: '갈릴리 숯불 아침식사' }
+    ];
+
+    const FALLBACK_ADMIN_NOTEBOOK_CATALOG = [
+      {
+        key: 'rumors',
+        label: '🟡 소문',
+        items: [
+          { id: 'rumor_cana',      sub: '갈릴리',   title: '가나 혼인잔치의 포도주 소동' },
+          { id: 'rumor_paralytic', sub: '갈릴리',   title: '지붕으로 올라간 네 친구' },
+          { id: 'rumor_storm',     sub: '갈릴리',   title: '바람과 바다를 꾸짖으신 분' },
+          { id: 'rumor_loaves',    sub: '갈릴리',   title: '도시락 하나로 먹은 무리들' },
+          { id: 'rumor_children',  sub: '갈릴리',   title: '어린이를 안아주시는 선생님' },
+          { id: 'rumor_well',      sub: '사마리아', title: '수가성 우물가의 대화' },
+          { id: 'rumor_zacchaeus', sub: '여리고',   title: '뽕나무 위로 올라간 세리장' },
+          { id: 'rumor_samaritan', sub: '유대광야', title: '길가에 쓰러진 여행자 이야기' },
+          { id: 'rumor_lepers',    sub: '사마리아', title: '돌아와 감사한 한 사람' },
+          { id: 'rumor_palm',      sub: '예루살렘', title: '나귀를 타신 평화의 왕' },
+          { id: 'rumor_widow',     sub: '예루살렘', title: '가난한 과부의 작은 동전 두 개' },
+          { id: 'rumor_identity',  sub: '갈릴리',   title: '사람들이 말하는 그분은 누구?' }
+        ]
+      },
+      {
+        key: 'miracles',
+        label: '✨ 기적',
+        items: [
+          { id: 'mir_cana',      sub: '요 2:1~11',   title: '물이 변하여 포도주가 되다' },
+          { id: 'mir_storm',     sub: '막 4:35~41',  title: '폭풍우를 잠잠하게 하시다' },
+          { id: 'mir_paralytic', sub: '막 2:1~12',   title: '네 친구의 믿음과 중풍병자 치유' },
+          { id: 'mir_loaves',    sub: '요 6:1~13',   title: '오병이어로 오천 명을 먹이시다' },
+          { id: 'mir_lepers',    sub: '눅 17:11~19', title: '열 명의 나병환자를 깨끗하게 하시다' },
+          { id: 'mir_fish',      sub: '눅 5:4~7',    title: '깊은 데로 가서 그물을 내리라' },
+          { id: 'mir_resurrect', sub: '마 28:5~6',   title: '사망을 이기시고 부활하시다' },
+          { id: 'mir_nicodemus', sub: '요 3:3~16',   title: '🌙 밤에 찾아온 니고데모 (거듭남)', extraOnly: !DEFAULT_INCLUDE_NICODEMUS }
+        ]
+      },
+      {
+        key: 'parables',
+        label: '🌱 비유',
+        items: [
+          { id: 'par_sower',   sub: '마 13:1~9',   title: '[비유] 씨 뿌리는 사람의 네 가지 땅' },
+          { id: 'par_sheep',   sub: '눅 15:3~7',   title: '[비유] 잃어버린 양 한 마리' },
+          { id: 'par_builder', sub: '마 7:24~27',  title: '[비유] 반석 위에 집을 지은 지혜로운 사람' },
+          { id: 'par_mustard', sub: '마 13:31~32', title: '[비유] 가장 작은 겨자씨 한 알의 성장' }
+        ]
+      },
+      {
+        key: 'words',
+        label: '📜 말씀',
+        items: [
+          { id: 'wd_john316',  sub: '요 3:16',  title: '세상을 이처럼 사랑하사' },
+          { id: 'wd_john146',  sub: '요 14:6',  title: '길이요 진리요 생명' },
+          { id: 'wd_mark1014', sub: '막 10:14', title: '어린아이들이 내게 오는 것' },
+          { id: 'wd_john414',  sub: '요 4:14',  title: '영원히 목마르지 아니하는 샘물' },
+          { id: 'wd_luke1910', sub: '눅 19:10', title: '잃어버린 자를 찾아 구원하려 함' },
+          { id: 'wd_luke1037', sub: '눅 10:37', title: '가서 너도 이와 같이 하라' },
+          { id: 'wd_john1314', sub: '요 13:14', title: '서로 발을 씻어 주는 섬김' },
+          { id: 'wd_mark1243', sub: '막 12:43', title: '마음을 다해 드린 두 렙돈' },
+          { id: 'wd_matt1128', sub: '마 11:28', title: '수고하고 무거운 짐 진 자들아' },
+          { id: 'wd_matt2820', sub: '마 28:20', title: '세상 끝날까지 너희와 항상 함께' }
+        ]
+      },
+      {
+        key: 'testimonies',
+        label: '🕊️ 부활증언',
+        items: [
+          { id: 'test_emmaus',    sub: '눅 24:13~35', title: '엠마오로 가는 두 제자의 뜨거워진 가슴' },
+          { id: 'test_thomas',    sub: '요 20:24~29', title: '도마의 고백: 나의 주님이시요 나의 하나님' },
+          { id: 'test_breakfast', sub: '요 21:1~19',  title: '갈릴리 바닷가의 숯불 아침 식사와 사명' }
+        ]
+      }
+    ];
+
+    function buildAdminCatalogsFromShared() {
+      const cat = (typeof window !== 'undefined' && window.BIBLE_GAME_CATALOG) ? window.BIBLE_GAME_CATALOG : null;
+      if (!cat) {
+        return {
+          episodes: FALLBACK_ADMIN_EPISODE_CATALOG,
+          footsteps: FALLBACK_ADMIN_FOOTSTEPS_CATALOG,
+          missions: FALLBACK_ADMIN_MISSION_CATALOG,
+          notebook: FALLBACK_ADMIN_NOTEBOOK_CATALOG
+        };
+      }
+
+      const episodes = (Array.isArray(cat.episodesOrder) && cat.episodesOrder.length && cat.episodeCardMeta)
+        ? cat.episodesOrder.map((key, idx) => {
+            const m = cat.episodeCardMeta[key] || {};
+            const num = m.epNum || (idx + 1);
+            return {
+              key,
+              num,
+              icon: m.icon || '📘',
+              title: '에피소드 ' + num + ' · ' + (m.shortTitle || key),
+              prefix: m.prefix || (String(key).slice(0, 3).toUpperCase() + '-')
+            };
+          })
+        : FALLBACK_ADMIN_EPISODE_CATALOG;
+
+      const footsteps = (Array.isArray(cat.footstepsOrder) && cat.footstepsOrder.length && cat.footstepsMeta)
+        ? cat.footstepsOrder.map((id, idx) => {
+            const m = cat.footstepsMeta[id] || {};
+            const stNum = m.stageNum || (idx + 1);
+            return {
+              id,
+              stageNum: stNum,
+              stageLabel: m.stageLabel || (stNum + '단계'),
+              requiredCount: Number(m.requiredCount || 0),
+              isAllClear: Boolean(m.isAllClear),
+              title: m.title || id,
+              icon: m.symbolIcon || m.icon || '✨',
+              prefix: m.prefix || 'FP-'
+            };
+          })
+        : FALLBACK_ADMIN_FOOTSTEPS_CATALOG;
+
+      const missions = (Array.isArray(cat.miracleMissions) && cat.miracleMissions.length)
+        ? cat.miracleMissions.map(m => ({
+            id: m.id,
+            group: m.group || '기타',
+            title: m.title || m.id,
+            extraOnly: false
+          }))
+        : FALLBACK_ADMIN_MISSION_CATALOG;
+
+      const notebook = (Array.isArray(cat.miracleNotebookCategories) && cat.miracleNotebookCategories.length && cat.miracleNotebookDb)
+        ? cat.miracleNotebookCategories.map(c => {
+            const rawList = Array.isArray(cat.miracleNotebookDb[c.key]) ? cat.miracleNotebookDb[c.key] : [];
+            return {
+              key: c.key,
+              label: c.label || c.key,
+              items: rawList.map(it => {
+                let sub = it.region || '';
+                if (!sub && it.verse) {
+                  const m = String(it.verse).match(/\(([^()]+)\)\s*$/);
+                  sub = m ? m[1] : String(it.verse);
+                }
+                return {
+                  id: it.id,
+                  sub,
+                  title: it.title || it.id,
+                  extraOnly: false
+                };
+              })
+            };
+          })
+        : FALLBACK_ADMIN_NOTEBOOK_CATALOG;
+
+      return { episodes, footsteps, missions, notebook };
+    }
+
+    const _RESOLVED_CATALOGS = buildAdminCatalogsFromShared();
+    const ADMIN_EPISODE_CATALOG = _RESOLVED_CATALOGS.episodes;
+    const ADMIN_FOOTSTEPS_CATALOG = _RESOLVED_CATALOGS.footsteps;
+    const ADMIN_MISSION_CATALOG = _RESOLVED_CATALOGS.missions;
+    const ADMIN_NOTEBOOK_CATALOG = _RESOLVED_CATALOGS.notebook;
+
+    function getDefaultTotalMissionCount() {
+      return ADMIN_MISSION_CATALOG.filter(m => !m.extraOnly).length;
+    }
+    function getDefaultTotalNotebookCount() {
+      return ADMIN_NOTEBOOK_CATALOG.reduce((sum, cat) => sum + cat.items.filter(x => !x.extraOnly).length, 0);
+    }
 
     function loadLocalDeletedState() {
       try {
@@ -310,11 +1129,9 @@
       if (/^\d{10,13}$/.test(s)) {
         dt = new Date(s.length === 10 ? Number(s) * 1000 : Number(s));
       } else if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2})?(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/.test(s)) {
-        // 시간대 표기가 없는 단순 YYYY-MM-DD HH:mm:ss 형식은 이미 KST 문자열인지 확인 후 Date 생성
         const hasTz = /(Z|[+-]\d{2}:?\d{2})$/i.test(s);
         dt = new Date(hasTz ? s : s.replace(' ', 'T') + '+09:00');
       } else {
-        // 예: "Thu Nov 19 2026 21:45:10 GMT+0000" 또는 "2026. 11. 19. 오후 9:45:10"
         const parsed = Date.parse(s);
         if (!isNaN(parsed)) dt = new Date(parsed);
       }
@@ -336,10 +1153,15 @@
         const hh = get('hour') === '24' ? '00' : get('hour');
         return `${get('year')}-${get('month')}-${get('day')} ${hh}:${get('minute')}:${get('second')}`;
       } catch (e) {
-        // Intl 미지원 환경 수동 KST(+9시간) 폴백
         const kst = new Date(dt.getTime() + 9 * 3600 * 1000);
         return kst.toISOString().replace('T', ' ').slice(0, 19);
       }
+    }
+
+    function formatDotDateKst(rawVal = Date.now()) {
+      const kst = formatKoreanTime(rawVal);
+      if (kst && /^\d{4}-\d{2}-\d{2}/.test(kst)) return kst.slice(0, 10).replace(/-/g, '.');
+      return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10).replace(/-/g, '.');
     }
 
     function escapeHtml(str) {
@@ -362,6 +1184,15 @@
       { key: 'junior', label: '🌱 유년반' },
       { key: 'senior', label: '🍎 소년반' }
     ];
+
+    const ADMIN_GAME_VERSION = '3.12.3';
+    (function syncAdminVersionBadges() {
+      const label = 'v' + ADMIN_GAME_VERSION;
+      const b1 = document.getElementById('admin-version-badge');
+      const b2 = document.getElementById('admin-login-version-badge');
+      if (b1) b1.textContent = label;
+      if (b2) b2.textContent = label;
+    })();
 
     const EP4_MIRACLE_STAGES = [
       { stage: 1, sub: 'openworld',     label: '🌿 오픈월드' },
@@ -387,9 +1218,26 @@
       location.reload();
     }
 
+    function syncCatalogStatusBanner() {
+      const banner = document.getElementById('catalog-status-banner');
+      if (!banner) return;
+      const catVer = window.__GAME_BUILD_VERSIONS__ && window.__GAME_BUILD_VERSIONS__.catalog;
+      if (!window.BIBLE_GAME_CATALOG) {
+        banner.innerHTML = '⚠️ <b>game_catalog.js</b>를 불러오지 못해 내장 기본 목록으로 동작 중입니다. 신규 발자취 카드·미션·수첩 항목은 데이터 손실 없이 자동 보존됩니다.';
+        banner.classList.remove('hidden');
+      } else if (catVer && catVer !== ADMIN_GAME_VERSION) {
+        banner.innerHTML = `⚠️ <b>카탈로그 버전 불일치 감지</b>: <code>game_catalog.js</code>(v${escapeHtml(catVer)})와 <code>admin.html</code>(v${escapeHtml(ADMIN_GAME_VERSION)}) 버전이 다릅니다. 브라우저 강력 새로고침(<b>Ctrl+F5</b>)을 권장합니다.`;
+        banner.classList.remove('hidden');
+      } else {
+        banner.innerHTML = '';
+        banner.classList.add('hidden');
+      }
+    }
+
     function unlockAdminPage() {
       document.getElementById('login-screen').classList.add('hidden');
       document.getElementById('admin-main').classList.remove('hidden');
+      syncCatalogStatusBanner();
       renderStageLauncher();
       fetchSheetRecords();
     }
@@ -487,19 +1335,899 @@
 
     async function fetchSheetRecords() {
       const tbody = document.getElementById('records-tbody');
+      const ptbody = document.getElementById('profiles-tbody');
       tbody.innerHTML = `<tr><td colspan="9" class="p-6 text-center text-slate-400">구글 스프레드시트에서 데이터를 불러오는 중...</td></tr>`;
+      if (ptbody) ptbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-slate-400">플레이어 탐험기록을 불러오는 중...</td></tr>`;
       try {
         const res = await fetch(GOOGLE_SHEET_WEBAPP_URL, { redirect: 'follow' });
         const data = await res.json();
         allRecords = data.list || [];
+        allProfiles = Array.isArray(data.profiles) ? data.profiles : [];
+        profilesSupported = Boolean(data.profileSupported || Array.isArray(data.profiles));
+
+        const banner = document.getElementById('profiles-upgrade-banner');
+        if (banner) banner.classList.toggle('hidden', profilesSupported);
+
         updateDeleteTargetDropdown();
         updateSummaryStats();
         renderRecordsTable();
+        updateProfileStats();
+        renderProfilesTable();
       } catch (e) {
         tbody.innerHTML = `<tr><td colspan="9" class="p-6 text-center text-rose-400">데이터 로드 실패: 구글 스프레드시트 Apps Script 배포 권한(모든 사용자)을 확인해 주세요.</td></tr>`;
+        if (ptbody) ptbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-rose-400">데이터 로드 실패</td></tr>`;
       }
     }
 
+    // =========================================================================
+    // [섹션 B] 플레이어 탐험수첩 · 에피소드 · 예수님의 발자취 조회 및 수정
+    // =========================================================================
+    function normalizeModeKeyFromRaw(raw) {
+      const s = String(raw || '').trim().toLowerCase();
+      if (!s) return '';
+      if (s === 'kinder' || s.includes('유치')) return 'kinder';
+      if (s === 'junior' || s.includes('유년')) return 'junior';
+      if (s === 'senior' || s.includes('소년')) return 'senior';
+      if (s === 'timeattack' || s.includes('타임')) return 'timeattack';
+      return '';
+    }
+
+    function createEmptyProfileObject(pid) {
+      const initProgress = {};
+      ADMIN_EPISODE_CATALOG.forEach(ep => {
+        initProgress[ep.key] = { maxClearedStage: 0, completed: false, certIssued: false, attempts: 0 };
+      });
+      return {
+        playerId: String(pid || '').trim(),
+        updatedAt: '-',
+        revision: 0,
+        adminOverrideRev: 0,
+        lastModifiedBy: 'log_inferred',
+        _isLogOnly: true,
+        episodes: {
+          progress: initProgress,
+          certs: {}
+        },
+        notebook: {
+          collected: [],
+          completedMissions: [],
+          clearedStages: { 1: false, 2: false, 3: false, 4: false },
+          postResurrection: false,
+          ascensionSeen: false
+        },
+        footsteps: {}
+      };
+    }
+
+    function getAllFootstepsCatalogForProfile(profile) {
+      const base = [...ADMIN_FOOTSTEPS_CATALOG];
+      const known = new Set(base.map(m => m.id));
+      const fp = (profile && profile.footsteps) || {};
+      const extraKeys = Object.keys(fp).filter(k => !known.has(k) && fp[k] && fp[k].code).sort();
+      extraKeys.forEach(k => {
+        base.push({
+          id: k,
+          stageNum: 99,
+          stageLabel: k,
+          requiredCount: 0,
+          isAllClear: false,
+          title: '확장 발자취 카드 (' + k + ')',
+          icon: '✨',
+          prefix: 'EXT-',
+          isUnknownExtra: true
+        });
+      });
+      return base;
+    }
+
+    function getAllEpisodeCatalogForProfile(profile) {
+      const base = [...ADMIN_EPISODE_CATALOG];
+      const known = new Set(base.map(ep => ep.key));
+      const prog = (profile && profile.episodes && profile.episodes.progress) || {};
+      const certs = (profile && profile.episodes && profile.episodes.certs) || {};
+      const extraKeys = Array.from(new Set(Object.keys(prog).concat(Object.keys(certs))))
+        .filter(k => k && !known.has(k))
+        .sort();
+      extraKeys.forEach(k => {
+        base.push({
+          key: k,
+          num: k.toUpperCase(),
+          icon: '🆕',
+          title: '확장 에피소드 (' + k + ')',
+          prefix: 'EXT-',
+          isUnknownExtra: true
+        });
+      });
+      return base;
+    }
+
+    function getMergedProfilesList() {
+      const byKey = new Map();
+      allProfiles.forEach(p => {
+        const pid = String(p.playerId || '').trim();
+        if (!pid) return;
+        const clone = JSON.parse(JSON.stringify(p));
+        clone._isLogOnly = false;
+        byKey.set(pid.toLowerCase(), clone);
+      });
+
+      // 기존 로그에만 존재하는 어린이도 보조 프로필로 합쳐서 표시
+      const logGrouped = new Map();
+      getVisibleRecords().forEach(r => {
+        const nm = String(r.name || '').trim();
+        if (!nm) return;
+        const key = nm.toLowerCase();
+        if (byKey.has(key)) return;
+        if (!logGrouped.has(key)) logGrouped.set(key, { name: nm, rows: [] });
+        logGrouped.get(key).rows.push(r);
+      });
+
+      logGrouped.forEach((grp, key) => {
+        const prof = createEmptyProfileObject(grp.name);
+        let latestRaw = '';
+        grp.rows.forEach(r => {
+          if (r.time && (!latestRaw || String(r.time) > latestRaw)) latestRaw = String(r.time);
+          const ep = String(r.episode || 'noah').trim();
+          const p = prof.episodes.progress[ep];
+          if (!p) return;
+          const stStr = String(r.status || '');
+          const stNum = parseInt(r.stage || 0, 10) || 0;
+          const certStr = String(r.certCode || '-').trim();
+          const mk = normalizeModeKeyFromRaw(r.mode);
+          if (stStr.includes('게임시작') || stStr.includes('재도전') || stStr.includes('바로진입')) {
+            p.attempts = (p.attempts || 0) + 1;
+          }
+          const isCertRow = stStr.includes('완주') || (certStr !== '-' && certStr.length >= 4) || (ep !== 'miracle' && stNum >= 4);
+          if (isCertRow) {
+            p.maxClearedStage = 4;
+            p.completed = true;
+            p.certIssued = true;
+            if (!prof.episodes.certs[ep]) {
+              const meta = ADMIN_EPISODE_CATALOG.find(x => x.key === ep) || { prefix: 'CRT-' };
+              prof.episodes.certs[ep] = {
+                epId: ep,
+                code: (certStr && certStr !== '-') ? certStr : (meta.prefix + '000'),
+                playerName: grp.name,
+                issuedAt: formatDotDateKst(r.time),
+                updatedAt: formatDotDateKst(r.time),
+                clearedModes: mk ? [mk] : ['junior']
+              };
+            } else if (mk && !prof.episodes.certs[ep].clearedModes.includes(mk)) {
+              prof.episodes.certs[ep].clearedModes.push(mk);
+            }
+          } else if (stStr.includes('클리어') && stNum >= 1 && stNum <= 4) {
+            if (stNum > p.maxClearedStage) p.maxClearedStage = stNum;
+            if (ep !== 'miracle' && stNum >= 3) p.completed = true;
+          }
+        });
+        prof.updatedAt = latestRaw || '-';
+        byKey.set(key, prof);
+      });
+
+      return Array.from(byKey.values()).sort((a, b) => String(a.playerId).localeCompare(String(b.playerId), 'ko'));
+    }
+
+    function updateProfileStats() {
+      const list = getMergedProfilesList();
+      const totalNb = getDefaultTotalNotebookCount();
+      const elCount = document.getElementById('stat-prof-count');
+      const elEp4 = document.getElementById('stat-prof-ep4-clear');
+      const elAvg = document.getElementById('stat-prof-nb-avg');
+      const elFp = document.getElementById('stat-prof-fp-total');
+      if (elCount) elCount.textContent = `${list.length}명`;
+
+      let ep4Clear = 0;
+      let nbSum = 0;
+      let fpSum = 0;
+      list.forEach(p => {
+        const mProg = (p.episodes && p.episodes.progress && p.episodes.progress.miracle) || {};
+        if (mProg.completed || mProg.certIssued || (p.episodes && p.episodes.certs && p.episodes.certs.miracle)) ep4Clear++;
+        nbSum += (p.notebook && Array.isArray(p.notebook.collected)) ? p.notebook.collected.length : 0;
+        const fp = p.footsteps || {};
+        getAllFootstepsCatalogForProfile(p).forEach(meta => { if (fp[meta.id] && fp[meta.id].code) fpSum++; });
+      });
+      if (elEp4) elEp4.textContent = `${ep4Clear}명`;
+      const avgNb = list.length ? Math.round((nbSum / list.length) * 10) / 10 : 0;
+      if (elAvg) elAvg.textContent = `${avgNb} / ${totalNb}`;
+      if (elFp) elFp.textContent = `${fpSum}장`;
+    }
+
+    function renderProfilesTable() {
+      const tbody = document.getElementById('profiles-tbody');
+      if (!tbody) return;
+      const nameQ = (document.getElementById('profile-filter-name')?.value || '').trim().toLowerCase();
+      const typeQ = document.getElementById('profile-filter-type')?.value || 'all';
+      const totalNb = getDefaultTotalNotebookCount();
+      const totalMs = getDefaultTotalMissionCount();
+
+      const filtered = getMergedProfilesList().filter(p => {
+        if (nameQ && !String(p.playerId || '').toLowerCase().includes(nameQ)) return false;
+        const mProg = (p.episodes && p.episodes.progress && p.episodes.progress.miracle) || {};
+        const nbCnt = (p.notebook && Array.isArray(p.notebook.collected)) ? p.notebook.collected.length : 0;
+        const fpCnt = getAllFootstepsCatalogForProfile(p).filter(m => p.footsteps && p.footsteps[m.id] && p.footsteps[m.id].code).length;
+        if (typeQ === 'synced' && p._isLogOnly) return false;
+        if (typeQ === 'log_only' && !p._isLogOnly) return false;
+        if (typeQ === 'ep4_clear' && !(mProg.completed || mProg.certIssued)) return false;
+        if (typeQ === 'has_footsteps' && fpCnt === 0) return false;
+        if (typeQ === 'has_notebook' && nbCnt === 0) return false;
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-slate-400">조건에 맞는 탐험기록이 없습니다.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(p => {
+        const pid = String(p.playerId || '');
+        const eps = p.episodes || {};
+        const prog = eps.progress || {};
+        const certs = eps.certs || {};
+        const epPills = getAllEpisodeCatalogForProfile(p).map(ep => {
+          const pr = prog[ep.key] || {};
+          const cert = certs[ep.key];
+          const epTag = ep.isUnknownExtra ? escapeHtml(String(ep.key).toUpperCase()) : `EP${ep.num}`;
+          if (cert && cert.code) {
+            return `<span title="${escapeHtml(ep.title)} 완주 · 코드: ${escapeHtml(cert.code)}" class="px-1.5 py-0.5 rounded bg-emerald-600/80 text-white font-jua text-[10px]">${epTag}🏆</span>`;
+          }
+          if (pr.completed || pr.certIssued) {
+            return `<span title="${escapeHtml(ep.title)} 완주" class="px-1.5 py-0.5 rounded bg-emerald-700/70 text-emerald-100 font-jua text-[10px]">${epTag}✓</span>`;
+          }
+          if ((pr.maxClearedStage || 0) > 0) {
+            return `<span title="${escapeHtml(ep.title)} 스테이지 ${pr.maxClearedStage}" class="px-1.5 py-0.5 rounded bg-amber-600/70 text-amber-100 font-jua text-[10px]">${epTag}·${pr.maxClearedStage}</span>`;
+          }
+          if (ep.isUnknownExtra) return '';
+          return `<span class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-500 font-jua text-[10px]">${epTag}</span>`;
+        }).filter(Boolean).join(' ');
+
+        const nbArr = (p.notebook && Array.isArray(p.notebook.collected)) ? p.notebook.collected : [];
+        const msArr = (p.notebook && Array.isArray(p.notebook.completedMissions)) ? p.notebook.completedMissions : [];
+        const nbPct = Math.min(100, Math.round((nbArr.length / Math.max(1, totalNb)) * 100));
+
+        const fp = p.footsteps || {};
+        const fpPills = getAllFootstepsCatalogForProfile(p).map(meta => {
+          const has = Boolean(fp[meta.id] && fp[meta.id].code);
+          const pillLabel = meta.isUnknownExtra ? `🆕${escapeHtml(meta.id)}` : `${meta.stageNum}${meta.icon}`;
+          return `<span title="${escapeHtml(meta.stageLabel)} ${escapeHtml(meta.title)}${has ? ' (' + escapeHtml(fp[meta.id].code) + ')' : ' (미획득)'}"
+            class="px-1.5 py-0.5 rounded text-[10px] font-jua ${has ? 'bg-amber-400 text-slate-950' : 'bg-slate-800 text-slate-500 opacity-60'}">${pillLabel}</span>`;
+        }).join(' ');
+
+        const modBadge = p._isLogOnly
+          ? '<span class="px-1.5 py-0.5 rounded bg-slate-700 text-slate-300 text-[10px]">📄 로그추론</span>'
+          : (p.lastModifiedBy === 'admin'
+            ? '<span class="px-1.5 py-0.5 rounded bg-indigo-600/80 text-white text-[10px]">🛠️ 관리자수정</span>'
+            : '<span class="px-1.5 py-0.5 rounded bg-emerald-700/70 text-emerald-100 text-[10px]">☁️ 자동저장</span>');
+
+        return `
+        <tr class="hover:bg-slate-800/60">
+          <td class="p-3 font-bold text-white whitespace-nowrap">${escapeHtml(pid)}</td>
+          <td class="p-3"><div class="flex flex-wrap gap-1">${epPills}</div></td>
+          <td class="p-3 min-w-[110px]">
+            <div class="flex items-center justify-between text-[11px] font-bold text-amber-200 mb-1">
+              <span>${nbArr.length} / ${totalNb}</span>
+              <span class="text-[10px] text-slate-400">${nbPct}%</span>
+            </div>
+            <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+              <div class="h-full bg-amber-400" style="width:${nbPct}%"></div>
+            </div>
+          </td>
+          <td class="p-3 font-mono font-bold text-cyan-300 whitespace-nowrap">${msArr.length} / ${totalMs}</td>
+          <td class="p-3"><div class="flex flex-wrap gap-1">${fpPills}</div></td>
+          <td class="p-3">
+            <div class="text-[11px] font-mono text-slate-300 whitespace-nowrap">${escapeHtml(formatKoreanTime(p.updatedAt))}</div>
+            <div class="mt-0.5">${modBadge}</div>
+          </td>
+          <td class="p-3 text-center whitespace-nowrap">
+            <div class="inline-flex items-center gap-1">
+              <button type="button" onclick="openProfileEditorModal(${JSON.stringify(pid).replace(/"/g, '&quot;')})"
+                class="mc-btn px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-jua text-[11px]">
+                ✏️ 조회·수정
+              </button>
+              ${p._isLogOnly ? '' : `
+              <button type="button" onclick="deleteSingleProfile(${JSON.stringify(pid).replace(/"/g, '&quot;')})"
+                class="px-2 py-1 rounded-lg bg-rose-700/80 hover:bg-rose-600 text-[11px] font-bold text-white" title="PlayerProgress 마스터 행 삭제">
+                삭제
+              </button>`}
+            </div>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    // -------------------------------------------------------------------------
+    // 플레이어 탐험기록 상세 조회 / 수정 모달 로직
+    // -------------------------------------------------------------------------
+    let _editingProfile = null;
+    let _editingIsNew = false;
+    let _editingTab = 'episodes';
+
+    function generateRandomCode(prefix) {
+      return String(prefix || 'CRT-') + Math.floor(100 + Math.random() * 900);
+    }
+
+    function openNewProfileEditor() {
+      _editingIsNew = true;
+      _editingProfile = createEmptyProfileObject('');
+      _editingProfile._isLogOnly = false;
+      openProfileEditorModalInternal();
+    }
+
+    function openProfileEditorModal(playerId) {
+      const target = getMergedProfilesList().find(p => String(p.playerId) === String(playerId));
+      _editingIsNew = false;
+      _editingProfile = target ? JSON.parse(JSON.stringify(target)) : createEmptyProfileObject(playerId);
+      openProfileEditorModalInternal();
+    }
+
+    function openProfileEditorModalInternal() {
+      const modal = document.getElementById('profile-editor-modal');
+      if (!modal || !_editingProfile) return;
+
+      const idInput = document.getElementById('pe-player-id-input');
+      const idRo = document.getElementById('pe-player-id-readonly');
+      const revBadge = document.getElementById('pe-rev-badge');
+      const updInfo = document.getElementById('pe-last-updated-info');
+      const saveStatus = document.getElementById('pe-save-status');
+
+      if (_editingIsNew) {
+        idInput.classList.remove('hidden');
+        idInput.value = '';
+        idRo.classList.add('hidden');
+      } else {
+        idInput.classList.add('hidden');
+        idRo.classList.remove('hidden');
+        idRo.textContent = _editingProfile.playerId;
+      }
+
+      if (revBadge) {
+        revBadge.textContent = _editingProfile._isLogOnly
+          ? '로그 추론본 (저장 시 시트 등록)'
+          : `rev ${_editingProfile.revision || 0} · adminRev ${_editingProfile.adminOverrideRev || 0}`;
+      }
+      if (updInfo) {
+        updInfo.textContent = _editingProfile.updatedAt && _editingProfile.updatedAt !== '-'
+          ? `최근 갱신: ${formatKoreanTime(_editingProfile.updatedAt)}`
+          : '';
+      }
+      if (saveStatus) saveStatus.textContent = '';
+
+      renderProfileEditorEpisodes();
+      renderProfileEditorFootstepsAndMissions();
+      renderProfileEditorNotebook();
+      updateProfileEditorTabCounts();
+      switchProfileEditorTab('episodes');
+      modal.classList.remove('hidden');
+    }
+
+    function closeProfileEditorModal() {
+      const modal = document.getElementById('profile-editor-modal');
+      if (modal) modal.classList.add('hidden');
+      _editingProfile = null;
+    }
+
+    function switchProfileEditorTab(tabKey) {
+      _editingTab = tabKey;
+      ['episodes', 'footsteps', 'notebook'].forEach(k => {
+        const panel = document.getElementById(`pe-tab-${k}`);
+        const btn = document.getElementById(`pe-tab-btn-${k}`);
+        const active = (k === tabKey);
+        if (panel) panel.classList.toggle('hidden', !active);
+        if (btn) {
+          btn.className = active
+            ? 'mc-btn px-3.5 py-2 rounded-xl bg-amber-500 text-slate-950 font-jua text-xs sm:text-sm'
+            : 'mc-btn px-3.5 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 font-jua text-xs sm:text-sm';
+        }
+      });
+    }
+
+    function updateProfileEditorTabCounts() {
+      if (!_editingProfile) return;
+      const nb = _editingProfile.notebook || {};
+      const msCount = Array.isArray(nb.completedMissions) ? nb.completedMissions.length : 0;
+      const nbCount = Array.isArray(nb.collected) ? nb.collected.length : 0;
+      const msEl = document.getElementById('pe-tab-mission-count');
+      const nbEl = document.getElementById('pe-tab-nb-count');
+      if (msEl) msEl.textContent = `${msCount}/${getDefaultTotalMissionCount()}`;
+      if (nbEl) nbEl.textContent = `${nbCount}/${getDefaultTotalNotebookCount()}`;
+    }
+
+    function renderProfileEditorEpisodes() {
+      const grid = document.getElementById('pe-episodes-grid');
+      if (!grid || !_editingProfile) return;
+      const eps = _editingProfile.episodes || { progress: {}, certs: {} };
+      const prog = eps.progress || {};
+      const certs = eps.certs || {};
+      const allModes = [
+        { key: 'kinder', label: '🐣유치' },
+        { key: 'junior', label: '🌱유년' },
+        { key: 'senior', label: '🍎소년' },
+        { key: 'timeattack', label: '⚡타임' }
+      ];
+
+      grid.innerHTML = ADMIN_EPISODE_CATALOG.map(ep => {
+        const pr = prog[ep.key] || { maxClearedStage: 0, completed: false, certIssued: false, attempts: 0 };
+        const cert = certs[ep.key] || null;
+        const modes = cert && Array.isArray(cert.clearedModes) ? cert.clearedModes : [];
+        return `
+        <div class="bg-slate-900/90 border border-slate-700 rounded-xl p-3 space-y-2.5" data-pe-ep="${ep.key}">
+          <div class="flex items-center justify-between">
+            <span class="font-jua text-sm text-amber-200">${ep.icon} ${ep.title}</span>
+            <select id="pe-ep-stage-${ep.key}" onchange="onPeEpChange('${ep.key}')"
+              class="px-2 py-1 rounded-lg bg-slate-800 border border-slate-600 text-xs text-white">
+              <option value="0" ${Number(pr.maxClearedStage || 0) === 0 ? 'selected' : ''}>0 · 미진행</option>
+              <option value="1" ${Number(pr.maxClearedStage || 0) === 1 ? 'selected' : ''}>1 · 스테이지 1</option>
+              <option value="2" ${Number(pr.maxClearedStage || 0) === 2 ? 'selected' : ''}>2 · 스테이지 2</option>
+              <option value="3" ${Number(pr.maxClearedStage || 0) === 3 ? 'selected' : ''}>3 · 스테이지 3</option>
+              <option value="4" ${Number(pr.maxClearedStage || 0) >= 4 ? 'selected' : ''}>4 · 엔딩/완주</option>
+            </select>
+          </div>
+          <div class="flex flex-wrap gap-3 text-xs">
+            <label class="inline-flex items-center gap-1.5 cursor-pointer">
+              <input id="pe-ep-comp-${ep.key}" type="checkbox" ${pr.completed ? 'checked' : ''} onchange="onPeEpChange('${ep.key}')" class="accent-emerald-400" />
+              <span>완주 완료</span>
+            </label>
+            <label class="inline-flex items-center gap-1.5 cursor-pointer">
+              <input id="pe-ep-cert-${ep.key}" type="checkbox" ${(pr.certIssued || Boolean(cert && cert.code)) ? 'checked' : ''} onchange="onPeEpCertToggle('${ep.key}')" class="accent-amber-400" />
+              <span>인증서 발급</span>
+            </label>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <span class="text-[11px] text-slate-400 shrink-0">인증코드:</span>
+            <input id="pe-ep-code-${ep.key}" type="text" value="${escapeHtml(cert ? cert.code : '')}" placeholder="${ep.prefix}000"
+              class="px-2 py-1 rounded-lg bg-slate-800 border border-slate-600 text-xs font-mono text-yellow-300 w-24" />
+            <button type="button" onclick="document.getElementById('pe-ep-code-${ep.key}').value = generateRandomCode('${ep.prefix}'); document.getElementById('pe-ep-cert-${ep.key}').checked = true; onPeEpChange('${ep.key}');"
+              class="px-2 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-[11px]">🎲 생성</button>
+            <input id="pe-ep-date-${ep.key}" type="text" value="${escapeHtml(cert ? (cert.updatedAt || cert.issuedAt || '') : '')}" placeholder="YYYY.MM.DD"
+              class="px-2 py-1 rounded-lg bg-slate-800 border border-slate-600 text-[11px] font-mono text-slate-300 w-24" />
+          </div>
+          <div class="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-800">
+            <span class="text-[11px] text-slate-400">클리어 반:</span>
+            ${allModes.map(m => `
+              <label class="inline-flex items-center gap-1 text-[11px] cursor-pointer">
+                <input type="checkbox" class="pe-ep-mode-${ep.key} accent-cyan-400" value="${m.key}" ${modes.includes(m.key) ? 'checked' : ''} />
+                <span>${m.label}</span>
+              </label>
+            `).join('')}
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function onPeEpCertToggle(epKey) {
+      const cb = document.getElementById(`pe-ep-cert-${epKey}`);
+      const codeEl = document.getElementById(`pe-ep-code-${epKey}`);
+      const dateEl = document.getElementById(`pe-ep-date-${epKey}`);
+      const compEl = document.getElementById(`pe-ep-comp-${epKey}`);
+      const stEl = document.getElementById(`pe-ep-stage-${epKey}`);
+      const meta = ADMIN_EPISODE_CATALOG.find(x => x.key === epKey);
+      if (cb && cb.checked) {
+        if (codeEl && !codeEl.value.trim()) codeEl.value = generateRandomCode(meta ? meta.prefix : 'CRT-');
+        if (dateEl && !dateEl.value.trim()) dateEl.value = formatDotDateKst();
+        if (compEl) compEl.checked = true;
+        if (stEl && Number(stEl.value) < 4) stEl.value = '4';
+      } else {
+        if (codeEl) codeEl.value = '';
+      }
+    }
+
+    function onPeEpChange(epKey) {
+      const stEl = document.getElementById(`pe-ep-stage-${epKey}`);
+      const compEl = document.getElementById(`pe-ep-comp-${epKey}`);
+      const certEl = document.getElementById(`pe-ep-cert-${epKey}`);
+      if (stEl && Number(stEl.value) >= 4 && compEl) {
+        compEl.checked = true;
+      }
+      if (certEl && certEl.checked && compEl) {
+        compEl.checked = true;
+      }
+    }
+
+    function peSetAllEpisodesClear() {
+      const today = formatDotDateKst();
+      ADMIN_EPISODE_CATALOG.forEach(ep => {
+        const stEl = document.getElementById(`pe-ep-stage-${ep.key}`);
+        const compEl = document.getElementById(`pe-ep-comp-${ep.key}`);
+        const certEl = document.getElementById(`pe-ep-cert-${ep.key}`);
+        const codeEl = document.getElementById(`pe-ep-code-${ep.key}`);
+        const dateEl = document.getElementById(`pe-ep-date-${ep.key}`);
+        if (stEl) stEl.value = '4';
+        if (compEl) compEl.checked = true;
+        if (certEl) certEl.checked = true;
+        if (codeEl && !codeEl.value.trim()) codeEl.value = generateRandomCode(ep.prefix);
+        if (dateEl && !dateEl.value.trim()) dateEl.value = today;
+        const modes = document.querySelectorAll(`.pe-ep-mode-${ep.key}`);
+        if (!Array.from(modes).some(x => x.checked)) {
+          modes.forEach(x => { if (x.value === 'junior') x.checked = true; });
+        }
+      });
+    }
+
+    function peResetAllEpisodes() {
+      ADMIN_EPISODE_CATALOG.forEach(ep => {
+        const stEl = document.getElementById(`pe-ep-stage-${ep.key}`);
+        const compEl = document.getElementById(`pe-ep-comp-${ep.key}`);
+        const certEl = document.getElementById(`pe-ep-cert-${ep.key}`);
+        const codeEl = document.getElementById(`pe-ep-code-${ep.key}`);
+        const dateEl = document.getElementById(`pe-ep-date-${ep.key}`);
+        if (stEl) stEl.value = '0';
+        if (compEl) compEl.checked = false;
+        if (certEl) certEl.checked = false;
+        if (codeEl) codeEl.value = '';
+        if (dateEl) dateEl.value = '';
+        document.querySelectorAll(`.pe-ep-mode-${ep.key}`).forEach(x => { x.checked = false; });
+      });
+    }
+
+    function renderProfileEditorFootstepsAndMissions() {
+      const fpWrap = document.getElementById('pe-footsteps-list');
+      const msWrap = document.getElementById('pe-missions-grid');
+      if (!fpWrap || !msWrap || !_editingProfile) return;
+
+      const fp = _editingProfile.footsteps || {};
+      const nb = _editingProfile.notebook || {};
+      const msSet = new Set(Array.isArray(nb.completedMissions) ? nb.completedMissions : []);
+
+      const fpList = getAllFootstepsCatalogForProfile(_editingProfile);
+      fpWrap.innerHTML = fpList.map(meta => {
+        const entry = fp[meta.id] || null;
+        const reqLabel = meta.isUnknownExtra ? '미등록 확장' : (meta.isAllClear ? `전체(${getDefaultTotalMissionCount()}개)` : `${meta.requiredCount}개`);
+        const safeId = escapeHtml(meta.id);
+        return `
+        <div class="flex flex-wrap items-center justify-between gap-2 bg-slate-800/80 border ${meta.isUnknownExtra ? 'border-cyan-500/60' : 'border-slate-700'} rounded-lg p-2">
+          <label class="inline-flex items-center gap-2 text-xs font-bold text-white cursor-pointer min-w-[190px]">
+            <input id="pe-fp-has-${safeId}" type="checkbox" ${entry && entry.code ? 'checked' : ''} onchange="onPeFpToggle('${safeId}')" class="accent-amber-400" />
+            <span>${meta.icon} ${escapeHtml(meta.stageLabel)} · ${escapeHtml(meta.title)} <span class="text-[10px] ${meta.isUnknownExtra ? 'text-cyan-300' : 'text-slate-400'}">(${reqLabel})</span></span>
+          </label>
+          <div class="flex flex-wrap items-center gap-1.5">
+            <input id="pe-fp-code-${safeId}" type="text" value="${escapeHtml(entry ? entry.code : '')}" placeholder="${escapeHtml(meta.prefix)}000"
+              class="px-2 py-1 rounded bg-slate-900 border border-slate-600 text-xs font-mono text-yellow-300 w-24" />
+            <button type="button" onclick="document.getElementById('pe-fp-code-${safeId}').value = generateRandomCode('${escapeHtml(meta.prefix)}'); document.getElementById('pe-fp-has-${safeId}').checked = true;"
+              class="px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-[11px]">🎲</button>
+            <input id="pe-fp-date-${safeId}" type="text" value="${escapeHtml(entry ? entry.issuedAt : '')}" placeholder="YYYY.MM.DD"
+              class="px-2 py-1 rounded bg-slate-900 border border-slate-600 text-[11px] font-mono text-slate-300 w-24" />
+          </div>
+        </div>`;
+      }).join('');
+
+      const prEl = document.getElementById('pe-flag-post-res');
+      const asEl = document.getElementById('pe-flag-ascension');
+      if (prEl) prEl.checked = Boolean(nb.postResurrection);
+      if (asEl) asEl.checked = Boolean(nb.ascensionSeen);
+
+      const knownMsIds = new Set(ADMIN_MISSION_CATALOG.map(m => m.id));
+      const extraMsItems = Array.from(msSet).filter(id => !knownMsIds.has(id)).sort().map(id => ({
+        id, group: '🆕 확장', title: id, extraOnly: false
+      }));
+      const renderMsList = ADMIN_MISSION_CATALOG.filter(m => !m.extraOnly || msSet.has(m.id)).concat(extraMsItems);
+      msWrap.innerHTML = renderMsList.map(m => `
+        <label class="flex items-center gap-2 bg-slate-800/70 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs cursor-pointer hover:bg-slate-800">
+          <input type="checkbox" class="pe-mission-cb accent-emerald-400" value="${escapeHtml(m.id)}" ${msSet.has(m.id) ? 'checked' : ''} onchange="syncPeEditorLiveCounts()" />
+          <span class="px-1.5 py-0.5 rounded bg-slate-700 text-[10px] text-amber-200 shrink-0">${escapeHtml(m.group)}</span>
+          <span class="text-slate-100 truncate">${escapeHtml(m.title)}</span>
+        </label>
+      `).join('');
+    }
+
+    function onPeFpToggle(tierId) {
+      const cb = document.getElementById(`pe-fp-has-${tierId}`);
+      const codeEl = document.getElementById(`pe-fp-code-${tierId}`);
+      const dateEl = document.getElementById(`pe-fp-date-${tierId}`);
+      const meta = getAllFootstepsCatalogForProfile(_editingProfile).find(x => x.id === tierId);
+      if (cb && cb.checked) {
+        if (codeEl && !codeEl.value.trim()) codeEl.value = generateRandomCode(meta ? meta.prefix : 'FP-');
+        if (dateEl && !dateEl.value.trim()) dateEl.value = formatDotDateKst();
+      } else {
+        if (codeEl) codeEl.value = '';
+      }
+    }
+
+    function peSyncFootstepsFromMissions() {
+      const checkedCount = document.querySelectorAll('.pe-mission-cb:checked').length;
+      const totalMs = getDefaultTotalMissionCount();
+      const today = formatDotDateKst();
+      ADMIN_FOOTSTEPS_CATALOG.forEach(meta => {
+        if (meta.isUnknownExtra) return;
+        const req = meta.isAllClear ? totalMs : meta.requiredCount;
+        const shouldHave = checkedCount >= req;
+        const cb = document.getElementById(`pe-fp-has-${meta.id}`);
+        const codeEl = document.getElementById(`pe-fp-code-${meta.id}`);
+        const dateEl = document.getElementById(`pe-fp-date-${meta.id}`);
+        if (cb) cb.checked = shouldHave;
+        if (shouldHave) {
+          if (codeEl && !codeEl.value.trim()) codeEl.value = generateRandomCode(meta.prefix);
+          if (dateEl && !dateEl.value.trim()) dateEl.value = today;
+        } else {
+          if (codeEl) codeEl.value = '';
+        }
+      });
+    }
+
+    function peToggleAllMissions(checked) {
+      document.querySelectorAll('.pe-mission-cb').forEach(cb => { cb.checked = checked; });
+      syncPeEditorLiveCounts();
+    }
+
+    function renderProfileEditorNotebook() {
+      const wrap = document.getElementById('pe-notebook-categories');
+      if (!wrap || !_editingProfile) return;
+      const nb = _editingProfile.notebook || {};
+      const colSet = new Set(Array.isArray(nb.collected) ? nb.collected : []);
+
+      const knownNbIds = new Set(ADMIN_NOTEBOOK_CATALOG.flatMap(cat => cat.items.map(it => it.id)));
+      const extraNbIds = Array.from(colSet).filter(id => !knownNbIds.has(id)).sort();
+      const categoriesToRender = [...ADMIN_NOTEBOOK_CATALOG];
+      if (extraNbIds.length > 0) {
+        categoriesToRender.push({
+          key: '__extra__',
+          label: '🆕 확장 / 미등록 수첩 항목',
+          items: extraNbIds.map(id => ({ id, sub: '미등록 ID', title: id, extraOnly: false }))
+        });
+      }
+
+      wrap.innerHTML = categoriesToRender.map(cat => {
+        const items = cat.items.filter(item => !item.extraOnly || colSet.has(item.id));
+        const selectedCnt = items.filter(it => colSet.has(it.id)).length;
+        return `
+        <div class="bg-slate-900/80 border border-slate-700 rounded-xl p-3 space-y-2">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h4 class="font-jua text-sm text-amber-200">${escapeHtml(cat.label)} (<span id="pe-nb-cat-cnt-${cat.key}">${selectedCnt}</span> / ${items.length})</h4>
+            <div class="flex gap-1.5">
+              <button type="button" onclick="peToggleCategoryNotebook('${cat.key}', true)" class="px-2 py-0.5 rounded bg-emerald-700 hover:bg-emerald-600 text-[11px] font-bold">선택</button>
+              <button type="button" onclick="peToggleCategoryNotebook('${cat.key}', false)" class="px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-[11px] font-bold">해제</button>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+            ${items.map(it => `
+              <label class="flex items-center justify-between gap-2 bg-slate-800/70 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs cursor-pointer hover:bg-slate-800">
+                <span class="flex items-center gap-2 min-w-0">
+                  <input type="checkbox" data-nb-cat="${cat.key}" class="pe-nb-cb accent-amber-400 shrink-0" value="${escapeHtml(it.id)}" ${colSet.has(it.id) ? 'checked' : ''} onchange="syncPeEditorLiveCounts()" />
+                  <span class="text-slate-100 truncate">${escapeHtml(it.title)}</span>
+                </span>
+                <span class="text-[10px] text-slate-400 shrink-0">${escapeHtml(it.sub)}</span>
+              </label>
+            `).join('')}
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function peToggleCategoryNotebook(catKey, checked) {
+      document.querySelectorAll(`.pe-nb-cb[data-nb-cat="${catKey}"]`).forEach(cb => { cb.checked = checked; });
+      syncPeEditorLiveCounts();
+    }
+
+    function peToggleAllNotebook(checked) {
+      document.querySelectorAll('.pe-nb-cb').forEach(cb => { cb.checked = checked; });
+      syncPeEditorLiveCounts();
+    }
+
+    function syncPeEditorLiveCounts() {
+      const msCount = document.querySelectorAll('.pe-mission-cb:checked').length;
+      const nbCount = document.querySelectorAll('.pe-nb-cb:checked').length;
+      const msEl = document.getElementById('pe-tab-mission-count');
+      const nbEl = document.getElementById('pe-tab-nb-count');
+      if (msEl) msEl.textContent = `${msCount}/${getDefaultTotalMissionCount()}`;
+      if (nbEl) nbEl.textContent = `${nbCount}/${getDefaultTotalNotebookCount()}`;
+
+      [...ADMIN_NOTEBOOK_CATALOG, { key: '__extra__' }].forEach(cat => {
+        const cntEl = document.getElementById(`pe-nb-cat-cnt-${cat.key}`);
+        if (cntEl) {
+          cntEl.textContent = String(document.querySelectorAll(`.pe-nb-cb[data-nb-cat="${cat.key}"]:checked`).length);
+        }
+      });
+    }
+
+    function collectEditedProfilePayload() {
+      const pid = _editingIsNew
+        ? (document.getElementById('pe-player-id-input')?.value || '').trim()
+        : String(_editingProfile.playerId || '').trim();
+      const today = formatDotDateKst();
+      const progress = {};
+      const certs = {};
+      const prevEpProg = (_editingProfile.episodes && _editingProfile.episodes.progress) || {};
+      const prevEpCerts = (_editingProfile.episodes && _editingProfile.episodes.certs) || {};
+      const knownEpKeys = new Set(ADMIN_EPISODE_CATALOG.map(ep => ep.key));
+
+      ADMIN_EPISODE_CATALOG.forEach(ep => {
+        const stVal = parseInt(document.getElementById(`pe-ep-stage-${ep.key}`)?.value || '0', 10) || 0;
+        const comp = Boolean(document.getElementById(`pe-ep-comp-${ep.key}`)?.checked);
+        const certChecked = Boolean(document.getElementById(`pe-ep-cert-${ep.key}`)?.checked);
+        const code = (document.getElementById(`pe-ep-code-${ep.key}`)?.value || '').trim();
+        const dateVal = (document.getElementById(`pe-ep-date-${ep.key}`)?.value || '').trim() || today;
+        const modes = Array.from(document.querySelectorAll(`.pe-ep-mode-${ep.key}:checked`)).map(el => el.value);
+        const prevProg = prevEpProg[ep.key] || {};
+
+        progress[ep.key] = {
+          maxClearedStage: stVal,
+          completed: comp || (ep.key !== 'miracle' && stVal >= 3),
+          certIssued: certChecked || Boolean(code),
+          attempts: Math.max(0, parseInt(prevProg.attempts || 0, 10) || 0)
+        };
+        if (certChecked || code) {
+          certs[ep.key] = {
+            epId: ep.key,
+            code: code || generateRandomCode(ep.prefix),
+            playerName: pid,
+            issuedAt: (prevEpCerts[ep.key]?.issuedAt) || dateVal,
+            updatedAt: dateVal,
+            clearedModes: modes.length ? modes : ['junior']
+          };
+        }
+      });
+
+      Object.keys(prevEpProg).forEach(k => {
+        if (!knownEpKeys.has(k) && prevEpProg[k]) {
+          progress[k] = JSON.parse(JSON.stringify(prevEpProg[k]));
+        }
+      });
+      Object.keys(prevEpCerts).forEach(k => {
+        if (!knownEpKeys.has(k) && prevEpCerts[k]) {
+          certs[k] = JSON.parse(JSON.stringify(prevEpCerts[k]));
+        }
+      });
+
+      const completedMissions = Array.from(document.querySelectorAll('.pe-mission-cb:checked')).map(el => el.value);
+      const collected = Array.from(document.querySelectorAll('.pe-nb-cb:checked')).map(el => el.value);
+      const mirSt = progress.miracle ? progress.miracle.maxClearedStage : 0;
+      const clearedStages = {
+        1: mirSt >= 1 || completedMissions.includes('main_1'),
+        2: mirSt >= 2 || completedMissions.includes('main_2'),
+        3: mirSt >= 3 || completedMissions.includes('main_3'),
+        4: mirSt >= 4 || completedMissions.includes('main_4')
+      };
+
+      const footsteps = {};
+      const totalMs = getDefaultTotalMissionCount();
+      getAllFootstepsCatalogForProfile(_editingProfile).forEach(meta => {
+        const has = Boolean(document.getElementById(`pe-fp-has-${meta.id}`)?.checked);
+        const code = (document.getElementById(`pe-fp-code-${meta.id}`)?.value || '').trim();
+        const dateVal = (document.getElementById(`pe-fp-date-${meta.id}`)?.value || '').trim() || today;
+        const prevFp = (_editingProfile.footsteps && _editingProfile.footsteps[meta.id]) || null;
+        if (has || code) {
+          footsteps[meta.id] = Object.assign({}, prevFp || {}, {
+            tierId: meta.id,
+            code: code || generateRandomCode(meta.prefix),
+            playerName: pid,
+            issuedAt: dateVal,
+            completedCount: (meta.isUnknownExtra && prevFp && typeof prevFp.completedCount === 'number') ? prevFp.completedCount : completedMissions.length,
+            totalCount: (meta.isUnknownExtra && prevFp && typeof prevFp.totalCount === 'number') ? prevFp.totalCount : totalMs
+          });
+        }
+      });
+
+      return {
+        playerId: pid,
+        episodes: { progress, certs },
+        notebook: {
+          collected,
+          completedMissions,
+          clearedStages,
+          postResurrection: Boolean(document.getElementById('pe-flag-post-res')?.checked),
+          ascensionSeen: Boolean(document.getElementById('pe-flag-ascension')?.checked)
+        },
+        footsteps
+      };
+    }
+
+    async function saveProfileFromEditor() {
+      if (!_editingProfile) return;
+      const payloadProfile = collectEditedProfilePayload();
+      if (!payloadProfile.playerId) {
+        alert('대원 ID(이름(생일))를 입력해 주세요!');
+        return;
+      }
+      const saveBtn = document.getElementById('pe-save-btn');
+      const saveStatus = document.getElementById('pe-save-status');
+      if (saveBtn) saveBtn.disabled = true;
+      if (saveStatus) saveStatus.textContent = '구글 스프레드시트에 저장하는 중...';
+
+      try {
+        const res = await fetch(GOOGLE_SHEET_WEBAPP_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            action: 'admin_upsert_profile',
+            password: ADMIN_PASSWORD,
+            playerId: payloadProfile.playerId,
+            profile: payloadProfile
+          })
+        });
+        const txt = await res.text();
+        let data = null;
+        try { data = JSON.parse(txt); } catch (e) {}
+
+        if (data && data.ok && data.profile) {
+          const idx = allProfiles.findIndex(p => String(p.playerId || '').trim().toLowerCase() === payloadProfile.playerId.toLowerCase());
+          if (idx >= 0) allProfiles[idx] = data.profile;
+          else allProfiles.push(data.profile);
+          profilesSupported = true;
+          const banner = document.getElementById('profiles-upgrade-banner');
+          if (banner) banner.classList.add('hidden');
+
+          updateProfileStats();
+          renderProfilesTable();
+          const stLine = document.getElementById('profile-action-status');
+          if (stLine) stLine.textContent = `✅ [${payloadProfile.playerId}] 탐험기록 저장 완료 (rev ${data.revision})`;
+          closeProfileEditorModal();
+        } else {
+          if (saveStatus) saveStatus.textContent = '❌ 저장 실패: 구글 Apps Script가 구버전이거나 권한 오류입니다.';
+          if (confirm('구글 Apps Script가 통합 저장을 지원하지 않는 구버전일 수 있습니다.\n[구글 시트 연동 설정] 안내창을 열어 코드를 업데이트할까요?')) {
+            openAppsScriptGuideModal();
+          }
+        }
+      } catch (e) {
+        if (saveStatus) saveStatus.textContent = '❌ 네트워크 오류로 저장하지 못했습니다.';
+      } finally {
+        if (saveBtn) saveBtn.disabled = false;
+      }
+    }
+
+    async function deleteSingleProfile(playerId) {
+      if (!confirm(`[${playerId}]님의 마스터 탐험기록(PlayerProgress 행: 수첩·발자취·인증서 상태)을 삭제하시겠습니까?\n(기존 플레이 이력 로그는 그대로 유지됩니다)`)) return;
+      const stLine = document.getElementById('profile-action-status');
+      if (stLine) stLine.textContent = '삭제 중...';
+      try {
+        const res = await fetch(GOOGLE_SHEET_WEBAPP_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            action: 'admin_delete_profile',
+            password: ADMIN_PASSWORD,
+            playerId
+          })
+        });
+        const data = await res.json();
+        if (data && data.ok) {
+          allProfiles = allProfiles.filter(p => String(p.playerId || '').trim().toLowerCase() !== String(playerId).trim().toLowerCase());
+          updateProfileStats();
+          renderProfilesTable();
+          if (stLine) stLine.textContent = `✅ [${playerId}] 마스터 탐험기록 삭제 완료`;
+        } else {
+          if (stLine) stLine.textContent = '❌ 삭제 실패 (Apps Script 버전 확인 필요)';
+        }
+      } catch (e) {
+        if (stLine) stLine.textContent = '❌ 네트워크 오류';
+      }
+    }
+
+    function downloadProfilesCsv() {
+      const list = getMergedProfilesList();
+      if (list.length === 0) return;
+      const totalNb = getDefaultTotalNotebookCount();
+      const totalMs = getDefaultTotalMissionCount();
+      const header = ['이름(생일)', ...ADMIN_EPISODE_CATALOG.map(ep => 'EP' + ep.num), '탐험수첩', '완료미션', '예수님의발자취', '최종갱신(KST)', '출처'];
+      const rows = list.map(p => {
+        const epVal = (key) => {
+          const c = p.episodes?.certs?.[key];
+          const pr = p.episodes?.progress?.[key] || {};
+          if (c && c.code) return `완주(${c.code})`;
+          if (pr.completed) return '완주';
+          return pr.maxClearedStage ? `ST${pr.maxClearedStage}` : '-';
+        };
+        const fp = p.footsteps || {};
+        const fpCodes = getAllFootstepsCatalogForProfile(p).filter(m => fp[m.id] && fp[m.id].code).map(m => `${m.stageLabel}:${fp[m.id].code}`).join(' / ') || '-';
+        const nbCnt = (p.notebook?.collected || []).length;
+        const msCnt = (p.notebook?.completedMissions || []).length;
+        return [
+          p.playerId, ...ADMIN_EPISODE_CATALOG.map(ep => epVal(ep.key)),
+          `${nbCnt}/${totalNb}`, `${msCnt}/${totalMs}`, fpCodes,
+          formatKoreanTime(p.updatedAt), p._isLogOnly ? '로그추론' : p.lastModifiedBy
+        ];
+      });
+      const csvContent = '\uFEFF' + [header, ...rows].map(e => e.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const kstDate = formatKoreanTime(Date.now()).slice(0, 10);
+      a.download = `출발탐험대_탐험수첩발자취_${kstDate}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // =========================================================================
+    // [섹션 C] 기존 로그 조회 · 삭제 · CSV
+    // =========================================================================
     function updateDeleteTargetDropdown() {
       const sel = document.getElementById('delete-target-select');
       const restoreBtn = document.getElementById('restore-hidden-btn');
@@ -546,6 +2274,8 @@
     async function deleteRecordsByPerson() {
       const sel = document.getElementById('delete-target-select');
       const inp = document.getElementById('delete-target-input');
+      const incProfEl = document.getElementById('delete-include-profile');
+      const includeProfile = Boolean(incProfEl && incProfEl.checked);
       const statusEl = document.getElementById('admin-delete-status');
       const targetName = (inp && inp.value.trim()) || (sel && sel.value.trim()) || '';
       if (!targetName) {
@@ -553,33 +2283,37 @@
         return;
       }
       const matchCnt = getVisibleRecords().filter(r => String(r.name || '') === targetName).length;
-      if (matchCnt === 0) {
+      if (matchCnt === 0 && !includeProfile) {
         alert(`[${targetName}] 이름과 정확히 일치하는 기록이 없습니다.`);
         return;
       }
-      if (!confirm(`[${targetName}]님의 기록 총 ${matchCnt}건을 삭제하시겠습니까?`)) return;
+      if (!confirm(`[${targetName}]님의 로그 ${matchCnt}건${includeProfile ? ' 및 탐험수첩·발자취 기록' : ''}을 삭제하시겠습니까?`)) return;
 
-      // 1) 로컬 삭제 필터 즉시 반영 (화면·통계·CSV 즉시 제외)
       const st = loadLocalDeletedState();
       if (!st.names.includes(targetName)) st.names.push(targetName);
       saveLocalDeletedState(st);
       if (inp) inp.value = '';
+      if (includeProfile) {
+        allProfiles = allProfiles.filter(p => String(p.playerId || '').trim().toLowerCase() !== targetName.toLowerCase());
+      }
       updateDeleteTargetDropdown();
       updateSummaryStats();
       renderRecordsTable();
+      updateProfileStats();
+      renderProfilesTable();
 
-      // 2) 구글 Apps Script 서버에도 영구 삭제 요청 전송
       if (statusEl) statusEl.textContent = '삭제 요청 처리 중...';
       const serverDeleted = await sendSheetDeleteRequest({
         action: 'delete',
         password: ADMIN_PASSWORD,
         deleteBy: 'name',
-        name: targetName
+        name: targetName,
+        includeProfile
       });
       if (statusEl) {
         statusEl.textContent = serverDeleted
           ? `✅ [${targetName}] 구글 시트 원본에서도 영구 삭제 완료!`
-          : `✅ [${targetName}] 화면에서 삭제됨 (원본 시트 영구 삭제는 우측 상단 ⚙️ 설정 참고)`;
+          : `✅ [${targetName}] 화면에서 삭제됨 (원본 시트 영구 삭제는 상단 ⚙️ 설정 참고)`;
       }
     }
 
@@ -616,6 +2350,8 @@
       updateDeleteTargetDropdown();
       updateSummaryStats();
       renderRecordsTable();
+      updateProfileStats();
+      renderProfilesTable();
     }
 
     function openAppsScriptGuideModal() {
@@ -630,7 +2366,7 @@
       const pre = document.getElementById('apps-script-snippet');
       if (!pre) return;
       navigator.clipboard?.writeText(pre.textContent).then(() => {
-        alert('✅ Apps Script 삭제 코드가 복사되었습니다!');
+        alert('✅ 통합 Google Apps Script 코드가 복사되었습니다!');
       }).catch(() => {
         alert('코드 영역을 드래그하여 복사해 주세요.');
       });

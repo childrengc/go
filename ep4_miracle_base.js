@@ -4,7 +4,7 @@
 // - 확장된 오픈월드 지형 고도 계산기(넓어진 골고다 언덕 포함) 및 소프트 로우 폴리곤 자연물 팩토리
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_base = '20261126_v50';
+window.__GAME_BUILD_VERSIONS__.ep4_base = '3.12.3';
 window.EP4_VOICE_VOLUME = 0.75;
 
 // =========================================================================
@@ -20,11 +20,23 @@ window.EP4_ENDING_VIDEO_URL = window.EP4_ENDING_VIDEO_URL || 'assets/video/ep4_e
 
 const MIRACLE_SCRIPTURE = {
   1: {
-    title: '메인 스테이지 1 클리어! 바람과 바다도 순종하는 분!',
-    desc: '갈릴리 바다에 그물을 던져 물고기를 가득 잡고, 거센 풍랑 속에서 배의 균형을 잡으며 주무시던 예수님을 깨워 바람과 바다를 잠잠하게 하시는 기적을 목격했어요!',
+    title: '메인 스테이지 1 클리어! 깊은 곳으로! 사람을 낚는 어부!',
+    desc: '예수님의 말씀에 순종해 깊은 바다로 배를 저어 나가 두 배 가득 물고기를 잡았고, 베드로·야고보·요한은 배와 그물을 뒤로하고 예수님을 따라갔어요!',
+    verse: '"나를 따라오라 내가 너희로 사람을 낚는 어부가 되게 하리라" (마가복음 1장 17절)',
+    audioUrl: 'assets/voice/ep4_st1_bible01.mp3',
+    btnText: '🗺️ 오픈월드로 돌아가기 ▶',
+    quiz: {
+      q: '퀴즈! 깊은 곳에서 물고기를 가득 잡은 베드로와 제자들에게 예수님은 무엇이 되게 하겠다고 말씀하셨나요?',
+      opts: ['사람을 낚는 어부', '가장 큰 배의 선장', '예루살렘의 세리장'],
+      ans: 0
+    }
+  },
+  '1_night': {
+    title: '야간 스테이지 1 클리어! 바람과 바다도 순종하는 분!',
+    desc: '깊은 밤 거센 갈릴리 풍랑 속에서 배의 균형을 지키며 주무시던 예수님을 깨워, 말씀 한마디로 바람과 바다를 잠잠하게 하시는 기적을 목격했어요!',
     verse: '"예수께서 깨어 바람을 꾸짖으시며 바다더러 이르시되 잠잠하라 고요하라 하시니 바람이 그치고 아주 잔잔하여지더라" (마가복음 4장 39절)',
     audioUrl: 'assets/voice/ep4_stage01_bible.mp3',
-    btnText: '🗺️ 갈릴리 오픈월드로 돌아가기 ▶',
+    btnText: '🗺️ 오픈월드로 돌아가기 ▶',
     quiz: {
       q: '퀴즈! 거센 폭풍우가 몰아치던 갈릴리 바다를 예수님은 어떻게 잠잠하게 하셨나요?',
       opts: ['말씀으로 바람을 꾸짖으시며 잠잠하라 하셨다', '제자들에게 노를 더 빨리 저으라고 하셨다', '비가 그칠 때까지 며칠을 기다리셨다'],
@@ -109,9 +121,11 @@ let miracleDialogState = {
 };
 
 // -------------------------------------------------------------------------
-// 2. [나의 복음서 수첩] 데이터베이스 (총 36개)
+// 2. [나의 복음서 수첩] 데이터베이스 (game_catalog.js 우선 로드 + 폴백)
 // -------------------------------------------------------------------------
-const MIRACLE_NOTEBOOK_DB = {
+const MIRACLE_NOTEBOOK_DB = (typeof window !== 'undefined' && window.BIBLE_GAME_CATALOG && window.BIBLE_GAME_CATALOG.miracleNotebookDb)
+  ? window.BIBLE_GAME_CATALOG.miracleNotebookDb
+  : {
   rumors: [
     { id: 'rumor_cana',      region: '갈릴리',   title: '가나 혼인잔치의 포도주 소동', text: '"가나 마을 혼인잔치에 포도주가 다 떨어져서 큰일이 났대! 하인들이 물항아리를 찾고 있다던데?"', unlocksEvent: 'ev_cana' },
     { id: 'rumor_paralytic', region: '갈릴리',   title: '지붕으로 올라간 네 친구',     text: '"가버나움 집에 사람이 너무 많아서, 친구 네 명이 중풍병자를 들것에 메고 지붕으로 올라갔대!"', unlocksEvent: 'ev_paralytic' },
@@ -163,8 +177,11 @@ const MIRACLE_NOTEBOOK_DB = {
 
 let miracleCollectedIds = new Set();
 let miracleCompletedMissionIds = new Set();
+let _miracleExtraMissionIds = [];
 
-const MIRACLE_TRACKED_MISSION_IDS = [
+const MIRACLE_TRACKED_MISSION_IDS = (typeof window !== 'undefined' && window.BIBLE_GAME_CATALOG && Array.isArray(window.BIBLE_GAME_CATALOG.miracleMissions))
+  ? window.BIBLE_GAME_CATALOG.miracleMissions.map(m => m.id)
+  : [
   'main_1', 'main_2', 'main_3', 'main_4',
   'ev_cana', 'ev_paralytic', 'ev_children', 'ev_well', 'ev_zacchaeus',
   'ev_samaritan', 'ev_lepers', 'ev_palm', 'ev_washfeet', 'ev_widow',
@@ -172,7 +189,9 @@ const MIRACLE_TRACKED_MISSION_IDS = [
   'post_emmaus', 'post_thomas', 'post_breakfast'
 ];
 
-const MIRACLE_LEGACY_MISSION_NOTEBOOK_MAP = {
+const MIRACLE_LEGACY_MISSION_NOTEBOOK_MAP = (typeof window !== 'undefined' && window.BIBLE_GAME_CATALOG && window.BIBLE_GAME_CATALOG.miracleLegacyMissionNotebookMap)
+  ? window.BIBLE_GAME_CATALOG.miracleLegacyMissionNotebookMap
+  : {
   ev_cana: 'mir_cana',
   ev_paralytic: 'mir_paralytic',
   ev_children: 'wd_mark1014',
@@ -209,6 +228,7 @@ function getMiracleNotebookStorageKey() {
 function loadMiracleNotebookProgress() {
   miracleCollectedIds = new Set();
   miracleCompletedMissionIds = new Set();
+  _miracleExtraMissionIds = [];
   miracleMainStagesCleared = { 1: false, 2: false, 3: false, 4: false };
   miracleIsPostResurrection = false;
   miracleAscensionSeen = false;
@@ -226,6 +246,8 @@ function loadMiracleNotebookProgress() {
           parsed.completedMissions.forEach(id => {
             if (MIRACLE_TRACKED_MISSION_IDS.includes(id)) {
               miracleCompletedMissionIds.add(id);
+            } else if (id && !_miracleExtraMissionIds.includes(id)) {
+              _miracleExtraMissionIds.push(id);
             }
           });
         }
@@ -272,11 +294,15 @@ function loadMiracleNotebookProgress() {
   updateMiracleNotebookHudBadge();
 }
 
-function saveMiracleNotebookProgress() {
+function saveMiracleNotebookProgress(opts = {}) {
   try {
+    const mergedMissions = Array.from(new Set([
+      ...Array.from(miracleCompletedMissionIds),
+      ..._miracleExtraMissionIds
+    ]));
     const payload = {
       collected: Array.from(miracleCollectedIds),
-      completedMissions: Array.from(miracleCompletedMissionIds),
+      completedMissions: mergedMissions,
       clearedStages: miracleMainStagesCleared,
       postResurrection: miracleIsPostResurrection,
       ascensionSeen: miracleAscensionSeen
@@ -284,13 +310,81 @@ function saveMiracleNotebookProgress() {
     localStorage.setItem(getMiracleNotebookStorageKey(), JSON.stringify(payload));
   } catch (e) {}
   updateMiracleNotebookHudBadge();
+  if (!opts.skipSheetSync && !window.__suppressProfileSheetSync && typeof window.schedulePlayerProfileSheetSync === 'function') {
+    window.schedulePlayerProfileSheetSync(opts.reason || 'notebook', Boolean(opts.immediate));
+  }
 }
+
+function exportMiracleNotebookState() {
+  const mergedMissions = Array.from(new Set([
+    ...Array.from(miracleCompletedMissionIds),
+    ..._miracleExtraMissionIds
+  ]));
+  return {
+    collected: Array.from(miracleCollectedIds),
+    completedMissions: mergedMissions,
+    clearedStages: {
+      1: Boolean(miracleMainStagesCleared[1]),
+      2: Boolean(miracleMainStagesCleared[2]),
+      3: Boolean(miracleMainStagesCleared[3]),
+      4: Boolean(miracleMainStagesCleared[4])
+    },
+    postResurrection: Boolean(miracleIsPostResurrection),
+    ascensionSeen: Boolean(miracleAscensionSeen)
+  };
+}
+window.exportMiracleNotebookState = exportMiracleNotebookState;
+
+function applyMiracleNotebookState(remoteState, mode = 'merge') {
+  const src = (remoteState && typeof remoteState === 'object') ? remoteState : {};
+  const isOverwrite = (mode === 'overwrite');
+
+  if (isOverwrite) {
+    miracleCollectedIds = new Set();
+    miracleCompletedMissionIds = new Set();
+    _miracleExtraMissionIds = [];
+    miracleMainStagesCleared = { 1: false, 2: false, 3: false, 4: false };
+    miracleIsPostResurrection = false;
+    miracleAscensionSeen = false;
+  }
+
+  if (Array.isArray(src.collected)) {
+    src.collected.forEach(id => {
+      if (id) miracleCollectedIds.add(String(id));
+    });
+  }
+  if (Array.isArray(src.completedMissions)) {
+    src.completedMissions.forEach(id => {
+      const cleanId = String(id || '').trim();
+      if (!cleanId) return;
+      if (MIRACLE_TRACKED_MISSION_IDS.includes(cleanId)) {
+        miracleCompletedMissionIds.add(cleanId);
+      } else if (!_miracleExtraMissionIds.includes(cleanId)) {
+        _miracleExtraMissionIds.push(cleanId);
+      }
+    });
+  }
+  if (src.clearedStages && typeof src.clearedStages === 'object') {
+    [1, 2, 3, 4].forEach(n => {
+      if (src.clearedStages[n]) miracleMainStagesCleared[n] = true;
+    });
+  }
+  if (src.postResurrection) miracleIsPostResurrection = true;
+  if (src.ascensionSeen) miracleAscensionSeen = true;
+
+  saveMiracleNotebookProgress({ skipSheetSync: true });
+  if (!isOverwrite && typeof window.syncFootstepsMilestonesFromCount === 'function') {
+    window.syncFootstepsMilestonesFromCount(miracleCompletedMissionIds.size, MIRACLE_TRACKED_MISSION_IDS.length, { silent: true });
+  }
+  if (typeof window.syncHudMenuInfo === 'function') window.syncHudMenuInfo();
+}
+window.applyMiracleNotebookState = applyMiracleNotebookState;
 
 function recordMiracleMissionCompleted(missionId, opts = {}) {
   if (!missionId || !MIRACLE_TRACKED_MISSION_IDS.includes(missionId)) return false;
   const isNew = !miracleCompletedMissionIds.has(missionId);
   miracleCompletedMissionIds.add(missionId);
-  saveMiracleNotebookProgress();
+  saveMiracleNotebookProgress({ reason: 'mission_complete', immediate: true });
   if (typeof window.checkAndQueueFootstepsAwards === 'function') {
     window.checkAndQueueFootstepsAwards(miracleCompletedMissionIds.size, MIRACLE_TRACKED_MISSION_IDS.length, opts);
   }
@@ -313,7 +407,7 @@ window.isMiracleAllStagesUnlocked = isMiracleAllStagesUnlocked;
 function unlockMiracleNotebookEntry(entryId, silent = false) {
   if (!entryId || miracleCollectedIds.has(entryId)) return false;
   miracleCollectedIds.add(entryId);
-  saveMiracleNotebookProgress();
+  saveMiracleNotebookProgress({ reason: 'notebook_entry', immediate: false });
 
   if (!silent) {
     let foundItem = null;
@@ -772,9 +866,9 @@ function scheduleMiracleBgmBeat(ctx, step, st, mode, playing, timeRem, toFreq) {
     return stepMs;
   }
 
-  // 1-B) 갈릴리 바다 폭풍우(스테이지 1) 긴장 테마
+  // 1-B) 갈릴리 바다 폭풍우(스테이지 1 야간) 및 만선 긴장 테마
   const isStormTension =
-    (miracleSubMode === 'main1_galilee' &&
+    ((miracleSubMode === 'main1_storm_night' || miracleSubMode === 'main1_galilee') &&
       (miracleActiveMiniState.phase === 'storm' || miracleActiveMiniState.phase === 'storm_balance'));
 
   if (isStormTension) {
@@ -1614,18 +1708,34 @@ function buildTurnaroundSycamoreTreeData(x, z, scale = 1.42, faceTargetX = null,
     crownMeshes.push(puff);
   });
 
-  // 5) 수관 아래와 바깥쪽 가지 끝에 매달린 돌무화과 열매 장식
+  // 5) 수관 아랫면·가지 끝에 단단히 붙은 돌무화과 열매 장식 ([fx, fy, fz, topY]: 줄기 상단이 수관/가지 내부까지 직결)
   const figClusterSpecs = [
-    [-1.42, 3.48,  0.42],
-    [ 1.38, 3.46,  0.38],
-    [-2.14, 2.38,  0.14],
-    [ 1.98, 2.42,  0.12],
-    [ 0.22, 3.55, -1.02]
+    [-1.58, 3.80,  0.18, 4.10], // 상단 좌측 수관(Puff 3) 내부 직결
+    [ 1.56, 3.78,  0.14, 4.08], // 상단 우측 수관(Puff 4) 내부 직결
+    [ 0.06, 3.90,  0.82, 4.18], // 상단 전면 수관(Puff 7) 내부 직결
+    [ 0.58, 4.10, -0.86, 4.42], // 상단 후면 수관(Puff 6) 내부 직결
+    [-2.14, 2.48,  0.04, 2.76], // 좌측 낮은 가지 끝(seatBranch)·Puff 8 결합부 직결
+    [ 2.02, 2.52,  0.04, 2.82], // 우측 낮은 가지 끝(sideBranch)·Puff 10 결합부 직결
+    [ 1.12, 1.98,  0.05, 2.16]  // 우측 주 가지(sideBranch) 목재 표면 직부착
   ];
-  figClusterSpecs.forEach(([fx, fy, fz], ci) => {
-    const stem = createLowPolyMesh(new THREE.CylinderGeometry(0.016 * scale, 0.016 * scale, 0.26 * scale, 4), '#784b2c', fx * scale, (fy + 0.12) * scale, fz * scale, false);
-    const f1 = createLowPolyMesh(new THREE.DodecahedronGeometry(0.088 * scale, 0), ci % 2 === 0 ? '#9aa653' : '#a35b43', (fx - 0.05) * scale, fy * scale, (fz + 0.03) * scale, false);
-    const f2 = createLowPolyMesh(new THREE.DodecahedronGeometry(0.078 * scale, 0), ci % 2 === 0 ? '#a35b43' : '#9aa653', (fx + 0.06) * scale, (fy - 0.05) * scale, (fz - 0.03) * scale, false);
+  figClusterSpecs.forEach(([fx, fy, fz, topY], ci) => {
+    const stemH = Math.max(0.16, topY - fy);
+    const stemCy = fy + stemH * 0.5;
+    const stem = createLowPolyMesh(
+      new THREE.CylinderGeometry(0.022 * scale, 0.018 * scale, stemH * scale, 5),
+      '#784b2c',
+      fx * scale, stemCy * scale, fz * scale, false
+    );
+    const f1 = createLowPolyMesh(
+      new THREE.DodecahedronGeometry(0.092 * scale, 0),
+      ci % 2 === 0 ? '#9aa653' : '#a35b43',
+      (fx - 0.042) * scale, fy * scale, (fz + 0.024) * scale, false
+    );
+    const f2 = createLowPolyMesh(
+      new THREE.DodecahedronGeometry(0.082 * scale, 0),
+      ci % 2 === 0 ? '#a35b43' : '#9aa653',
+      (fx + 0.046) * scale, (fy - 0.032) * scale, (fz - 0.020) * scale, false
+    );
     grp.add(stem, f1, f2);
   });
 
@@ -5902,11 +6012,11 @@ function ensureMiracleCustomUI() {
 
           <div class="flex flex-wrap gap-1.5" id="miracle-notebook-tabs">
             <button type="button" onclick="openMiracleNotebookModal('all')" data-tab="all" class="mc-btn px-2.5 py-1 rounded-xl font-jua text-xs bg-amber-500 text-slate-950">전체 보기</button>
-            <button type="button" onclick="openMiracleNotebookModal('rumors')" data-tab="rumors" class="mc-btn px-2.5 py-1 rounded-xl font-jua text-xs bg-amber-100 text-amber-950">🟡 소문 (12)</button>
-            <button type="button" onclick="openMiracleNotebookModal('miracles')" data-tab="miracles" class="mc-btn px-2.5 py-1 rounded-xl font-jua text-xs bg-amber-100 text-amber-950">✨ 기적 (7)</button>
-            <button type="button" onclick="openMiracleNotebookModal('parables')" data-tab="parables" class="mc-btn px-2.5 py-1 rounded-xl font-jua text-xs bg-amber-100 text-amber-950">🌱 비유 (4)</button>
-            <button type="button" onclick="openMiracleNotebookModal('words')" data-tab="words" class="mc-btn px-2.5 py-1 rounded-xl font-jua text-xs bg-amber-100 text-amber-950">📜 말씀 (10)</button>
-            <button type="button" onclick="openMiracleNotebookModal('testimonies')" data-tab="testimonies" class="mc-btn px-2.5 py-1 rounded-xl font-jua text-xs bg-amber-100 text-amber-950">🕊️ 부활증언 (3)</button>
+            <button type="button" onclick="openMiracleNotebookModal('rumors')" data-tab="rumors" class="mc-btn px-2.5 py-1 rounded-xl font-jua text-xs bg-amber-100 text-amber-950">🟡 소문 (${MIRACLE_NOTEBOOK_DB.rumors.length})</button>
+            <button type="button" onclick="openMiracleNotebookModal('miracles')" data-tab="miracles" class="mc-btn px-2.5 py-1 rounded-xl font-jua text-xs bg-amber-100 text-amber-950">✨ 기적 (${MIRACLE_NOTEBOOK_DB.miracles.length})</button>
+            <button type="button" onclick="openMiracleNotebookModal('parables')" data-tab="parables" class="mc-btn px-2.5 py-1 rounded-xl font-jua text-xs bg-amber-100 text-amber-950">🌱 비유 (${MIRACLE_NOTEBOOK_DB.parables.length})</button>
+            <button type="button" onclick="openMiracleNotebookModal('words')" data-tab="words" class="mc-btn px-2.5 py-1 rounded-xl font-jua text-xs bg-amber-100 text-amber-950">📜 말씀 (${MIRACLE_NOTEBOOK_DB.words.length})</button>
+            <button type="button" onclick="openMiracleNotebookModal('testimonies')" data-tab="testimonies" class="mc-btn px-2.5 py-1 rounded-xl font-jua text-xs bg-amber-100 text-amber-950">🕊️ 부활증언 (${MIRACLE_NOTEBOOK_DB.testimonies.length})</button>
           </div>
 
           <div id="miracle-notebook-list" class="grid grid-cols-1 sm:grid-cols-2 gap-2 overflow-y-auto pr-1 max-h-[54dvh]"></div>
@@ -6184,7 +6294,11 @@ window.closeMiracleNotebookModal = function () {
 window.stopAllEp4VoiceAudio = function () {
   ['__activeNpcAudio', '__activeVerseAudio', '__activeEndingAudio'].forEach(key => {
     if (window[key]) {
-      try { window[key].pause(); } catch (e) {}
+      try {
+        window[key].onended = null;
+        window[key].onerror = null;
+        window[key].pause();
+      } catch (e) {}
       window[key] = null;
     }
   });
@@ -6767,6 +6881,7 @@ if (!window.__ep4DayNightKeysBound) {
         ? asc.disciples.filter(d => d && d.mesh && Math.abs(d.mesh.rotation.x + Math.PI * 0.5) < 0.25).length
         : 0;
       const payload = {
+        gameVersion: window.GAME_VERSION || '3.11.2',
         versions: window.__GAME_BUILD_VERSIONS__ || {},
         subMode: sub,
         anim: window.ep4CharacterAnimator ? window.ep4CharacterAnimator.debugState : null,
@@ -6794,7 +6909,7 @@ if (!window.__ep4DayNightKeysBound) {
         patrols: Array.isArray(window.miracleNightPatrolSoldiers) ? window.miracleNightPatrolSoldiers.length : 0,
         sleepingDisciples,
         mission: fe ? { type: fe.type, id: fe.spot ? fe.spot.id : '', collected: fe.collected || 0, carrying: fe.carrying || 0, required: fe.required || 0, carried: (typeof carriedBlockGroup !== 'undefined' && carriedBlockGroup) ? carriedBlockGroup.children.length : 0 } : null,
-        stage1: (sub === 'main1_galilee' && ms) ? { phase: ms.phase, haulProgress: +(ms.haulProgress || 0).toFixed(2), netTension: +(ms.netTension || 0).toFixed(2), tearingFish: Array.isArray(ms.tearingNetFishes) ? ms.tearingNetFishes.length : 0, sternLightPower: +(ms.sternLightPower || 0).toFixed(2) } : null
+        stage1: ((sub === 'main1_galilee' || sub === 'main1_storm_night') && ms) ? { subMode: sub, phase: ms.phase, holdGauge: +(ms.holdGauge || 0).toFixed(2), coopProgress: +(ms.coopProgress || 0).toFixed(2), balanceProgress: +(ms.balanceProgress || 0).toFixed(2), sternLightPower: +(ms.sternLightPower || 0).toFixed(2) } : null
       };
       const jsonStr = JSON.stringify(payload);
       let dbgEl = document.getElementById('ep4-debug-readout');

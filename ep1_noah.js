@@ -6,6 +6,9 @@
 // - 엔딩(스테이지 4): 방주 내부는 열린 문 밖에서만 관람(진입 차단) & 자연스러운 바위 더미를 통한 2층(꼭대기) 등반
 // =========================================================================
 
+window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
+window.__GAME_BUILD_VERSIONS__.ep1_noah = '3.12.3';
+
 EPISODE_SCRIPTURE.noah = {
   1: {
     title: '스테이지 1 클리어! 동물 7쌍 방주 탑승!',
@@ -2053,7 +2056,8 @@ function updateNoahStageFrame(dt, now) {
         } else {
           showToast(`🐾 ${ANIMAL_SPECS[a.type].name} 한 쌍이 방주 위로 올라갔어요! (${rescuedPairs}/7)`);
         }
-        document.getElementById('hud-counter-text').textContent = `${rescuedPairs}/7쌍`;
+        if (typeof window.syncStageHudCounter === 'function') window.syncStageHudCounter(`${rescuedPairs}/7쌍`);
+        else document.getElementById('hud-counter-text').textContent = `${rescuedPairs}/7쌍`;
         if (rescuedPairs >= 7) openStageClearModal(1);
       }
     });
@@ -2211,7 +2215,8 @@ function updateNoahStageFrame(dt, now) {
         } else {
           showToast(`🐾 ${ANIMAL_SPECS[a.type].name} 한 쌍이 노아 뒤를 졸졸 따라와요! (${rescuedPairs}/7)`);
         }
-        document.getElementById('hud-counter-text').textContent = `${rescuedPairs}/7쌍`;
+        if (typeof window.syncStageHudCounter === 'function') window.syncStageHudCounter(`${rescuedPairs}/7쌍`);
+        else document.getElementById('hud-counter-text').textContent = `${rescuedPairs}/7쌍`;
         if (rescuedPairs === 7) showToast('🎉 동물 7쌍이 모두 뒤따라와요! 북쪽 벽의 출구 문으로 나가세요!');
       }
     });

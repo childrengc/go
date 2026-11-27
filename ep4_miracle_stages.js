@@ -4,7 +4,43 @@
 // - 스테이지 3(십자가 사건): 넓어진 골고다 언덕 정상 고원과 세 십자가 등장 연출 적용
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_stages = '20261126_v50';
+window.__GAME_BUILD_VERSIONS__.ep4_stages = '3.12.3';
+
+// 스테이지 1 완만한 곡선 해안선 X 계산기 (중앙 선착장 x≈20에서 북/남 양쪽으로 갈수록 뒤쪽(+X)으로 부드럽게 만곡)
+function getGalileeStage1ShoreX(wz) {
+  const az = Math.abs(wz);
+  const dz = Math.max(0, az - 42.0);
+  return 20.0 + Math.sin(wz * 0.028) * 1.8 + 0.0024 * dz * dz;
+}
+
+// 스테이지 1 해안~평탄한 갈릴리 마을 들판 지형 고도 계산기 (비현실적 산 제거 + 완만한 해안 평지 연장)
+function getGalileeStage1CoastHeight(wx, wz) {
+  const smooth01 = (a, b, v) => {
+    const t = Math.max(0, Math.min(1, (v - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+  };
+  const shoreX = getGalileeStage1ShoreX(wz);
+  const dShore = wx - shoreX;
+  let rawH = 0;
+  if (dShore < -1.0) rawH = -1.35 + (dShore + 1.0) * 0.08;
+  else if (dShore < 4.5) rawH = -1.35 + smooth01(-1.0, 4.5, dShore) * 1.25;
+  else if (dShore < 7.0) rawH = -0.10 + smooth01(4.5, 7.0, dShore) * 0.40;
+  else if (dShore < 44.0) {
+    // 완만한 갈릴리 해안 마을 평지 (dShore 7..44) — 가옥·야자수·시장 가판대가 반듯하게 안착
+    const t1 = smooth01(7.0, 44.0, dShore);
+    rawH = 0.30 + t1 * 1.25 + Math.sin(wx * 0.055) * Math.cos(wz * 0.048) * 0.14;
+  } else {
+    // 내륙 평탄 들판 연장 (산·급경사 완전 제거, 나무와 건물이 자연스럽게 시야 차폐)
+    const t2 = smooth01(44.0, 140.0, dShore);
+    rawH = 1.55 + t2 * 0.45 + Math.sin(wx * 0.045) * Math.cos(wz * 0.042) * 0.20;
+  }
+  // 남·북 최외곽 원경(±345~±415)에서는 해수면 아래로 부드럽게 잠겨 바다 중간 단절감 제거
+  const edgeDip = smooth01(345.0, 415.0, Math.abs(wz));
+  if (edgeDip > 0.001) {
+    return rawH * (1.0 - edgeDip) + (-1.38) * edgeDip;
+  }
+  return rawH;
+}
 
 // 스테이지 3: 십자가를 지고 힘겹게 오르시는 예수님 보행 속도(더 천천히) 및 플레이어 대신 짊어졌을 때의 보행 속도
 const MIRACLE_STAGE3_JESUS_WALK_SPEED = 1.05;
@@ -20,6 +56,13 @@ const MIRACLE_STAGE_TAG_DIST = 11.5;
 window.getMiracleGroundHeight = function (x, z, st) {
   if (miracleSubMode === 'openworld') {
     return window.getMiracleOpenWorldGroundHeight(x, z);
+  }
+  if (miracleSubMode === 'main1_galilee' || miracleSubMode === 'main1_storm_night') {
+    const mini = st || ((typeof miracleActiveMiniState !== 'undefined') ? miracleActiveMiniState : null);
+    if (mini && mini.beachSceneActive) {
+      return getGalileeBeachCallingGroundHeight(x, z);
+    }
+    return getGalileeStage1CoastHeight(x, z);
   }
   if (miracleSubMode === 'main2_loaves') {
     // 동북쪽 외곽 오병이어 전망 언덕: 남쪽 마을 입구(z = 32, y = 0.5)에서 북쪽 언덕 정상(z = -26, y = 13.5)으로 완만하게 융기
@@ -42,13 +85,26 @@ window.getMiracleGroundHeight = function (x, z, st) {
     return Number(Math.max(0, hillProfile * 9.6 + bump).toFixed(3));
   }
   if (miracleSubMode === 'ascension') {
-    // 감람산 승천 언덕 정상부 + 서쪽 예루살렘 골짜기 경사면(x < -28)을 지형 메쉬와 100% 일치시켜 원경 건물 들뜸 완벽 해소!
-    if (x < -28) {
-      return Number(Math.max(-8.0, (x + 28) * 0.18).toFixed(3));
+    // 감람산 승천 언덕: 정상 고원(반경 19m, y≈11.8~12.6m)에서 사방 360° 아래쪽 골짜기(y≈0.4~1.4m)로 부드럽게 내려가는 입체 언덕
+    const dx = x;
+    const dz = z + 4;
+    const r = Math.hypot(dx / 1.05, dz / 1.0);
+    const rCore = 19.0;
+    const rFoot = 62.0;
+    let hill = 0;
+    if (r <= rCore) {
+      const innerT = r / rCore;
+      hill = 11.8 + (1.0 - innerT * innerT) * 0.85;
+    } else if (r < rFoot) {
+      const u = (r - rCore) / (rFoot - rCore);
+      const s = 1.0 - (u * u * (3.0 - 2.0 * u));
+      hill = 0.6 + s * 11.2;
+    } else {
+      hill = 0.6 + Math.sin(x * 0.055) * Math.cos(z * 0.055) * 0.45;
     }
-    const dist = Math.hypot(x / 32, (z + 4) / 32);
-    const dome = Math.max(0, 1.0 - dist * dist) * 2.2;
-    return Number(dome.toFixed(3));
+    const westValleyDip = (x < -48) ? Math.max(-2.2, (x + 48) * 0.06) : 0;
+    const microBump = Math.sin(x * 0.13) * Math.cos(z * 0.13) * 0.22;
+    return Number((hill + westValleyDip + microBump).toFixed(3));
   }
   return 0;
 };
@@ -64,7 +120,7 @@ window.startMiracleDirectSubStage = function (subId) {
     window.MiracleGuideUI.suppressedDuringIntro = false;
   }
   currentEpisode = 'miracle';
-  const stageMap = { main1_boat: 1, main1_galilee: 1, main2_loaves: 2, main3_cross: 3, main4_tomb: 4 };
+  const stageMap = { main1_boat: 1, main1_galilee: 1, main1_storm_night: 1, main2_loaves: 2, main3_cross: 3, main4_tomb: 4 };
   const stNum = stageMap[subId] || 1;
   currentStage = stNum;
   enteredFromMapStageSelect = true;
@@ -85,7 +141,8 @@ window.startMiracleDirectSubStage = function (subId) {
     const isEffSenior = (typeof isEffectiveSeniorMode === 'function')
       ? isEffectiveSeniorMode('miracle', currentMode)
       : (currentMode === 'senior' || currentMode === 'timeattack');
-    guideArrowGroup.visible = !isEffSenior;
+    const isStage1NoArrow = (subId === 'main1_galilee' || subId === 'main1_storm_night');
+    guideArrowGroup.visible = !isEffSenior && !isStage1NoArrow;
   }
   if (typeof setInGameHudControlsVisible === 'function') {
     setInGameHudControlsVisible(stNum !== 2);
@@ -100,7 +157,8 @@ window.startMiracleDirectSubStage = function (subId) {
   if (typeof stopMiracleOpenWorldOgg === 'function') stopMiracleOpenWorldOgg(false);
   miracleStageCutscene.active = false;
   miracleStageObjects = [];
-  if (stNum === 1) buildMiracleMainStage1Galilee();
+  if (subId === 'main1_storm_night') buildMiracleMainStage1NightStorm();
+  else if (stNum === 1) buildMiracleMainStage1Galilee();
   else if (stNum === 2) buildMiracleMainStage2Loaves();
   else if (stNum === 3) buildMiracleMainStage3Cross();
   else if (stNum === 4) buildMiracleMainStage4Tomb();
@@ -114,13 +172,18 @@ window.startMiracleDirectSubStage = function (subId) {
 // -------------------------------------------------------------------------
 let _isEnteringMiracleStage = false;
 
-function enterMiracleMainStage(stageNum) {
+function enterMiracleMainStage(stageNum, variant = null) {
   if (typeof miracleActiveFieldEvent !== 'undefined' && miracleActiveFieldEvent) {
     if (typeof showToast === 'function') showToast('⚠️ 진행 중인 미션을 먼저 완료한 뒤 스테이지에 입장할 수 있어요!');
     return;
   }
   if (_isEnteringMiracleStage) return;
   _isEnteringMiracleStage = true;
+
+  const isNightStage1 = (stageNum === 1) && (
+    variant === 'night' ||
+    (variant !== 'day' && Boolean(window.MiracleDayNight && typeof window.MiracleDayNight.isNight === 'function' && window.MiracleDayNight.isNight()))
+  );
 
   if (typeof stopMiracleOpenWorldOgg === 'function') stopMiracleOpenWorldOgg(false);
   const s1Ui = document.getElementById('miracle-s1-ui');
@@ -140,7 +203,10 @@ function enterMiracleMainStage(stageNum) {
       const timerBox = document.getElementById('hud-timer-box');
       if (timerBox) { timerBox.classList.add('hidden'); timerBox.classList.remove('flex'); }
 
-      if (stageNum === 1) buildMiracleMainStage1Galilee();
+      if (stageNum === 1) {
+        if (isNightStage1) buildMiracleMainStage1NightStorm();
+        else buildMiracleMainStage1Galilee();
+      }
       else if (stageNum === 2) buildMiracleMainStage2Loaves();
       else if (stageNum === 3 && typeof buildMiracleMainStage3Cross === 'function') buildMiracleMainStage3Cross();
       else if (stageNum === 4 && typeof buildMiracleMainStage4Tomb === 'function') buildMiracleMainStage4Tomb();
@@ -176,7 +242,7 @@ function resetMiracleBoatRockingTransform() {
   }
 }
 
-// 스테이지 1 미니게임(그물 던지기 & 풍랑 균형 잡기) 진행 중 조이스틱 이동 잠금 연동
+// 스테이지 1 미니게임(주간 깊은 곳으로! & 야간 풍랑 균형 잡기) 진행 중 보행 이동 잠금 연동
 const _prevIsPlayerMovementLockedForStages = window.isPlayerMovementLocked;
 window.isPlayerMovementLocked = function () {
   let locked = false;
@@ -184,8 +250,12 @@ window.isPlayerMovementLocked = function () {
     locked = _prevIsPlayerMovementLockedForStages();
   }
   if (miracleSubMode === 'main1_galilee' && miracleActiveMiniState) {
+    // 주간 스테이지 1은 배 항해(window.lastRawMoveInput 직접 사용) · 그물 · 컷신 전체에서 도보 이탈 방지
+    return true;
+  }
+  if (miracleSubMode === 'main1_storm_night' && miracleActiveMiniState) {
     const ph = miracleActiveMiniState.phase;
-    if (ph === 'cast_net' || ph === 'storm_balance' || ph === 'calm') {
+    if (ph === 'storm_balance' || ph === 'calm') {
       return true;
     }
   }
@@ -199,13 +269,201 @@ window.isPlayerMovementLocked = function () {
 };
 
 // -------------------------------------------------------------------------
-// 2. [메인 스테이지 1] 갈릴리 바다 전면 리뉴얼
-//    - 디테일한 다단 곡선 갈릴리 목선 내부 탑승 표현 (늑골·갑판판재·노·돛·로프·고물 베개·어망 바구니)
-//    - 1단계: 터치(누르고 있기)로 게이지 채워 놓아 바다에 3D 그물 던지기
-//    - 2단계: 풍랑 중 배가 기울면 반대쪽 터치로 균형 잡기 + 고물 베개에 누워 주무시는 예수님
-//    - 3단계: 주무시는 예수님 깨우기 -> 예수님이 일어나 풍랑을 잠잠케 하심
+// 2. [메인 스테이지 1] 주간 "깊은 곳으로!" (제자 부르심) & 야간 전용 "갈릴리 밤 풍랑"
+//    - 주간(main1_galilee): 예수님 말씀 → 베드로 대답 → 1세기 어선 노·방향타 항해(랜덤 깊은 바다)
+//      → 그물 투척 → 물고기 몰려듦 → 연타 그물 잡기(쉬면 게임오버 / 유지 시 그물 팽창+배 기울기)
+//      → 베드로가 야고보·요한 호출 → 작은 동업자 배 합류 & 레벨별 연타 협동 끌어올리기
+//      → 두 배 만선 → 갈릴리 해변 부르심 → 제자들이 배와 그물을 두고 예수님을 따름(5줄 내레이션)
+//      → 화이트 아웃 → 마가복음 1:17 성구 클리어!
+//    - 야간(main1_storm_night): 밤바다 풍랑 균형 잡기 → 주무시는 예수님 깨우기 → 폭풍 잠잠케 하심(마가복음 4:39)
 // -------------------------------------------------------------------------
 let _miracleS1KeyBound = false;
+
+const MIRACLE_STAGE1_BEACH_NARRATION_LINES = [
+  '베드로와 친구들은 놀라운 일을 경험했어요.',
+  '예수님은 그들에게 새로운 일을 맡기셨어요.',
+  '이제부터 사람들에게 하나님의 사랑을 전하는 사람이 되라고 하셨지요.',
+  '그들은 배와 그물을 뒤로하고 예수님을 따라갔어요.',
+  '예수님과 함께하는 새로운 여정이 시작되었어요!'
+];
+
+const MIRACLE_STAGE1_VOICE_FILES = {
+  peter01: 'assets/voice/ep4_st1_peter01.mp3',
+  peter02: 'assets/voice/ep4_st1_peter02.mp3',
+  peter03: 'assets/voice/ep4_st1_peter03.mp3',
+  peter04: 'assets/voice/ep4_st1_peter04.mp3',
+  jesus01: 'assets/voice/ep4_st1_jesus01.mp3',
+  jesus02: 'assets/voice/ep4_st1_jesus02.mp3',
+  narration: [
+    'assets/voice/ep4_st1_narration01.mp3',
+    'assets/voice/ep4_st1_narration02.mp3',
+    'assets/voice/ep4_st1_narration03.mp3',
+    'assets/voice/ep4_st1_narration04.mp3',
+    'assets/voice/ep4_st1_narration05.mp3'
+  ],
+  bible01: 'assets/voice/ep4_st1_bible01.mp3'
+};
+
+function getMiracleStage1CoopParams() {
+  if (currentMode === 'kinder') {
+    return {
+      label: '🐣 유치반',
+      holdThreshold: 0.40, holdTapGain: 0.145, holdDrain: 0.19, holdIdleMult: 1.20, swellDur: 4.5, holdGrace: 3.0,
+      tapGain: 0.095, decayRate: 0.14, coopIdleMult: 1.20
+    };
+  }
+  if (currentMode === 'senior' || currentMode === 'timeattack') {
+    return {
+      label: '🔥 소년반',
+      holdThreshold: 0.55, holdTapGain: 0.072, holdDrain: 0.43, holdIdleMult: 1.45, swellDur: 6.6, holdGrace: 2.0,
+      tapGain: 0.072, decayRate: 0.40, coopIdleMult: 1.45
+    };
+  }
+  return {
+    label: '🌱 유년반',
+    holdThreshold: 0.50, holdTapGain: 0.100, holdDrain: 0.31, holdIdleMult: 1.32, swellDur: 5.5, holdGrace: 2.3,
+    tapGain: 0.082, decayRate: 0.25, coopIdleMult: 1.32
+  };
+}
+
+function stopMiracleStage1TTS() {
+  if (window.__activeNpcAudio) {
+    try {
+      window.__activeNpcAudio.onended = null;
+      window.__activeNpcAudio.onerror = null;
+    } catch (e) {}
+  }
+  if (typeof window.stopAllEp4VoiceAudio === 'function') {
+    window.stopAllEp4VoiceAudio();
+  } else if (typeof window.speechSynthesis !== 'undefined' && window.speechSynthesis) {
+    try { window.speechSynthesis.cancel(); } catch (e) {}
+  }
+}
+
+function speakMiracleStage1Line(text, audioUrlOrOnEnd, maybeOnEnd) {
+  let audioUrl = null;
+  let onEnd = null;
+  if (typeof audioUrlOrOnEnd === 'function') {
+    onEnd = audioUrlOrOnEnd;
+  } else {
+    audioUrl = audioUrlOrOnEnd || null;
+    onEnd = (typeof maybeOnEnd === 'function') ? maybeOnEnd : null;
+  }
+
+  stopMiracleStage1TTS();
+
+  let settled = false;
+  const finish = () => {
+    if (settled) return;
+    settled = true;
+    if (onEnd) {
+      try { onEnd(); } catch (e) {}
+    }
+  };
+
+  if (audioUrl) {
+    const aud = new Audio(audioUrl);
+    aud.volume = window.EP4_VOICE_VOLUME ?? 0.75;
+    window.__activeNpcAudio = aud;
+
+    let fellBack = false;
+    const fallbackToTts = () => {
+      if (settled || fellBack) return;
+      fellBack = true;
+      if (window.__activeNpcAudio === aud) {
+        try {
+          aud.onended = null;
+          aud.onerror = null;
+          aud.pause();
+        } catch (e) {}
+        window.__activeNpcAudio = null;
+      }
+      if (typeof speakText === 'function' && text) {
+        speakText(text, { onEnd: finish });
+      } else {
+        setTimeout(finish, 2200);
+      }
+    };
+
+    aud.onended = () => {
+      if (window.__activeNpcAudio === aud) window.__activeNpcAudio = null;
+      finish();
+    };
+    aud.onerror = fallbackToTts;
+
+    try {
+      const playPromise = aud.play();
+      if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch(fallbackToTts);
+      }
+    } catch (e) {
+      fallbackToTts();
+    }
+    return;
+  }
+
+  if (typeof speakText === 'function' && text) {
+    speakText(text, { onEnd: finish });
+  } else if (onEnd) {
+    setTimeout(finish, 2200);
+  }
+}
+
+function syncMiracleStage1HudControlsVisibility() {
+  const joyEl = document.getElementById('joystick-zone');
+  const actEl = document.getElementById('action-zone');
+  const camEl = document.getElementById('cam-bottom-bar');
+  const st = miracleActiveMiniState;
+  if (!st) return;
+
+  if (miracleSubMode === 'main1_galilee') {
+    const isSailing = (st.phase === 'sail_to_deep');
+    if (joyEl) joyEl.style.display = isSailing ? 'block' : 'none';
+    if (actEl) actEl.style.display = 'none';
+    if (camEl) camEl.style.display = 'none';
+    if (typeof guideArrowGroup !== 'undefined' && guideArrowGroup) guideArrowGroup.visible = false;
+    if (!isSailing && typeof window.updateMiracleMiniNavigatorUI === 'function') {
+      window.updateMiracleMiniNavigatorUI({ visible: false });
+    }
+  } else if (miracleSubMode === 'main1_storm_night') {
+    const canWalk = (st.phase === 'wake_jesus');
+    if (joyEl) joyEl.style.display = canWalk ? 'block' : 'none';
+    if (actEl) actEl.style.display = 'none';
+    if (camEl) camEl.style.display = 'none';
+    if (typeof guideArrowGroup !== 'undefined' && guideArrowGroup) {
+      guideArrowGroup.visible = false;
+    }
+    if (typeof window.updateMiracleMiniNavigatorUI === 'function') {
+      window.updateMiracleMiniNavigatorUI({ visible: false });
+    }
+  }
+}
+
+function openMiracleStage1NetLostRetryModal() {
+  isPlaying = false;
+  isTimeAttackActive = false;
+  stopMiracleStage1TTS();
+  playSfx('wrong');
+  const s1Ui = document.getElementById('miracle-s1-ui');
+  if (s1Ui) s1Ui.classList.add('hidden');
+  if (typeof window.updateMiracleMiniNavigatorUI === 'function') {
+    window.updateMiracleMiniNavigatorUI({ visible: false });
+  }
+  const iconEl = document.getElementById('retry-modal-icon');
+  const titleEl = document.getElementById('retry-modal-title');
+  const descEl = document.getElementById('retry-modal-desc');
+  if (iconEl) iconEl.textContent = '🕸️';
+  if (titleEl) titleEl.textContent = '앗! 그물을 놓쳐버렸어요!';
+  if (descEl) {
+    descEl.innerHTML = '터치를 쉬면 무거운 그물을 놓쳐 게임오버가 돼요.<br/>연타로 그물을 꽉 붙잡고 다시 한 번 도전해 볼까요?';
+  }
+  const rm = document.getElementById('retry-modal');
+  if (rm) {
+    rm.classList.remove('hidden');
+    rm.classList.add('flex');
+  }
+  if (typeof syncOverlayModalBodyClass === 'function') syncOverlayModalBodyClass();
+}
 
 function ensureMiracleStage1UI() {
   let root = document.getElementById('miracle-s1-ui');
@@ -214,10 +472,31 @@ function ensureMiracleStage1UI() {
     root.id = 'miracle-s1-ui';
     root.className = 'hidden fixed inset-x-0 bottom-3 sm:bottom-5 z-30 flex flex-col items-center pointer-events-none px-3 select-none';
     root.innerHTML = `
-      <!-- 1단계: 그물 던지기 게이지 패널 -->
+      <!-- 시네마틱 대사 / 내레이션 패널 (Steps 2, 3, 6, 8, 10, 11, 12) -->
+      <div id="ms1-cinema-panel" class="hidden pointer-events-auto w-full max-w-xl bg-slate-950/86 backdrop-blur-md border-2 border-amber-300/85 rounded-2xl p-3.5 sm:p-4 shadow-2xl text-white">
+        <div class="flex items-center justify-between gap-2 mb-1.5">
+          <span id="ms1-cinema-speaker" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-400/20 border border-amber-300/60 text-amber-200 font-jua text-xs sm:text-sm">✨ 예수님</span>
+          <span id="ms1-cinema-step" class="text-[11px] sm:text-xs font-bold text-sky-200/90"></span>
+        </div>
+        <p id="ms1-cinema-text" class="font-jua text-sm sm:text-base md:text-lg leading-relaxed text-white whitespace-pre-line mb-2.5"></p>
+        <div id="ms1-cinema-btn-wrap" class="flex justify-end">
+          <button id="ms1-cinema-next-btn" type="button"
+            class="mc-btn px-5 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-400 active:scale-95 text-slate-950 font-jua text-sm sm:text-base shadow-lg border-2 border-yellow-100">
+            다음 ▶
+          </button>
+        </div>
+      </div>
+
+      <!-- Step 4: 1세기 어선 깊은 바다 항해 안내 배너 -->
+      <div id="ms1-sail-panel" class="hidden pointer-events-none w-full max-w-xs sm:max-w-sm bg-slate-900/80 backdrop-blur-md border-2 border-sky-300/80 rounded-2xl px-3.5 py-2 shadow-xl text-white text-center mb-1">
+        <div id="ms1-sail-dist" class="font-jua text-sm sm:text-base text-amber-300">🧭 깊은 바다 목적지까지 50m</div>
+        <div class="text-[11px] sm:text-xs text-sky-100/95 font-bold mt-0.5">🕹️ 조이스틱 · 방향키로 노를 저어 목적지까지 이동하세요!</div>
+      </div>
+
+      <!-- Step 5: 그물 던지기 게이지 패널 -->
       <div id="ms1-cast-panel" class="hidden pointer-events-auto w-full max-w-md bg-slate-900/85 backdrop-blur-md border-2 border-sky-400/80 rounded-2xl p-3 shadow-2xl text-white">
         <div class="flex items-center justify-between text-xs sm:text-sm font-bold mb-1.5">
-          <span id="ms1-cast-title" class="text-sky-200">🎣 오른편으로 그물 던지기</span>
+          <span id="ms1-cast-title" class="text-sky-200">🎣 깊은 바다 물고기 떼에 그물 던지기</span>
           <span id="ms1-cast-hint" class="text-emerald-300">초록 구간에서 손을 떼세요!</span>
         </div>
         <div class="relative h-6 w-full rounded-full bg-slate-800 border border-slate-600 overflow-hidden mb-2.5">
@@ -231,34 +510,50 @@ function ensureMiracleStage1UI() {
         </button>
       </div>
 
-      <!-- 1-2단계: 그물이 찢어지는 만선 끌어올리기 패널 -->
-      <div id="ms1-haul-panel" class="hidden pointer-events-auto w-full max-w-md bg-slate-900/88 backdrop-blur-md border-2 border-amber-400/85 rounded-2xl p-3 shadow-2xl text-white">
-        <div class="flex items-center justify-between text-xs sm:text-sm font-bold mb-1">
-          <span class="text-amber-200">🐟 만선! 그물이 찢어질 듯 팽팽해요!</span>
-          <span id="ms1-haul-pct" class="text-emerald-300">0%</span>
+      <!-- Step 7: 그물 잡기 유지 연타 게임 (0% 시작 · 쉬면 게이지 감소 → 게임오버 / 수준별 기준선 이상 유지 시 그물 팽창+배 기울기) -->
+      <div id="ms1-hold-panel" class="hidden pointer-events-auto w-full max-w-md bg-slate-900/90 backdrop-blur-md border-2 border-rose-400/90 rounded-2xl p-3 shadow-2xl text-white">
+        <div class="flex items-center justify-between text-xs sm:text-sm font-bold mb-1 gap-1.5">
+          <span id="ms1-hold-title" class="text-amber-200 truncate">✊ 지금 바로 빠르게 연타해 게이지를 채우세요!</span>
+          <span id="ms1-hold-level" class="px-2 py-0.5 rounded-full bg-amber-500/25 border border-amber-300/60 text-[11px] text-amber-200 shrink-0">🌱 유년반</span>
+          <span id="ms1-hold-pct" class="text-amber-300 shrink-0">0%</span>
         </div>
-        <div class="h-3 w-full rounded-full bg-slate-800 overflow-hidden mb-2 border border-slate-600">
-          <div id="ms1-haul-bar" class="h-full bg-gradient-to-r from-amber-400 to-emerald-400 transition-all duration-100" style="width:0%;"></div>
+        <div class="relative h-3.5 w-full rounded-full bg-slate-800 overflow-hidden mb-2 border border-slate-600">
+          <div id="ms1-hold-bar" class="h-full bg-gradient-to-r from-rose-500 via-amber-400 to-emerald-400 transition-all duration-75" style="width:0%;"></div>
+          <div id="ms1-hold-threshold-line" class="absolute top-0 bottom-0 left-[50%] w-0.5 bg-yellow-200/95 shadow-[0_0_6px_#fef08a] pointer-events-none" title="유지 기준선"></div>
         </div>
         <div class="flex items-center justify-between text-[11px] font-bold mb-1">
-          <span id="ms1-tension-txt" class="text-orange-300">⚠️ 그물 장력 (팽팽함)</span>
-          <span id="ms1-tension-val" class="text-rose-300">20%</span>
+          <span class="text-sky-200">🐟 그물이 점점 커지며 배가 기울고 있어요!</span>
+          <span id="ms1-swell-pct" class="text-amber-300">0%</span>
         </div>
-        <div class="h-2 w-full rounded-full bg-slate-800 overflow-hidden mb-2.5">
-          <div id="ms1-tension-bar" class="h-full bg-gradient-to-r from-amber-300 via-orange-500 to-rose-500 transition-all duration-100" style="width:20%;"></div>
+        <div class="h-2 w-full rounded-full bg-slate-800 overflow-hidden mb-2.5 border border-slate-700">
+          <div id="ms1-swell-bar" class="h-full bg-gradient-to-r from-sky-400 to-amber-300 transition-all duration-100" style="width:0%;"></div>
         </div>
-        <button id="ms1-haul-btn" type="button" style="touch-action:none;"
-          class="mc-btn w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 active:scale-95 text-slate-950 font-jua text-base sm:text-lg shadow-lg border-2 border-yellow-200">
-          🕸️ 그물 힘껏 끌어올리기! (연타 / Space)
+        <button id="ms1-hold-btn" type="button" style="touch-action:none;"
+          class="mc-btn w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 active:scale-95 text-white font-jua text-base sm:text-lg shadow-lg border-2 border-yellow-200">
+          ✊ 빠르게 연타해서 그물 붙잡기! (터치 / Space)
         </button>
       </div>
 
-      <!-- 1-3단계: 노을 → 밤 전환 연출 배너 -->
-      <div id="ms1-sunset-panel" class="hidden pointer-events-none px-5 py-2.5 rounded-2xl bg-slate-950/80 border border-orange-300/80 text-orange-100 font-jua text-sm sm:text-base shadow-xl backdrop-blur-sm">
-        🌅 저녁 노을이 지고 깊은 밤이 찾아옵니다...
+      <!-- Step 9: 야고보·요한의 배 합류 협동 끌어올리기 (유치-유년-소년 레벨 구분) -->
+      <div id="ms1-coop-panel" class="hidden pointer-events-auto w-full max-w-md bg-slate-900/90 backdrop-blur-md border-2 border-emerald-400/90 rounded-2xl p-3 shadow-2xl text-white">
+        <div class="flex items-center justify-between text-xs sm:text-sm font-bold mb-1 gap-1.5">
+          <span class="text-emerald-200 truncate">⛵ 야고보·요한과 함께 그물 올리기!</span>
+          <span id="ms1-coop-level" class="px-2 py-0.5 rounded-full bg-emerald-500/25 border border-emerald-300/60 text-[11px] text-emerald-200 shrink-0">🌱 유년반</span>
+          <span id="ms1-coop-pct" class="text-amber-300 shrink-0">0%</span>
+        </div>
+        <div class="h-3.5 w-full rounded-full bg-slate-800 overflow-hidden mb-1.5 border border-slate-600">
+          <div id="ms1-coop-bar" class="h-full bg-gradient-to-r from-sky-400 via-emerald-400 to-amber-300 transition-all duration-75" style="width:0%;"></div>
+        </div>
+        <div id="ms1-coop-hint" class="text-center text-[11px] sm:text-xs font-bold text-amber-200 mb-2">
+          💪 두 배가 함께 당기고 있어요! 멈추지 말고 연타해서 끌어올리세요!
+        </div>
+        <button id="ms1-coop-btn" type="button" style="touch-action:none;"
+          class="mc-btn w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 active:scale-95 text-slate-950 font-jua text-base sm:text-lg shadow-lg border-2 border-emerald-100">
+          🕸️ 다 함께 연타로 그물 끌어올리기! (터치 / Space)
+        </button>
       </div>
 
-      <!-- 2단계: 풍랑 균형 잡기 패널 -->
+      <!-- [야간 전용] 풍랑 균형 잡기 패널 -->
       <div id="ms1-bal-panel" class="hidden pointer-events-auto w-full max-w-lg bg-slate-900/88 backdrop-blur-md border-2 border-amber-400/80 rounded-2xl p-3 shadow-2xl text-white">
         <div class="flex items-center justify-between text-xs sm:text-sm font-bold mb-1">
           <span class="text-amber-300">⛈️ 깊은 밤 풍랑 속 균형 잡기</span>
@@ -287,7 +582,7 @@ function ensureMiracleStage1UI() {
         </div>
       </div>
 
-      <!-- 3단계: 주무시는 예수님 깨우기 버튼 -->
+      <!-- [야간 전용] 주무시는 예수님 깨우기 버튼 -->
       <div id="ms1-wake-panel" class="hidden pointer-events-auto w-full max-w-md bg-slate-900/88 backdrop-blur-md border-2 border-yellow-300 rounded-2xl p-3 shadow-2xl text-white text-center">
         <p class="font-jua text-sm text-yellow-200 mb-2">😴 어두운 밤 거센 풍랑 속에서도 예수님이 등불 아래 베개에 누워 주무시고 계세요!</p>
         <button id="ms1-wake-btn" type="button"
@@ -298,7 +593,16 @@ function ensureMiracleStage1UI() {
     `;
     document.body.appendChild(root);
 
-    // 1단계 그물 버튼 포인터 이벤트
+    // 시네마틱 다음 버튼
+    const cinemaNextBtn = root.querySelector('#ms1-cinema-next-btn');
+    cinemaNextBtn.addEventListener('click', (e) => {
+      if (e) e.preventDefault();
+      if (typeof window.advanceMiracleStage1Cinema === 'function') {
+        window.advanceMiracleStage1Cinema();
+      }
+    });
+
+    // Step 5 그물 던지기 버튼 포인터 이벤트
     const castBtn = root.querySelector('#ms1-cast-btn');
     const startCastCharge = (e) => {
       if (e) e.preventDefault();
@@ -323,26 +627,33 @@ function ensureMiracleStage1UI() {
     window.addEventListener('pointerup', releaseCastCharge);
     window.addEventListener('pointercancel', releaseCastCharge);
 
-    // 1-2단계 찢어질 듯한 만선 그물 끌어올리기 버튼 이벤트
-    const haulBtn = root.querySelector('#ms1-haul-btn');
-    const onHaulTrigger = (e) => {
+    // Step 7 그물 잡기 유지 연타 버튼
+    const holdBtn = root.querySelector('#ms1-hold-btn');
+    holdBtn.addEventListener('pointerdown', (e) => {
       if (e) e.preventDefault();
       if (typeof window.isMissionGuideBubbleBlockingAction === 'function' && window.isMissionGuideBubbleBlockingAction()) return;
-      if (miracleSubMode !== 'main1_galilee' || !miracleActiveMiniState) return;
-      if (miracleActiveMiniState.phase === 'haul_net' && typeof window.pulseGalileeHaulNet === 'function') {
-        window.pulseGalileeHaulNet();
+      if (miracleSubMode === 'main1_galilee' && miracleActiveMiniState && miracleActiveMiniState.phase === 'hold_net_tap') {
+        if (typeof window.pulseGalileeHoldNet === 'function') window.pulseGalileeHoldNet();
       }
-    };
-    haulBtn.addEventListener('pointerdown', onHaulTrigger);
-    haulBtn.addEventListener('click', onHaulTrigger);
+    });
 
-    // 2단계 좌/우 균형 버튼 포인터 이벤트 (탭 즉시 힘 + 꾹 누르기 연속 힘)
+    // Step 9 두 배 협동 끌어올리기 연타 버튼
+    const coopBtn = root.querySelector('#ms1-coop-btn');
+    coopBtn.addEventListener('pointerdown', (e) => {
+      if (e) e.preventDefault();
+      if (typeof window.isMissionGuideBubbleBlockingAction === 'function' && window.isMissionGuideBubbleBlockingAction()) return;
+      if (miracleSubMode === 'main1_galilee' && miracleActiveMiniState && miracleActiveMiniState.phase === 'coop_haul_tap') {
+        if (typeof window.pulseGalileeCoopHaul === 'function') window.pulseGalileeCoopHaul();
+      }
+    });
+
+    // [야간 전용] 좌/우 균형 버튼 포인터 이벤트
     const leftBtn = root.querySelector('#ms1-bal-left');
     const rightBtn = root.querySelector('#ms1-bal-right');
     const pressBalance = (side) => (e) => {
       if (e) e.preventDefault();
       if (typeof window.isMissionGuideBubbleBlockingAction === 'function' && window.isMissionGuideBubbleBlockingAction()) return;
-      if (miracleSubMode !== 'main1_galilee' || !miracleActiveMiniState) return;
+      if (miracleSubMode !== 'main1_storm_night' || !miracleActiveMiniState) return;
       const st = miracleActiveMiniState;
       if (st.phase !== 'storm_balance') return;
       if (side < 0) st.holdLeft = true; else st.holdRight = true;
@@ -364,11 +675,11 @@ function ensureMiracleStage1UI() {
     rightBtn.addEventListener('pointerleave', releaseBalance(1));
     rightBtn.addEventListener('pointercancel', releaseBalance(1));
 
-    // 3단계 예수님 깨우기 버튼
+    // [야간 전용] 예수님 깨우기 버튼
     const wakeBtn = root.querySelector('#ms1-wake-btn');
     wakeBtn.addEventListener('click', () => {
       if (typeof window.isMissionGuideBubbleBlockingAction === 'function' && window.isMissionGuideBubbleBlockingAction()) return;
-      if (miracleSubMode === 'main1_galilee' && miracleActiveMiniState && miracleActiveMiniState.phase === 'wake_jesus') {
+      if (miracleSubMode === 'main1_storm_night' && miracleActiveMiniState && miracleActiveMiniState.phase === 'wake_jesus') {
         triggerGalileeCalmStormCutscene();
       }
     });
@@ -378,32 +689,59 @@ function ensureMiracleStage1UI() {
     _miracleS1KeyBound = true;
     window.addEventListener('keydown', (e) => {
       if (typeof window.isMissionGuideBubbleBlockingAction === 'function' && window.isMissionGuideBubbleBlockingAction()) return;
-      if (miracleSubMode !== 'main1_galilee' || !miracleActiveMiniState || typeof isPlaying === 'undefined' || !isPlaying) return;
+      if (!miracleActiveMiniState || typeof isPlaying === 'undefined' || !isPlaying) return;
       const st = miracleActiveMiniState;
-      if (st.phase === 'cast_net' && (e.code === 'Space' || e.code === 'Enter') && !e.repeat && !st.netInFlight) {
-        e.preventDefault();
-        st.isCharging = true;
-        st.chargeVal = 0.02;
-        st.chargeDir = 1;
-      } else if (st.phase === 'haul_net' && (e.code === 'Space' || e.code === 'Enter') && !e.repeat) {
-        e.preventDefault();
-        if (typeof window.pulseGalileeHaulNet === 'function') window.pulseGalileeHaulNet();
-      } else if (st.phase === 'storm_balance') {
-        if ((e.code === 'ArrowLeft' || e.code === 'KeyA') && !e.repeat) {
-          st.holdLeft = true;
-          st.boatTilt = THREE.MathUtils.clamp(st.boatTilt - 0.14, -1.0, 1.0);
-        } else if ((e.code === 'ArrowRight' || e.code === 'KeyD') && !e.repeat) {
-          st.holdRight = true;
-          st.boatTilt = THREE.MathUtils.clamp(st.boatTilt + 0.14, -1.0, 1.0);
+
+      if (miracleSubMode === 'main1_galilee') {
+        if ((e.code === 'Space' || e.code === 'Enter') && !e.repeat) {
+          if (
+            st.phase === 'intro_jesus' ||
+            st.phase === 'intro_peter' ||
+            st.phase === 'boats_full_celebration' ||
+            st.phase === 'beach_calling' ||
+            st.phase === 'beach_follow_narration'
+          ) {
+            e.preventDefault();
+            if (typeof window.advanceMiracleStage1Cinema === 'function') window.advanceMiracleStage1Cinema();
+            return;
+          }
+          if (st.phase === 'cast_net' && !st.netInFlight) {
+            e.preventDefault();
+            st.isCharging = true;
+            st.chargeVal = 0.02;
+            st.chargeDir = 1;
+            return;
+          }
+          if (st.phase === 'hold_net_tap') {
+            e.preventDefault();
+            if (typeof window.pulseGalileeHoldNet === 'function') window.pulseGalileeHoldNet();
+            return;
+          }
+          if (st.phase === 'coop_haul_tap') {
+            e.preventDefault();
+            if (typeof window.pulseGalileeCoopHaul === 'function') window.pulseGalileeCoopHaul();
+            return;
+          }
         }
-      } else if (st.phase === 'wake_jesus' && (e.code === 'Space' || e.code === 'Enter')) {
-        triggerGalileeCalmStormCutscene();
+      } else if (miracleSubMode === 'main1_storm_night') {
+        if (st.phase === 'storm_balance') {
+          if ((e.code === 'ArrowLeft' || e.code === 'KeyA') && !e.repeat) {
+            st.holdLeft = true;
+            st.boatTilt = THREE.MathUtils.clamp(st.boatTilt - 0.14, -1.0, 1.0);
+          } else if ((e.code === 'ArrowRight' || e.code === 'KeyD') && !e.repeat) {
+            st.holdRight = true;
+            st.boatTilt = THREE.MathUtils.clamp(st.boatTilt + 0.14, -1.0, 1.0);
+          }
+        } else if (st.phase === 'wake_jesus' && (e.code === 'Space' || e.code === 'Enter')) {
+          e.preventDefault();
+          triggerGalileeCalmStormCutscene();
+        }
       }
     });
     window.addEventListener('keyup', (e) => {
-      if (miracleSubMode !== 'main1_galilee' || !miracleActiveMiniState) return;
+      if (!miracleActiveMiniState) return;
       const st = miracleActiveMiniState;
-      if (st.phase === 'cast_net' && (e.code === 'Space' || e.code === 'Enter') && st.isCharging) {
+      if (miracleSubMode === 'main1_galilee' && st.phase === 'cast_net' && (e.code === 'Space' || e.code === 'Enter') && st.isCharging) {
         st.isCharging = false;
         launchGalileeFishingNet(st.chargeVal);
       }
@@ -418,30 +756,111 @@ function ensureMiracleStage1UI() {
 function syncMiracleStage1UI() {
   const root = ensureMiracleStage1UI();
   const st = miracleActiveMiniState;
-  if (!st || miracleSubMode !== 'main1_galilee') {
+  const isDay = (miracleSubMode === 'main1_galilee');
+  const isNight = (miracleSubMode === 'main1_storm_night');
+  if (!st || (!isDay && !isNight) || st.phase === 'white_out' || st.phase === 'calm') {
     root.classList.add('hidden');
     return;
   }
   root.classList.remove('hidden');
 
+  const cinemaP = root.querySelector('#ms1-cinema-panel');
+  const sailP   = root.querySelector('#ms1-sail-panel');
   const castP   = root.querySelector('#ms1-cast-panel');
-  const haulP   = root.querySelector('#ms1-haul-panel');
-  const sunsetP = root.querySelector('#ms1-sunset-panel');
+  const holdP   = root.querySelector('#ms1-hold-panel');
+  const coopP   = root.querySelector('#ms1-coop-panel');
   const balP    = root.querySelector('#ms1-bal-panel');
   const wakeP   = root.querySelector('#ms1-wake-panel');
 
-  if (castP) castP.classList.toggle('hidden', st.phase !== 'cast_net');
-  if (haulP) haulP.classList.toggle('hidden', st.phase !== 'haul_net');
-  if (sunsetP) sunsetP.classList.toggle('hidden', st.phase !== 'sunset_to_night');
-  if (balP) balP.classList.toggle('hidden', st.phase !== 'storm_balance');
-  if (wakeP) wakeP.classList.toggle('hidden', st.phase !== 'wake_jesus');
+  const isCinemaPhase = isDay && (
+    st.phase === 'intro_jesus' ||
+    st.phase === 'intro_peter' ||
+    st.phase === 'fish_gathering' ||
+    st.phase === 'call_partners' ||
+    st.phase === 'boats_full_celebration' ||
+    st.phase === 'beach_calling' ||
+    st.phase === 'beach_follow_narration'
+  );
 
-  if (st.phase === 'cast_net') {
+  if (cinemaP) cinemaP.classList.toggle('hidden', !isCinemaPhase);
+  if (sailP)   sailP.classList.toggle('hidden', !(isDay && st.phase === 'sail_to_deep'));
+  if (castP)   castP.classList.toggle('hidden', !(isDay && st.phase === 'cast_net'));
+  if (holdP)   holdP.classList.toggle('hidden', !(isDay && st.phase === 'hold_net_tap'));
+  if (coopP)   coopP.classList.toggle('hidden', !(isDay && st.phase === 'coop_haul_tap'));
+  if (balP)    balP.classList.toggle('hidden', !(isNight && st.phase === 'storm_balance'));
+  if (wakeP)   wakeP.classList.toggle('hidden', !(isNight && st.phase === 'wake_jesus'));
+
+  if (isCinemaPhase) {
+    const spkEl = root.querySelector('#ms1-cinema-speaker');
+    const stepEl = root.querySelector('#ms1-cinema-step');
+    const txtEl = root.querySelector('#ms1-cinema-text');
+    const btnWrap = root.querySelector('#ms1-cinema-btn-wrap');
+    const nextBtn = root.querySelector('#ms1-cinema-next-btn');
+
+    let speaker = '';
+    let stepTag = '';
+    let bodyText = '';
+    let showBtn = true;
+    let btnLabel = '다음 ▶';
+
+    if (st.phase === 'intro_jesus') {
+      speaker = '✨ 예수님';
+      stepTag = '깊은 곳으로!';
+      bodyText = '"깊은 데로 가서 그물을 내려 고기를 잡으세요."';
+    } else if (st.phase === 'intro_peter') {
+      speaker = '🎣 베드로';
+      stepTag = '갈릴리 바다';
+      bodyText = '"선생님, 우리가 밤새도록 일을 했지만 아무 것도 잡지 못했습니다. 그래도 해보죠 뭐."';
+      btnLabel = '⛵ 깊은 바다로 노 젓기 ▶';
+    } else if (st.phase === 'fish_gathering') {
+      speaker = '🐟 놀라운 기적!';
+      stepTag = '물고기 떼 몰려듦';
+      bodyText = '그물을 내리자마자 셀 수 없이 많은 물고기가 그물 속으로 몰려들고 있어요!';
+      showBtn = false;
+    } else if (st.phase === 'call_partners') {
+      speaker = '🎣 베드로';
+      stepTag = '동업자 호출!';
+      bodyText = '"야고보, 요한! 도와줘! 배가 뒤집힐 것 같아!"';
+      showBtn = Boolean(st.partnerArrived);
+      btnLabel = '🕸️ 함께 그물 끌어올리기 ▶';
+    } else if (st.phase === 'boats_full_celebration') {
+      speaker = '🐟 만선의 기적!';
+      stepTag = '두 배 모두 가득!';
+      bodyText = '우와! 베드로의 배와 야고보·요한의 배 모두 물고기가 넘치도록 가득 찼어요!';
+      btnLabel = '🏖️ 갈릴리 해변으로 ▶';
+    } else if (st.phase === 'beach_calling') {
+      speaker = '✨ 예수님';
+      stepTag = '갈릴리 해변';
+      bodyText = '"나와 함께 갑시다. 이제 여러분은 사람을 낚는 어부가 될 것입니다."';
+      btnLabel = '다음 ▶';
+    } else if (st.phase === 'beach_follow_narration') {
+      const idx = Math.max(0, Math.min(MIRACLE_STAGE1_BEACH_NARRATION_LINES.length - 1, st.narrationIdx || 0));
+      speaker = '📖 내레이션';
+      stepTag = `${idx + 1} / ${MIRACLE_STAGE1_BEACH_NARRATION_LINES.length}`;
+      bodyText = MIRACLE_STAGE1_BEACH_NARRATION_LINES[idx];
+      btnLabel = (idx >= MIRACLE_STAGE1_BEACH_NARRATION_LINES.length - 1) ? '✨ 여정 마치기 ▶' : '다음 ▶';
+    }
+
+    if (spkEl) spkEl.textContent = speaker;
+    if (stepEl) stepEl.textContent = stepTag;
+    if (txtEl) txtEl.textContent = bodyText;
+    if (btnWrap) btnWrap.classList.toggle('hidden', !showBtn);
+    if (nextBtn) nextBtn.textContent = btnLabel;
+  } else if (isDay && st.phase === 'sail_to_deep') {
+    const distEl = root.querySelector('#ms1-sail-dist');
+    if (distEl && st.boatRootGroup && st.deepTargetPos) {
+      const d = Math.max(0, Math.round(Math.hypot(
+        st.deepTargetPos.x - st.boatRootGroup.position.x,
+        st.deepTargetPos.z - st.boatRootGroup.position.z
+      )));
+      distEl.textContent = `🧭 깊은 바다 목적지까지 ${d}m`;
+    }
+  } else if (isDay && st.phase === 'cast_net') {
     const titleEl = root.querySelector('#ms1-cast-title');
     const sweetEl = root.querySelector('#ms1-cast-sweet');
     const fillEl  = root.querySelector('#ms1-cast-fill');
     const needleEl = root.querySelector('#ms1-cast-needle');
-    if (titleEl) titleEl.textContent = `🎣 오른편으로 그물 던지기 (${st.castCaught}/${st.reqCasts})`;
+    if (titleEl) titleEl.textContent = '🎣 깊은 바다 물고기 떼에 그물 던지기';
     if (sweetEl) {
       const leftPct = Math.max(0, (st.targetRatio - st.sweetHalfWidth) * 100);
       const widthPct = Math.min(100 - leftPct, st.sweetHalfWidth * 200);
@@ -451,23 +870,60 @@ function syncMiracleStage1UI() {
     const pct = Math.min(100, Math.max(0, st.chargeVal * 100));
     if (fillEl) fillEl.style.width = `${pct.toFixed(1)}%`;
     if (needleEl) needleEl.style.left = `calc(${pct.toFixed(1)}% - 3px)`;
-  } else if (st.phase === 'haul_net') {
-    const hPct = Math.min(100, Math.round((st.haulProgress || 0) * 100));
-    const tPct = Math.min(100, Math.round((st.netTension || 0.2) * 100));
-    const hPctEl = root.querySelector('#ms1-haul-pct');
-    const hBarEl = root.querySelector('#ms1-haul-bar');
-    const tValEl = root.querySelector('#ms1-tension-val');
-    const tBarEl = root.querySelector('#ms1-tension-bar');
-    const tTxtEl = root.querySelector('#ms1-tension-txt');
-    if (hPctEl) hPctEl.textContent = `${hPct}%`;
-    if (hBarEl) hBarEl.style.width = `${hPct}%`;
-    if (tValEl) tValEl.textContent = `${tPct}%`;
-    if (tBarEl) tBarEl.style.width = `${tPct}%`;
-    if (tTxtEl) {
-      tTxtEl.textContent = tPct > 70 ? '🚨 그물이 곧 찢어질 것 같아요!' : '⚠️ 물고기가 가득해 매우 무겁습니다!';
-      tTxtEl.className = tPct > 70 ? 'text-rose-400 animate-pulse' : 'text-amber-300';
+  } else if (isDay && st.phase === 'hold_net_tap') {
+    const params = getMiracleStage1CoopParams();
+    const thPct = Math.round((params.holdThreshold || 0.50) * 100);
+    const gPct = Math.max(0, Math.min(100, Math.round((st.holdGauge || 0) * 100)));
+    const sPct = Math.max(0, Math.min(100, Math.round((st.holdSustainProgress || 0) * 100)));
+    const hTitle = root.querySelector('#ms1-hold-title');
+    const hLvlEl = root.querySelector('#ms1-hold-level');
+    const hThEl  = root.querySelector('#ms1-hold-threshold-line');
+    const hPctEl = root.querySelector('#ms1-hold-pct');
+    const hBarEl = root.querySelector('#ms1-hold-bar');
+    const sPctEl = root.querySelector('#ms1-swell-pct');
+    const sBarEl = root.querySelector('#ms1-swell-bar');
+    if (hLvlEl) hLvlEl.textContent = params.label;
+    if (hThEl) hThEl.style.left = `${thPct}%`;
+    if (hPctEl) {
+      hPctEl.textContent = `${gPct}%`;
+      hPctEl.className = (st.holdArmed && gPct < Math.max(25, thPct - 18))
+        ? 'text-rose-400 animate-pulse shrink-0'
+        : (gPct < thPct ? 'text-amber-300 shrink-0' : 'text-emerald-300 shrink-0');
     }
-  } else if (st.phase === 'storm_balance') {
+    if (hTitle) {
+      if (!st.holdArmed) {
+        hTitle.textContent = `✊ 지금 바로 연타해 ${thPct}% 기준선 이상으로 끌어올리세요!`;
+        hTitle.className = 'text-amber-200 animate-pulse truncate';
+      } else if (gPct < Math.max(25, thPct - 18)) {
+        hTitle.textContent = '🚨 위험! 쉬면 그물을 놓쳐 게임오버! 더 빠르게 연타!';
+        hTitle.className = 'text-rose-300 animate-pulse truncate';
+      } else if (gPct < thPct) {
+        hTitle.textContent = `⚡ 조금만 더! 노란 기준선(${thPct}%) 위로 올려 유지하세요!`;
+        hTitle.className = 'text-amber-200 truncate';
+      } else {
+        hTitle.textContent = '✊ 유지 성공! 그물이 커지며 배가 기울고 있어요!';
+        hTitle.className = 'text-emerald-300 truncate';
+      }
+    }
+    if (hBarEl) hBarEl.style.width = `${gPct}%`;
+    if (sPctEl) sPctEl.textContent = `${sPct}%`;
+    if (sBarEl) sBarEl.style.width = `${sPct}%`;
+  } else if (isDay && st.phase === 'coop_haul_tap') {
+    const cPct = Math.max(0, Math.min(100, Math.round((st.coopProgress || 0) * 100)));
+    const params = getMiracleStage1CoopParams();
+    const lvlEl = root.querySelector('#ms1-coop-level');
+    const pctEl = root.querySelector('#ms1-coop-pct');
+    const barEl = root.querySelector('#ms1-coop-bar');
+    const hintEl = root.querySelector('#ms1-coop-hint');
+    if (lvlEl) lvlEl.textContent = params.label;
+    if (pctEl) pctEl.textContent = `${cPct}%`;
+    if (barEl) barEl.style.width = `${cPct}%`;
+    if (hintEl) {
+      hintEl.textContent = cPct > 70
+        ? '🎉 거의 다 올라왔어요! 마지막까지 힘차게 연타!'
+        : '💪 야고보·요한의 배와 함께 당기고 있어요! 계속 연타하세요!';
+    }
+  } else if (isNight && st.phase === 'storm_balance') {
     const progPct = Math.min(100, Math.round((st.balanceProgress / st.balanceGoal) * 100));
     const progTxt = root.querySelector('#ms1-bal-prog-txt');
     const progBar = root.querySelector('#ms1-bal-prog-bar');
@@ -524,6 +980,366 @@ function syncMiracleStage1UI() {
   }
 }
 
+function populateBoatFishPile(fishPileGroup, count, halfW, halfZ) {
+  if (!fishPileGroup) return;
+  while (fishPileGroup.children.length > 0) {
+    fishPileGroup.remove(fishPileGroup.children[0]);
+  }
+  const fishCount = Math.max(12, count || 36);
+  for (let i = 0; i < fishCount; i++) {
+    const layer = Math.floor(i / 10);
+    const t = (i % 10) / 10;
+    const angle = i * 2.39996;
+    const radFrac = Math.sqrt(0.15 + ((i * 37) % 100) / 118) * Math.max(0.45, 1.0 - layer * 0.14);
+    const fx = Math.cos(angle) * halfW * radFrac;
+    const fz = Math.sin(angle) * halfZ * radFrac;
+    const fy = 0.14 + layer * 0.20 + (1.0 - radFrac) * 0.26 + Math.sin(t * Math.PI) * 0.08;
+    const sc = 0.72 + (i % 4) * 0.11;
+    const fMesh = (typeof createLowPolyFishMesh === 'function')
+      ? createLowPolyFishMesh(null, sc, i + 3)
+      : createLowPolyMesh(new THREE.ConeGeometry(0.20, 0.68, 5), '#38bdf8', 0, 0, 0, false);
+    fMesh.position.set(fx, fy, fz);
+    fMesh.rotation.set(
+      ((i % 5) - 2) * 0.16,
+      angle + (i % 3) * 0.7,
+      (i % 2 === 0 ? 1 : -1) * (0.35 + (i % 3) * 0.18)
+    );
+    fishPileGroup.add(fMesh);
+  }
+  fishPileGroup.visible = true;
+}
+
+// 자연스러운 중력 처짐(catenary)을 가진 소프트 로우폴리 곡선 밧줄 생성기 (정적 배 리깅용)
+function createCurvedRopeMesh(pStart, pEnd, sag = 0.22, radius = 0.036, segs = 9, color = '#d6b685') {
+  const pts = [];
+  const count = Math.max(4, segs);
+  for (let i = 0; i <= count; i++) {
+    const t = i / count;
+    const p = new THREE.Vector3().lerpVectors(pStart, pEnd, t);
+    p.y -= Math.sin(t * Math.PI) * sag;
+    pts.push(p);
+  }
+  const curve = new THREE.CatmullRomCurve3(pts);
+  const geo = new THREE.TubeGeometry(curve, count * 2, radius, 5, false);
+  const nonIdx = geo.toNonIndexed();
+  geo.dispose();
+  nonIdx.computeVertexNormals();
+  const mesh = new THREE.Mesh(nonIdx, matLowPoly(color));
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
+  return mesh;
+}
+
+// 뱃전 나무 계류 말뚝(Cleat) + 감긴 밧줄 매듭 조형
+function createBoatWoodenCleat(x, y, z, rotY = 0, woodCol = '#5c2d0c', ropeCol = '#d6b685') {
+  const g = new THREE.Group();
+  const base = createLowPolyMesh(new THREE.BoxGeometry(0.16, 0.14, 0.34), woodCol, 0, 0.04, 0, false);
+  const horn = createLowPolyMesh(new THREE.BoxGeometry(0.14, 0.09, 0.56), woodCol, 0, 0.14, 0, false);
+  const wrap = createLowPolyMesh(new THREE.TorusGeometry(0.11, 0.035, 5, 8), ropeCol, 0, 0.09, 0, false);
+  wrap.rotation.x = Math.PI * 0.5;
+  g.add(base, horn, wrap);
+  g.position.set(x, y, z);
+  g.rotation.y = rotY;
+  return g;
+}
+
+// 실시간 동적 다분절 곡선 밧줄 생성기 (돛 시트 & 만선 그물 당기기 밧줄 공용, 0-할당 업데이트)
+const _sharedDynamicRopeSegGeo = new THREE.CylinderGeometry(1.0, 1.0, 1.0, 5);
+const _sharedDynamicRopeKnotGeo = new THREE.TorusGeometry(1.0, 0.42, 5, 8);
+const _dynRopeUpAxis = new THREE.Vector3(0, 1, 0);
+const _dynRopeTmpA = new THREE.Vector3();
+const _dynRopeTmpB = new THREE.Vector3();
+const _dynRopeMid  = new THREE.Vector3();
+const _dynRopeDir  = new THREE.Vector3();
+
+function createDynamicCurvedRope(segs, radius, mat, withEndKnots = true) {
+  const grp = new THREE.Group();
+  const segments = [];
+  for (let i = 0; i < segs; i++) {
+    const m = new THREE.Mesh(_sharedDynamicRopeSegGeo, mat);
+    grp.add(m);
+    segments.push(m);
+  }
+  let startKnot = null;
+  let endKnot = null;
+  if (withEndKnots) {
+    startKnot = new THREE.Mesh(_sharedDynamicRopeKnotGeo, mat);
+    startKnot.scale.setScalar(radius * 2.1);
+    endKnot = new THREE.Mesh(_sharedDynamicRopeKnotGeo, mat);
+    endKnot.scale.setScalar(radius * 2.4);
+    grp.add(startKnot, endKnot);
+  }
+  grp.visible = false;
+  return { group: grp, segments, startKnot, endKnot, radius, segs };
+}
+
+function updateDynamicCurvedRope(ropeObj, pStart, pEnd, sag = 0.25, radiusScale = 1.0, vibAmp = 0, nowMs = 0, phaseOff = 0) {
+  if (!ropeObj || !ropeObj.group) return;
+  ropeObj.group.visible = true;
+  const n = ropeObj.segs;
+  const rad = ropeObj.radius * radiusScale;
+
+  if (ropeObj.startKnot) {
+    ropeObj.startKnot.position.copy(pStart);
+  }
+  if (ropeObj.endKnot) {
+    ropeObj.endKnot.position.copy(pEnd);
+  }
+
+  for (let i = 0; i < n; i++) {
+    const t0 = i / n;
+    const t1 = (i + 1) / n;
+    _dynRopeTmpA.lerpVectors(pStart, pEnd, t0);
+    _dynRopeTmpB.lerpVectors(pStart, pEnd, t1);
+    const s0 = Math.sin(t0 * Math.PI);
+    const s1 = Math.sin(t1 * Math.PI);
+    _dynRopeTmpA.y -= s0 * sag;
+    _dynRopeTmpB.y -= s1 * sag;
+    if (vibAmp > 0.0005) {
+      const v0 = Math.sin(nowMs * 0.048 + t0 * 9.0 + phaseOff) * vibAmp * s0;
+      const v1 = Math.sin(nowMs * 0.048 + t1 * 9.0 + phaseOff) * vibAmp * s1;
+      _dynRopeTmpA.x += v0;
+      _dynRopeTmpB.x += v1;
+      _dynRopeTmpA.z += v0 * 0.65;
+      _dynRopeTmpB.z += v1 * 0.65;
+    }
+    _dynRopeMid.addVectors(_dynRopeTmpA, _dynRopeTmpB).multiplyScalar(0.5);
+    _dynRopeDir.subVectors(_dynRopeTmpB, _dynRopeTmpA);
+    const segLen = Math.max(0.05, _dynRopeDir.length());
+    const segMesh = ropeObj.segments[i];
+    segMesh.position.copy(_dynRopeMid);
+    segMesh.scale.set(rad, segLen * 1.04, rad);
+    segMesh.quaternion.setFromUnitVectors(_dynRopeUpAxis, _dynRopeDir.normalize());
+  }
+}
+
+function _boatMatDouble(hex) {
+  return (typeof matLowPolyDouble === 'function') ? matLowPolyDouble(hex) : matLowPoly(hex);
+}
+
+// 부드러운 곡선 목선 선체 · 뱃전 테두리 · 갑판 · 늑골 빌더 (계단식 단차 제거, 소프트 로우 폴리곤 타입)
+function buildCurvedLowPolyBoatHull(cfg) {
+  const hullGrp = new THREE.Group();
+  const halfLen = cfg.halfLen;
+  const maxHalfW = cfg.maxHalfW;
+  const wallThick = cfg.wallThick;
+  const deckY = cfg.deckY !== undefined ? cfg.deckY : 0.02;
+  const keelY = cfg.keelY;
+  const midGunwaleY = cfg.midGunwaleY;
+  const bowGunwaleY = cfg.bowGunwaleY;
+  const sternGunwaleY = cfg.sternGunwaleY;
+
+  const getHalfW = (z) => {
+    const t = THREE.MathUtils.clamp(z / halfLen, -1, 1);
+    const u = Math.abs(t);
+    return maxHalfW * Math.pow(Math.max(0.001, 1 - Math.pow(u, 2.35)), 0.52);
+  };
+  const getInnerHalfW = (z) => Math.max(0.05, getHalfW(z) - wallThick);
+  const getGunwaleY = (z) => {
+    const t = THREE.MathUtils.clamp(z / halfLen, -1, 1);
+    const u = Math.abs(t);
+    return midGunwaleY + (t < 0 ? (bowGunwaleY - midGunwaleY) : (sternGunwaleY - midGunwaleY)) * Math.pow(u, 2.15);
+  };
+  const getKeelY = (z) => {
+    const t = THREE.MathUtils.clamp(z / halfLen, -1, 1);
+    const u = Math.abs(t);
+    return keelY + Math.pow(u, 2.6) * (midGunwaleY * 0.52 - keelY);
+  };
+  const getRailPoint = (z, side) => {
+    const sgn = side < 0 ? -1 : 1;
+    const rX = (zs) => sgn * ((getHalfW(zs) + getInnerHalfW(zs)) * 0.5);
+    const dz = 0.25;
+    const dx = rX(z + dz) - rX(z - dz);
+    return {
+      x: rX(z),
+      y: getGunwaleY(z) + 0.10,
+      z,
+      yaw: Math.atan2(dx, dz * 2)
+    };
+  };
+
+  const pushTri = (arr, a, b, c) => arr.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
+  const pushQuad = (arr, a, b, c, d) => { pushTri(arr, a, b, c); pushTri(arr, a, c, d); };
+  const makeFacetedMesh = (verts, hex, castShadow = true) => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    g.computeVertexNormals();
+    const m = new THREE.Mesh(g, _boatMatDouble(hex));
+    if (castShadow) {
+      m.castShadow = true;
+      m.receiveShadow = true;
+    }
+    return m;
+  };
+
+  const tStations = [-1.0, -0.92, -0.82, -0.68, -0.50, -0.28, 0.0, 0.28, 0.50, 0.68, 0.82, 0.92, 1.0];
+  const rings = tStations.map(t => {
+    const z = t * halfLen;
+    const w = getHalfW(z);
+    const iw = getInnerHalfW(z);
+    const ky = getKeelY(z);
+    const gy = getGunwaleY(z);
+    const cy = Math.min(deckY - 0.12, ky + (gy - ky) * 0.52);
+    const by = ky + (cy - ky) * 0.42;
+    const inBotY = Math.max(ky + 0.16, deckY - 0.04);
+    return {
+      z,
+      keel: [0, ky, z],
+      bilgeL: [-w * 0.66, by, z],
+      bilgeR: [ w * 0.66, by, z],
+      chineL: [-w * 0.92, cy, z],
+      chineR: [ w * 0.92, cy, z],
+      gunOutL: [-w, gy, z],
+      gunOutR: [ w, gy, z],
+      railOutTopL: [-(w + 0.07), gy + 0.06, z],
+      railOutTopR: [ (w + 0.07), gy + 0.06, z],
+      railCrownL: [-(w + iw) * 0.5, gy + 0.13, z],
+      railCrownR: [ (w + iw) * 0.5, gy + 0.13, z],
+      railInTopL: [-(iw - 0.06), gy + 0.06, z],
+      railInTopR: [ (iw - 0.06), gy + 0.06, z],
+      gunInL: [-iw, gy, z],
+      gunInR: [ iw, gy, z],
+      inBilgeL: [-iw * 0.88, inBotY, z],
+      inBilgeR: [ iw * 0.88, inBotY, z]
+    };
+  });
+
+  const lowerVerts = [];
+  const upperVerts = [];
+  const railVerts = [];
+
+  for (let i = 0; i < rings.length - 1; i++) {
+    const r0 = rings[i];
+    const r1 = rings[i + 1];
+    // 하부 용골·선저 외판
+    pushQuad(lowerVerts, r0.chineL, r0.bilgeL, r1.bilgeL, r1.chineL);
+    pushQuad(lowerVerts, r0.bilgeL, r0.keel,   r1.keel,   r1.bilgeL);
+    pushQuad(lowerVerts, r0.keel,   r0.bilgeR, r1.bilgeR, r1.keel);
+    pushQuad(lowerVerts, r0.bilgeR, r0.chineR, r1.chineR, r1.bilgeR);
+
+    // 상부 외벽 + 내측 선체 벽·선창 바닥
+    pushQuad(upperVerts, r0.gunOutL, r0.chineL, r1.chineL, r1.gunOutL);
+    pushQuad(upperVerts, r0.chineR, r0.gunOutR, r1.gunOutR, r1.chineR);
+    pushQuad(upperVerts, r0.gunInL, r0.inBilgeL, r1.inBilgeL, r1.gunInL);
+    pushQuad(upperVerts, r0.inBilgeL, r0.inBilgeR, r1.inBilgeR, r1.inBilgeL);
+    pushQuad(upperVerts, r0.inBilgeR, r0.gunInR, r1.gunInR, r1.inBilgeR);
+
+    // 연속 곡선 베벨 뱃전 테두리 (Gunwale Rim)
+    pushQuad(railVerts, r0.gunOutL,     r0.railOutTopL, r1.railOutTopL, r1.gunOutL);
+    pushQuad(railVerts, r0.railOutTopL, r0.railCrownL,  r1.railCrownL,  r1.railOutTopL);
+    pushQuad(railVerts, r0.railCrownL,  r0.railInTopL,  r1.railInTopL,  r1.railCrownL);
+    pushQuad(railVerts, r0.railInTopL,  r0.gunInL,      r1.gunInL,      r1.railInTopL);
+
+    pushQuad(railVerts, r0.gunInR,      r0.railInTopR,  r1.railInTopR,  r1.gunInR);
+    pushQuad(railVerts, r0.railInTopR,  r0.railCrownR,  r1.railCrownR,  r1.railInTopR);
+    pushQuad(railVerts, r0.railCrownR,  r0.railOutTopR, r1.railOutTopR, r1.railCrownR);
+    pushQuad(railVerts, r0.railOutTopR, r0.gunOutR,     r1.gunOutR,     r1.railOutTopR);
+  }
+
+  // 선수(r0)·선미(rLast) 끝단 깔끔한 곡선 마감 캡
+  [rings[0], rings[rings.length - 1]].forEach(rc => {
+    pushQuad(lowerVerts, rc.chineL, rc.bilgeL, rc.bilgeR, rc.chineR);
+    pushTri(lowerVerts,  rc.bilgeL, rc.keel,   rc.bilgeR);
+    pushQuad(upperVerts, rc.gunOutL, rc.chineL, rc.chineR, rc.gunOutR);
+    pushQuad(railVerts,  rc.railOutTopL, rc.railCrownL, rc.railCrownR, rc.railOutTopR);
+    pushQuad(railVerts,  rc.gunOutL, rc.railOutTopL, rc.railOutTopR, rc.gunOutR);
+  });
+
+  hullGrp.add(
+    makeFacetedMesh(lowerVerts, cfg.cHullTrim, true),
+    makeFacetedMesh(upperVerts, cfg.cHullOuter, true),
+    makeFacetedMesh(railVerts,  cfg.cHullTrim, true)
+  );
+
+  // 곡선 윤곽에 맞춘 종방향 갑판 널빤지 2톤 스트립
+  const plankCount = cfg.plankCount || 7;
+  const lightVerts = [];
+  const darkVerts = [];
+  const plankStep = (maxHalfW * 2) / plankCount;
+  const pTop = deckY + 0.025;
+  const pBot = deckY - 0.075;
+  for (let p = 0; p < plankCount; p++) {
+    const sx0 = -maxHalfW + p * plankStep + 0.03;
+    const sx1 = -maxHalfW + (p + 1) * plankStep - 0.03;
+    const targetVerts = (p % 2 === 0) ? lightVerts : darkVerts;
+    for (let i = 1; i < rings.length - 2; i++) {
+      const z0 = rings[i].z;
+      const z1 = rings[i + 1].z;
+      const lim0 = getInnerHalfW(z0) * 0.96;
+      const lim1 = getInnerHalfW(z1) * 0.96;
+      const x0L = THREE.MathUtils.clamp(sx0, -lim0, lim0);
+      const x0R = THREE.MathUtils.clamp(sx1, -lim0, lim0);
+      const x1L = THREE.MathUtils.clamp(sx0, -lim1, lim1);
+      const x1R = THREE.MathUtils.clamp(sx1, -lim1, lim1);
+      if (x0R - x0L < 0.05 || x1R - x1L < 0.05) continue;
+      pushQuad(targetVerts, [x0L, pTop, z0], [x1L, pTop, z1], [x1R, pTop, z1], [x0R, pTop, z0]);
+      pushQuad(targetVerts, [x0L, pBot, z0], [x1L, pBot, z1], [x1L, pTop, z1], [x0L, pTop, z0]);
+      pushQuad(targetVerts, [x0R, pTop, z0], [x1R, pTop, z1], [x1R, pBot, z1], [x0R, pBot, z0]);
+    }
+  }
+  if (lightVerts.length) hullGrp.add(makeFacetedMesh(lightVerts, cfg.cDeckLight, false));
+  if (darkVerts.length)  hullGrp.add(makeFacetedMesh(darkVerts,  cfg.cDeckDark, false));
+
+  // 내벽 곡선을 따라 세운 목재 늑골(Ribs)
+  const ribTs = [-0.68, -0.46, -0.24, 0.0, 0.24, 0.46, 0.68];
+  const ribT = wallThick * 0.38;
+  ribTs.forEach(rt => {
+    const rz = rt * halfLen;
+    const iw = getInnerHalfW(rz);
+    const gy = getGunwaleY(rz);
+    const h = gy - deckY;
+    [-1, 1].forEach(side => {
+      const xBot = side * iw * 0.84;
+      const xTop = side * iw * 0.94;
+      const ribMesh = createLowPolyMesh(
+        new THREE.BoxGeometry(ribT, h, ribT * 1.15),
+        cfg.cHullTrim,
+        (xBot + xTop) * 0.5,
+        deckY + h * 0.48,
+        rz,
+        false
+      );
+      ribMesh.rotation.z = -side * Math.atan2(iw * 0.10, Math.max(0.2, h));
+      hullGrp.add(ribMesh);
+    });
+  });
+
+  return { group: hullGrp, getHalfW, getInnerHalfW, getGunwaleY, getKeelY, getRailPoint };
+}
+
+function createPivotedGalileeOar(side, oarLen, shaftCol, bladeCol) {
+  const pivot = new THREE.Group();
+  const shaft = createLowPolyMesh(new THREE.CylinderGeometry(0.052, 0.068, oarLen, 6), shaftCol, 0, 0, 0, false);
+  shaft.rotation.z = side * (Math.PI * 0.5);
+  shaft.position.x = side * (oarLen * 0.24);
+  const gripWrap = createLowPolyMesh(new THREE.CylinderGeometry(0.066, 0.062, Math.max(0.54, oarLen * 0.105), 6), '#5c2d0c', -side * (oarLen * 0.205), 0, 0, false);
+  gripWrap.rotation.z = side * (Math.PI * 0.5);
+  const oarLock = createLowPolyMesh(new THREE.TorusGeometry(0.11, 0.032, 5, 8), '#d6b685', 0, 0, 0, false);
+  oarLock.rotation.y = Math.PI * 0.5;
+  const blade = createLowPolyMesh(new THREE.BoxGeometry(1.22, 0.08, 0.38), bladeCol, side * (oarLen * 0.72), 0, 0, false);
+  blade.rotation.x = 0.22;
+
+  // 노 손잡이 실제 3D 파지 앵커 (양손 IK 1:1 추적용)
+  const gripInboard = new THREE.Object3D();
+  gripInboard.name = 'gripInboard';
+  gripInboard.position.set(-side * (oarLen * 0.236), 0, 0);
+  const gripOutboard = new THREE.Object3D();
+  gripOutboard.name = 'gripOutboard';
+  gripOutboard.position.set(-side * (oarLen * 0.176), 0, 0);
+
+  pivot.add(shaft, gripWrap, oarLock, blade, gripInboard, gripOutboard);
+  pivot.rotation.z = -side * 0.16;
+  pivot.userData = {
+    side,
+    oarLen,
+    gripInboard,
+    gripOutboard,
+    gripL: side < 0 ? gripOutboard : gripInboard,
+    gripR: side < 0 ? gripInboard : gripOutboard
+  };
+  return pivot;
+}
+
 function buildDetailedPlayableGalileeShip() {
   const ship = new THREE.Group();
   const cHullOuter = '#7c4318';
@@ -535,91 +1351,95 @@ function buildDetailedPlayableGalileeShip() {
   const cSailBand  = '#f3dfb0';
   const cRope      = '#d6b685';
 
-  // 1) 다단 곡선 목선 선체 & 갑판 판재 (5구간 테이퍼드 선체)
-  const hullSections = [
-    { z: -9.8, w: 3.4, len: 3.4 },
-    { z: -6.4, w: 6.2, len: 3.8 },
-    { z: -2.2, w: 8.6, len: 4.8 },
-    { z:  2.6, w: 8.8, len: 5.0 },
-    { z:  7.2, w: 6.6, len: 4.4 },
-    { z: 10.6, w: 3.8, len: 3.0 }
-  ];
-  hullSections.forEach((sec, idx) => {
-    // 하부 용골 선체
-    const lowerHull = createLowPolyMesh(new THREE.BoxGeometry(sec.w * 0.86, 1.15, sec.len), cHullTrim, 0, -0.88, sec.z);
-    // 상부 넓은 선체 외벽
-    const upperHull = createLowPolyMesh(new THREE.BoxGeometry(sec.w, 0.58, sec.len + 0.15), cHullOuter, 0, -0.18, sec.z);
-    ship.add(lowerHull, upperHull);
-
-    // 줄무늬 목재 갑판 판재
-    const plankCount = Math.max(3, Math.round(sec.w / 1.15));
-    const pw = (sec.w - 0.7) / plankCount;
-    for (let p = 0; p < plankCount; p++) {
-      const px = -(sec.w - 0.7) * 0.5 + (p + 0.5) * pw;
-      const plank = createLowPolyMesh(
-        new THREE.BoxGeometry(pw - 0.05, 0.14, sec.len),
-        (p + idx) % 2 === 0 ? cDeckLight : cDeckDark,
-        px, -0.02, sec.z, false
-      );
-      ship.add(plank);
-    }
-
-    // 좌·우 곡선 뱃전 난간(Gunwale) & 내부 목재 늑골(Ribs)
-    const wallH = 1.05;
-    const halfW = sec.w * 0.5 - 0.18;
-    const wallL = createLowPolyMesh(new THREE.BoxGeometry(0.36, wallH, sec.len + 0.1), cHullOuter, -halfW, wallH * 0.5, sec.z);
-    const wallR = createLowPolyMesh(new THREE.BoxGeometry(0.36, wallH, sec.len + 0.1), cHullOuter,  halfW, wallH * 0.5, sec.z);
-    const railCapL = createLowPolyMesh(new THREE.BoxGeometry(0.48, 0.16, sec.len + 0.15), cHullTrim, -halfW, wallH + 0.06, sec.z, false);
-    const railCapR = createLowPolyMesh(new THREE.BoxGeometry(0.48, 0.16, sec.len + 0.15), cHullTrim,  halfW, wallH + 0.06, sec.z, false);
-    const ribL = createLowPolyMesh(new THREE.BoxGeometry(0.18, 0.92, 0.22), cHullTrim, -halfW + 0.24, 0.45, sec.z, false);
-    const ribR = createLowPolyMesh(new THREE.BoxGeometry(0.18, 0.92, 0.22), cHullTrim,  halfW - 0.24, 0.45, sec.z, false);
-    ship.add(wallL, wallR, railCapL, railCapR, ribL, ribR);
+  // 1) 부드러운 곡선 목선 선체 & 곡선 베벨 뱃전 테두리 & 갑판 널빤지
+  const hull = buildCurvedLowPolyBoatHull({
+    halfLen: 12.6,
+    maxHalfW: 4.38,
+    wallThick: 0.36,
+    deckY: 0.02,
+    keelY: -1.32,
+    midGunwaleY: 1.04,
+    bowGunwaleY: 1.88,
+    sternGunwaleY: 1.82,
+    plankCount: 7,
+    cHullOuter,
+    cHullTrim,
+    cDeckLight,
+    cDeckDark
   });
+  ship.add(hull.group);
 
-  // 2) 날렵하게 솟아오른 이물(선수) & 고물(선미) 장식 기둥 + 방향타(Rudder)
-  const prowCone = createLowPolyMesh(new THREE.ConeGeometry(1.9, 3.6, 5), cHullOuter, 0, 0.25, -12.6);
-  prowCone.rotation.x = -Math.PI / 2 - 0.24;
-  prowCone.scale.set(0.95, 1.0, 0.55);
-  const prowPost = createLowPolyMesh(new THREE.CylinderGeometry(0.20, 0.34, 3.2, 6), cHullTrim, 0, 1.45, -12.1);
-  prowPost.rotation.x = -0.32;
-  const prowCap = createLowPolyMesh(new THREE.DodecahedronGeometry(0.30, 0), '#eab308', 0, 2.95, -12.6, false);
+  // 2) 곡선 이물(선수) & 고물(선미) 장식 기둥 + 회전형 방향타(rudderPivot)
+  const prowPost = createLowPolyMesh(new THREE.CylinderGeometry(0.18, 0.30, 2.7, 7), cHullTrim, 0, 1.98, -12.45);
+  prowPost.rotation.x = -0.34;
+  const prowCap = createLowPolyMesh(new THREE.DodecahedronGeometry(0.28, 0), '#eab308', 0, 3.22, -12.92, false);
 
-  const sternCone = createLowPolyMesh(new THREE.ConeGeometry(2.0, 3.0, 5), cHullOuter, 0, 0.25, 12.8);
-  sternCone.rotation.x = Math.PI / 2 + 0.22;
-  sternCone.scale.set(0.98, 1.0, 0.58);
-  const sternPost = createLowPolyMesh(new THREE.CylinderGeometry(0.20, 0.32, 3.0, 6), cHullTrim, 0, 1.4, 12.3);
-  sternPost.rotation.x = 0.28;
+  const sternPost = createLowPolyMesh(new THREE.CylinderGeometry(0.18, 0.28, 2.6, 7), cHullTrim, 0, 1.92, 12.45);
+  sternPost.rotation.x = 0.30;
 
-  // 선미 우측 방향타(키 노)
-  const rudderShaft = createLowPolyMesh(new THREE.CylinderGeometry(0.10, 0.12, 4.4, 6), cHullTrim, 2.6, 0.2, 11.4, false);
+  const rudderRail = hull.getRailPoint(9.8, 1);
+  const rudderPivot = new THREE.Group();
+  rudderPivot.position.set(rudderRail.x - 0.08, rudderRail.y - 0.14, rudderRail.z);
+  const rudderShaft = createLowPolyMesh(new THREE.CylinderGeometry(0.10, 0.12, 4.4, 6), cHullTrim, 0.25, -0.58, 0.75, false);
   rudderShaft.rotation.set(0.45, 0, -0.22);
-  const rudderBlade = createLowPolyMesh(new THREE.BoxGeometry(0.14, 1.5, 0.72), cBench, 2.95, -1.15, 12.6, false);
+  const rudderBlade = createLowPolyMesh(new THREE.BoxGeometry(0.14, 1.55, 0.76), cBench, 0.60, -1.92, 1.95, false);
   rudderBlade.rotation.set(0.45, 0, -0.22);
-  ship.add(prowCone, prowPost, prowCap, sternCone, sternPost, rudderShaft, rudderBlade);
+  const rudderTiller = createLowPolyMesh(new THREE.CylinderGeometry(0.06, 0.07, 1.35, 5), cBench, -0.45, 0.35, -0.25, false);
+  rudderTiller.rotation.z = Math.PI * 0.44;
+  rudderPivot.add(rudderShaft, rudderBlade, rudderTiller);
+  ship.add(prowPost, prowCap, sternPost, rudderPivot);
 
-  // 3) 선내 가로 나무 벤치 2개 + 고물(선미) 단상 & 예수님이 누우시는 붉은 직물 베개 침상
-  [-6.2, 3.2].forEach(bz => {
-    const bw = bz < 0 ? 5.2 : 7.4;
-    ship.add(createLowPolyMesh(new THREE.BoxGeometry(bw, 0.18, 0.78), cBench, 0, 0.56, bz, false));
+  // 3) 곡선 선내 폭에 맞춘 가로 벤치 3개 + 고물(선미) 테이퍼드 단상 & 예수님 침상
+  [-6.2, -0.55, 3.2].forEach(bz => {
+    const bw = Math.max(1.8, hull.getInnerHalfW(bz) * 2 - 0.14);
+    ship.add(createLowPolyMesh(new THREE.BoxGeometry(bw, 0.18, 0.76), cBench, 0, 0.56, bz, false));
   });
 
-  // 고물(z = 7.4 ~ 10.6) 단상과 베개
-  const sternDeck = createLowPolyMesh(new THREE.BoxGeometry(5.6, 0.42, 3.4), cBench, 0, 0.24, 8.6);
-  const sternRug  = createLowPolyMesh(new THREE.BoxGeometry(4.2, 0.08, 2.5), '#991b1b', 0, 0.49, 8.5, false);
-  const pillow    = createLowPolyMesh(new THREE.IcosahedronGeometry(0.44, 0), '#dc2626', 0, 0.64, 9.75, false);
+  const sdVerts = [];
+  const sdZs = [6.7, 8.0, 9.3, 10.5];
+  const pushSdTri = (a, b, c) => sdVerts.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
+  const pushSdQuad = (a, b, c, d) => { pushSdTri(a, b, c); pushSdTri(a, c, d); };
+  for (let si = 0; si < sdZs.length - 1; si++) {
+    const z0 = sdZs[si], z1 = sdZs[si + 1];
+    const w0 = hull.getInnerHalfW(z0) * 0.95;
+    const w1 = hull.getInnerHalfW(z1) * 0.95;
+    pushSdQuad([-w0, 0.45, z0], [-w1, 0.45, z1], [w1, 0.45, z1], [w0, 0.45, z0]);
+    pushSdQuad([-w0, 0.02, z0], [-w1, 0.02, z1], [-w1, 0.45, z1], [-w0, 0.45, z0]);
+    pushSdQuad([ w0, 0.45, z0], [ w1, 0.45, z1], [ w1, 0.02, z1], [ w0, 0.02, z0]);
+  }
+  const fw0 = hull.getInnerHalfW(sdZs[0]) * 0.95;
+  pushSdQuad([-fw0, 0.02, sdZs[0]], [-fw0, 0.45, sdZs[0]], [fw0, 0.45, sdZs[0]], [fw0, 0.02, sdZs[0]]);
+  const sdGeo = new THREE.BufferGeometry();
+  sdGeo.setAttribute('position', new THREE.Float32BufferAttribute(sdVerts, 3));
+  sdGeo.computeVertexNormals();
+  const sternDeck = new THREE.Mesh(sdGeo, _boatMatDouble(cBench));
+  sternDeck.castShadow = true;
+  sternDeck.receiveShadow = true;
+
+  const sternRug  = createLowPolyMesh(new THREE.BoxGeometry(3.4, 0.08, 2.4), '#991b1b', 0, 0.49, 8.5, false);
+  const pillow    = createLowPolyMesh(new THREE.IcosahedronGeometry(0.44, 0), '#dc2626', 0, 0.64, 9.65, false);
   pillow.scale.set(1.45, 0.52, 0.95);
-  const pillowTrim = createLowPolyMesh(new THREE.BoxGeometry(1.1, 0.12, 0.12), '#eab308', 0, 0.62, 9.35, false);
+  const pillowTrim = createLowPolyMesh(new THREE.BoxGeometry(1.1, 0.12, 0.12), '#eab308', 0, 0.62, 9.25, false);
   ship.add(sternDeck, sternRug, pillow, pillowTrim);
 
-  // 4) 돛대 + 대각선 활대 + 곡면 부푼 돛 + 로프 리깅 + 노 4자루 + 고물 등불
+  // 4) 돛대 + 대각선 활대 + 활차/매듭 + 곡면 부푼 돛 + 곡선 뱃전에 밀착된 리깅
   const mast = createLowPolyMesh(new THREE.CylinderGeometry(0.24, 0.34, 10.6, 8), cHullTrim, 0, 5.2, -3.4);
   const mastStep = createLowPolyMesh(new THREE.BoxGeometry(1.1, 0.42, 1.1), cHullOuter, 0, 0.22, -3.4, false);
-  const yard = createLowPolyMesh(new THREE.CylinderGeometry(0.12, 0.16, 8.6, 6), cHullTrim, 0, 8.6, -3.1);
-  yard.rotation.z = Math.PI / 2 - 0.14;
 
-  // 부드럽게 바람을 머금고 부푼 곡면 저폴리곤 돛 (sailPivot으로 풍랑 시 흔들림 연출)
+  const mastCapRing = createLowPolyMesh(new THREE.TorusGeometry(0.27, 0.055, 5, 10), cRope, 0, 9.88, -3.4, false);
+  mastCapRing.rotation.x = Math.PI * 0.5;
+  const mastPulley = createLowPolyMesh(new THREE.BoxGeometry(0.38, 0.34, 0.28), cBench, 0, 10.05, -3.28, false);
+  const mastParrel = createLowPolyMesh(new THREE.TorusGeometry(0.32, 0.065, 5, 10), cRope, 0, 8.62, -3.26, false);
+  mastParrel.rotation.x = Math.PI * 0.5;
+
+  const yardSlope = 0.14;
+  const yard = createLowPolyMesh(new THREE.CylinderGeometry(0.11, 0.15, 8.6, 6), cHullTrim, 0, 8.6, -3.1);
+  yard.rotation.z = Math.PI / 2 - yardSlope;
+
   const sailPivot = new THREE.Group();
-  sailPivot.position.set(0, 8.4, -3.1);
+  sailPivot.position.set(0, 8.55, -3.1);
+  sailPivot.rotation.z = -yardSlope;
+
   const sailGeo = new THREE.PlaneGeometry(7.6, 5.4, 6, 5);
   const sPos = sailGeo.attributes.position;
   for (let i = 0; i < sPos.count; i++) {
@@ -627,47 +1447,118 @@ function buildDetailedPlayableGalileeShip() {
     const sy = sPos.getY(i);
     const u = sx / 3.8;
     const v = sy / 2.7;
-    const billow = Math.cos(u * Math.PI * 0.45) * Math.cos(v * Math.PI * 0.42) * 1.15;
+    const billow = Math.cos(u * Math.PI * 0.45) * Math.cos(v * Math.PI * 0.42) * 1.12;
     sPos.setZ(i, billow);
   }
   const sailNon = sailGeo.toNonIndexed();
   sailNon.computeVertexNormals();
-  const sailMesh = new THREE.Mesh(sailNon, matLowPolyDouble(cSail));
-  sailMesh.position.set(0, -2.7, 0.25);
+  const sailMesh = new THREE.Mesh(sailNon, _boatMatDouble(cSail));
+  sailMesh.position.set(0, -2.7, 0.22);
   sailMesh.castShadow = true;
-  const sailBand1 = createLowPolyMesh(new THREE.BoxGeometry(7.2, 0.26, 0.14), cSailBand, 0, -1.6, 1.12, false);
-  const sailBand2 = createLowPolyMesh(new THREE.BoxGeometry(7.0, 0.26, 0.14), cSailBand, 0, -3.8, 1.02, false);
-  sailPivot.add(sailMesh, sailBand1, sailBand2);
+  const sailBand1 = createLowPolyMesh(new THREE.BoxGeometry(7.2, 0.26, 0.14), cSailBand, 0, -1.6, 1.06, false);
+  const sailBand2 = createLowPolyMesh(new THREE.BoxGeometry(7.0, 0.26, 0.14), cSailBand, 0, -3.8, 0.96, false);
 
-  // 앞·뒤 돛대 밧줄(리깅)
-  const ropeFront = createBranchSegmentMesh(new THREE.Vector3(0, 9.6, -3.4), new THREE.Vector3(0, 2.2, -11.8), 0.05, 0.05, cRope);
-  const ropeBackL = createBranchSegmentMesh(new THREE.Vector3(0, 9.5, -3.4), new THREE.Vector3(-3.3, 1.1, 6.2), 0.045, 0.045, cRope);
-  const ropeBackR = createBranchSegmentMesh(new THREE.Vector3(0, 9.5, -3.4), new THREE.Vector3( 3.3, 1.1, 6.2), 0.045, 0.045, cRope);
+  for (let ti = -3; ti <= 3; ti++) {
+    const tieRing = createLowPolyMesh(new THREE.TorusGeometry(0.145, 0.036, 5, 8), cRope, ti * 1.18, 0.02, 0.06, false);
+    tieRing.rotation.y = Math.PI * 0.5;
+    sailPivot.add(tieRing);
+  }
+  const clewLocalL = new THREE.Vector3(-3.72, -5.32, 0.28);
+  const clewLocalR = new THREE.Vector3( 3.72, -5.32, 0.28);
+  const clewRingL = createLowPolyMesh(new THREE.TorusGeometry(0.12, 0.036, 5, 8), cRope, clewLocalL.x, clewLocalL.y, clewLocalL.z, false);
+  const clewRingR = createLowPolyMesh(new THREE.TorusGeometry(0.12, 0.036, 5, 8), cRope, clewLocalR.x, clewLocalR.y, clewLocalR.z, false);
+  sailPivot.add(sailMesh, sailBand1, sailBand2, clewRingL, clewRingR);
 
-  // 양옆 노 4자루
+  // 곡선 뱃전 좌표에 정확히 밀착된 클리트 & 리깅
+  const railL22 = hull.getRailPoint(-2.2, -1);
+  const railR22 = hull.getRailPoint(-2.2,  1);
+  const railL12 = hull.getRailPoint( 1.2, -1);
+  const railR12 = hull.getRailPoint( 1.2,  1);
+  const railL56 = hull.getRailPoint( 5.6, -1);
+  const railR56 = hull.getRailPoint( 5.6,  1);
+  const railRNet = hull.getRailPoint(-3.2, 1);
+
+  const riggingGrp = new THREE.Group();
+  const prowLash = createLowPolyMesh(new THREE.TorusGeometry(0.24, 0.052, 5, 8), cRope, 0, 2.52, -12.64, false);
+  prowLash.rotation.x = Math.PI * 0.42;
+  const sternLash = createLowPolyMesh(new THREE.TorusGeometry(0.23, 0.050, 5, 8), cRope, 0, 2.38, 12.58, false);
+  sternLash.rotation.x = Math.PI * 0.58;
+  riggingGrp.add(
+    prowLash, sternLash,
+    createBoatWoodenCleat(railL22.x,  railL22.y,  railL22.z,  railL22.yaw,  cHullTrim, cRope),
+    createBoatWoodenCleat(railR22.x,  railR22.y,  railR22.z,  railR22.yaw,  cHullTrim, cRope),
+    createBoatWoodenCleat(railL12.x,  railL12.y,  railL12.z,  railL12.yaw,  cHullTrim, cRope),
+    createBoatWoodenCleat(railR12.x,  railR12.y,  railR12.z,  railR12.yaw,  cHullTrim, cRope),
+    createBoatWoodenCleat(railL56.x,  railL56.y,  railL56.z,  railL56.yaw,  cHullTrim, cRope),
+    createBoatWoodenCleat(railR56.x,  railR56.y,  railR56.z,  railR56.yaw,  cHullTrim, cRope),
+    createBoatWoodenCleat(railRNet.x, railRNet.y, railRNet.z, railRNet.yaw, cHullTrim, cRope)
+  );
+
+  const yardTipL = new THREE.Vector3(-4.08, 8.6 + Math.sin(yardSlope) * 4.12, -3.1);
+  const yardTipR = new THREE.Vector3( 4.08, 8.6 - Math.sin(yardSlope) * 4.12, -3.1);
+  const cRopeDark = '#b89664';
+  riggingGrp.add(
+    createCurvedRopeMesh(new THREE.Vector3(0, 9.88, -3.4), new THREE.Vector3(0, 2.52, -12.64), 0.22, 0.042, 9, cRope),
+    createCurvedRopeMesh(new THREE.Vector3(0, 9.85, -3.4), new THREE.Vector3(0, 2.38,  12.58), 0.34, 0.036, 10, cRopeDark),
+    createCurvedRopeMesh(new THREE.Vector3(-0.22, 9.35, -3.4), new THREE.Vector3(railL22.x, railL22.y + 0.08, railL22.z), 0.10, 0.036, 8, cRopeDark),
+    createCurvedRopeMesh(new THREE.Vector3( 0.22, 9.35, -3.4), new THREE.Vector3(railR22.x, railR22.y + 0.08, railR22.z), 0.10, 0.036, 8, cRopeDark),
+    createCurvedRopeMesh(new THREE.Vector3(-0.22, 9.25, -3.4), new THREE.Vector3(railL12.x, railL12.y + 0.08, railL12.z), 0.12, 0.034, 8, cRopeDark),
+    createCurvedRopeMesh(new THREE.Vector3( 0.22, 9.25, -3.4), new THREE.Vector3(railR12.x, railR12.y + 0.08, railR12.z), 0.12, 0.034, 8, cRopeDark),
+    createCurvedRopeMesh(new THREE.Vector3(-0.16, 10.05, -3.28), yardTipL, 0.14, 0.030, 7, cRope),
+    createCurvedRopeMesh(new THREE.Vector3( 0.16, 10.05, -3.28), yardTipR, 0.14, 0.030, 7, cRope),
+    createCurvedRopeMesh(yardTipL, new THREE.Vector3(railL56.x, railL56.y + 0.08, railL56.z), 0.42, 0.028, 9, cRope),
+    createCurvedRopeMesh(yardTipR, new THREE.Vector3(railR56.x, railR56.y + 0.08, railR56.z), 0.42, 0.028, 9, cRope),
+    createLowPolyMesh(new THREE.TorusGeometry(0.14, 0.035, 5, 8), cRope, yardTipL.x, yardTipL.y, yardTipL.z, false),
+    createLowPolyMesh(new THREE.TorusGeometry(0.14, 0.035, 5, 8), cRope, yardTipR.x, yardTipR.y, yardTipR.z, false)
+  );
+
+  const sailSheetMat = matLowPoly(cRope);
+  const sailSheetL = createDynamicCurvedRope(6, 0.028, sailSheetMat, false);
+  const sailSheetR = createDynamicCurvedRope(6, 0.028, sailSheetMat, false);
+  riggingGrp.add(sailSheetL.group, sailSheetR.group);
+  const sailSheets = [
+    { rope: sailSheetL, clewLocal: clewLocalL, cleatLocal: new THREE.Vector3(railL12.x, railL12.y + 0.08, railL12.z) },
+    { rope: sailSheetR, clewLocal: clewLocalR, cleatLocal: new THREE.Vector3(railR12.x, railR12.y + 0.08, railR12.z) }
+  ];
+  const syncShipSailSheets = () => {
+    sailPivot.updateMatrix();
+    const tmpClew = new THREE.Vector3();
+    for (let si = 0; si < sailSheets.length; si++) {
+      const sh = sailSheets[si];
+      tmpClew.copy(sh.clewLocal).applyMatrix4(sailPivot.matrix);
+      updateDynamicCurvedRope(sh.rope, tmpClew, sh.cleatLocal, 0.28, 1.0, 0, 0, si);
+    }
+  };
+  syncShipSailSheets();
+
+  // 피벗형 주노 1쌍 (곡선 뱃전 위 x ≈ ±4.19, z = +0.80 거치 → 안쪽 손잡이 x ≈ ±2.82, y ≈ 1.38)
+  const oarPivots = { left: [], right: [] };
   [-1, 1].forEach(side => {
-    [-0.6, 3.4].forEach(oz => {
-      const oar = createLowPolyMesh(new THREE.CylinderGeometry(0.06, 0.075, 4.8, 5), '#b45309', side * 4.5, 0.85, oz, false);
-      oar.rotation.z = side * 1.24;
-      oar.rotation.y = side * 0.18;
-      ship.add(oar);
-    });
+    const op = createPivotedGalileeOar(side, 6.4, '#a16207', '#c27a34');
+    const oarRail = hull.getRailPoint(0.80, side);
+    op.position.set(oarRail.x, oarRail.y + 0.02, oarRail.z);
+    ship.add(op);
+    if (side < 0) oarPivots.left.push({ pivot: op, phase: 0 });
+    else oarPivots.right.push({ pivot: op, phase: 0.18 });
   });
 
-  // 말린 그물 뭉치 & 어획 물고기 바구니 (1단계에서 잡은 물고기가 실제로 쌓임!)
-  const netCoil = createLowPolyMesh(new THREE.CylinderGeometry(0.75, 0.92, 0.45, 8), '#d6c6a5', -2.4, 0.25, -5.2, false);
+  const netCoil = createLowPolyMesh(new THREE.CylinderGeometry(0.75, 0.92, 0.45, 8), '#d6c6a5', -2.3, 0.25, -5.2, false);
   const catchBasketGrp = new THREE.Group();
-  catchBasketGrp.position.set(-2.3, 0.05, 0.8);
+  catchBasketGrp.position.set(-2.4, 0.05, 4.4);
   catchBasketGrp.add(
     createLowPolyMesh(new THREE.CylinderGeometry(0.82, 0.64, 0.72, 9), '#a16207', 0, 0.36, 0),
     createLowPolyMesh(new THREE.CylinderGeometry(0.86, 0.86, 0.12, 9), '#78350f', 0, 0.72, 0, false)
   );
 
-  // 고물 등불 (밤 풍랑 속 주무시는 예수님을 비추는 따뜻한 황금빛 등잔 & 글로우)
-  const lanternPole = createLowPolyMesh(new THREE.CylinderGeometry(0.05, 0.06, 2.4, 5), cHullTrim, -2.3, 1.6, 10.6, false);
+  const fishPileGroup = new THREE.Group();
+  fishPileGroup.position.set(0, 0.06, 0.2);
+  fishPileGroup.visible = false;
+
+  const lanternRail = hull.getRailPoint(10.6, -1);
+  const lanternPole = createLowPolyMesh(new THREE.CylinderGeometry(0.05, 0.06, 2.2, 5), cHullTrim, lanternRail.x, lanternRail.y + 0.85, lanternRail.z, false);
   const lanternLampMat = new THREE.MeshBasicMaterial({ color: 0xfef08a, fog: false });
   const lanternLamp = new THREE.Mesh(new THREE.OctahedronGeometry(0.28, 0), lanternLampMat);
-  lanternLamp.position.set(-2.3, 2.75, 10.6);
+  lanternLamp.position.set(lanternRail.x, lanternRail.y + 1.98, lanternRail.z);
   const sternGlowMat = new THREE.MeshBasicMaterial({
     color: 0xffb347,
     transparent: true,
@@ -677,44 +1568,642 @@ function buildDetailedPlayableGalileeShip() {
     blending: THREE.AdditiveBlending
   });
   const sternGlow = new THREE.Mesh(new THREE.IcosahedronGeometry(0.58, 1), sternGlowMat);
-  sternGlow.position.set(-2.3, 2.75, 10.6);
+  sternGlow.position.set(lanternRail.x, lanternRail.y + 1.98, lanternRail.z);
   sternGlow.visible = false;
 
-  ship.add(mast, mastStep, yard, sailPivot, ropeFront, ropeBackL, ropeBackR, netCoil, catchBasketGrp, lanternPole, lanternLamp, sternGlow);
-  return { ship, sailPivot, catchBasketGrp, sternGlow, sternGlowMat, lanternLampMat };
+  ship.add(
+    mast, mastStep, mastCapRing, mastPulley, mastParrel, yard, sailPivot, riggingGrp,
+    netCoil, catchBasketGrp, fishPileGroup, lanternPole, lanternLamp, sternGlow
+  );
+  return { ship, hull, sailPivot, syncShipSailSheets, catchBasketGrp, sternGlow, sternGlowMat, lanternLampMat, oarPivots, rudderPivot, fishPileGroup };
+}
+
+// 야고보·요한의 동업자 어선 (부드러운 곡선 소프트 로우폴리 선체)
+function buildPartnerGalileeBoat(includeCrew = true) {
+  const boat = new THREE.Group();
+  const cHullOuter = '#8a4f22';
+  const cHullTrim  = '#623310';
+  const cDeckLight = '#cc8a43';
+  const cDeckDark  = '#b06d2a';
+  const cBench     = '#92521d';
+
+  const hull = buildCurvedLowPolyBoatHull({
+    halfLen: 9.2,
+    maxHalfW: 3.22,
+    wallThick: 0.28,
+    deckY: 0.02,
+    keelY: -1.04,
+    midGunwaleY: 0.96,
+    bowGunwaleY: 1.60,
+    sternGunwaleY: 1.54,
+    plankCount: 5,
+    cHullOuter,
+    cHullTrim,
+    cDeckLight,
+    cDeckDark
+  });
+  boat.add(hull.group);
+
+  // 곡선 선수/선미 기둥
+  const prowPost = createLowPolyMesh(new THREE.CylinderGeometry(0.14, 0.24, 2.2, 7), cHullTrim, 0, 1.62, -9.05);
+  prowPost.rotation.x = -0.32;
+  const sternPost = createLowPolyMesh(new THREE.CylinderGeometry(0.14, 0.22, 2.1, 7), cHullTrim, 0, 1.56, 9.05);
+  sternPost.rotation.x = 0.28;
+
+  // 접힌 돛과 마스트 + 곡선 뱃전 클리트·스테이
+  const cRope = '#d6b685';
+  const mast = createLowPolyMesh(new THREE.CylinderGeometry(0.16, 0.24, 6.2, 7), cHullTrim, 0, 3.0, -2.5);
+  const furledSail = createLowPolyMesh(new THREE.CylinderGeometry(0.26, 0.28, 4.8, 7), '#f5e7c6', 0, 5.1, -2.3, false);
+  furledSail.rotation.z = Math.PI * 0.5 - 0.08;
+  const pRigGrp = new THREE.Group();
+  [-1.7, -0.6, 0.6, 1.7].forEach(fx => {
+    const fWrap = createLowPolyMesh(new THREE.TorusGeometry(0.28, 0.036, 5, 8), cRope, fx, 5.1 - fx * 0.08, -2.3, false);
+    fWrap.rotation.y = Math.PI * 0.5;
+    pRigGrp.add(fWrap);
+  });
+  const pRailL26 = hull.getRailPoint(-2.6, -1);
+  const pRailL18 = hull.getRailPoint( 1.8, -1);
+  const pRailR15 = hull.getRailPoint(-1.5,  1);
+  pRigGrp.add(
+    createBoatWoodenCleat(pRailL26.x, pRailL26.y, pRailL26.z, pRailL26.yaw, cHullTrim, cRope),
+    createBoatWoodenCleat(pRailL18.x, pRailL18.y, pRailL18.z, pRailL18.yaw, cHullTrim, cRope),
+    createBoatWoodenCleat(pRailR15.x, pRailR15.y, pRailR15.z, pRailR15.yaw, cHullTrim, cRope),
+    createCurvedRopeMesh(new THREE.Vector3(0, 5.85, -2.5), new THREE.Vector3(0, 2.02, -9.15), 0.16, 0.030, 7, cRope),
+    createCurvedRopeMesh(new THREE.Vector3(-0.14, 5.65, -2.5), new THREE.Vector3(pRailL26.x, pRailL26.y + 0.07, pRailL26.z), 0.09, 0.026, 6, '#b89664'),
+    createCurvedRopeMesh(new THREE.Vector3( 0.14, 5.65, -2.5), new THREE.Vector3(pRailR15.x, pRailR15.y + 0.07, pRailR15.z), 0.09, 0.026, 6, '#b89664')
+  );
+  boat.add(pRigGrp);
+
+  // 곡선 내벽에 맞춘 가로 벤치 & 그물
+  [-4.2, 3.6].forEach(bz => {
+    const bw = Math.max(1.4, hull.getInnerHalfW(bz) * 2 - 0.12);
+    boat.add(createLowPolyMesh(new THREE.BoxGeometry(bw, 0.16, 0.62), cBench, 0, 0.48, bz, false));
+  });
+  const netCoil = createLowPolyMesh(new THREE.CylinderGeometry(0.58, 0.72, 0.38, 8), '#d6c6a5', 1.4, 0.22, 4.6, false);
+
+  // 피벗형 방향타 + 곡선 뱃전 위 노 4자루
+  const pRudderRail = hull.getRailPoint(7.2, 1);
+  const rudderPivot = new THREE.Group();
+  rudderPivot.position.set(pRudderRail.x - 0.05, pRudderRail.y - 0.14, pRudderRail.z);
+  const rShaft = createLowPolyMesh(new THREE.CylinderGeometry(0.08, 0.10, 3.4, 5), cHullTrim, 0.2, -0.45, 0.55, false);
+  rShaft.rotation.set(0.45, 0, -0.22);
+  const rBlade = createLowPolyMesh(new THREE.BoxGeometry(0.12, 1.2, 0.58), cBench, 0.45, -1.5, 1.45, false);
+  rBlade.rotation.set(0.45, 0, -0.22);
+  rudderPivot.add(rShaft, rBlade);
+
+  const oarPivots = { left: [], right: [] };
+  [-1, 1].forEach(side => {
+    [-1.2, 2.2].forEach((oz, oi) => {
+      const op = createPivotedGalileeOar(side, 4.6, '#a16207', '#cc8a43');
+      const oRail = hull.getRailPoint(oz, side);
+      op.position.set(oRail.x, oRail.y + 0.02, oRail.z);
+      boat.add(op);
+      if (side < 0) oarPivots.left.push({ pivot: op, phase: oi * 0.65 + 0.4 });
+      else oarPivots.right.push({ pivot: op, phase: oi * 0.65 + 0.4 });
+    });
+  });
+
+  const fishPileGroup = new THREE.Group();
+  fishPileGroup.position.set(0, 0.05, 0.3);
+  fishPileGroup.visible = false;
+
+  boat.add(prowPost, sternPost, mast, furledSail, netCoil, rudderPivot, fishPileGroup);
+
+  let jamesMesh = null;
+  let johnMesh = null;
+  if (includeCrew) {
+    jamesMesh = createLowPolyPersonMesh('james', 1);
+    jamesMesh.position.set(-2.06, 0.06, -1.46);
+    jamesMesh.rotation.y = 0;
+    johnMesh = createLowPolyPersonMesh('john', 2);
+    johnMesh.position.set(-2.04, 0.06, 1.94);
+    johnMesh.rotation.y = 0;
+    boat.add(jamesMesh, johnMesh);
+  }
+
+  return { boat, hull, oarPivots, rudderPivot, fishPileGroup, jamesMesh, johnMesh };
+}
+
+function animateGalileeBoatOars(oarPivots, rudderPivot, now, dt, leftEffort, rightEffort, steerVal) {
+  if (rudderPivot) {
+    rudderPivot.rotation.y = THREE.MathUtils.lerp(rudderPivot.rotation.y, (steerVal || 0) * 0.52, Math.min(1, dt * 7.0));
+  }
+  const res = { leftPhase: 0, rightPhase: 0 };
+  if (!oarPivots) return res;
+  const t = now * 0.0052;
+  const applySide = (arr, side, eff) => {
+    const absEff = Math.min(1.2, Math.abs(eff));
+    const dir = eff >= 0 ? 1 : -1;
+    let firstPhase = 0;
+    for (let i = 0; i < arr.length; i++) {
+      const o = arr[i];
+      if (!o || !o.pivot) continue;
+      if (absEff > 0.06) {
+        const cyc = t * (0.9 + absEff * 0.65) * dir + o.phase;
+        if (i === 0) firstPhase = cyc;
+        // 전진 추진 시 물갈퀴가 물속(-Y)에서 선미(+Z)로 쓸고 공중(+Y)에서 선수(-Z)로 복귀
+        const sweepY = -side * Math.sin(cyc) * 0.18 * Math.min(1.05, absEff);
+        const dipZ   = -side * (0.16 + Math.cos(cyc) * 0.12 * Math.min(1.05, absEff));
+        o.pivot.rotation.y = THREE.MathUtils.lerp(o.pivot.rotation.y, sweepY, Math.min(1, dt * 10));
+        o.pivot.rotation.z = THREE.MathUtils.lerp(o.pivot.rotation.z, dipZ, Math.min(1, dt * 10));
+      } else {
+        o.pivot.rotation.y = THREE.MathUtils.lerp(o.pivot.rotation.y, 0, Math.min(1, dt * 5));
+        o.pivot.rotation.z = THREE.MathUtils.lerp(o.pivot.rotation.z, -side * 0.16, Math.min(1, dt * 5));
+      }
+    }
+    return firstPhase;
+  };
+  res.leftPhase = applySide(oarPivots.left, -1, leftEffort);
+  res.rightPhase = applySide(oarPivots.right, 1, rightEffort);
+  return res;
+}
+
+// =========================================================================
+// [노 젓기 2-Bone Arm IK] 캐릭터 손바닥(gripPoint)을 노 손잡이 3D 좌표에 1:1 고정
+// =========================================================================
+const _ikTmpTargetLoc = new THREE.Vector3();
+const _ikTmpDiff      = new THREE.Vector3();
+const _ikTmpU         = new THREE.Vector3();
+const _ikTmpPole      = new THREE.Vector3();
+const _ikTmpW         = new THREE.Vector3();
+const _ikTmpElbow     = new THREE.Vector3();
+const _ikTmpE1        = new THREE.Vector3();
+const _ikTmpE2        = new THREE.Vector3();
+const _ikTmpYArm      = new THREE.Vector3();
+const _ikTmpZArm      = new THREE.Vector3();
+const _ikTmpXArm      = new THREE.Vector3();
+const _ikTmpMat4      = new THREE.Matrix4();
+const _ikTmpGripLW    = new THREE.Vector3();
+const _ikTmpGripRW    = new THREE.Vector3();
+const _ikTmpMidLoc    = new THREE.Vector3();
+
+function solveSingleArmTwoBoneIK(armGrp, isLeft, targetWorldPos) {
+  if (!armGrp || !armGrp.parent || !targetWorldPos) return false;
+  const upperPivot = (armGrp.children[0] && armGrp.children[0].isGroup) ? armGrp.children[0] : null;
+  const elbowPivot = armGrp.getObjectByName('elbowPivot');
+  if (!elbowPivot) return false;
+
+  if (!armGrp.userData) armGrp.userData = {};
+  if (!armGrp.userData._ikBaseZ) {
+    armGrp.userData._ikBaseZ = {
+      upperZ: upperPivot ? upperPivot.rotation.z : 0,
+      elbowZ: elbowPivot.rotation.z
+    };
+  }
+  armGrp.userData._ikActive = true;
+  if (upperPivot) upperPivot.rotation.z = 0;
+  elbowPivot.rotation.z = 0;
+
+  const L1 = Math.max(0.14, Math.abs(elbowPivot.position.y));
+  const gripObj = elbowPivot.getObjectByName('gripPoint');
+  const gripY = gripObj ? gripObj.position.y : -0.33;
+  const gripZ = gripObj ? gripObj.position.z : 0.014;
+  const L2 = Math.max(0.16, Math.hypot(gripY, gripZ));
+  const gripZAngle = Math.atan2(gripZ, Math.max(0.05, -gripY));
+
+  armGrp.parent.updateMatrixWorld(true);
+  _ikTmpTargetLoc.copy(targetWorldPos);
+  armGrp.parent.worldToLocal(_ikTmpTargetLoc);
+
+  _ikTmpDiff.subVectors(_ikTmpTargetLoc, armGrp.position);
+  const rawDist = _ikTmpDiff.length();
+  if (rawDist < 1e-5) return false;
+  const minDist = Math.abs(L1 - L2) + 0.01;
+  const maxDist = L1 + L2 - 0.002;
+  const dist = THREE.MathUtils.clamp(rawDist, minDist, maxDist);
+
+  const cosA = THREE.MathUtils.clamp((L1 * L1 + dist * dist - L2 * L2) / (2 * L1 * dist), -1, 1);
+  const alpha = Math.acos(cosA);
+  const cosB = THREE.MathUtils.clamp((L1 * L1 + L2 * L2 - dist * dist) / (2 * L1 * L2), -1, 1);
+  const elbowBend = Math.PI - Math.acos(cosB);
+
+  _ikTmpU.copy(_ikTmpDiff).multiplyScalar(1 / rawDist);
+  // 자연스러운 팔꿈치 바깥·아래·뒤쪽 극벡터(Pole)
+  _ikTmpPole.set(isLeft ? -0.36 : 0.36, -0.82, -0.44).normalize();
+  _ikTmpW.copy(_ikTmpPole).addScaledVector(_ikTmpU, -_ikTmpPole.dot(_ikTmpU));
+  if (_ikTmpW.lengthSq() < 1e-5) {
+    _ikTmpW.set(isLeft ? -0.4 : 0.4, -0.9, 0).addScaledVector(_ikTmpU, -(_ikTmpPole.y * _ikTmpU.y));
+  }
+  _ikTmpW.normalize();
+
+  _ikTmpElbow.copy(armGrp.position)
+    .addScaledVector(_ikTmpU, L1 * Math.cos(alpha))
+    .addScaledVector(_ikTmpW, L1 * Math.sin(alpha));
+
+  _ikTmpE1.subVectors(_ikTmpElbow, armGrp.position).normalize();
+  _ikTmpE2.subVectors(_ikTmpTargetLoc, _ikTmpElbow).normalize();
+
+  _ikTmpYArm.copy(_ikTmpE1).negate();
+  _ikTmpZArm.copy(_ikTmpE2).addScaledVector(_ikTmpE1, -_ikTmpE2.dot(_ikTmpE1));
+  if (_ikTmpZArm.lengthSq() < 1e-6) {
+    _ikTmpZArm.copy(_ikTmpW).negate();
+  }
+  _ikTmpZArm.normalize();
+  _ikTmpXArm.crossVectors(_ikTmpYArm, _ikTmpZArm).normalize();
+  _ikTmpZArm.crossVectors(_ikTmpXArm, _ikTmpYArm).normalize();
+
+  _ikTmpMat4.makeBasis(_ikTmpXArm, _ikTmpYArm, _ikTmpZArm);
+  armGrp.quaternion.setFromRotationMatrix(_ikTmpMat4);
+  elbowPivot.rotation.set(-(elbowBend - gripZAngle), 0, 0);
+  armGrp.updateMatrixWorld(true);
+  return true;
+}
+
+function applyRowingOarHandIK(actorRoot, limbs, oarPivot, isPlayer, shipRoot) {
+  if (!actorRoot || !limbs || !limbs.lArm || !limbs.rArm || !oarPivot || !oarPivot.userData) return;
+  const gL = oarPivot.userData.gripL;
+  const gR = oarPivot.userData.gripR;
+  if (!gL || !gR) return;
+
+  // 노 젓기 중에는 NPC가 원거리 LOD 실루엣으로 전환되어 팔 관절이 멈추지 않도록 고해상도 레벨 유지
+  if (actorRoot.isLOD && Array.isArray(actorRoot.levels) && actorRoot.levels.length > 1) {
+    if (actorRoot.userData._origLodDist === undefined) {
+      actorRoot.userData._origLodDist = actorRoot.levels[1].distance;
+    }
+    actorRoot.levels[1].distance = 120;
+    actorRoot.levels[0].object.visible = true;
+    actorRoot.levels[1].object.visible = false;
+  }
+
+  oarPivot.updateMatrixWorld(true);
+  gL.getWorldPosition(_ikTmpGripLW);
+  gR.getWorldPosition(_ikTmpGripRW);
+
+  if (shipRoot) {
+    shipRoot.updateMatrixWorld(true);
+    _ikTmpMidLoc.addVectors(_ikTmpGripLW, _ikTmpGripRW).multiplyScalar(0.5);
+    shipRoot.worldToLocal(_ikTmpMidLoc);
+    const actorLoc = shipRoot.worldToLocal(actorRoot.getWorldPosition(new THREE.Vector3()));
+    const pitch = THREE.MathUtils.clamp((_ikTmpMidLoc.z - actorLoc.z - 0.34) * 0.62, -0.26, 0.34);
+    if (isPlayer) {
+      actorRoot.rotation.order = 'YXZ';
+      actorRoot.rotation.x = pitch;
+    } else if (actorRoot.userData && actorRoot.userData.bodyRoot) {
+      actorRoot.userData.bodyRoot.rotation.x = pitch;
+    }
+  }
+
+  actorRoot.updateMatrixWorld(true);
+  solveSingleArmTwoBoneIK(limbs.lArm, true, _ikTmpGripLW);
+  solveSingleArmTwoBoneIK(limbs.rArm, false, _ikTmpGripRW);
+}
+
+function resetActorRowingArmIK(actorRoot, limbs, isPlayer = false) {
+  if (actorRoot && actorRoot.isLOD && actorRoot.userData && actorRoot.userData._origLodDist !== undefined) {
+    if (Array.isArray(actorRoot.levels) && actorRoot.levels.length > 1) {
+      actorRoot.levels[1].distance = actorRoot.userData._origLodDist;
+    }
+    delete actorRoot.userData._origLodDist;
+  }
+  if (isPlayer && actorRoot) {
+    actorRoot.rotation.x = 0;
+  } else if (actorRoot && actorRoot.userData && actorRoot.userData.bodyRoot) {
+    actorRoot.userData.bodyRoot.rotation.x = 0;
+  }
+  if (!limbs) return;
+  [limbs.lArm, limbs.rArm].forEach(armGrp => {
+    if (!armGrp) return;
+    if (armGrp.userData && armGrp.userData._ikBaseZ) {
+      const upperPivot = (armGrp.children[0] && armGrp.children[0].isGroup) ? armGrp.children[0] : null;
+      const elbowPivot = armGrp.getObjectByName('elbowPivot');
+      if (upperPivot) upperPivot.rotation.z = armGrp.userData._ikBaseZ.upperZ;
+      if (elbowPivot) {
+        elbowPivot.rotation.z = armGrp.userData._ikBaseZ.elbowZ;
+        elbowPivot.rotation.x = 0;
+      }
+      armGrp.userData._ikActive = false;
+    }
+    armGrp.rotation.set(0, 0, 0);
+  });
+}
+
+// 공통 갈릴리 바다 & 곡선 동쪽 해안 배경 생성기 (주간 & 야간 스테이지 1 공용)
+function buildSharedGalileeSeaAndCoast(isNightStorm) {
+  const seaFloor = (typeof createIrregularLowPolyWaterMesh === 'function')
+    ? createIrregularLowPolyWaterMesh(840, 840, 64, 64, 17, { shoreRightEdgeX: 128, shallowBandW: 64, opacity: 0.86, isStorm: Boolean(isNightStorm) })
+    : (() => {
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(840, 840, 48, 48), new THREE.MeshPhongMaterial({ color: 0x0284c7, flatShading: true, shininess: 0, specular: 0x000000 }));
+        m.rotation.x = -Math.PI / 2;
+        return m;
+      })();
+  seaFloor.position.set(-100, -1.15, 0);
+  seaFloor.receiveShadow = true;
+  worldGroup.add(seaFloor);
+
+  const shoreCenterX = 196;
+  const s1ShoreHeight = (lx, lz) => getGalileeStage1CoastHeight(lx + shoreCenterX, lz);
+  const cS1Sand   = new THREE.Color('#ebd8ae');
+  const cS1Bank   = new THREE.Color('#cfa572');
+  const cS1Meadow = new THREE.Color('#b6b968');
+  const cS1Ochre  = new THREE.Color('#d8b674');
+  const cS1Pasture = new THREE.Color('#8eb054');
+  const shoreMesh = (typeof createCrispLowPolyFacetedTerrain === 'function')
+    ? createCrispLowPolyFacetedTerrain(380, 840, 52, 76, s1ShoreHeight, (mx, my, mz, slopeFlat, hash2, outCol) => {
+        const wx = mx + shoreCenterX;
+        const dShore = wx - getGalileeStage1ShoreX(mz);
+        const onPierRoad = (wx >= 25.0 && wx <= 48.0 && Math.abs(mz) < 3.4);
+        if (dShore < 4.5) outCol.copy(cS1Sand);
+        else if (dShore < 7.2 && !onPierRoad) outCol.copy(cS1Bank);
+        else if (onPierRoad) outCol.copy(cS1Ochre);
+        else if (dShore > 54.0) {
+          const patch = hash2(Math.floor(mx * 0.12), Math.floor(mz * 0.12));
+          outCol.copy(cS1Pasture).lerp(cS1Meadow, 0.25 + patch * 0.45);
+        } else {
+          const patch = hash2(Math.floor(mx * 0.14), Math.floor(mz * 0.14));
+          outCol.copy(cS1Meadow).lerp(cS1Ochre, 0.28 + patch * 0.52);
+        }
+      }, 0.85)
+    : new THREE.Mesh(new THREE.PlaneGeometry(380, 840, 40, 58), new THREE.MeshPhongMaterial({ color: '#9ec164', flatShading: true, shininess: 0, specular: 0x000000 }));
+  shoreMesh.position.set(shoreCenterX, 0, 0);
+  worldGroup.add(shoreMesh);
+
+  const s1CoastGrp = new THREE.Group();
+  for (let cz = -132; cz <= 132; cz += 6.0) {
+    if (Math.abs(cz) < 4.2) continue;
+    const ci = Math.round((cz + 132) / 6.0);
+    const rx = getGalileeStage1ShoreX(cz) + 0.5 + (ci % 3) * 1.4;
+    const ry = getGalileeStage1CoastHeight(rx, cz);
+    const stMesh = createLowPolyMesh(new THREE.DodecahedronGeometry(0.55 + (ci % 3) * 0.22, 0), ci % 2 === 0 ? '#cbd5e1' : '#a8a29e', rx, ry + 0.18, cz, false);
+    stMesh.scale.set(1.3, 0.58, 1.1);
+    s1CoastGrp.add(stMesh);
+    if (typeof createShorelineCattailCluster === 'function' && ci % 2 === 0) {
+      const cat = createShorelineCattailCluster(0.95 + (ci % 3) * 0.12);
+      cat.position.set(rx + 2.4, getGalileeStage1CoastHeight(rx + 2.4, cz), cz + 0.8);
+      s1CoastGrp.add(cat);
+    }
+  }
+  if (typeof mergeStaticLowPolyGroupToVertexColor === 'function') {
+    mergeStaticLowPolyGroupToVertexColor(s1CoastGrp, { registerWall: false, castShadow: false });
+  }
+  worldGroup.add(s1CoastGrp);
+
+  const s1Pier = (typeof createOrganicGalileePierGroup === 'function')
+    ? createOrganicGalileePierGroup(12.8, 3.8, 73)
+    : createLowPolyMesh(new THREE.BoxGeometry(12.5, 0.35, 3.8), '#92400e', 0, 0.25, 0);
+  s1Pier.position.set(22, 0.0, 0);
+  worldGroup.add(s1Pier);
+
+  // 오픈월드 갈릴리 항구 마을 & 다층 건물·돌담·수림대 차폐 벨트 (비현실적 산 제거, 나무·건물로 가장자리 자연 차폐!)
+  const coastStartIdx = worldGroup.children.length;
+  const coastHouses = [
+    // 중앙 1열 해안 마을 라인 (선착장 진입로 z ∈ [-6, +6] 비워두고 좌·우 형성)
+    { x: 38, z: -42, v: 0, yaw: -1.48, sc: 0.96, m: 'plaster' },
+    { x: 39, z: -29, v: 1, yaw: -1.57, sc: 0.98, m: 'stonebrick' },
+    { x: 38, z: -16, v: 3, yaw: -1.52, sc: 0.96, m: 'stonebrick' },
+    { x: 39, z:  12, v: 0, yaw: -1.62, sc: 0.96, m: 'plaster' },
+    { x: 40, z:  25, v: 2, yaw: -1.55, sc: 0.95, m: 'stonebrick' },
+    { x: 39, z:  38, v: 4, yaw: -1.45, sc: 0.95, m: 'plaster' },
+    // 중앙 2열 엇갈림 마을 라인
+    { x: 55, z: -36, v: 2, yaw: -1.57, sc: 1.00, m: 'stonebrick' },
+    { x: 54, z: -22, v: 1, yaw: -1.52, sc: 1.02, m: 'plaster' },
+    { x: 56, z:  -8, v: 3, yaw: -1.60, sc: 1.00, m: 'stonebrick' },
+    { x: 55, z:   6, v: 2, yaw: -1.55, sc: 0.98, m: 'stonebrick' },
+    { x: 56, z:  20, v: 1, yaw: -1.58, sc: 1.02, m: 'plaster' },
+    { x: 57, z:  35, v: 0, yaw: -1.50, sc: 0.98, m: 'stonebrick' },
+    // 중앙 3열 후면 지붕 실루엣 라인 (수평선 건물 차폐)
+    { x: 74, z: -44, v: 3, yaw: -1.50, sc: 1.08, m: 'stonebrick' },
+    { x: 73, z: -28, v: 4, yaw: -1.62, sc: 1.12, m: 'plaster' },
+    { x: 75, z: -12, v: 1, yaw: -1.54, sc: 1.06, m: 'stonebrick' },
+    { x: 74, z:   3, v: 3, yaw: -1.58, sc: 1.10, m: 'plaster' },
+    { x: 75, z:  18, v: 2, yaw: -1.48, sc: 1.08, m: 'stonebrick' },
+    { x: 74, z:  34, v: 4, yaw: -1.56, sc: 1.12, m: 'plaster' }
+  ];
+  // 북쪽(-Z)·남쪽(+Z) 완만한 곡선 해안선을 따라 2중으로 촘촘히 이어지는 외곽 어촌 가옥 30채 추가
+  [
+    // 북쪽 1열
+    { z: -54,  dx: 20, v: 2, yawOff:  0.14, sc: 0.98, m: 'stonebrick' },
+    { z: -68,  dx: 22, v: 0, yawOff:  0.20, sc: 0.98, m: 'plaster' },
+    { z: -83,  dx: 23, v: 3, yawOff:  0.24, sc: 1.02, m: 'stonebrick' },
+    { z: -99,  dx: 24, v: 1, yawOff:  0.28, sc: 1.00, m: 'plaster' },
+    { z: -116, dx: 25, v: 4, yawOff:  0.32, sc: 1.04, m: 'stonebrick' },
+    { z: -134, dx: 25, v: 0, yawOff:  0.36, sc: 1.02, m: 'plaster' },
+    { z: -153, dx: 26, v: 2, yawOff:  0.40, sc: 1.05, m: 'stonebrick' },
+    { z: -172, dx: 27, v: 3, yawOff:  0.44, sc: 1.04, m: 'plaster' },
+    // 북쪽 2열 (1열 사이 틈새 차폐)
+    { z: -61,  dx: 42, v: 1, yawOff:  0.16, sc: 1.06, m: 'stonebrick' },
+    { z: -78,  dx: 45, v: 4, yawOff:  0.22, sc: 1.08, m: 'plaster' },
+    { z: -96,  dx: 46, v: 2, yawOff:  0.26, sc: 1.10, m: 'stonebrick' },
+    { z: -115, dx: 48, v: 3, yawOff:  0.30, sc: 1.08, m: 'plaster' },
+    { z: -136, dx: 49, v: 1, yawOff:  0.34, sc: 1.12, m: 'stonebrick' },
+    { z: -158, dx: 50, v: 0, yawOff:  0.38, sc: 1.10, m: 'plaster' },
+    { z: -180, dx: 52, v: 2, yawOff:  0.42, sc: 1.08, m: 'stonebrick' },
+    // 남쪽 1열
+    { z:  54,  dx: 21, v: 1, yawOff: -0.14, sc: 0.98, m: 'plaster' },
+    { z:  68,  dx: 22, v: 3, yawOff: -0.20, sc: 1.00, m: 'stonebrick' },
+    { z:  83,  dx: 24, v: 0, yawOff: -0.24, sc: 0.98, m: 'plaster' },
+    { z:  99,  dx: 25, v: 2, yawOff: -0.28, sc: 1.02, m: 'stonebrick' },
+    { z:  116, dx: 25, v: 4, yawOff: -0.32, sc: 1.00, m: 'plaster' },
+    { z:  134, dx: 26, v: 1, yawOff: -0.36, sc: 1.04, m: 'stonebrick' },
+    { z:  153, dx: 26, v: 3, yawOff: -0.40, sc: 1.02, m: 'plaster' },
+    { z:  172, dx: 27, v: 0, yawOff: -0.44, sc: 1.05, m: 'stonebrick' },
+    // 남쪽 2열 (1열 사이 틈새 차폐)
+    { z:  61,  dx: 42, v: 3, yawOff: -0.16, sc: 1.06, m: 'stonebrick' },
+    { z:  78,  dx: 45, v: 0, yawOff: -0.22, sc: 1.08, m: 'plaster' },
+    { z:  96,  dx: 46, v: 4, yawOff: -0.26, sc: 1.10, m: 'stonebrick' },
+    { z:  115, dx: 48, v: 2, yawOff: -0.30, sc: 1.08, m: 'plaster' },
+    { z:  136, dx: 49, v: 3, yawOff: -0.34, sc: 1.12, m: 'stonebrick' },
+    { z:  158, dx: 50, v: 1, yawOff: -0.38, sc: 1.10, m: 'plaster' },
+    { z:  180, dx: 52, v: 4, yawOff: -0.42, sc: 1.08, m: 'stonebrick' }
+  ].forEach(fh => {
+    const sx = getGalileeStage1ShoreX(fh.z);
+    coastHouses.push({ x: sx + fh.dx, z: fh.z, v: fh.v, yaw: -Math.PI * 0.5 + fh.yawOff, sc: fh.sc, m: fh.m });
+  });
+  coastHouses.forEach(h => {
+    addJudeanRoadsideBuilding(h.x, h.z, h.v, h.yaw, h.sc, false, h.m);
+  });
+
+  if (typeof createStandaloneMarketStall === 'function') {
+    createStandaloneMarketStall(32.5, -8.2, -Math.PI * 0.45, 0, true, 401);
+    createStandaloneMarketStall(32.8,  7.8, -Math.PI * 0.55, 2, true, 417);
+  }
+  if (typeof createOrganicStreetPropCluster === 'function') {
+    createOrganicStreetPropCluster(31.5, -4.4,  0.3, 41);
+    createOrganicStreetPropCluster(31.8,  4.4, -0.4, 52);
+    createOrganicStreetPropCluster(45.5, -19.0, 0.2, 63);
+    createOrganicStreetPropCluster(46.0,  15.5,-0.2, 74);
+  }
+  if (typeof createLowPolyWoodenCart === 'function') {
+    createLowPolyWoodenCart(45.5, -2.5, 0.15);
+  }
+
+  // 야자수(28) · 올리브(56) · 측백(64) · 캐노피(32) — 산 대신 풍성한 다층 수림대로 해안·후면 가장자리 완벽 차폐!
+  const allPalms = [
+    [29, -38, 1.12], [30, -23, 1.15], [29, -11, 1.10], [31, 10, 1.12],
+    [30,  22, 1.08], [31,  34, 1.14], [47, -30, 1.08], [48, 28, 1.06]
+  ];
+  [-202, -184, -166, -148, -130, -112, -94, -76, -58, -46, 46, 58, 76, 94, 112, 130, 148, 166, 184, 202].forEach((pz, pi) => {
+    allPalms.push([getGalileeStage1ShoreX(pz) + 10.5 + (pi % 3) * 2.5, pz, 1.08 + (pi % 3) * 0.09]);
+  });
+  allPalms.forEach(([px, pz, sc]) => addLowPolyPalmTree(px, pz, sc, false));
+
+  const allOlives = [
+    [35, -48, 1.10], [46, -40, 1.14], [47, -23, 1.08], [46, -10, 1.12],
+    [47,   5, 1.10], [48,  19, 1.14], [46,  33, 1.08], [36,  46, 1.12],
+    [64, -30, 1.20], [66, -14, 1.18], [65,   2, 1.18], [66,  24, 1.20]
+  ];
+  for (let oi = 0; oi < 44; oi++) {
+    const oz = (oi < 22) ? (-48 - oi * 8.2) : (48 + (oi - 22) * 8.2);
+    const ox = getGalileeStage1ShoreX(oz) + 26 + (oi % 4) * 14;
+    allOlives.push([ox, oz, 1.10 + (oi % 3) * 0.14]);
+  }
+  allOlives.forEach(([ox, oz, sc]) => {
+    if (typeof addLowPolyOliveTree === 'function') addLowPolyOliveTree(ox, oz, sc, false);
+  });
+
+  const allCypresses = [
+    [52, -46, 1.18], [64, -44, 1.28], [69, -22, 1.24], [71, -4, 1.30],
+    [70,  14, 1.24], [68,  34, 1.26], [54,  46, 1.18], [74, -36, 1.32]
+  ];
+  // 2열·3열 후면 고밀도 측백 방풍 수림대 (z ∈ [-236, +236] 전체 스카이라인 차폐)
+  for (let cyi = 0; cyi < 34; cyi++) {
+    const cz = -236 + cyi * 14.3;
+    const cx = getGalileeStage1ShoreX(cz) + 60 + (cyi % 3) * 14;
+    allCypresses.push([cx, cz, 1.24 + (cyi % 4) * 0.12]);
+  }
+  for (let cy2 = 0; cy2 < 22; cy2++) {
+    const cz = -224 + cy2 * 21.3;
+    const cx = getGalileeStage1ShoreX(cz) + 86 + (cy2 % 3) * 15;
+    allCypresses.push([cx, cz, 1.36 + (cy2 % 3) * 0.14]);
+  }
+  allCypresses.forEach(([cx, cz, sc]) => {
+    if (typeof addLowPolyCypressPineTree === 'function') addLowPolyCypressPineTree(cx, cz, sc, false);
+  });
+
+  if (typeof addLowPolyCanopyTree === 'function') {
+    const allCanopies = [
+      [48, -14, 1.24], [63, -2, 1.32], [50, 16, 1.24],
+      [82, -38, 1.42], [84, -18, 1.48], [83, 6, 1.45], [85, 26, 1.42], [82, 46, 1.38]
+    ];
+    for (let ki = 0; ki < 24; ki++) {
+      const kz = (ki < 12) ? (-54 - ki * 14.5) : (54 + (ki - 12) * 14.5);
+      const kx = getGalileeStage1ShoreX(kz) + 34 + (ki % 3) * 20;
+      allCanopies.push([kx, kz, 1.28 + (ki % 3) * 0.14]);
+    }
+    allCanopies.forEach(([kx, kz, sc]) => addLowPolyCanopyTree(kx, kz, sc, false));
+  }
+
+  if (typeof addLowPolyCactusAndScrub === 'function') {
+    [[31, -33], [33, -17], [34, 18], [32, 30], [45, -46], [49, -6], [49, 9], [61, -38], [62, 12], [60, 40]]
+      .forEach(([sx, sz], idx) => addLowPolyCactusAndScrub(sx, sz, 0.92 + (idx % 3) * 0.14));
+  }
+  if (typeof addLowPolyRock === 'function') {
+    [[34, -25, 1.3], [35, 15, 1.4], [46, -34, 1.5], [47, 23, 1.4], [61, -24, 1.7], [62, 8, 1.6], [60, -10, 1.5], [64, 30, 1.7]]
+      .forEach(([rx, rz, rad], idx) => addLowPolyRock(rx, rz, rad, 0.72, idx % 2 === 0 ? '#94a3b8' : '#a8a29e', false));
+  }
+  if (typeof addLowPolyWildflowerCluster === 'function') {
+    for (let fi = 0; fi < 26; fi++) {
+      const fx = 29 + ((fi * 17) % 36);
+      const fz = -48 + fi * 3.8;
+      if (Math.abs(fz) < 3.6 && fx < 45) continue;
+      addLowPolyWildflowerCluster(fx, fz, 0.95 + (fi % 3) * 0.15);
+    }
+  }
+
+  if (typeof buildStageDryStoneTerraceWalls === 'function') {
+    const wallPts1 = [], wallPts2 = [];
+    for (let wz = -108; wz <= 108; wz += 24) {
+      wallPts1.push([getGalileeStage1ShoreX(wz) + 30, wz]);
+      wallPts2.push([getGalileeStage1ShoreX(wz) + 52, wz]);
+    }
+    buildStageDryStoneTerraceWalls(
+      [
+        { pts: wallPts1, courses: 3 },
+        { pts: wallPts2, courses: 3 }
+      ],
+      (wx, wz) => getGalileeStage1CoastHeight(wx, wz),
+      710
+    );
+  }
+
+  const openSeaCoastNodes = worldGroup.children.slice(coastStartIdx);
+
+  const skyClouds = [];
+  [
+    [-160, 28, -95, 1.5], [-95, 26, -65, 1.4], [-40, 24, -45, 1.3], [32, 26, -40, 1.4],
+    [-190, 25,  15, 1.4], [-115, 24, 30, 1.3], [-45, 22,  15, 1.2], [40, 25,  22, 1.3],
+    [-150, 28,  95, 1.5], [-70, 26,  85, 1.4], [0, 28, -55, 1.5], [0, 26, 48, 1.25],
+    [-125, 30, -130, 1.5], [-185, 27, -35, 1.4]
+  ].forEach(([cx, cy, cz, sc]) => {
+    const cl = createLowPolyCloudGroup(sc, false);
+    cl.position.set(cx, cy, cz);
+    if (isNightStorm) {
+      cl.traverse(ch => {
+        if (ch.isMesh && !ch.userData._isCloudDepthPrepass) ch.material = matLowPoly('#1e293b');
+      });
+      cl._cloudMats = null;
+    }
+    worldGroup.add(cl);
+    skyClouds.push(cl);
+  });
+
+  const seaBirds = [];
+  if (typeof window.createFlyingBirdMesh === 'function') {
+    for (let b = 0; b < 6; b++) {
+      const bm = window.createFlyingBirdMesh('#f8fafc', '#cbd5e1', 0.9 + (b % 2) * 0.2);
+      worldGroup.add(bm);
+      seaBirds.push({
+        mesh: bm,
+        rad: 26 + b * 8,
+        baseY: 13 + (b % 3) * 3.5,
+        angle: b * 1.15,
+        speed: 0.26 + (b % 2) * 0.08,
+        phase: b * 1.4
+      });
+    }
+  }
+
+  const waves = [];
+  for (let i = 0; i < 84; i++) {
+    const ang = (i / 84) * Math.PI * 2 + (i % 5) * 0.35;
+    const dist = 18 + (i % 8) * 21.5;
+    const wx = -95 + Math.cos(ang) * dist;
+    const wz = Math.sin(ang) * dist;
+    if (wx > 14 || wx < -250 || Math.abs(wz) > 175) continue;
+    const waveMesh = createLowPolyMesh(new THREE.DodecahedronGeometry(1.55, 0), isNightStorm ? '#1d4ed8' : '#38bdf8', wx, -0.92, wz, false);
+    waveMesh.scale.set(2.5, 0.34, 0.85);
+    worldGroup.add(waveMesh);
+    waves.push({ mesh: waveMesh, baseY: -0.92, phase: i * 0.65 });
+  }
+
+  return { seaFloor, shoreMesh, s1CoastGrp, openSeaCoastNodes, skyClouds, seaBirds, waves, s1Pier };
 }
 
 function pickNextGalileeFishSchoolTarget() {
   const st = miracleActiveMiniState;
-  if (!st) return;
-  const ratio = 0.34 + Math.random() * 0.36; // 배 오른편(+X) 물 위 황금 물고기 떼
+  if (!st || !st.boatRootGroup) return;
+  const ratio = 0.36 + Math.random() * 0.32;
   st.targetRatio = ratio;
   const sideSign = st.commandedSide || 1;
-  const targetX = sideSign * (7.8 + ratio * 7.8);
-  const targetZ = -1.2 + (Math.random() - 0.5) * 1.8;
-  st.targetFishPos.set(targetX, -0.78, targetZ);
+  const localX = sideSign * (7.8 + ratio * 7.4);
+  const localZ = -0.8 + (Math.random() - 0.5) * 1.4;
+  st.targetFishLocal.set(localX, -0.78, localZ);
+  st.boatRootGroup.updateMatrixWorld(true);
+  st.targetFishPos.copy(st.targetFishLocal);
+  st.boatRootGroup.localToWorld(st.targetFishPos);
+  st.targetFishPos.y = -0.78;
+
   if (st.fishSchoolGroup) {
     st.fishSchoolGroup.position.copy(st.targetFishPos);
     st.fishSchoolGroup.visible = true;
-  }
-  if (st.dirArrowGroup) {
-    st.dirArrowGroup.visible = (st.phase === 'cast_net');
   }
   syncMiracleStage1UI();
 }
 
 function launchGalileeFishingNet(powerRatio) {
   const st = miracleActiveMiniState;
-  if (!st || st.netInFlight) return;
+  if (!st || st.netInFlight || !st.boatRootGroup) return;
   st.netInFlight = true;
   st.netFlightT = 0;
   st.netPowerUsed = powerRatio;
 
   const sideSign = st.commandedSide || 1;
-  const landX = sideSign * (7.8 + powerRatio * 7.8);
-  const landZ = st.targetFishPos.z;
-  st.netStartPos.set(playerPos.x + sideSign * 0.6, 1.55, playerPos.z);
-  st.netEndPos.set(landX, -0.82, landZ);
+  const localLand = new THREE.Vector3(sideSign * (7.8 + powerRatio * 7.4), -0.82, st.targetFishLocal.z);
+  st.boatRootGroup.updateMatrixWorld(true);
+  st.netEndPos.copy(localLand);
+  st.boatRootGroup.localToWorld(st.netEndPos);
+  st.netEndPos.y = -0.82;
+
+  st.netStartPos.set(playerPos.x, playerPos.y + 1.5, playerPos.z);
   if (st.flyingNetMesh) {
     st.flyingNetMesh.visible = true;
     st.flyingNetMesh.position.copy(st.netStartPos);
@@ -724,40 +2213,451 @@ function launchGalileeFishingNet(powerRatio) {
   playSfx('jump');
 }
 
+// Step 11~12 갈릴리 바닷가 지형 고도 함수 (오픈월드 스테이지 1 시작지점 x=-82, z=-68의 해안 단면과 100% 동일!)
+function getGalileeBeachCallingGroundHeight(wx, wz) {
+  const smooth01 = (a, b, v) => {
+    const t = Math.max(0, Math.min(1, (v - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+  };
+  const shoreX = 20.0 + Math.sin((wz + 3.5) * 0.032) * 1.4;
+  const dShore = wx - shoreX;
+  let h = 0.25; // 오픈월드 갈릴리 해안 둑 위 평지·선착장 흙길과 동일한 기본 고도!
+  if (dShore < 6.4) {
+    if (dShore >= 4.2) {
+      // 약 35cm 부드러운 해안 둑 단차 (-0.10 → +0.25)
+      h = -0.10 + smooth01(4.2, 6.4, dShore) * 0.35;
+    } else if (dShore >= -0.8) {
+      // 완만하게 경사진 모래 물가 (-0.50 → -0.10)
+      h = -0.50 + smooth01(-0.8, 4.2, dShore) * 0.40;
+    } else {
+      // 얕은 물속 모래 해저
+      h = -0.50 + (dShore + 0.8) * 0.085;
+    }
+  } else if (dShore > 24.0) {
+    // 멀리 동쪽 마을 뒤편 완만한 갈릴리 구릉 배경
+    const hillT = smooth01(24.0, 74.0, dShore);
+    h = 0.25 + hillT * 9.5 + Math.sin(wx * 0.08) * Math.cos(wz * 0.07) * 0.45 * hillT;
+  }
+  return h;
+}
+
+// Step 11~12용 갈릴리 바닷가 장면 생성 (오픈월드 스테이지 1 시작지점과 동일한 선착장·해안 둑·갈대·조약돌·두 만선 어선·어망)
+function buildGalileeBeachCallingScene(st) {
+  if (!st) return;
+  if (st.beachSceneGroup && st.beachSceneGroup.parent) {
+    st.beachSceneGroup.parent.remove(st.beachSceneGroup);
+  }
+  const grp = new THREE.Group();
+
+  // 1) 오픈월드 스테이지 1 시작지점과 동일한 크리스프 로우폴리 갈릴리 해변 지형 & 긴 보행 해변길
+  const centerX = 50.0;
+  const centerZ = 18.0;
+  const cDeepSeaBed   = new THREE.Color('#0369a1');
+  const cShoreSand    = new THREE.Color('#e6d09c');
+  const cCoastalEarth = new THREE.Color('#c9b372');
+  const cWarmMeadow   = new THREE.Color('#b6b968');
+  const cSunlitOchre  = new THREE.Color('#d8b674');
+  const cDirtRoad     = new THREE.Color('#dfb984');
+  const cHillOlive    = new THREE.Color('#6a9b43');
+
+  const beachTerrain = (typeof createCrispLowPolyFacetedTerrain === 'function')
+    ? createCrispLowPolyFacetedTerrain(
+        112, 168, 40, 56,
+        (lx, lz) => getGalileeBeachCallingGroundHeight(lx + centerX, lz + centerZ),
+        (mx, my, mz, slopeFlat, hash2, outCol) => {
+          const wx = mx + centerX;
+          const wz = mz + centerZ;
+          const shoreX = 20.0 + Math.sin((wz + 3.5) * 0.032) * 1.4;
+          const dShore = wx - shoreX;
+          const onPierTrail = (wx >= 25.0 && wx <= 36.5 && Math.abs(wz - (-3.5 + Math.sin(wx * 0.08) * 1.2)) < 3.1);
+          const onBeachRoad = (wx >= 27.2 && wx <= 33.4 && wz >= -6.5 && wz <= 64.0);
+
+          if (dShore < -4.0) {
+            outCol.copy(cDeepSeaBed);
+          } else if (dShore < -0.6) {
+            const subT = Math.max(0, Math.min(1, (dShore + 4.0) / 3.4));
+            outCol.copy(cDeepSeaBed).lerp(cShoreSand, 0.35 + subT * 0.45);
+          } else if (dShore < 4.2 && !onPierTrail) {
+            const sandT = Math.max(0, Math.min(1, (dShore + 0.6) / 4.8));
+            outCol.copy(cShoreSand).lerp(cCoastalEarth, sandT * 0.22);
+          } else if (dShore < 6.5 && !onPierTrail) {
+            const bankT = Math.max(0, Math.min(1, (dShore - 4.2) / 2.3));
+            outCol.copy(cCoastalEarth).lerp(cWarmMeadow, bankT * 0.45);
+          } else if (onPierTrail || onBeachRoad) {
+            outCol.copy(cDirtRoad);
+          } else if (my > 2.8) {
+            outCol.copy(cHillOlive);
+          } else {
+            const patch = hash2(Math.floor(wx * 0.14), Math.floor(wz * 0.14));
+            outCol.copy(cWarmMeadow).lerp(cSunlitOchre, 0.24 + patch * 0.50);
+          }
+        },
+        0.55
+      )
+    : new THREE.Mesh(new THREE.PlaneGeometry(112, 168, 24, 34), new THREE.MeshPhongMaterial({ color: '#b6b968', flatShading: true, shininess: 0, specular: 0x000000 }));
+  beachTerrain.position.set(centerX, 0, centerZ);
+  beachTerrain.receiveShadow = true;
+  grp.add(beachTerrain);
+
+  // 2) 오픈월드 스테이지 1 시작지점과 동일한 비정형 소프트 로우폴리 갈릴리 선착장 다리(부두)
+  const beachPier = (typeof createOrganicGalileePierGroup === 'function')
+    ? createOrganicGalileePierGroup(12.8, 3.8, 41)
+    : createLowPolyMesh(new THREE.BoxGeometry(12.5, 0.35, 3.8), '#92400e', 0, 0.22, 0);
+  beachPier.position.set(21.8, 0.0, -3.5);
+  grp.add(beachPier);
+
+  // 3) 오픈월드 스타일 해변 조약돌 & 부들(갈대) 수초 군락 (남쪽 해변길 +60까지 연장, 선착장 정면 제외)
+  const coastProps = new THREE.Group();
+  const coastStoneCols = ['#d6cfc2', '#cbd5e1', '#a8a29e', '#b8b0a4', '#94a3b8'];
+  for (let z = -26; z <= 60; z += 4.4) {
+    if (z > -6.5 && z < -0.5) continue; // 선착장 정면 비워둠
+    const sX = 20.0 + Math.sin((z + 3.5) * 0.032) * 1.4;
+    const idx = Math.abs(Math.round(z));
+    const wetX = sX - 0.5 + (idx % 4) * 1.05;
+    const wetY = getGalileeBeachCallingGroundHeight(wetX, z);
+    const wetRad = 0.42 + (idx % 3) * 0.20;
+    const wetStone = createLowPolyMesh(new THREE.DodecahedronGeometry(wetRad, 0), coastStoneCols[idx % coastStoneCols.length], wetX, wetY + wetRad * 0.26, z, false);
+    wetStone.scale.set(1.32, 0.56, 1.12);
+    wetStone.rotation.y = idx * 0.8;
+    coastProps.add(wetStone);
+
+    if (idx % 2 === 0 && typeof createShorelineCattailCluster === 'function') {
+      const bankX = sX + 4.3 + (idx % 3) * 0.6;
+      const bankY = getGalileeBeachCallingGroundHeight(bankX, z + 1.0);
+      const cat = createShorelineCattailCluster(0.88 + (idx % 3) * 0.14);
+      cat.position.set(bankX, bankY - 0.03, z + 1.0);
+      cat.rotation.y = idx * 0.65;
+      coastProps.add(cat);
+    }
+    if (idx % 3 === 1) {
+      const dryX = sX + 2.4 + (idx % 2) * 1.1;
+      const dryY = getGalileeBeachCallingGroundHeight(dryX, z - 1.1);
+      const drySt = createLowPolyMesh(new THREE.DodecahedronGeometry(0.30 + (idx % 2) * 0.13, 0), coastStoneCols[(idx + 2) % coastStoneCols.length], dryX, dryY + 0.10, z - 1.1, false);
+      drySt.scale.set(1.25, 0.52, 1.05);
+      coastProps.add(drySt);
+    }
+  }
+  if (typeof mergeStaticLowPolyGroupToVertexColor === 'function') {
+    mergeStaticLowPolyGroupToVertexColor(coastProps, { registerWall: false, castShadow: false });
+  }
+  grp.add(coastProps);
+
+  // 해안 길가 야자수 · 올리브나무 · 해변 뒤편 유대 마을 가옥 (지형 높이 정확히 반영)
+  [[36.8, -11.5, 1.08], [37.4, 7.2, 1.04], [36.2, 20.5, 1.12], [36.8, 34.0, 1.10], [37.2, 47.5, 1.06], [36.5, 59.0, 1.12]].forEach(([px, pz, psc]) => {
+    const py = getGalileeBeachCallingGroundHeight(px, pz);
+    const pTrunk = createLowPolyMesh(new THREE.CylinderGeometry(0.18 * psc, 0.30 * psc, 5.2 * psc, 6), '#8b5a2b', px, py + 2.5 * psc, pz);
+    pTrunk.rotation.z = 0.09;
+    grp.add(pTrunk);
+    for (let lf = 0; lf < 6; lf++) {
+      const ang = (lf / 6) * Math.PI * 2;
+      const frond = createLowPolyMesh(new THREE.ConeGeometry(0.55 * psc, 2.6 * psc, 4), '#5a8f3a', px + Math.cos(ang) * 1.1 * psc, py + 5.1 * psc, pz + Math.sin(ang) * 1.1 * psc, false);
+      frond.rotation.z = -Math.cos(ang) * 1.15;
+      frond.rotation.x =  Math.sin(ang) * 1.15;
+      grp.add(frond);
+    }
+  });
+
+  // 해변 길 동편 유대 가옥 & 올리브/측백나무·야생화 (긴 보행 씬 배경 풍부화)
+  [
+    [43.5, -14.0, 1, -Math.PI / 2, 0.94, 'stonebrick'],
+    [43.5,   4.0, 0, -Math.PI / 2, 0.95, 'plaster'],
+    [44.0,  22.0, 2, -Math.PI / 2, 0.96, 'stonebrick'],
+    [43.5,  39.0, 3, -Math.PI / 2, 0.95, 'plaster'],
+    [44.5,  55.0, 0, -Math.PI / 2, 0.96, 'stonebrick']
+  ].forEach(([bx, bz, bv, byaw, bsc, bm]) => {
+    addJudeanRoadsideBuilding(bx, bz, bv, byaw, bsc, false, bm);
+  });
+  [[40.5, -5.0, 1.06], [40.2, 13.5, 1.10], [40.5, 30.5, 1.08], [40.0, 47.0, 1.12]].forEach(([ox, oz, osc]) => {
+    if (typeof addLowPolyOliveTree === 'function') addLowPolyOliveTree(ox, oz, osc, false);
+  });
+  if (typeof addLowPolyWildflowerCluster === 'function') {
+    [[35.5, -6.5], [35.2, 2.5], [35.8, 12.0], [35.2, 27.0], [35.6, 41.5], [35.4, 54.0]].forEach(([fx, fz]) => {
+      addLowPolyWildflowerCluster(fx, fz, 1.05);
+    });
+  }
+
+  // 4) 선착장 좌·우 얕은 물가에 정박된 만선 어선 2척 (베드로의 배 + 야고보·요한의 조금 작은 배 — 배와 그물을 뒤로하고 떠나는 모습)
+  const beachedMain = buildDetailedPlayableGalileeShip();
+  beachedMain.ship.scale.setScalar(0.68);
+  beachedMain.ship.position.set(16.6, -0.10, -10.8);
+  beachedMain.ship.rotation.set(0.02, 0.45, 0.06);
+  populateBoatFishPile(beachedMain.fishPileGroup, 36, 2.6, 4.8);
+  grp.add(beachedMain.ship);
+
+  const beachedPartner = buildPartnerGalileeBoat(false);
+  beachedPartner.boat.scale.setScalar(0.68);
+  beachedPartner.boat.position.set(17.4, -0.12, 3.6);
+  beachedPartner.boat.rotation.set(-0.02, 0.72, 0.06);
+  populateBoatFishPile(beachedPartner.fishPileGroup, 26, 1.9, 3.4);
+  grp.add(beachedPartner.boat);
+
+  // 5) 해변 캐릭터 배치: 모든 캐릭터 Y를 getGalileeBeachCallingGroundHeight + 0.012로 정확히 안착 (발 빠짐 0%!)
+  const placeOnBeach = (mesh, bx, bz, rotY) => {
+    const by = getGalileeBeachCallingGroundHeight(bx, bz) + 0.012;
+    mesh.position.set(bx, by, bz);
+    mesh.rotation.y = rotY;
+    grp.add(mesh);
+  };
+
+  const bJesus = createLowPolyPersonMesh('jesus', 0);
+  placeOnBeach(bJesus, 31.2, -1.8, -Math.PI * 0.5);
+
+  const bPeter = createLowPolyPersonMesh('peter', 1);
+  placeOnBeach(bPeter, 27.8, -3.2, Math.PI * 0.5);
+
+  const bJames = createLowPolyPersonMesh('james', 2);
+  placeOnBeach(bJames, 27.3, -1.8, Math.PI * 0.5);
+
+  const bJohn = createLowPolyPersonMesh('john', 3);
+  placeOnBeach(bJohn, 27.8, -0.3, Math.PI * 0.5);
+
+  worldGroup.add(grp);
+
+  st.beachSceneGroup = grp;
+  st.beachJesusMesh = bJesus;
+  st.beachPeterMesh = bPeter;
+  st.beachJamesMesh = bJames;
+  st.beachJohnMesh = bJohn;
+}
+
+function transitionToGalileeBeachCalling(st) {
+  if (!st || st._beachTransitioning) return;
+  st._beachTransitioning = true;
+  stopMiracleStage1TTS();
+  const wf = document.getElementById('white-fade');
+  if (wf) wf.style.opacity = '0.92';
+  playSfx('dove');
+
+  setTimeout(() => {
+    try {
+      if (miracleSubMode !== 'main1_galilee' || !miracleActiveMiniState) return;
+      const cur = miracleActiveMiniState;
+      if (cur.boatRootGroup) cur.boatRootGroup.visible = false;
+      if (cur.partnerBoatGroup) cur.partnerBoatGroup.visible = false;
+      if (cur.deepTargetBeacon) cur.deepTargetBeacon.visible = false;
+      if (cur.fishSchoolGroup) cur.fishSchoolGroup.visible = false;
+      if (cur.flyingNetMesh) cur.flyingNetMesh.visible = false;
+      if (cur.tearingNetGroup) cur.tearingNetGroup.visible = false;
+      hideMiracleRopeBundle(cur.tearingNetRopes);
+      hideMiracleRopeBundle(cur.partnerNetRopes);
+      if (Array.isArray(cur.wakeRings)) cur.wakeRings.forEach(w => { if (w.mesh) w.mesh.visible = false; });
+      // 항해 원경용 해안 지형/장식/부두/마을/수목을 모두 확실히 숨겨 해변 전용 지형과 겹침·발 빠짐 완벽 차단!
+      if (cur.shoreMesh) cur.shoreMesh.visible = false;
+      if (cur.s1CoastGrp) cur.s1CoastGrp.visible = false;
+      if (cur.s1Pier) cur.s1Pier.visible = false;
+      if (Array.isArray(cur.openSeaCoastNodes)) {
+        cur.openSeaCoastNodes.forEach(node => { if (node) node.visible = false; });
+      }
+      // 수면 높이도 오픈월드(-0.40)와 동일하게 맞춤!
+      if (cur.seaMesh) cur.seaMesh.position.y = -0.40;
+      if (Array.isArray(colliders)) colliders.length = 0;
+      if (Array.isArray(platforms)) platforms.length = 0;
+
+      cur.beachSceneActive = true;
+      buildGalileeBeachCallingScene(cur);
+
+      // 해변 장면에서는 플레이어도 정확한 지형 고도 위에 배치
+      const plX = 28.8, plZ = -5.4;
+      const plY = getGalileeBeachCallingGroundHeight(plX, plZ) + 0.012;
+      playerPos.set(plX, plY, plZ);
+      lastGroundedY = plY;
+      playerFacing = Math.PI * 0.35;
+      if (playerGroup) {
+        playerGroup.position.copy(playerPos);
+        playerGroup.rotation.set(0, playerFacing, 0);
+      }
+
+      if (window.MiracleDayNight) {
+        window.MiracleDayNight.stageControlled = true;
+        window.MiracleDayNight.setTime(0.32); // 따뜻하고 밝은 오전 갈릴리 해변
+      }
+
+      cur.phase = 'beach_calling';
+      cur.phaseTimer = 0;
+      cur._camSnapNext = true;
+      cur._beachTransitioning = false;
+      syncMiracleStage1HudControlsVisibility();
+      syncMiracleStage1UI();
+      updateStageHUD();
+      speakMiracleStage1Line(
+        '나와 함께 갑시다. 이제 여러분은 사람을 낚는 어부가 될 것입니다.',
+        MIRACLE_STAGE1_VOICE_FILES.jesus02
+      );
+    } finally {
+      setTimeout(() => {
+        if (wf) wf.style.opacity = '0';
+      }, 220);
+    }
+  }, 360);
+}
+
+function advanceGalileeBeachNarrationLine(st, lineIdx) {
+  if (!st || miracleSubMode !== 'main1_galilee' || st.phase !== 'beach_follow_narration') return;
+  if (st._narrationAutoTimer) {
+    clearTimeout(st._narrationAutoTimer);
+    st._narrationAutoTimer = null;
+  }
+  if (lineIdx >= MIRACLE_STAGE1_BEACH_NARRATION_LINES.length) {
+    // Step 13: 화이트 아웃 전환 시작!
+    st.phase = 'white_out';
+    st.phaseTimer = 0;
+    st._whiteOutCompleted = false;
+    stopMiracleStage1TTS();
+    const s1Ui = document.getElementById('miracle-s1-ui');
+    if (s1Ui) s1Ui.classList.add('hidden');
+    playSfx('dove');
+    return;
+  }
+
+  st.narrationIdx = lineIdx;
+  st.narrationLineTimer = 0;
+  syncMiracleStage1UI();
+  updateStageHUD();
+
+  const myToken = (st._narrationToken = (st._narrationToken || 0) + 1);
+  const lineText = MIRACLE_STAGE1_BEACH_NARRATION_LINES[lineIdx];
+  const lineAudioUrl = MIRACLE_STAGE1_VOICE_FILES.narration[lineIdx] || null;
+  speakMiracleStage1Line(lineText, lineAudioUrl, () => {
+    if (miracleSubMode !== 'main1_galilee' || !miracleActiveMiniState) return;
+    if (miracleActiveMiniState.phase !== 'beach_follow_narration' || miracleActiveMiniState._narrationToken !== myToken) return;
+    st._narrationAutoTimer = setTimeout(() => {
+      if (miracleSubMode === 'main1_galilee' && miracleActiveMiniState && miracleActiveMiniState.phase === 'beach_follow_narration' && miracleActiveMiniState._narrationToken === myToken) {
+        advanceGalileeBeachNarrationLine(miracleActiveMiniState, lineIdx + 1);
+      }
+    }, 850);
+  });
+}
+
+window.advanceMiracleStage1Cinema = function () {
+  const st = miracleActiveMiniState;
+  if (!st || miracleSubMode !== 'main1_galilee') return;
+  const nowMs = performance.now();
+  if (st._lastCinemaAdvanceAt && nowMs - st._lastCinemaAdvanceAt < 340) return;
+  st._lastCinemaAdvanceAt = nowMs;
+
+  if (st.phase === 'intro_jesus') {
+    st.phase = 'intro_peter';
+    st.phaseTimer = 0;
+    playSfx('switch');
+    syncMiracleStage1HudControlsVisibility();
+    syncMiracleStage1UI();
+    updateStageHUD();
+    speakMiracleStage1Line(
+      '선생님, 우리가 밤새도록 일을 했지만 아무 것도 잡지 못했습니다. 그래도 해보죠 뭐.',
+      MIRACLE_STAGE1_VOICE_FILES.peter03
+    );
+  } else if (st.phase === 'intro_peter') {
+    stopMiracleStage1TTS();
+    st.phase = 'sail_to_deep';
+    st.phaseTimer = 0;
+    if (st.deepTargetBeacon) st.deepTargetBeacon.visible = true;
+    playSfx('switch');
+    syncMiracleStage1HudControlsVisibility();
+    syncMiracleStage1UI();
+    updateStageHUD();
+    showToast('⛵ 조이스틱·방향키로 어선의 노를 저어 깊은 바다 목표 지점으로 항해하세요!');
+  } else if (st.phase === 'call_partners' && st.partnerArrived) {
+    stopMiracleStage1TTS();
+    st.phase = 'coop_haul_tap';
+    st.phaseTimer = 0;
+    st.coopProgress = 0.06;
+    st.coopTapImpulse = 0;
+    st.lastCoopTapTime = performance.now();
+    if (st.partnerBoatGroup && st.tearingNetGroup) {
+      updateMiracleRopeBundle(st.partnerNetRopes, st.partnerBoatGroup, st.netWorldPos, 2.08, 0.78, st, performance.now());
+    }
+    playSfx('rescue');
+    syncMiracleStage1HudControlsVisibility();
+    syncMiracleStage1UI();
+    updateStageHUD();
+  } else if (st.phase === 'boats_full_celebration') {
+    transitionToGalileeBeachCalling(st);
+  } else if (st.phase === 'beach_calling') {
+    st.phase = 'beach_follow_narration';
+    st.phaseTimer = 0;
+    st.beachWalkDist = 0;
+    window.__ep4ForcedWalkSpeed = 2.35;
+    playSfx('switch');
+    syncMiracleStage1HudControlsVisibility();
+    advanceGalileeBeachNarrationLine(st, 0);
+  } else if (st.phase === 'beach_follow_narration') {
+    advanceGalileeBeachNarrationLine(st, (st.narrationIdx || 0) + 1);
+  }
+};
+
+window.pulseGalileeHoldNet = function () {
+  const st = miracleActiveMiniState;
+  if (!st || miracleSubMode !== 'main1_galilee' || st.phase !== 'hold_net_tap') return;
+  const nowMs = performance.now();
+  if (st._lastHoldTapAt && nowMs - st._lastHoldTapAt < 35) return;
+  st._lastHoldTapAt = nowMs;
+  const params = getMiracleStage1CoopParams();
+  st.holdGauge = Math.min(1.0, (st.holdGauge || 0) + params.holdTapGain);
+  st.holdTapImpulse = 0.42;
+  st.lastHoldTapTime = nowMs;
+  playSfx('step');
+  syncMiracleStage1UI();
+};
+
+window.pulseGalileeCoopHaul = function () {
+  const st = miracleActiveMiniState;
+  if (!st || miracleSubMode !== 'main1_galilee' || st.phase !== 'coop_haul_tap') return;
+  const nowMs = performance.now();
+  if (st._lastCoopTapAt && nowMs - st._lastCoopTapAt < 35) return;
+  st._lastCoopTapAt = nowMs;
+  const params = getMiracleStage1CoopParams();
+  st.coopProgress = Math.min(1.0, (st.coopProgress || 0) + params.tapGain);
+  st.coopTapImpulse = 0.46;
+  st.lastCoopTapTime = nowMs;
+  playSfx('step');
+  syncMiracleStage1UI();
+};
+
+window.debugJumpStage1ToNightStorm = function () {
+  buildMiracleMainStage1NightStorm();
+  updateMiracleNotebookHudBadge();
+  updateStageHUD();
+  startStageBgm(1);
+};
+
+// =========================================================================
+// 2-A. [주간 스테이지 1] "깊은 곳으로!" 빌드 & 프레임 업데이트
+// =========================================================================
 function buildMiracleMainStage1Galilee() {
   clearWorld();
   resetMiracleBoatRockingTransform();
+  stopMiracleStage1TTS();
   miracleSubMode = 'main1_galilee';
   miracleStageObjects = [];
 
   const dn1 = window.MiracleDayNight;
-  const s1EnteredAtNight = Boolean(dn1 && (dn1.isNight() || (typeof dn1.getNightFactor === 'function' && dn1.getNightFactor() > 0.25)));
   if (dn1) {
     dn1.clearNightLightSources();
     dn1.stageControlled = true;
     dn1.freezeForNightMission = false;
     dn1.stormDarkness = 0;
-    if (!s1EnteredAtNight) {
-      dn1.setTime(0.28);
-    }
+    dn1.setTime(0.28); // 화창한 낮 갈릴리 바다
   }
   if (typeof setupMiracleDynamicSunAndShadows === 'function') {
     setupMiracleDynamicSunAndShadows();
   }
 
   scene.background = new THREE.Color(0x38bdf8);
-  scene.fog = new THREE.Fog(0x7dd3fc, 65, 230);
+  scene.fog = new THREE.Fog(0x7dd3fc, 125, 365);
 
   const isKinder = (currentMode === 'kinder');
-  const reqCasts = 1;
-  const sweetHalfWidth = isKinder ? 0.16 : 0.125;
-  const balanceGoal = isKinder ? 10.5 : 14.5;
+  const sweetHalfWidth = isKinder ? 0.165 : 0.125;
+  const coopParams = getMiracleStage1CoopParams();
+
+  // Step 4: 매 판마다 랜덤 스폰되는 훨씬 먼 깊은 바다 목적지 (시작점 (4, 0)에서 125~200m 거리)
+  let deepX = -(118 + Math.random() * 56);
+  let deepZ = (Math.random() - 0.5) * 190;
+  if (Math.hypot(deepX - 4, deepZ) < 125) deepX = -132;
 
   miracleActiveMiniState = {
-    phase: 'cast_net', // 'cast_net' | 'haul_net' | 'sunset_to_night' | 'storm_balance' | 'wake_jesus' | 'calm'
-    commandedSide: 1,  // +1: 배 오른편 (우현)
-    castCaught: 0,
-    reqCasts,
+    phase: 'intro_jesus',
+    phaseTimer: 0,
+    commandedSide: 1,
     sweetHalfWidth,
     targetRatio: 0.50,
     chargeVal: 0,
@@ -768,38 +2668,70 @@ function buildMiracleMainStage1Galilee() {
     netPowerUsed: 0,
     netStartPos: new THREE.Vector3(),
     netEndPos: new THREE.Vector3(),
-    targetFishPos: new THREE.Vector3(11.5, -0.78, -1.2),
+    targetFishLocal: new THREE.Vector3(11.5, -0.78, -0.8),
+    targetFishPos: new THREE.Vector3(),
     splashTimer: 0,
-    // 1-2단계: 그물이 찢어지는 만선 끌어올리기 상태
-    haulProgress: 0,
-    netTension: 0.25,
-    haulTapImpulse: 0,
-    sunsetTimer: 0,
-    sunsetStartTime: null,
-    enteredAtNight: s1EnteredAtNight,
-    sternLightPower: s1EnteredAtNight ? Math.max(0.85, dn1.getNightFactor()) : 0,
-    // 2단계 풍랑 균형 잡기 상태
-    boatTilt: 0,
-    waveGustForce: 0.48,
-    waveGustDir: 1,
-    waveGustTimer: 1.4,
-    holdLeft: false,
-    holdRight: false,
-    balanceProgress: 0,
-    balanceGoal,
-    tiltWarnCooldown: 0,
+    // Step 4 항해 상태
+    boatHeading: Math.PI * 0.5, // 선수(-Z)가 서쪽(-X) 깊은 바다를 향함
+    boatSpeed: 0,
+    boatSteer: 0,
+    deepTargetPos: new THREE.Vector3(deepX, -0.75, deepZ),
+    wakeSpawnTimer: 0,
+    wakeRings: [],
+    // Step 6~7 그물 팽창 + 연타 잡기 유지 상태 (0%부터 시작 + 공정한 시작 유예 가드)
+    holdGauge: 0.0,
+    holdArmed: false,
+    holdGraceTimer: coopParams.holdGrace,
+    holdSustainProgress: 0,
+    holdTapImpulse: 0,
+    lastHoldTapTime: performance.now(),
+    boatRollTilt: 0,
+    netWorldPos: new THREE.Vector3(),
+    // Step 8~9 동업자 배 호출 + 협동 끌어올리기 상태
+    partnerArrived: false,
+    partnerProgress: 0,
+    partnerBoatStartLocal: new THREE.Vector3(24.0, 0, -18.0),
+    partnerBoatEndLocal: new THREE.Vector3(12.2, 0, -0.8),
+    partnerRollTilt: 0,
+    coopProgress: 0,
+    coopTapImpulse: 0,
+    lastCoopTapTime: performance.now(),
+    // Step 11~13 갈릴리 해변 부르심 & 내레이션 & 화이트아웃
+    narrationIdx: 0,
+    narrationLineTimer: 0,
+    beachWalkDist: 0,
+    beachSceneActive: false,
+    openSeaCoastNodes: [],
+    _narrationToken: 0,
+    _narrationAutoTimer: null,
+    _whiteOutCompleted: false,
+    _beachTransitioning: false,
+    // 카메라 스무딩 상태
+    _camPos: new THREE.Vector3(),
+    _camLook: new THREE.Vector3(),
+    _camInitialized: false,
+    _camSnapNext: true,
     // 3D 참조 객체
     seaMesh: null,
+    s1Pier: null,
     boatRootGroup: null,
     sailPivot: null,
-    catchBasketGrp: null,
-    sternGlow: null,
-    sternGlowMat: null,
-    lanternLampMat: null,
-    dirArrowGroup: null,
+    oarPivots: null,
+    rudderPivot: null,
+    fishPileGroup: null,
+    partnerBoatGroup: null,
+    partnerOarPivots: null,
+    partnerRudderPivot: null,
+    partnerFishPileGroup: null,
+    jamesMesh: null,
+    johnMesh: null,
+    deepTargetBeacon: null,
+    beaconFishes: [],
     tearingNetGroup: null,
     tearingNetFishes: [],
+    swarmFishes: [],
     tearingNetRopes: [],
+    partnerNetRopes: [],
     tearingNetRopeMat: null,
     fishSchoolGroup: null,
     schoolFishes: [],
@@ -807,269 +2739,93 @@ function buildMiracleMainStage1Galilee() {
     flyingNetMesh: null,
     splashRingMesh: null,
     jesusMesh: null,
-    jesusLabel: null,
     peterMesh: null,
+    beachSceneGroup: null,
+    beachJesusMesh: null,
+    beachPeterMesh: null,
+    beachJamesMesh: null,
+    beachJohnMesh: null,
     waves: [],
     skyClouds: [],
     seaBirds: []
   };
 
-  currentMapRectBounds = { minX: -3.8, maxX: 3.8, minZ: -7.5, maxZ: 7.5 };
+  currentMapRectBounds = { minX: -260, maxX: 80, minZ: -200, maxZ: 200 };
 
-  // 1) 갈릴리 바다 수면 — 비정형 삼각 분할 소프트 로우폴리 수면 (오픈월드와 동일 스타일!)
-  const seaFloor = (typeof createIrregularLowPolyWaterMesh === 'function')
-    ? createIrregularLowPolyWaterMesh(380, 380, 44, 44, 17, { shoreRightEdgeX: 28, shallowBandW: 54, opacity: 0.85, isStorm: false })
-    : (() => {
-        const m = new THREE.Mesh(new THREE.PlaneGeometry(380, 380, 32, 32), new THREE.MeshPhongMaterial({ color: 0x0284c7, flatShading: true, shininess: 0, specular: 0x000000 }));
-        m.rotation.x = -Math.PI / 2;
-        return m;
-      })();
-  seaFloor.position.y = -1.15;
-  seaFloor.receiveShadow = true;
-  worldGroup.add(seaFloor);
-  miracleActiveMiniState.seaMesh = seaFloor;
+  // 1) 갈릴리 바다 & 동쪽 해안
+  const env = buildSharedGalileeSeaAndCoast(false);
+  miracleActiveMiniState.seaMesh = env.seaFloor;
+  miracleActiveMiniState.shoreMesh = env.shoreMesh;
+  miracleActiveMiniState.s1CoastGrp = env.s1CoastGrp;
+  miracleActiveMiniState.openSeaCoastNodes = env.openSeaCoastNodes || [];
+  miracleActiveMiniState.skyClouds = env.skyClouds;
+  miracleActiveMiniState.seaBirds = env.seaBirds;
+  miracleActiveMiniState.waves = env.waves;
+  miracleActiveMiniState.s1Pier = env.s1Pier;
 
-  // 2) 동쪽 해안 원경 (Image 1 스타일 해안 단차·경사진 모래 물가 · 비정형 선착장 · 벽돌가옥 · 언덕 돌담)
-  const smooth01S1 = (a, b, v) => {
-    const t = Math.max(0, Math.min(1, (v - a) / (b - a)));
-    return t * t * (3 - 2 * t);
-  };
-  const s1ShoreHeight = (lx, lz) => {
-    const wx = lx + 78; // 월드 X (x≈20이 물가)
-    const dShore = wx - 20.0;
-    if (dShore < -1.0) return -1.35 + (dShore + 1.0) * 0.08;
-    if (dShore < 4.5) return -1.35 + smooth01S1(-1.0, 4.5, dShore) * 0.72; // 완만히 경사진 모래 물가
-    if (dShore < 7.0) return -0.63 + smooth01S1(4.5, 7.0, dShore) * 0.68;  // 약간의 해안 둑 단차!
-    const inlandT = Math.max(0, (dShore - 7.0) / 112);
-    return 0.05 + Math.pow(inlandT, 0.92) * 14.0 + Math.sin(lx * 0.08) * Math.cos(lz * 0.06) * 0.62;
-  };
-  const cS1Sand   = new THREE.Color('#ebd8ae');
-  const cS1Bank   = new THREE.Color('#cfa572');
-  const cS1Meadow = new THREE.Color('#b6b968');
-  const cS1Ochre  = new THREE.Color('#d8b674');
-  const cS1Slope  = new THREE.Color('#cf9f60');
-  const cS1Hill   = new THREE.Color('#6a9b43');
-  const shoreMesh = (typeof createCrispLowPolyFacetedTerrain === 'function')
-    ? createCrispLowPolyFacetedTerrain(120, 260, 28, 42, s1ShoreHeight, (mx, my, mz, slopeFlat, hash2, outCol) => {
-        const dShore = (mx + 78) - 20.0;
-        if (dShore < 4.5) {
-          outCol.copy(cS1Sand);
-        } else if (dShore < 7.2) {
-          outCol.copy(cS1Bank);
-        } else if (my > 6.5) {
-          outCol.copy(cS1Hill);
-        } else if (my > 2.2 && slopeFlat < 0.94) {
-          outCol.copy(cS1Slope);
-        } else {
-          const patch = hash2(Math.floor(mx * 0.14), Math.floor(mz * 0.14));
-          outCol.copy(cS1Meadow).lerp(cS1Ochre, 0.28 + patch * 0.52);
-        }
-      }, 0.85)
-    : new THREE.Mesh(new THREE.PlaneGeometry(120, 260, 24, 36), new THREE.MeshPhongMaterial({ color: '#9ec164', flatShading: true, shininess: 0, specular: 0x000000 }));
-  shoreMesh.position.set(78, 0, 0);
-  worldGroup.add(shoreMesh);
-
-  // 해안 물가 로우폴리 바위 & 부들(갈대) 수초 장식
-  const s1CoastGrp = new THREE.Group();
-  for (let ci = 0; ci < 14; ci++) {
-    const cz = -42 + ci * 6.4;
-    if (Math.abs(cz) < 4.2) continue; // 선착장 제외
-    const rx = 20.5 + (ci % 3) * 1.4;
-    const ry = s1ShoreHeight(rx - 78, cz);
-    const st = createLowPolyMesh(new THREE.DodecahedronGeometry(0.55 + (ci % 3) * 0.22, 0), ci % 2 === 0 ? '#cbd5e1' : '#a8a29e', rx, ry + 0.18, cz, false);
-    st.scale.set(1.3, 0.58, 1.1);
-    s1CoastGrp.add(st);
-    if (typeof createShorelineCattailCluster === 'function' && ci % 2 === 0) {
-      const cat = createShorelineCattailCluster(0.95 + (ci % 3) * 0.12);
-      cat.position.set(rx + 2.4, s1ShoreHeight(rx + 2.4 - 78, cz), cz + 0.8);
-      s1CoastGrp.add(cat);
-    }
-  }
-  if (typeof mergeStaticLowPolyGroupToVertexColor === 'function') {
-    mergeStaticLowPolyGroupToVertexColor(s1CoastGrp, { registerWall: false, castShadow: false });
-  }
-  worldGroup.add(s1CoastGrp);
-
-  // 비정형 소프트 로우폴리 갈릴리 선착장 다리
-  const s1Pier = (typeof createOrganicGalileePierGroup === 'function')
-    ? createOrganicGalileePierGroup(12.8, 3.8, 73)
-    : createLowPolyMesh(new THREE.BoxGeometry(12.5, 0.35, 3.8), '#92400e', 0, 0.25, 0);
-  s1Pier.position.set(22, 0.0, 0);
-  worldGroup.add(s1Pier);
-
-  addJudeanRoadsideBuilding(44, -18, 1, -Math.PI / 2, 0.95, false, 'stonebrick');
-  addJudeanRoadsideBuilding(48,  14, 0, -Math.PI / 2, 0.95, false, 'plaster');
-  addJudeanRoadsideBuilding(54,  -2, 2, -Math.PI / 2, 0.96, false, 'stonebrick');
-  addLowPolyPalmTree(30, -12, 1.1, false);
-  addLowPolyPalmTree(32,  10, 1.1, false);
-
-  if (typeof buildStageDryStoneTerraceWalls === 'function') {
-    buildStageDryStoneTerraceWalls(
-      [
-        { pts: [[56, -42], [60, -24], [62, -6], [60, 16], [56, 36]], courses: 3 },
-        { pts: [[68, -32], [72, -10], [72, 14], [68, 34]], courses: 3 }
-      ],
-      (wx, wz) => s1ShoreHeight(wx - 78, wz),
-      710
-    );
-  }
-
-  if (typeof createBumpyLowPolyHillMesh === 'function') {
-    createBumpyLowPolyHillMesh(88, -55, 26, 13.5, 24, '#7ca344', 11, false);
-    createBumpyLowPolyHillMesh(92,   5, 24,  8.5, 22, '#84a955', 22, false);
-    createBumpyLowPolyHillMesh(86,  55, 25,  9.0, 22, '#789c4a', 33, false);
-  }
-
-  [[-36, 24, -45, 1.3], [32, 26, -40, 1.4], [-42, 22, 15, 1.2], [40, 25, 22, 1.3], [0, 28, -55, 1.5], [0, 26, 48, 1.25]]
-    .forEach(([cx, cy, cz, sc]) => {
-      const cl = createLowPolyCloudGroup(sc, false);
-      cl.position.set(cx, cy, cz);
-      worldGroup.add(cl);
-      miracleActiveMiniState.skyClouds.push(cl);
-    });
-
-  // 바다 위를 나는 갈매기 5마리
-  if (typeof window.createFlyingBirdMesh === 'function') {
-    for (let b = 0; b < 5; b++) {
-      const bm = window.createFlyingBirdMesh('#f8fafc', '#cbd5e1', 0.9 + (b % 2) * 0.2);
-      worldGroup.add(bm);
-      miracleActiveMiniState.seaBirds.push({
-        mesh: bm,
-        rad: 22 + b * 6,
-        baseY: 13 + (b % 3) * 3.5,
-        angle: b * 1.25,
-        speed: 0.26 + (b % 2) * 0.08,
-        phase: b * 1.4
-      });
-    }
-  }
-
-  // 파도 장식
-  for (let i = 0; i < 40; i++) {
-    const ang = (i / 40) * Math.PI * 2;
-    const dist = 14 + (i % 5) * 7.5;
-    const wx = Math.cos(ang) * dist;
-    const wz = Math.sin(ang) * dist;
-    if (wx > 16) continue;
-    const waveMesh = createLowPolyMesh(new THREE.DodecahedronGeometry(1.45, 0), '#38bdf8', wx, -0.92, wz, false);
-    waveMesh.scale.set(2.3, 0.35, 0.85);
-    worldGroup.add(waveMesh);
-    miracleActiveMiniState.waves.push({ mesh: waveMesh, baseY: -0.92, phase: i * 0.65 });
-  }
-
-  // 3) 디테일한 탑승용 갈릴리 어선 조립 (boatRootGroup)
+  // 2) 베드로의 1세기 갈릴리 목선 조립 (해안 선착장 앞 (4, 0, 0)에서 서쪽 깊은 바다를 바라봄)
   const shipBuilt = buildDetailedPlayableGalileeShip();
-  const { ship, sailPivot, catchBasketGrp, sternGlow, sternGlowMat, lanternLampMat } = shipBuilt;
+  const { ship, sailPivot, syncShipSailSheets, oarPivots, rudderPivot, fishPileGroup } = shipBuilt;
+  ship.position.set(4.0, 0, 0);
+  ship.rotation.y = miracleActiveMiniState.boatHeading;
   worldGroup.add(ship);
   miracleActiveMiniState.boatRootGroup = ship;
   miracleActiveMiniState.sailPivot = sailPivot;
-  miracleActiveMiniState.catchBasketGrp = catchBasketGrp;
-  miracleActiveMiniState.sternGlow = sternGlow;
-  miracleActiveMiniState.sternGlowMat = sternGlowMat;
-  miracleActiveMiniState.lanternLampMat = lanternLampMat;
-  if (miracleActiveMiniState.enteredAtNight) {
-    if (sternGlow) sternGlow.visible = true;
-    if (sternGlowMat) sternGlowMat.opacity = 0.22;
-  }
+  miracleActiveMiniState.syncShipSailSheets = syncShipSailSheets;
+  miracleActiveMiniState.oarPivots = oarPivots;
+  miracleActiveMiniState.rudderPivot = rudderPivot;
+  miracleActiveMiniState.fishPileGroup = fishPileGroup;
 
-  const _s1SternLightPos = new THREE.Vector3(-1.3, 2.2, 9.6);
-  if (window.MiracleDayNight && typeof window.MiracleDayNight.registerNightLightSource === 'function') {
-    window.MiracleDayNight.registerNightLightSource({
-      getPos: () => {
-        if (ship && ship.parent) {
-          _s1SternLightPos.set(-1.3, 2.2, 9.6);
-          ship.localToWorld(_s1SternLightPos);
-        }
-        return _s1SternLightPos;
-      },
-      yOffset: 0.0,
-      color: 0xffad48,
-      intensity: 3.1,
-      distance: 17.5,
-      phase: 0.7,
-      isActive: () => Boolean(miracleSubMode === 'main1_galilee' && miracleActiveMiniState && miracleActiveMiniState.sternLightPower > 0.05)
-    });
-  }
-
-  // 배 고물(선미) 위 예수님 (1단계에는 앉아/서 계시다 노을·밤 폭풍 시 베개에 누워 주무심)
+  // 선미 단상 위 예수님 + 선수 쪽 베드로 (신규 턴어라운드 'peter' 캐릭터!)
   const jesusMesh = createLowPolyPersonMesh('jesus', 0);
-  jesusMesh.position.set(0, 0.48, 8.2);
+  jesusMesh.position.set(0, 0.48, 7.6);
   jesusMesh.rotation.y = Math.PI;
   ship.add(jesusMesh);
   miracleActiveMiniState.jesusMesh = jesusMesh;
-  miracleActiveMiniState.jesusLabel = createWorldLabel('✨ 배 오른편 깊은 곳에 그물을 내리라 하신 예수님');
-  miracleActiveMiniState.jesusLabel.style.opacity = '0';
 
-  // 배 오른편 방향 지시 3D 화살표
-  const dirArrowGrp = new THREE.Group();
-  const arrShaft = createLowPolyMesh(new THREE.BoxGeometry(1.15, 0.24, 0.24), '#fde047', -0.25, 0, 0, false);
-  const arrHead = createLowPolyMesh(new THREE.ConeGeometry(0.42, 0.72, 5), '#f59e0b', 0.62, 0, 0, false);
-  arrHead.rotation.z = -Math.PI * 0.5;
-  dirArrowGrp.add(arrShaft, arrHead);
-  dirArrowGrp.position.set(4.1, 2.25, -1.2);
-  ship.add(dirArrowGrp);
-  miracleActiveMiniState.dirArrowGroup = dirArrowGrp;
-
-  // [그물이 찢어지는 만선 미션] 24마리 물고기가 가득 차 부풀어 오른 3D 그물 + 팽팽한 로프 4줄
-  const tearingNetGrp = new THREE.Group();
-  tearingNetGrp.position.set(5.45, -0.35, -1.2);
-  const netOuterWire = new THREE.Mesh(
-    new THREE.IcosahedronGeometry(1.75, 1),
-    new THREE.MeshPhongMaterial({ color: 0xe7d3a7, wireframe: true, shininess: 0, specular: 0x000000 })
-  );
-  netOuterWire.scale.set(1.02, 1.15, 1.25);
-  const netInnerBag = new THREE.Mesh(
-    new THREE.IcosahedronGeometry(1.66, 1),
-    new THREE.MeshPhongMaterial({ color: 0x0f766e, transparent: true, opacity: 0.40, flatShading: true, shininess: 0, specular: 0x000000 })
-  );
-  netInnerBag.scale.set(0.96, 1.10, 1.20);
-  tearingNetGrp.add(netInnerBag, netOuterWire);
-
-  const tearingFishes = [];
-  for (let tf = 0; tf < 24; tf++) {
-    const fSc = 0.68 + (tf % 3) * 0.14;
-    const fMesh = (typeof createLowPolyFishMesh === 'function')
-      ? createLowPolyFishMesh(null, fSc, tf)
-      : createLowPolyMesh(new THREE.ConeGeometry(0.22, 0.70, 5), '#f97316', 0, 0, 0, false);
-    const phi = (tf / 24) * Math.PI * 2;
-    const rr = 0.45 + (tf % 4) * 0.24;
-    const bx = Math.cos(phi * 1.7) * rr * 0.82;
-    const by = ((tf % 5) - 2) * 0.34;
-    const bz = Math.sin(phi * 2.1) * rr * 1.02;
-    fMesh.position.set(bx, by, bz);
-    fMesh.rotation.set((tf % 3) * 0.35, phi, (tf % 2 === 0 ? 0.3 : -0.3));
-    tearingNetGrp.add(fMesh);
-    tearingFishes.push({ mesh: fMesh, bx, by, bz, phase: tf * 0.95 });
-  }
-  tearingNetGrp.visible = false;
-  ship.add(tearingNetGrp);
-  miracleActiveMiniState.tearingNetGroup = tearingNetGrp;
-  miracleActiveMiniState.tearingNetFishes = tearingFishes;
-
-  const tearingRopeMat = new THREE.MeshPhongMaterial({ color: 0xd6b88d, emissive: 0x000000, shininess: 0, specular: 0x000000 });
-  miracleActiveMiniState.tearingNetRopeMat = tearingRopeMat;
-  const ropeAnchorDefs = [
-    { start: new THREE.Vector3(3.45, 1.15, -2.2), netOff: new THREE.Vector3(-0.7, 0.9, -1.0) },
-    { start: new THREE.Vector3(3.45, 1.15, -0.2), netOff: new THREE.Vector3(-0.7, 0.9,  1.0) },
-    { start: new THREE.Vector3(3.25, 1.15, -1.6), netOff: new THREE.Vector3( 0.8, 0.9, -0.7) },
-    { start: new THREE.Vector3(3.25, 1.15, -0.8), netOff: new THREE.Vector3( 0.8, 0.9,  0.7) }
-  ];
-  const ropeBaseGeo = new THREE.CylinderGeometry(0.055, 0.055, 1.0, 6);
-  miracleActiveMiniState.tearingNetRopes = ropeAnchorDefs.map(def => {
-    const rMesh = new THREE.Mesh(ropeBaseGeo, tearingRopeMat);
-    rMesh.visible = false;
-    ship.add(rMesh);
-    return { mesh: rMesh, start: def.start, netOff: def.netOff };
-  });
-
-  // 이물(선수) 쪽 어부 시몬 베드로
-  const peterMesh = createLowPolyPersonMesh('disciple', 1);
-  peterMesh.position.set(1.6, 0.05, -6.2);
-  peterMesh.rotation.y = -Math.PI * 0.25;
+  const peterMesh = createLowPolyPersonMesh('peter', 1);
+  peterMesh.position.set(-1.25, 0.06, -4.40);
+  peterMesh.rotation.y = 0.14; // 인트로 때 예수님(고물)을 바라봄
   ship.add(peterMesh);
   miracleActiveMiniState.peterMesh = peterMesh;
 
-  // 4) 1단계용 바다 물고기 떼 타깃 + 날아가는 3D 저폴리곤 그물 + 물보라 링
+  // Step 4 랜덤 깊은 바다 목적지 비콘 (먼 거리에서도 뚜렷하게 보이는 36m 빛기둥 + 링 + 14마리 물고기 떼)
+  const beaconGrp = new THREE.Group();
+  beaconGrp.position.copy(miracleActiveMiniState.deepTargetPos);
+  const bRingOuter = new THREE.Mesh(
+    new THREE.RingGeometry(5.2, 6.8, 28),
+    new THREE.MeshBasicMaterial({ color: 0xfde047, side: THREE.DoubleSide, transparent: true, opacity: 0.90 })
+  );
+  bRingOuter.rotation.x = -Math.PI / 2;
+  bRingOuter.position.y = 0.06;
+  const bRingInner = new THREE.Mesh(
+    new THREE.RingGeometry(2.3, 3.5, 24),
+    new THREE.MeshBasicMaterial({ color: 0x34d399, side: THREE.DoubleSide, transparent: true, opacity: 0.80 })
+  );
+  bRingInner.rotation.x = -Math.PI / 2;
+  bRingInner.position.y = 0.09;
+  const bBeam = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.8, 4.6, 36, 12, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0x7dd3fc, transparent: true, opacity: 0.24, side: THREE.DoubleSide, depthWrite: false })
+  );
+  bBeam.position.y = 18.0;
+  beaconGrp.add(bRingOuter, bRingInner, bBeam);
+  for (let bf = 0; bf < 14; bf++) {
+    const fAng = (bf / 14) * Math.PI * 2;
+    const rad = 1.6 + (bf % 3) * 1.1;
+    const fMesh = (typeof createLowPolyFishMesh === 'function')
+      ? createLowPolyFishMesh(null, 0.95 + (bf % 2) * 0.2, bf)
+      : createLowPolyMesh(new THREE.ConeGeometry(0.26, 0.8, 5), '#38bdf8', 0, 0, 0, false);
+    fMesh.position.set(Math.cos(fAng) * rad, 0.14 + (bf % 3) * 0.12, Math.sin(fAng) * rad);
+    fMesh.rotation.y = fAng + Math.PI * 0.5;
+    beaconGrp.add(fMesh);
+    miracleActiveMiniState.beaconFishes.push({ mesh: fMesh, rad, angle: fAng, speed: 0.9 + (bf % 4) * 0.18, phase: bf * 0.7 });
+  }
+  beaconGrp.visible = false;
+  worldGroup.add(beaconGrp);
+  miracleActiveMiniState.deepTargetBeacon = beaconGrp;
+
+  // Step 5 배 오른편 물고기 떼 타깃 + 날아가는 그물 + 물보라 링 (노란 3D 화살표 완전 제거)
   const fishSchoolGrp = new THREE.Group();
   const fRing = new THREE.Mesh(
     new THREE.RingGeometry(2.15, 2.95, 22),
@@ -1095,31 +2851,154 @@ function buildMiracleMainStage1Galilee() {
     fishSchoolGrp.add(fish);
     miracleActiveMiniState.schoolFishes.push({ mesh: fish, phase: k * 0.85 });
   }
+  fishSchoolGrp.visible = false;
   worldGroup.add(fishSchoolGrp);
   miracleActiveMiniState.fishSchoolGroup = fishSchoolGrp;
 
-  // 갈릴리 바다 수면 아래·주변을 자유롭게 헤엄치는 다양한 소프트 로우폴리 물고기 18마리
+  // Step 6~9: 디테일 3D 만선 그물 (입구 조임 밧줄 테두리 + 코르크 부표 10개 + 4개 결속 매듭 고리 + 2중 그물망 + 24마리 물고기)
+  const tearingNetGrp = new THREE.Group();
+  const netOuterWire = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(1.66, 2),
+    new THREE.MeshPhongMaterial({ color: 0xe7d3a7, wireframe: true, shininess: 0, specular: 0x000000 })
+  );
+  netOuterWire.scale.set(1.04, 1.06, 1.24);
+  const netCoarseWire = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(1.70, 1),
+    new THREE.MeshPhongMaterial({ color: 0xb99664, wireframe: true, shininess: 0, specular: 0x000000 })
+  );
+  netCoarseWire.scale.set(1.05, 1.08, 1.26);
+  const netInnerBag = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(1.56, 1),
+    new THREE.MeshPhongMaterial({ color: 0x0f766e, transparent: true, opacity: 0.44, flatShading: true, shininess: 0, specular: 0x000000 })
+  );
+  netInnerBag.scale.set(0.98, 1.02, 1.18);
+
+  // 상단 조임 입구 링 + 코르크 부표 10개 + 밧줄 결속 매듭 고리 4개
+  const netDrawRim = createLowPolyMesh(new THREE.TorusGeometry(1.16, 0.085, 6, 16), '#cfa972', 0, 0.96, 0, false);
+  netDrawRim.rotation.x = Math.PI * 0.5;
+  netDrawRim.scale.set(1.0, 1.15, 1.0);
+  tearingNetGrp.add(netInnerBag, netOuterWire, netCoarseWire, netDrawRim);
+
+  for (let cf = 0; cf < 10; cf++) {
+    const ang = (cf / 10) * Math.PI * 2;
+    const fx = Math.cos(ang) * 1.16;
+    const fz = Math.sin(ang) * 1.33;
+    const cork = createLowPolyMesh(new THREE.CylinderGeometry(0.11, 0.11, 0.25, 6), '#c97b42', fx, 0.98, fz, false);
+    cork.rotation.set(Math.PI * 0.5, 0, -ang);
+    tearingNetGrp.add(cork);
+  }
+  [
+    [-0.96, 0.98, -0.78],
+    [-0.96, 0.98,  0.78],
+    [ 0.96, 0.98, -0.78],
+    [ 0.96, 0.98,  0.78]
+  ].forEach(([bx, by, bz]) => {
+    const bridleRing = createLowPolyMesh(new THREE.TorusGeometry(0.14, 0.042, 5, 10), '#b58c56', bx, by, bz, false);
+    bridleRing.rotation.y = bx < 0 ? Math.PI * 0.5 : -Math.PI * 0.5;
+    tearingNetGrp.add(bridleRing);
+  });
+
+  for (let tf = 0; tf < 24; tf++) {
+    const fSc = 0.68 + (tf % 3) * 0.14;
+    const fMesh = (typeof createLowPolyFishMesh === 'function')
+      ? createLowPolyFishMesh(null, fSc, tf)
+      : createLowPolyMesh(new THREE.ConeGeometry(0.22, 0.70, 5), '#f97316', 0, 0, 0, false);
+    const phi = (tf / 24) * Math.PI * 2;
+    const rr = 0.42 + (tf % 4) * 0.23;
+    const bx = Math.cos(phi * 1.7) * rr * 0.80;
+    const by = ((tf % 5) - 2) * 0.30;
+    const bz = Math.sin(phi * 2.1) * rr * 0.98;
+    fMesh.position.set(bx, by, bz);
+    fMesh.rotation.set((tf % 3) * 0.35, phi, (tf % 2 === 0 ? 0.3 : -0.3));
+    fMesh.visible = false;
+    tearingNetGrp.add(fMesh);
+    miracleActiveMiniState.tearingNetFishes.push({ mesh: fMesh, bx, by, bz, phase: tf * 0.95, appearAt: tf / 24 });
+  }
+  tearingNetGrp.visible = false;
+  worldGroup.add(tearingNetGrp);
+  miracleActiveMiniState.tearingNetGroup = tearingNetGrp;
+
+  // Step 6: 사방에서 그물 속으로 몰려드는 16마리 물고기 연출
+  for (let sf = 0; sf < 16; sf++) {
+    const fMesh = (typeof createLowPolyFishMesh === 'function')
+      ? createLowPolyFishMesh(null, 0.88 + (sf % 3) * 0.14, sf + 5)
+      : createLowPolyMesh(new THREE.ConeGeometry(0.22, 0.7, 5), '#38bdf8', 0, 0, 0, false);
+    fMesh.visible = false;
+    worldGroup.add(fMesh);
+    miracleActiveMiniState.swarmFishes.push({
+      mesh: fMesh,
+      startAngle: (sf / 16) * Math.PI * 2 + (sf % 3) * 0.25,
+      startDist: 7.5 + (sf % 4) * 2.1,
+      delay: (sf % 6) * 0.10,
+      phase: sf * 0.8
+    });
+  }
+
+  // 다분절 곡선 그물 밧줄 (베드로 배: 클리트 2줄 + 베드로/플레이어 양손→뱃전→그물고리 2줄)
+  const tearingRopeMat = new THREE.MeshPhongMaterial({ color: 0xd6b88d, emissive: 0x000000, shininess: 0, specular: 0x000000 });
+  miracleActiveMiniState.tearingNetRopeMat = tearingRopeMat;
+  const mainRopeDefs = [
+    { kind: 'cleat', localStart: new THREE.Vector3(3.98, 1.24, -3.2), netOff: new THREE.Vector3(-0.96, 0.98, -0.78) },
+    { kind: 'cleat', localStart: new THREE.Vector3(4.10, 1.24,  1.2), netOff: new THREE.Vector3(-0.96, 0.98,  0.78) },
+    { kind: 'crew',  crewKey: 'peter',  railLocal: new THREE.Vector3(4.02, 1.22, -2.5), netOff: new THREE.Vector3(-0.96, 0.98, -0.78) },
+    { kind: 'crew',  crewKey: 'player', railLocal: new THREE.Vector3(4.04, 1.22, -0.4), netOff: new THREE.Vector3(-0.96, 0.98,  0.78) }
+  ];
+  miracleActiveMiniState.tearingNetRopes = mainRopeDefs.map(def => {
+    const outer = createDynamicCurvedRope(6, 0.042, tearingRopeMat, true);
+    worldGroup.add(outer.group);
+    let inner = null;
+    if (def.kind === 'crew') {
+      inner = createDynamicCurvedRope(4, 0.036, tearingRopeMat, false);
+      worldGroup.add(inner.group);
+    }
+    return { ...def, group: outer.group, outerRope: outer, innerRope: inner };
+  });
+
+  // 야고보·요한의 동업자 어선 (Step 8에서 등장!)
+  const partnerBuilt = buildPartnerGalileeBoat(true);
+  partnerBuilt.boat.visible = false;
+  worldGroup.add(partnerBuilt.boat);
+  miracleActiveMiniState.partnerBoatGroup = partnerBuilt.boat;
+  miracleActiveMiniState.partnerOarPivots = partnerBuilt.oarPivots;
+  miracleActiveMiniState.partnerRudderPivot = partnerBuilt.rudderPivot;
+  miracleActiveMiniState.partnerFishPileGroup = partnerBuilt.fishPileGroup;
+  miracleActiveMiniState.jamesMesh = partnerBuilt.jamesMesh;
+  miracleActiveMiniState.johnMesh = partnerBuilt.johnMesh;
+
+  const partnerRopeDefs = [
+    { kind: 'cleat', localStart: new THREE.Vector3(-2.95, 1.04, -2.6), netOff: new THREE.Vector3(0.96, 0.98, -0.78) },
+    { kind: 'cleat', localStart: new THREE.Vector3(-2.95, 1.04,  1.8), netOff: new THREE.Vector3(0.96, 0.98,  0.78) },
+    { kind: 'crew',  crewKey: 'james', railLocal: new THREE.Vector3(-2.95, 1.04, -1.55), netOff: new THREE.Vector3(0.96, 0.98, -0.78) },
+    { kind: 'crew',  crewKey: 'john',  railLocal: new THREE.Vector3(-2.95, 1.04,  1.35), netOff: new THREE.Vector3(0.96, 0.98,  0.78) }
+  ];
+  miracleActiveMiniState.partnerNetRopes = partnerRopeDefs.map(def => {
+    const outer = createDynamicCurvedRope(6, 0.040, tearingRopeMat, true);
+    worldGroup.add(outer.group);
+    let inner = null;
+    if (def.kind === 'crew') {
+      inner = createDynamicCurvedRope(4, 0.034, tearingRopeMat, false);
+      worldGroup.add(inner.group);
+    }
+    return { ...def, group: outer.group, outerRope: outer, innerRope: inner };
+  });
+
+  // 넓은 갈릴리 바다 전역 유영 물고기 22마리
   if (typeof createLowPolyFishMesh === 'function') {
-    for (let af = 0; af < 18; af++) {
-      const fScale = 0.72 + (af % 4) * 0.18;
-      const fMesh = createLowPolyFishMesh(null, fScale, af);
-      const cx = (af % 2 === 0 ? 11.0 : -14.5) + ((af * 7) % 10) - 5;
-      const cz = -16.0 + ((af * 13) % 32);
-      const radX = 3.0 + (af % 4) * 1.2;
-      const radZ = 2.6 + ((af + 1) % 3) * 1.3;
-      const spd = (0.45 + (af % 5) * 0.12) * (af % 2 === 0 ? 1 : -1);
-      const baseY = -0.96 + (af % 3) * 0.10;
-      const ang = (af / 18) * Math.PI * 2;
-      fMesh.position.set(cx + Math.cos(ang) * radX, baseY, cz + Math.sin(ang) * radZ);
+    for (let af = 0; af < 22; af++) {
+      const fMesh = createLowPolyFishMesh(null, 0.72 + (af % 4) * 0.16, af);
+      const cx = -18 - (af % 6) * 28 + ((af * 7) % 14);
+      const cz = -95 + ((af * 19) % 190);
+      const ang = (af / 22) * Math.PI * 2;
+      fMesh.position.set(cx + Math.cos(ang) * 4, -0.95, cz + Math.sin(ang) * 4);
       worldGroup.add(fMesh);
       miracleActiveMiniState.ambientFishes.push({
-        mesh: fMesh, cx, cz, radX, radZ, baseY,
-        angle: ang, speed: spd, phase: af * 0.85
+        mesh: fMesh, cx, cz, radX: 3.5 + (af % 3) * 1.4, radZ: 3.0 + (af % 4) * 1.2,
+        baseY: -0.96 + (af % 3) * 0.08, angle: ang, speed: (0.45 + (af % 4) * 0.12) * (af % 2 === 0 ? 1 : -1), phase: af * 0.85
       });
     }
   }
 
-  // 3D 던지는 어망(펼쳐지는 8각 원뿔형 로우폴리 그물)
+  // 던지는 그물 & 물보라 링
   const netGrp = new THREE.Group();
   const netCone = new THREE.Mesh(
     new THREE.ConeGeometry(1.85, 1.15, 8, 1, true),
@@ -1149,173 +3028,125 @@ function buildMiracleMainStage1Galilee() {
   const camLblEl = document.getElementById('global-camera-view-label');
   if (camLblEl) camLblEl.textContent = '기본';
 
-  // 플레이어를 우현(배 오른편) 난간 앞에 세우고 황금 물고기 떼(+X)를 바라보게 배치
-  playerPos.set(2.7, 0.06, -1.2);
-  lastGroundedY = 0.06;
+  ship.updateMatrixWorld(true);
+  // 플레이어를 우현 뒤쪽(2.45, 2.15)에 배치해 Step 2 예수님 / Step 3 베드로 카메라 가림 원천 방지
+  const startDeckPos = new THREE.Vector3(2.45, 0.06, 2.15);
+  ship.localToWorld(startDeckPos);
+  playerPos.copy(startDeckPos);
+  lastGroundedY = startDeckPos.y;
   playerVelY = 0;
   isGrounded = true;
-  playerFacing = Math.PI * 0.5;
-  cameraYaw = -Math.PI * 0.5;
-  cameraTargetYaw = -Math.PI * 0.5;
+  playerFacing = miracleActiveMiniState.boatHeading - 0.35;
   if (typeof rebuildPlayerAppearance === 'function') rebuildPlayerAppearance();
-  snapCameraToPlayer();
+  if (typeof guideArrowGroup !== 'undefined' && guideArrowGroup) guideArrowGroup.visible = false;
 
   if (typeof updateMiracleDynamicSun === 'function') {
     updateMiracleDynamicSun(0, performance.now());
   }
-  if (Array.isArray(miracleActiveMiniState.seaBirds) && window.MiracleDayNight && typeof window.MiracleDayNight.getBirdActivityRatio === 'function') {
-    const ratio = window.MiracleDayNight.getBirdActivityRatio();
-    const total = miracleActiveMiniState.seaBirds.length;
-    for (let i = 0; i < total; i++) {
-      const sb = miracleActiveMiniState.seaBirds[i];
-      if (!sb || !sb.mesh) continue;
-      if (sb.baseScale == null) sb.baseScale = sb.mesh.scale.x || 1;
-      sb.mesh.visible = ratio > (i + 0.5) / total;
-    }
-  }
-
-  pickNextGalileeFishSchoolTarget();
+  syncMiracleStage1HudControlsVisibility();
   syncMiracleStage1UI();
   if (typeof window.syncMiracleTimeHUD === 'function') window.syncMiracleTimeHUD();
-}
 
-function startGalileeStormPhase() {
-  const st = miracleActiveMiniState;
-  window.globalCameraViewMode = 'default';
-  const camLblEl = document.getElementById('global-camera-view-label');
-  if (camLblEl) camLblEl.textContent = '기본';
-
-  st.phase = 'storm_balance';
-  st.boatTilt = 0.28;
-  st.waveGustDir = 1;
-  st.waveGustForce = (currentMode === 'kinder') ? 0.50 : 0.68;
-  st.waveGustTimer = 1.6;
-  st.balanceProgress = 0;
-  st.noBalanceInputTimer = 0;
-  st.isDrainingGauge = false;
-  st.holdLeft = false;
-  st.holdRight = false;
-  st.isCharging = false;
-  st.netInFlight = false;
-  st.sternLightPower = 1.0;
-
-  if (st.dirArrowGroup) st.dirArrowGroup.visible = false;
-  if (st.tearingNetGroup) st.tearingNetGroup.visible = false;
-  if (Array.isArray(st.tearingNetRopes)) st.tearingNetRopes.forEach(r => { if (r.mesh) r.mesh.visible = false; });
-  if (st.fishSchoolGroup) st.fishSchoolGroup.visible = false;
-  if (st.flyingNetMesh) st.flyingNetMesh.visible = false;
-
-  if (window.MiracleDayNight) {
-    window.MiracleDayNight.stageControlled = true;
-    window.MiracleDayNight.stormDarkness = 0.68;
-    window.MiracleDayNight.setTime(0.83);
-  }
-  if (st.sternGlow) st.sternGlow.visible = true;
-  if (st.sternGlowMat) st.sternGlowMat.opacity = 0.36;
-
-  if (st.seaMesh && typeof tintIrregularLowPolyWater === 'function') {
-    tintIrregularLowPolyWater(st.seaMesh, true);
-  }
-  if (st.skyClouds) {
-    st.skyClouds.forEach(cl => {
-      cl.traverse(ch => {
-        if (ch.isMesh && !ch.userData._isCloudDepthPrepass) ch.material = matLowPoly('#1e293b');
-      });
-      cl._cloudMats = null;
-    });
-  }
-
-  // 풍랑 중에는 예수님이 고물 붉은 베개 침상에 편안히 누워 주무시고 등불이 따뜻하게 비춤!
-  if (st.jesusMesh) {
-    st.jesusMesh.position.set(0, 0.72, 9.45);
-    st.jesusMesh.rotation.set(-Math.PI / 2, 0, 0);
-    if (st.jesusMesh.userData) {
-      if (st.jesusMesh.userData.lArm) st.jesusMesh.userData.lArm.rotation.set(-0.25, 0, 0.20);
-      if (st.jesusMesh.userData.rArm) st.jesusMesh.userData.rArm.rotation.set(-0.25, 0, -0.20);
-      if (st.jesusMesh.userData.lLeg) st.jesusMesh.userData.lLeg.rotation.x = 0;
-      if (st.jesusMesh.userData.rLeg) st.jesusMesh.userData.rLeg.rotation.x = 0;
-    }
-  }
-  if (st.jesusLabel) {
-    st.jesusLabel.innerHTML = '😴 밤 풍랑 속에서도 등불 아래 베개에 누워 평안히 주무시는 예수님';
-  }
-
-  playerPos.set(0, 0.06, -0.8);
-  lastGroundedY = 0.06;
-  playerFacing = 0;
-  cameraTargetYaw = 0;
-  snapCameraToPlayer();
-
-  playRainOrSeaSound(5.5, true);
-  playSfx('thunder');
-  startStageBgm(1);
-  syncMiracleStage1UI();
-  updateStageHUD();
-  if (typeof window.syncMiracleTimeHUD === 'function') window.syncMiracleTimeHUD();
-}
-
-window.pulseGalileeHaulNet = function () {
-  const st = miracleActiveMiniState;
-  if (!st || miracleSubMode !== 'main1_galilee' || st.phase !== 'haul_net') return;
-  const nowMs = performance.now();
-  if (st._lastHaulAt && nowMs - st._lastHaulAt < 45) return;
-  st._lastHaulAt = nowMs;
-  st.haulProgress = Math.min(1.0, (st.haulProgress || 0) + 0.165);
-  st.netTension = Math.min(1.0, Math.max(st.netTension || 0.35, 0.45) + 0.18);
-  st.haulTapImpulse = 0.32;
-  playSfx('step');
-  syncMiracleStage1UI();
-};
-
-window.debugJumpStage1ToNightStorm = function () {
-  if (miracleSubMode !== 'main1_galilee' || !miracleActiveMiniState) return;
-  const st = miracleActiveMiniState;
-  st.castCaught = st.reqCasts;
-  st.haulProgress = 1.0;
-  startGalileeStormPhase();
-};
-
-function triggerGalileeCalmStormCutscene() {
-  const st = miracleActiveMiniState;
-  if (!st || st.phase === 'calm') return;
-  st.phase = 'calm';
-  isTimeAttackActive = false;
-  st.holdLeft = false;
-  st.holdRight = false;
-
-  const s1Ui = document.getElementById('miracle-s1-ui');
-  if (s1Ui) s1Ui.classList.add('hidden');
-  if (st.jesusLabel) st.jesusLabel.style.opacity = '0';
-
-  const wf = document.getElementById('white-fade');
-  if (wf) wf.style.opacity = '0.82';
+  // Step 2 시작: 예수님 말씀 MP3 출력 (파일 미존재 시 TTS 폴백)
   setTimeout(() => {
-    // 폭풍이 그친 뒤에도 달과 별이 가득한 고요한 갈릴리 밤바다 연출 유지!
-    if (window.MiracleDayNight) {
-      window.MiracleDayNight.stageControlled = true;
-      window.MiracleDayNight.stormDarkness = 0;
-      window.MiracleDayNight.setTime(0.85);
+    if (miracleSubMode === 'main1_galilee' && miracleActiveMiniState && miracleActiveMiniState.phase === 'intro_jesus') {
+      speakMiracleStage1Line(
+        '깊은 데로 가서 그물을 내려 고기를 잡으세요.',
+        MIRACLE_STAGE1_VOICE_FILES.jesus01
+      );
     }
-    if (st.seaMesh && typeof tintIrregularLowPolyWater === 'function') {
-      tintIrregularLowPolyWater(st.seaMesh, false);
-    }
-    if (st.skyClouds) {
-      st.skyClouds.forEach(cl => {
-        cl.traverse(ch => {
-          if (ch.isMesh && !ch.userData._isCloudDepthPrepass) ch.material = matLowPoly('#475569');
-        });
-        cl._cloudMats = null;
-      });
-    }
-    if (wf) wf.style.opacity = '0';
-  }, 340);
+  }, 420);
+}
 
-  miracleStageCutscene.active = true;
-  miracleStageCutscene.timer = 0;
-  miracleStageCutscene.stageNum = 1;
-  startStageBgm(1);
-  playSfx('clear');
-  showToast('✨ 예수께서 밤바다 바람을 꾸짖으시며 "잠잠하라! 고요하라!" 하시니 달빛 아래 바다가 아주 잔잔하여졌습니다!');
+// 플레이어를 움직이는 배의 로컬 좌표에 정확히 동기화하는 헬퍼
+function syncPlayerOntoShipDeck(st, localX, localY, localZ, localYawOffset, rollZ) {
+  if (!st || !st.boatRootGroup) return;
+  st.boatRootGroup.updateMatrixWorld(true);
+  const wPos = new THREE.Vector3(localX, localY, localZ);
+  st.boatRootGroup.localToWorld(wPos);
+  playerPos.copy(wPos);
+  lastGroundedY = wPos.y;
+  playerVelY = 0;
+  isGrounded = true;
+  playerFacing = st.boatHeading + localYawOffset;
+  if (playerGroup) {
+    playerGroup.position.copy(playerPos);
+    playerGroup.rotation.order = 'YXZ';
+    playerGroup.rotation.set(0, playerFacing, rollZ || 0);
+  }
+}
+
+function updateMiracleRopeBundle(ropes, ownerBoat, netWorldPos, netScale, tension, st = null, nowMs = 0) {
+  if (!Array.isArray(ropes) || !ownerBoat) return;
+  ownerBoat.updateMatrixWorld(true);
+  const startW = new THREE.Vector3();
+  const railW  = new THREE.Vector3();
+  const endW   = new THREE.Vector3();
+  const outerSag = Math.max(0.05, (1.0 - tension) * 0.78 + 0.06);
+  const innerSag = Math.max(0.03, (1.0 - tension) * 0.24 + 0.03);
+  const vibAmp = tension > 0.55 ? (tension - 0.55) * 0.055 : 0;
+  const radScale = 0.95 + tension * 0.18;
+
+  // 그물의 월드 회전(netGroup 회전) 없이도 배 방향(ownerBoat heading)에 맞춰 그물 매듭 고리 좌표를 정확히 변환!
+  const netMatRotY = ownerBoat.rotation.y || 0;
+  const cosN = Math.cos(netMatRotY);
+  const sinN = Math.sin(netMatRotY);
+
+  for (let i = 0; i < ropes.length; i++) {
+    const r = ropes[i];
+    if (!r || !r.outerRope) continue;
+
+    // 그물 상단 매듭 고리 월드 좌표 (netScale 반영)
+    const ox = r.netOff.x * netScale;
+    const oy = r.netOff.y * (netScale * 0.92);
+    const oz = r.netOff.z * netScale;
+    endW.set(
+      netWorldPos.x + ox * cosN + oz * sinN,
+      netWorldPos.y + oy,
+      netWorldPos.z - ox * sinN + oz * cosN
+    );
+
+    if (r.kind === 'crew' && r.railLocal && r.innerRope) {
+      railW.copy(r.railLocal);
+      ownerBoat.localToWorld(railW);
+
+      let handOk = false;
+      if (r.crewKey === 'player') {
+        const pf = (typeof playerFacing === 'number') ? playerFacing : 0;
+        startW.set(playerPos.x + Math.sin(pf) * 0.44, playerPos.y + 1.06, playerPos.z + Math.cos(pf) * 0.44);
+        handOk = true;
+      } else if (st) {
+        const actor = (r.crewKey === 'peter') ? st.peterMesh : ((r.crewKey === 'james') ? st.jamesMesh : st.johnMesh);
+        if (actor && actor.parent) {
+          actor.updateMatrixWorld(true);
+          startW.set(0, 1.12, 0.44);
+          actor.localToWorld(startW);
+          handOk = true;
+        }
+      }
+
+      if (handOk) {
+        updateDynamicCurvedRope(r.innerRope, startW, railW, innerSag, radScale, vibAmp * 0.55, nowMs, i * 1.3);
+      } else {
+        r.innerRope.group.visible = false;
+      }
+      updateDynamicCurvedRope(r.outerRope, railW, endW, outerSag, radScale, vibAmp, nowMs, i * 1.7 + 0.5);
+    } else if (r.localStart) {
+      startW.copy(r.localStart);
+      ownerBoat.localToWorld(startW);
+      updateDynamicCurvedRope(r.outerRope, startW, endW, outerSag * 0.92, radScale, vibAmp, nowMs, i * 1.7);
+    }
+  }
+}
+
+function hideMiracleRopeBundle(ropes) {
+  if (!Array.isArray(ropes)) return;
+  for (let i = 0; i < ropes.length; i++) {
+    const r = ropes[i];
+    if (!r) continue;
+    if (r.outerRope && r.outerRope.group) r.outerRope.group.visible = false;
+    if (r.innerRope && r.innerRope.group) r.innerRope.group.visible = false;
+  }
 }
 
 function updateMiracleMainStage1Frame(dt, now) {
@@ -1325,36 +3156,28 @@ function updateMiracleMainStage1Frame(dt, now) {
   const st = miracleActiveMiniState;
   if (!st) return;
 
-  const isStorming = (st.phase === 'storm_balance' || st.phase === 'wake_jesus');
+  // 스테이지 1 전 구간 플레이어 3D 안내 화살표 완전 숨김
+  if (typeof guideArrowGroup !== 'undefined' && guideArrowGroup) {
+    guideArrowGroup.visible = false;
+  }
 
-  // 1) 파도, 갈매기, 베드로, 돛 애니메이션
+  st.phaseTimer = (st.phaseTimer || 0) + dt;
+  const tSec = now * 0.001;
+
+  // 공통: 파도, 갈매기, 유영 물고기, 돛, 물보라 링
   if (st.waves) {
-    const amp = isStorming ? 1.05 : 0.20;
-    const spd = isStorming ? 0.0095 : 0.003;
     st.waves.forEach(w => {
-      w.mesh.position.y = w.baseY + Math.sin(now * spd + w.phase) * amp;
+      w.mesh.position.y = w.baseY + Math.sin(now * 0.003 + w.phase) * 0.20;
     });
   }
   if (st.seaBirds) {
-    const tSec = now * 0.001;
-    const dn = window.MiracleDayNight;
-    const birdRatio = isStorming ? 0 : ((dn && typeof dn.getBirdActivityRatio === 'function') ? dn.getBirdActivityRatio() : 1.0);
-    const totalSeaBirds = st.seaBirds.length;
-    st.seaBirds.forEach((b, idx) => {
+    const shipCx = (st.boatRootGroup && st.boatRootGroup.visible) ? st.boatRootGroup.position.x : 22;
+    const shipCz = (st.boatRootGroup && st.boatRootGroup.visible) ? st.boatRootGroup.position.z : 0;
+    st.seaBirds.forEach((b) => {
       if (!b || !b.mesh) return;
-      if (b.baseScale == null) b.baseScale = b.mesh.scale.x || 1;
-      const threshold = (idx + 0.5) / Math.max(1, totalSeaBirds);
-      if (birdRatio <= threshold || birdRatio <= 0.001) {
-        b.mesh.visible = false;
-        return;
-      }
       b.mesh.visible = true;
-      const bScale = b.baseScale * Math.min(1.0, Math.max(0.28, (birdRatio - threshold) / 0.08));
-      b.mesh.scale.setScalar(bScale);
       b.angle += dt * b.speed;
-      const nx = Math.cos(b.angle) * b.rad;
-      const nz = Math.sin(b.angle) * b.rad;
-      b.mesh.position.set(nx, b.baseY + Math.sin(tSec * 1.5 + b.phase) * 0.9, nz);
+      b.mesh.position.set(shipCx + Math.cos(b.angle) * b.rad, b.baseY + Math.sin(tSec * 1.5 + b.phase) * 0.9, shipCz + Math.sin(b.angle) * b.rad);
       b.mesh.rotation.y = Math.atan2(-Math.sin(b.angle), Math.cos(b.angle));
       const fl = Math.sin(tSec * 9.5 + b.phase) * 0.55;
       if (b.mesh.userData && b.mesh.userData.wingL) {
@@ -1364,107 +3187,227 @@ function updateMiracleMainStage1Frame(dt, now) {
     });
   }
   if (st.sailPivot) {
-    st.sailPivot.rotation.x = isStorming
-      ? (0.14 + Math.sin(now * 0.014) * 0.14)
-      : (0.04 + Math.sin(now * 0.003) * 0.04);
+    st.sailPivot.rotation.x = 0.05 + Math.sin(now * 0.0032) * 0.045;
+    if (typeof st.syncShipSailSheets === 'function') st.syncShipSailSheets();
   }
-  if (st.peterMesh && st.peterMesh.userData) {
-    const pu = st.peterMesh.userData;
-    const sway = Math.sin(now * (isStorming ? 0.012 : 0.004)) * 0.35;
-    if (pu.lArm && pu.rArm) {
-      pu.lArm.rotation.x = isStorming ? (-1.2 + sway) : (-0.3 + sway * 0.4);
-      pu.rArm.rotation.x = isStorming ? (-1.2 - sway) : (-0.3 - sway * 0.4);
-    }
-  }
-
-  // 바다 속을 자유롭게 유영하는 소프트 로우폴리 물고기 18마리 & 타깃 물고기 꼬리 흔들림 애니메이션
-  if (Array.isArray(st.ambientFishes) && st.ambientFishes.length > 0) {
-    const tSecF = now * 0.001;
+  if (Array.isArray(st.ambientFishes)) {
     st.ambientFishes.forEach((af) => {
-      af.angle += dt * af.speed * (isStorming ? 1.45 : 1.0);
+      af.angle += dt * af.speed;
       const nx = af.cx + Math.cos(af.angle) * af.radX;
       const nz = af.cz + Math.sin(af.angle) * af.radZ;
       const vx = -Math.sin(af.angle) * af.radX * af.speed;
       const vz =  Math.cos(af.angle) * af.radZ * af.speed;
-      af.mesh.position.set(nx, af.baseY + Math.sin(tSecF * 2.4 + af.phase) * 0.08, nz);
+      af.mesh.position.set(nx, af.baseY + Math.sin(tSec * 2.4 + af.phase) * 0.08, nz);
       af.mesh.rotation.y = Math.atan2(vx, vz);
       if (af.mesh.userData && af.mesh.userData.tailPivot) {
-        af.mesh.userData.tailPivot.rotation.y = Math.sin(tSecF * 11.0 + af.phase) * 0.36;
+        af.mesh.userData.tailPivot.rotation.y = Math.sin(tSec * 11.0 + af.phase) * 0.36;
       }
     });
   }
-  if (Array.isArray(st.schoolFishes)) {
-    const tSecS = now * 0.001;
-    st.schoolFishes.forEach((sf) => {
-      if (sf.mesh && sf.mesh.userData && sf.mesh.userData.tailPivot) {
-        sf.mesh.userData.tailPivot.rotation.y = Math.sin(tSecS * 12.5 + sf.phase) * 0.42;
-      }
-    });
-  }
-
-  // 물보라 링 연출
   if (st.splashTimer > 0 && st.splashRingMesh) {
     st.splashTimer -= dt;
     const sProg = 1.0 - Math.max(0, st.splashTimer / 0.55);
-    const sc = 0.7 + sProg * 2.4;
+    const sc = 0.7 + sProg * 2.6;
     st.splashRingMesh.scale.set(sc, sc, 1);
     st.splashRingMesh.material.opacity = Math.max(0, 0.9 * (1 - sProg));
     if (st.splashTimer <= 0) st.splashRingMesh.visible = false;
   }
-
-  // 2) 폭풍 잠잠케 하심 컷신 (누워 계시던 예수님이 벌떡 일어나 손을 드심!)
-  if (miracleStageCutscene.active) {
-    miracleStageCutscene.timer += dt;
-    const t = miracleStageCutscene.timer;
-    if (st.boatRootGroup) {
-      st.boatRootGroup.rotation.z = THREE.MathUtils.lerp(st.boatRootGroup.rotation.z, 0, dt * 5.0);
-      st.boatRootGroup.position.y = THREE.MathUtils.lerp(st.boatRootGroup.position.y, 0, dt * 5.0);
-    }
-    if (playerGroup) playerGroup.rotation.z = 0;
-
-    if (st.jesusMesh) {
-      // 누운 자세(-PI/2)에서 우뚝 일어서는 부드러운 전환 (rotation.y = Math.PI → -Z 정면 방향!)
-      const riseT = Math.min(1, t / 0.85);
-      st.jesusMesh.rotation.x = THREE.MathUtils.lerp(-Math.PI / 2, 0, riseT);
-      st.jesusMesh.rotation.y = Math.PI;
-      st.jesusMesh.position.y = THREE.MathUtils.lerp(0.72, 0.48, riseT);
-      st.jesusMesh.position.z = THREE.MathUtils.lerp(9.45, 8.2, riseT);
-      if (st.jesusMesh.userData && st.jesusMesh.userData.rArm) {
-        st.jesusMesh.userData.rArm.rotation.x = -2.25 + Math.sin(now * 0.008) * 0.18;
+  // 물결 자국(항해 웨이크) 페이드
+  if (Array.isArray(st.wakeRings) && st.wakeRings.length > 0) {
+    for (let i = st.wakeRings.length - 1; i >= 0; i--) {
+      const wr = st.wakeRings[i];
+      wr.age += dt;
+      const u = wr.age / wr.life;
+      if (u >= 1.0) {
+        if (wr.mesh && wr.mesh.parent) wr.mesh.parent.remove(wr.mesh);
+        st.wakeRings.splice(i, 1);
+      } else if (wr.mesh) {
+        const sc = 0.8 + u * 2.4;
+        wr.mesh.scale.set(sc, sc, 1);
+        wr.mesh.material.opacity = (1.0 - u) * 0.55;
       }
     }
-    cameraTargetYaw = Math.PI;
-    // 풍랑이 멈춘 뒤 카메라가 예수님 정면(-Z 앞쪽)으로 부드럽게 이동해 일어나신 예수님을 비춤!
-    if (typeof applyCoreCameraByMode === 'function') applyCoreCameraByMode();
+  }
 
-    if (t >= 3.3) {
-      miracleStageCutscene.active = false;
-      miracleMainStagesCleared[1] = true;
-      unlockMiracleNotebookEntry('mir_storm', true);
-      unlockMiracleNotebookEntry('mir_fish', true);
-      saveMiracleNotebookProgress();
-      if (typeof window.recordMiracleMissionCompleted === 'function') {
-        window.recordMiracleMissionCompleted('main_1', { deferPopup: true });
+  const ship = st.boatRootGroup;
+
+  // Step 2~3: 예수님 말씀 & 베드로 대답 (플레이어는 우현 뒤쪽 2.45, 2.15에 배치해 카메라 시야 확보!)
+  if (st.phase === 'intro_jesus' || st.phase === 'intro_peter') {
+    if (ship) {
+      ship.position.y = Math.sin(now * 0.0024) * 0.12;
+      ship.rotation.z = Math.sin(now * 0.0020) * 0.025;
+      ship.rotation.x = Math.cos(now * 0.0018) * 0.015;
+    }
+    animateGalileeBoatOars(st.oarPivots, st.rudderPivot, now, dt, 0, 0, 0);
+    if (st.peterMesh) {
+      st.peterMesh.position.set(-1.25, 0.06, -4.40);
+      st.peterMesh.rotation.y = 0.14; // 고물(예수님) 방향
+      if (typeof window.updateDiscipleSmoothPose === 'function') {
+        window.updateDiscipleSmoothPose(st.peterMesh, dt, now, st.phase === 'intro_peter' ? 'talk' : 'idle');
       }
-      openStageClearModal(1);
+    }
+    if (st.jesusMesh && typeof window.updateDiscipleSmoothPose === 'function') {
+      window.updateDiscipleSmoothPose(st.jesusMesh, dt, now, st.phase === 'intro_jesus' ? 'talk' : 'idle');
+    }
+    const plLookYaw = (st.phase === 'intro_jesus') ? -0.35 : (Math.PI + 0.42);
+    syncPlayerOntoShipDeck(st, 2.45, 0.06, 2.15, plLookYaw, ship ? ship.rotation.z : 0);
+    return;
+  }
+
+  // Step 4: 1세기 어선 노 젓기 & 방향타 조향으로 넓은 바다 먼 목적지 항해!
+  if (st.phase === 'sail_to_deep') {
+    const inp = window.lastRawMoveInput || { x: 0, z: 0, mag: 0 };
+    const rawThrottle = -inp.z; // W/Up/조이스틱 위 = +1
+    const rawSteer    = -inp.x; // A/Left/조이스틱 왼쪽 = +1 (좌선회)
+    const hasSteer = Math.abs(rawSteer) > 0.14;
+    const hasThrottle = Math.abs(rawThrottle) > 0.12;
+
+    // 조이스틱을 좌우로만 밀어도 1세기 배가 자연스럽게 호를 그리며 전진하도록 보조 추진 부여
+    let targetSpeed = 0;
+    if (rawThrottle > 0.12) targetSpeed = rawThrottle * 18.5;
+    else if (rawThrottle < -0.15) targetSpeed = rawThrottle * 7.5;
+    else if (hasSteer) targetSpeed = 6.5;
+
+    st.boatSpeed = THREE.MathUtils.lerp(st.boatSpeed, targetSpeed, Math.min(1, dt * 2.8));
+    st.boatSteer = THREE.MathUtils.lerp(st.boatSteer, hasSteer ? rawSteer : 0, Math.min(1, dt * 5.0));
+
+    const turnRate = (hasThrottle && rawThrottle < -0.15) ? -1.20 : 1.65;
+    st.boatHeading += st.boatSteer * turnRate * dt;
+
+    const fwdX = -Math.sin(st.boatHeading);
+    const fwdZ = -Math.cos(st.boatHeading);
+    if (ship) {
+      ship.position.x = THREE.MathUtils.clamp(ship.position.x + fwdX * st.boatSpeed * dt, -220, 8);
+      ship.position.z = THREE.MathUtils.clamp(ship.position.z + fwdZ * st.boatSpeed * dt, -160, 160);
+      ship.rotation.y = st.boatHeading;
+      ship.position.y = Math.sin(now * 0.0034) * 0.14;
+      ship.rotation.z = THREE.MathUtils.lerp(ship.rotation.z, st.boatSteer * 0.08 + Math.sin(now * 0.0026) * 0.025, dt * 4.0);
+      ship.rotation.x = THREE.MathUtils.lerp(ship.rotation.x, -Math.max(0, st.boatSpeed) * 0.0035, dt * 4.0);
+    }
+
+    // 1세기 방식 비대칭 노 젓기 + 선미 방향타 회전 (좌·우 노 위상 반환받아 베드로/플레이어 팔 동작과 1:1 동기화!)
+    const baseRow = st.boatSpeed / 12.5;
+    const leftEffort  = baseRow - st.boatSteer * 0.55;
+    const rightEffort = baseRow + st.boatSteer * 0.55;
+    const oarPhases = animateGalileeBoatOars(st.oarPivots, st.rudderPivot, now, dt, leftEffort, rightEffort, st.boatSteer);
+
+    // 물결 자국 스폰
+    if (ship && Math.abs(st.boatSpeed) > 2.2) {
+      st.wakeSpawnTimer += dt;
+      if (st.wakeSpawnTimer >= 0.24) {
+        st.wakeSpawnTimer = 0;
+        const wRing = new THREE.Mesh(
+          new THREE.RingGeometry(1.1, 1.85, 14),
+          new THREE.MeshBasicMaterial({ color: 0xe0f2fe, side: THREE.DoubleSide, transparent: true, opacity: 0.52 })
+        );
+        wRing.rotation.x = -Math.PI / 2;
+        const sternW = new THREE.Vector3(0, -0.92, 11.2);
+        ship.updateMatrixWorld(true);
+        ship.localToWorld(sternW);
+        wRing.position.set(sternW.x, -0.96, sternW.z);
+        worldGroup.add(wRing);
+        st.wakeRings.push({ mesh: wRing, age: 0, life: 1.35 });
+      }
+    }
+
+    // 노-손 2-Bone IK 연동 (베드로: 좌현 노 (-2.86, 0.06, +0.46) · 플레이어: 우현 노 (+2.86, 0.06, +0.46) 파지!)
+    const plScaleY = (playerGroup && playerGroup.scale) ? playerGroup.scale.y : 1.0;
+    const plZOff = (plScaleY < 0.88) ? 0.54 : 0.46;
+    if (st.peterMesh) {
+      st.peterMesh.position.set(-2.86, 0.06, 0.46);
+      st.peterMesh.rotation.y = 0; // 선미를 바라보며 양손으로 좌현 노 손잡이 파지
+      if (st.oarPivots && st.oarPivots.left && st.oarPivots.left[0]) {
+        applyRowingOarHandIK(st.peterMesh, st.peterMesh.userData, st.oarPivots.left[0].pivot, false, ship);
+      }
+    }
+    if (st.jesusMesh && typeof window.updateDiscipleSmoothPose === 'function') {
+      window.updateDiscipleSmoothPose(st.jesusMesh, dt, now, 'idle');
+    }
+    syncPlayerOntoShipDeck(st, 2.86, 0.06, plZOff, 0, ship ? ship.rotation.z : 0);
+    window.__ep4SkipArmAnimThisFrame = true;
+    if (playerGroup && playerLimbs && st.oarPivots && st.oarPivots.right && st.oarPivots.right[0]) {
+      applyRowingOarHandIK(playerGroup, playerLimbs, st.oarPivots.right[0].pivot, true, ship);
+    }
+
+    // 깊은 바다 비콘 & 나침반 화살표 업데이트
+    if (st.deepTargetBeacon) {
+      st.deepTargetBeacon.visible = true;
+      st.deepTargetBeacon.rotation.y += dt * 0.45;
+      st.beaconFishes.forEach(bf => {
+        bf.angle += dt * bf.speed;
+        bf.mesh.position.set(Math.cos(bf.angle) * bf.rad, 0.16 + Math.sin(tSec * 3 + bf.phase) * 0.12, Math.sin(bf.angle) * bf.rad);
+        bf.mesh.rotation.y = Math.atan2(-Math.sin(bf.angle), Math.cos(bf.angle));
+        if (bf.mesh.userData && bf.mesh.userData.tailPivot) {
+          bf.mesh.userData.tailPivot.rotation.y = Math.sin(tSec * 12 + bf.phase) * 0.4;
+        }
+      });
+    }
+    if (ship && st.deepTargetPos) {
+      const dx = st.deepTargetPos.x - ship.position.x;
+      const dz = st.deepTargetPos.z - ship.position.z;
+      const dist = Math.hypot(dx, dz);
+      if (typeof window.updateMiracleMiniNavigatorUI === 'function') {
+        const worldAng = Math.atan2(-dx, -dz);
+        const relDeg = ((st.boatHeading - worldAng) * 180) / Math.PI;
+        window.updateMiracleMiniNavigatorUI({
+          visible: true,
+          deg: relDeg,
+          label: '깊은 바다 목적지',
+          distText: `${Math.max(0, Math.round(dist))}m`
+        });
+      }
+      syncMiracleStage1UI();
+
+      // 목적지 도착 판정! → Step 5 그물 던지기 전환
+      if (dist < 11.8) {
+        st.phase = 'cast_net';
+        st.phaseTimer = 0;
+        st.boatSpeed = 0;
+        st.boatSteer = 0;
+        if (st.peterMesh) resetActorRowingArmIK(st.peterMesh, st.peterMesh.userData, false);
+        if (playerGroup && playerLimbs) resetActorRowingArmIK(playerGroup, playerLimbs, true);
+        if (st.deepTargetBeacon) st.deepTargetBeacon.visible = false;
+        if (typeof window.updateMiracleMiniNavigatorUI === 'function') {
+          window.updateMiracleMiniNavigatorUI({ visible: false });
+        }
+        playSfx('rescue');
+        showToast('✨ 깊은 바다에 도착했어요! 물속 물고기 떼에 그물을 던져보세요!');
+        pickNextGalileeFishSchoolTarget();
+        syncMiracleStage1HudControlsVisibility();
+        syncMiracleStage1UI();
+        updateStageHUD();
+      }
     }
     return;
   }
 
-  // 3) [1단계: 그물 던지기]
+  // Step 5: 물고기 떼에 그물 투척
   if (st.phase === 'cast_net') {
-    if (st.boatRootGroup) {
-      st.boatRootGroup.position.y = Math.sin(now * 0.0025) * 0.14;
-      st.boatRootGroup.rotation.z = Math.sin(now * 0.002) * 0.035;
+    if (ship) {
+      ship.position.y = Math.sin(now * 0.0025) * 0.13;
+      ship.rotation.z = THREE.MathUtils.lerp(ship.rotation.z, Math.sin(now * 0.002) * 0.03, dt * 4.0);
+      ship.rotation.x = THREE.MathUtils.lerp(ship.rotation.x, 0, dt * 4.0);
     }
-    if (st.dirArrowGroup) {
-      st.dirArrowGroup.visible = true;
-      st.dirArrowGroup.position.x = 4.1 + Math.sin(now * 0.006) * 0.25;
-      st.dirArrowGroup.position.y = 2.25 + Math.cos(now * 0.005) * 0.14;
+    animateGalileeBoatOars(st.oarPivots, st.rudderPivot, now, dt, 0, 0, 0);
+    if (st.peterMesh) {
+      st.peterMesh.position.set(2.35, 0.06, -3.1);
+      st.peterMesh.rotation.y = Math.PI * 0.5;
+      if (typeof window.updateDiscipleSmoothPose === 'function') window.updateDiscipleSmoothPose(st.peterMesh, dt, now, 'idle');
     }
+    if (st.jesusMesh && typeof window.updateDiscipleSmoothPose === 'function') {
+      window.updateDiscipleSmoothPose(st.jesusMesh, dt, now, 'idle');
+    }
+    syncPlayerOntoShipDeck(st, 2.55, 0.06, -0.4, Math.PI * 0.5, ship ? ship.rotation.z : 0);
+
     if (st.fishSchoolGroup) {
+      st.fishSchoolGroup.visible = true;
       st.fishSchoolGroup.rotation.y += dt * 1.4;
-      st.fishSchoolGroup.position.y = -0.82 + Math.sin(now * 0.006) * 0.16;
+      st.fishSchoolGroup.position.y = -0.82 + Math.sin(now * 0.006) * 0.14;
+      st.schoolFishes.forEach(sf => {
+        if (sf.mesh && sf.mesh.userData && sf.mesh.userData.tailPivot) {
+          sf.mesh.userData.tailPivot.rotation.y = Math.sin(tSec * 12.5 + sf.phase) * 0.42;
+        }
+      });
     }
 
     if (st.isCharging) {
@@ -1499,23 +3442,17 @@ function updateMiracleMainStage1Frame(dt, now) {
           st.splashRingMesh.visible = true;
           st.splashTimer = 0.55;
         }
-
         const diff = st.netPowerUsed - st.targetRatio;
         if (Math.abs(diff) <= st.sweetHalfWidth) {
-          st.castCaught++;
           playSfx('rescue');
-          // 1회 투척 성공 -> 찢어질 듯 물고기 24마리가 가득 찬 거대 만선 그물 끌어올리기 단계로 돌입!
-          st.phase = 'haul_net';
-          st.haulProgress = 0.08;
-          st.netTension = 0.44;
-          st.haulTapImpulse = 0;
-          if (st.dirArrowGroup) st.dirArrowGroup.visible = false;
+          // Step 6: 그물 속 물고기가 점점 많아지는 연출 시작!
+          st.phase = 'fish_gathering';
+          st.phaseTimer = 0;
           if (st.fishSchoolGroup) st.fishSchoolGroup.visible = false;
           if (st.tearingNetGroup) st.tearingNetGroup.visible = true;
-          if (Array.isArray(st.tearingNetRopes)) st.tearingNetRopes.forEach(r => { if (r.mesh) r.mesh.visible = true; });
+          syncMiracleStage1HudControlsVisibility();
           syncMiracleStage1UI();
           updateStageHUD();
-          return;
         } else {
           playSfx('wrong');
           st.chargeVal = 0;
@@ -1526,147 +3463,718 @@ function updateMiracleMainStage1Frame(dt, now) {
         }
       }
     }
+    return;
   }
 
-  // 3-2) [1-2단계: 그물이 찢어지는 만선 끌어올리기 (24마리 물고기 + 팽팽한 로프 색상/진동)]
-  if (st.phase === 'haul_net') {
-    st.haulTapImpulse = Math.max(0, (st.haulTapImpulse || 0) - dt * 1.4);
-    if (st.haulProgress < 0.985 && (st.haulTapImpulse || 0) <= 0.02) {
-      st.haulProgress = Math.max(0.04, st.haulProgress - dt * 0.020);
+  // Step 6: 그물 속으로 물고기가 점점 많아지며 그물이 부풀어 오르는 연출 (3.4초)
+  if (st.phase === 'fish_gathering') {
+    const u = Math.min(1.0, st.phaseTimer / 3.4);
+    if (ship) {
+      ship.position.y = Math.sin(now * 0.003) * 0.14;
+      ship.rotation.z = THREE.MathUtils.lerp(0, -0.08, u) + Math.sin(now * 0.01) * 0.015;
+      ship.updateMatrixWorld(true);
+      st.netWorldPos.set(6.0, -0.58, -0.8);
+      ship.localToWorld(st.netWorldPos);
+      st.netWorldPos.y = -0.58;
     }
-    const targetTens = Math.min(1.0, 0.32 + st.haulProgress * 0.48 + st.haulTapImpulse * 0.85);
-    st.netTension = THREE.MathUtils.lerp(st.netTension || 0.35, targetTens, Math.min(1, dt * 8.0));
-
-    const netY = THREE.MathUtils.lerp(-0.42, 1.18, st.haulProgress);
-    const vibX = Math.sin(now * 0.045) * (0.04 + st.netTension * 0.06);
-    const vibZ = Math.cos(now * 0.052) * (0.03 + st.netTension * 0.05);
+    const netSc = THREE.MathUtils.lerp(0.48, 1.18, u);
     if (st.tearingNetGroup) {
       st.tearingNetGroup.visible = true;
-      st.tearingNetGroup.position.set(5.35 - st.haulProgress * 0.75 + vibX, netY, -1.2 + vibZ);
-      const bulge = 1.0 + Math.sin(now * 0.022) * 0.06 + st.netTension * 0.08;
-      st.tearingNetGroup.scale.set(bulge, 1.0 / Math.sqrt(bulge), bulge);
+      st.tearingNetGroup.position.copy(st.netWorldPos);
+      st.tearingNetGroup.scale.set(netSc, netSc * 0.92, netSc);
+      st.tearingNetGroup.rotation.y = st.boatHeading;
     }
-
-    if (Array.isArray(st.tearingNetFishes)) {
-      const tSecH = now * 0.001;
-      for (let tf = 0; tf < st.tearingNetFishes.length; tf++) {
-        const fItem = st.tearingNetFishes[tf];
+    // 24마리 그물 속 물고기 순차 등장!
+    st.tearingNetFishes.forEach((fItem) => {
+      const show = u >= fItem.appearAt * 0.85;
+      fItem.mesh.visible = show;
+      if (show) {
         fItem.mesh.position.set(
-          fItem.bx + Math.sin(tSecH * 14 + fItem.phase) * 0.09,
-          fItem.by + Math.cos(tSecH * 12 + fItem.phase) * 0.09,
-          fItem.bz + Math.sin(tSecH * 11 + fItem.phase * 1.3) * 0.07
+          fItem.bx + Math.sin(tSec * 12 + fItem.phase) * 0.07,
+          fItem.by + Math.cos(tSec * 11 + fItem.phase) * 0.07,
+          fItem.bz + Math.sin(tSec * 10 + fItem.phase) * 0.06
         );
-        fItem.mesh.rotation.z = Math.sin(tSecH * 18 + fItem.phase) * 0.45;
         if (fItem.mesh.userData && fItem.mesh.userData.tailPivot) {
-          fItem.mesh.userData.tailPivot.rotation.y = Math.sin(tSecH * 24 + fItem.phase) * 0.55;
+          fItem.mesh.userData.tailPivot.rotation.y = Math.sin(tSec * 20 + fItem.phase) * 0.48;
         }
       }
-    }
-
-    if (st.tearingNetRopeMat) {
-      const tt = Math.max(0, Math.min(1, (st.netTension - 0.35) / 0.55));
-      if (tt < 0.5) {
-        st.tearingNetRopeMat.color.setHex(0xd6b88d).lerp(new THREE.Color(0xf59e0b), tt * 2.0);
-        st.tearingNetRopeMat.emissive.setHex(0x000000);
+    });
+    // 주변 16마리 물고기들이 나선형으로 그물 속으로 몰려듦!
+    st.swarmFishes.forEach((sf) => {
+      const localU = Math.max(0, Math.min(1, (u - sf.delay) / Math.max(0.25, 0.88 - sf.delay)));
+      if (localU <= 0 || localU >= 0.98) {
+        sf.mesh.visible = false;
       } else {
-        st.tearingNetRopeMat.color.setHex(0xf59e0b).lerp(new THREE.Color(0xef4444), (tt - 0.5) * 2.0);
-        st.tearingNetRopeMat.emissive.setHex(0x991b1b);
-      }
-    }
-    if (Array.isArray(st.tearingNetRopes) && st.tearingNetGroup) {
-      const _upAxis = new THREE.Vector3(0, 1, 0);
-      const _endVec = new THREE.Vector3();
-      const _midVec = new THREE.Vector3();
-      const _dirVec = new THREE.Vector3();
-      st.tearingNetRopes.forEach(r => {
-        if (!r.mesh) return;
-        r.mesh.visible = true;
-        _endVec.copy(st.tearingNetGroup.position).add(r.netOff);
-        _midVec.addVectors(r.start, _endVec).multiplyScalar(0.5);
-        _dirVec.subVectors(_endVec, r.start);
-        const len = Math.max(0.2, _dirVec.length());
-        r.mesh.position.copy(_midVec);
-        r.mesh.scale.set(1.0 + st.netTension * 0.25, len, 1.0 + st.netTension * 0.25);
-        r.mesh.quaternion.setFromUnitVectors(_upAxis, _dirVec.normalize());
-      });
-    }
-
-    if (st.boatRootGroup) {
-      st.boatRootGroup.position.y = Math.sin(now * 0.004) * 0.14;
-      st.boatRootGroup.rotation.z = -0.07 - st.netTension * 0.10 + Math.sin(now * 0.015) * 0.025;
-    }
-    window.__ep4SkipArmAnimThisFrame = true;
-    if (playerLimbs && playerLimbs.lArm && playerLimbs.rArm) {
-      const pullBob = Math.sin(now * 0.020) * 0.28 + st.haulTapImpulse * 0.8;
-      playerLimbs.lArm.rotation.x = -1.25 - pullBob;
-      playerLimbs.rArm.rotation.x = -1.25 - pullBob;
-    }
-
-    syncMiracleStage1UI();
-
-    if (st.haulProgress >= 0.99) {
-      st.haulProgress = 1.0;
-      st.phase = 'sunset_to_night';
-      st.sunsetTimer = 0;
-      if (st.tearingNetGroup) st.tearingNetGroup.visible = false;
-      if (Array.isArray(st.tearingNetRopes)) st.tearingNetRopes.forEach(r => { if (r.mesh) r.mesh.visible = false; });
-      if (st.catchBasketGrp && typeof createLowPolyFishMesh === 'function') {
-        for (let k = 0; k < 8; k++) {
-          const caughtF = createLowPolyFishMesh(null, 0.72, k);
-          caughtF.position.set((Math.random() - 0.5) * 0.65, 0.58 + k * 0.055, (Math.random() - 0.5) * 0.65);
-          caughtF.rotation.set(0.35, Math.random() * 6.28, 0.45);
-          st.catchBasketGrp.add(caughtF);
+        sf.mesh.visible = true;
+        const r = sf.startDist * (1.0 - localU);
+        const a = sf.startAngle + localU * 2.4;
+        const fx = st.netWorldPos.x + Math.cos(a) * r;
+        const fz = st.netWorldPos.z + Math.sin(a) * r;
+        sf.mesh.position.set(fx, -0.78 + Math.sin(localU * Math.PI) * 0.55, fz);
+        sf.mesh.rotation.y = Math.atan2(st.netWorldPos.x - fx, st.netWorldPos.z - fz);
+        if (sf.mesh.userData && sf.mesh.userData.tailPivot) {
+          sf.mesh.userData.tailPivot.rotation.y = Math.sin(tSec * 22 + sf.phase) * 0.5;
         }
       }
-      playSfx('clear');
+    });
+    updateMiracleRopeBundle(st.tearingNetRopes, ship, st.netWorldPos, netSc, 0.25 + u * 0.25, st, now);
+
+    if (st.peterMesh && typeof window.updateDiscipleSmoothPose === 'function') {
+      window.updateDiscipleSmoothPose(st.peterMesh, dt, now, 'pull_net', { intensity: 0.4 + u * 0.4 });
+    }
+    syncPlayerOntoShipDeck(st, 2.55, 0.06, -0.4, Math.PI * 0.5, ship ? ship.rotation.z : 0);
+
+    if (u >= 1.0) {
+      st.swarmFishes.forEach(sf => { if (sf.mesh) sf.mesh.visible = false; });
+      const holdParams = getMiracleStage1CoopParams();
+      // Step 7: 그물 잡기 유지 연타 게임 시작! (0%에서 시작 · 시작 유예 후 쉬면 게이지 감소 → 게임오버)
+      st.phase = 'hold_net_tap';
+      st.phaseTimer = 0;
+      st.holdGauge = 0.0;
+      st.holdArmed = false;
+      st.holdGraceTimer = holdParams.holdGrace;
+      st.holdSustainProgress = 0;
+      st.holdTapImpulse = 0;
+      st.lastHoldTapTime = performance.now();
+      playSfx('thunder');
+      syncMiracleStage1HudControlsVisibility();
       syncMiracleStage1UI();
       updateStageHUD();
-      return;
-    }
-  }
-
-  // 3-3) [노을 -> 밤 전환 연출 (4.2초): 해가 지고 달과 별이 뜨며 예수님 곁 등불이 켜짐]
-  if (st.phase === 'sunset_to_night') {
-    if (st.sunsetStartTime == null) {
-      st.sunsetStartTime = (window.MiracleDayNight && typeof window.MiracleDayNight.time === 'number')
-        ? window.MiracleDayNight.time
-        : 0.64;
-    }
-    st.sunsetTimer = (st.sunsetTimer || 0) + dt;
-    const u = Math.min(1.0, st.sunsetTimer / 4.2);
-    if (window.MiracleDayNight) {
-      window.MiracleDayNight.stageControlled = true;
-      const startT = st.enteredAtNight ? Math.max(0.74, st.sunsetStartTime) : 0.64;
-      window.MiracleDayNight.setTime(THREE.MathUtils.lerp(startT, 0.83, u));
-      window.MiracleDayNight.stormDarkness = Math.max(0, (u - 0.55) / 0.45) * 0.65;
-    }
-    st.sternLightPower = Math.max(st.enteredAtNight ? 0.85 : 0, (u - 0.35) / 0.65);
-    if (st.sternGlow) st.sternGlow.visible = (st.sternLightPower > 0.05);
-    if (st.sternGlowMat) st.sternGlowMat.opacity = st.sternLightPower * 0.18;
-    if (st.boatRootGroup) {
-      st.boatRootGroup.position.y = Math.sin(now * 0.003) * 0.22;
-      st.boatRootGroup.rotation.z = THREE.MathUtils.lerp(st.boatRootGroup.rotation.z, Math.sin(now * 0.0025) * 0.08, dt * 3);
-    }
-    if (st.jesusMesh) {
-      const lieU = ep4Smoothstep ? ep4Smoothstep(0.35, 1.0, u) : Math.max(0, Math.min(1, (u - 0.35) / 0.65));
-      st.jesusMesh.position.set(0, THREE.MathUtils.lerp(0.48, 0.72, lieU), THREE.MathUtils.lerp(8.2, 9.45, lieU));
-      st.jesusMesh.rotation.x = THREE.MathUtils.lerp(0, -Math.PI / 2, lieU);
-    }
-    if (u >= 1.0) {
-      startGalileeStormPhase();
+      showToast('✊ 0%에서 시작해요! 지금 바로 빠르게 연타해서 그물을 붙잡고 있으세요!');
     }
     return;
   }
 
-  // 고물 등불 글로우 애니메이션
+  // Step 7: 그물 잡기 유지 연타 (0% 시작 · 쉬면 게이지 감소 → 게임오버 / 55% 이상 유지 시 그물 팽창 + 배 기울기!)
+  if (st.phase === 'hold_net_tap') {
+    const params = getMiracleStage1CoopParams();
+    st.holdGraceTimer = Math.max(0, (st.holdGraceTimer || 0) - dt);
+    if (!st.holdArmed && (st.holdGauge >= 0.15 || st.holdGraceTimer <= 0)) {
+      st.holdArmed = true;
+    }
+    st.holdTapImpulse = Math.max(0, (st.holdTapImpulse || 0) - dt * 2.2);
+    const idleSec = (performance.now() - (st.lastHoldTapTime || 0)) * 0.001;
+    const drainMult = idleSec > 0.28 ? (params.holdIdleMult || 1.38) : 1.0;
+    if (st.holdGauge > 0) {
+      st.holdGauge = Math.max(0, st.holdGauge - params.holdDrain * drainMult * dt);
+    }
+
+    // 게이지가 0이 되면 게임오버! (단, 0% 시작 직후 초반 유예 동안은 즉시 종료 방지)
+    if (st.holdArmed && st.holdGauge <= 0.001) {
+      openMiracleStage1NetLostRetryModal();
+      return;
+    }
+
+    // 수준별 기준선(유치 40% · 유년 50% · 소년 55%) 이상으로 유지할 때 그물이 커지고 배가 기울어짐
+    if (st.holdGauge >= (params.holdThreshold || 0.50)) {
+      st.holdSustainProgress = Math.min(1.0, st.holdSustainProgress + dt / params.swellDur);
+    }
+
+    const sProg = st.holdSustainProgress;
+    const targetTilt = -(0.10 + sProg * 0.26); // 최대 -0.36 rad (약 -20.6도 급격히 우현 기울어짐!)
+    st.boatRollTilt = THREE.MathUtils.lerp(st.boatRollTilt, targetTilt, Math.min(1, dt * 4.5));
+    const vib = Math.sin(now * 0.036) * (0.012 + sProg * 0.022);
+
+    if (ship) {
+      ship.position.y = Math.sin(now * 0.005) * 0.16 - sProg * 0.24;
+      ship.rotation.z = st.boatRollTilt + vib;
+      ship.updateMatrixWorld(true);
+      st.netWorldPos.set(6.2, -0.52 - sProg * 0.18, -0.8);
+      ship.localToWorld(st.netWorldPos);
+      st.netWorldPos.y = -0.52 - sProg * 0.14;
+    }
+
+    const netSc = 1.18 + sProg * 0.96 + Math.sin(now * 0.022) * 0.05;
+    if (st.tearingNetGroup) {
+      st.tearingNetGroup.visible = true;
+      st.tearingNetGroup.position.copy(st.netWorldPos);
+      st.tearingNetGroup.scale.set(netSc, netSc * 0.92, netSc);
+    }
+    st.tearingNetFishes.forEach(fItem => {
+      fItem.mesh.visible = true;
+      fItem.mesh.position.set(
+        fItem.bx + Math.sin(tSec * 16 + fItem.phase) * 0.11,
+        fItem.by + Math.cos(tSec * 14 + fItem.phase) * 0.10,
+        fItem.bz + Math.sin(tSec * 13 + fItem.phase) * 0.08
+      );
+      fItem.mesh.rotation.z = Math.sin(tSec * 20 + fItem.phase) * 0.5;
+    });
+    if (st.tearingNetRopeMat) {
+      st.tearingNetRopeMat.color.setHex(0xd6b88d).lerp(new THREE.Color(0xef4444), sProg);
+      st.tearingNetRopeMat.emissive.setHex(sProg > 0.55 ? 0x7f1d1d : 0x000000);
+    }
+    updateMiracleRopeBundle(st.tearingNetRopes, ship, st.netWorldPos, netSc, 0.4 + sProg * 0.6, st, now);
+
+    if (st.peterMesh && typeof window.updateDiscipleSmoothPose === 'function') {
+      window.updateDiscipleSmoothPose(st.peterMesh, dt, now, 'pull_net', { intensity: 0.7 + sProg * 0.6 + st.holdTapImpulse });
+    }
+    syncPlayerOntoShipDeck(st, 2.55, 0.06, -0.4, Math.PI * 0.5, ship ? ship.rotation.z : 0);
+    window.__ep4SkipArmAnimThisFrame = true;
+    if (playerLimbs && playerLimbs.lArm && playerLimbs.rArm) {
+      const pullBob = Math.sin(now * 0.024) * 0.25 + st.holdTapImpulse * 0.85;
+      playerLimbs.lArm.rotation.x = -1.35 - pullBob;
+      playerLimbs.rArm.rotation.x = -1.35 - pullBob;
+    }
+
+    syncMiracleStage1UI();
+
+    if (sProg >= 1.0) {
+      // Step 8: 배가 뒤집힐 듯 기울자 베드로가 야고보·요한의 동업자 배에 소리침!
+      st.phase = 'call_partners';
+      st.phaseTimer = 0;
+      st.partnerArrived = false;
+      st.partnerProgress = 0;
+      if (st.partnerBoatGroup) st.partnerBoatGroup.visible = true;
+      playSfx('rescue');
+      syncMiracleStage1HudControlsVisibility();
+      syncMiracleStage1UI();
+      updateStageHUD();
+      speakMiracleStage1Line(
+        '야고보, 요한! 도와줘! 배가 뒤집힐 것 같아!',
+        MIRACLE_STAGE1_VOICE_FILES.peter04
+      );
+    }
+    return;
+  }
+
+  // Step 8: 베드로의 외침 + 야고보·요한의 조금 작은 배가 그물 반대편으로 접근!
+  if (st.phase === 'call_partners') {
+    const u = Math.min(1.0, st.phaseTimer / 3.6);
+    const easeU = 1.0 - Math.pow(1.0 - u, 3);
+    st.partnerProgress = easeU;
+
+    if (ship) {
+      ship.position.y = Math.sin(now * 0.004) * 0.14 - 0.24;
+      ship.rotation.z = THREE.MathUtils.lerp(-0.36, -0.26, easeU) + Math.sin(now * 0.02) * 0.015;
+      ship.updateMatrixWorld(true);
+      st.netWorldPos.set(6.2, -0.62, -0.8);
+      ship.localToWorld(st.netWorldPos);
+      st.netWorldPos.y = -0.62;
+    }
+
+    const netSc = 2.12 + Math.sin(now * 0.02) * 0.05;
+    if (st.tearingNetGroup) {
+      st.tearingNetGroup.position.copy(st.netWorldPos);
+      st.tearingNetGroup.scale.set(netSc, netSc * 0.92, netSc);
+    }
+    updateMiracleRopeBundle(st.tearingNetRopes, ship, st.netWorldPos, netSc, 0.9, st, now);
+
+    // 동업자 배가 먼 곳에서 그물 반대편으로 노를 저어 접근!
+    if (st.partnerBoatGroup && ship) {
+      const localP = new THREE.Vector3().lerpVectors(st.partnerBoatStartLocal, st.partnerBoatEndLocal, easeU);
+      const worldP = localP.clone();
+      ship.localToWorld(worldP);
+      st.partnerBoatGroup.position.set(worldP.x, Math.sin(now * 0.004 + 1.0) * 0.12, worldP.z);
+      st.partnerBoatGroup.rotation.y = st.boatHeading + THREE.MathUtils.lerp(-0.65, 0.0, easeU);
+      st.partnerBoatGroup.rotation.z = THREE.MathUtils.lerp(0, 0.14, easeU);
+      const rowEff = u < 0.92 ? 0.95 : 0;
+      animateGalileeBoatOars(st.partnerOarPivots, st.partnerRudderPivot, now, dt, rowEff, rowEff, 0);
+      if (st.jamesMesh) {
+        if (u < 0.85 && st.partnerOarPivots && st.partnerOarPivots.left && st.partnerOarPivots.left[0]) {
+          st.jamesMesh.position.set(-2.06, 0.06, -1.46);
+          st.jamesMesh.rotation.y = 0;
+          applyRowingOarHandIK(st.jamesMesh, st.jamesMesh.userData, st.partnerOarPivots.left[0].pivot, false, st.partnerBoatGroup);
+        } else {
+          resetActorRowingArmIK(st.jamesMesh, st.jamesMesh.userData, false);
+          st.jamesMesh.rotation.y = -Math.PI * 0.5;
+          if (typeof window.updateDiscipleSmoothPose === 'function') {
+            window.updateDiscipleSmoothPose(st.jamesMesh, dt, now, 'shout');
+          }
+        }
+      }
+      if (st.johnMesh) {
+        if (u < 0.85 && st.partnerOarPivots && st.partnerOarPivots.left && st.partnerOarPivots.left[1]) {
+          st.johnMesh.position.set(-2.04, 0.06, 1.94);
+          st.johnMesh.rotation.y = 0;
+          applyRowingOarHandIK(st.johnMesh, st.johnMesh.userData, st.partnerOarPivots.left[1].pivot, false, st.partnerBoatGroup);
+        } else {
+          resetActorRowingArmIK(st.johnMesh, st.johnMesh.userData, false);
+          st.johnMesh.rotation.y = -Math.PI * 0.5;
+          if (typeof window.updateDiscipleSmoothPose === 'function') {
+            window.updateDiscipleSmoothPose(st.johnMesh, dt, now, 'shout');
+          }
+        }
+      }
+    }
+
+    if (st.peterMesh && typeof window.updateDiscipleSmoothPose === 'function') {
+      window.updateDiscipleSmoothPose(st.peterMesh, dt, now, 'shout');
+    }
+    syncPlayerOntoShipDeck(st, 2.55, 0.06, -0.4, Math.PI * 0.5, ship ? ship.rotation.z : 0);
+
+    if (u >= 1.0 && !st.partnerArrived) {
+      st.partnerArrived = true;
+      updateMiracleRopeBundle(st.partnerNetRopes, st.partnerBoatGroup, st.netWorldPos, netSc, 0.75, st, now);
+      syncMiracleStage1UI();
+    }
+    // 도착 후 0.8초 뒤 자동으로 Step 9 협동 끌어올리기 돌입! (베드로 외침 MP3 재생 중이면 완료까지 최대 8초 대기)
+    const activeShoutAud = window.__activeNpcAudio;
+    const isShoutPlaying = Boolean(activeShoutAud && !activeShoutAud.paused && !activeShoutAud.ended && activeShoutAud.readyState >= 2);
+    if (st.phaseTimer >= 4.4 && (!isShoutPlaying || st.phaseTimer >= 8.0)) {
+      window.advanceMiracleStage1Cinema();
+    }
+    return;
+  }
+
+  // Step 9: 두 배가 함께 그물 끌어올리기 (유치-유년-소년 레벨 구분 연타! 소년반은 1차 그물잡기와 동급 연속 줄다리기 저항!)
+  if (st.phase === 'coop_haul_tap') {
+    const params = getMiracleStage1CoopParams();
+    st.coopTapImpulse = Math.max(0, (st.coopTapImpulse || 0) - dt * 2.2);
+    const coopIdleSec = (performance.now() - (st.lastCoopTapTime || 0)) * 0.001;
+    const coopDrainMult = coopIdleSec > 0.28 ? (params.coopIdleMult || 1.32) : 1.0;
+    if (st.coopProgress < 0.995 && st.coopProgress > 0.02) {
+      st.coopProgress = Math.max(0.02, st.coopProgress - params.decayRate * coopDrainMult * dt);
+    }
+
+    const cp = st.coopProgress;
+    if (ship) {
+      ship.position.y = Math.sin(now * 0.004) * 0.14 - (0.24 * (1 - cp * 0.4));
+      ship.rotation.z = THREE.MathUtils.lerp(-0.26, -0.08, cp) + Math.sin(now * 0.018) * 0.018;
+      ship.updateMatrixWorld(true);
+      st.netWorldPos.set(6.2, -0.65 + cp * 2.55, -0.8);
+      ship.localToWorld(st.netWorldPos);
+      st.netWorldPos.y = -0.65 + cp * 2.55;
+    }
+    if (st.partnerBoatGroup && ship) {
+      const worldP = st.partnerBoatEndLocal.clone();
+      ship.localToWorld(worldP);
+      st.partnerBoatGroup.position.set(worldP.x, Math.sin(now * 0.004 + 0.8) * 0.13 - (0.16 * (1 - cp * 0.4)), worldP.z);
+      st.partnerBoatGroup.rotation.y = st.boatHeading;
+      st.partnerBoatGroup.rotation.z = THREE.MathUtils.lerp(0.20, 0.06, cp) - Math.sin(now * 0.018) * 0.016;
+      animateGalileeBoatOars(st.partnerOarPivots, st.partnerRudderPivot, now, dt, 0, 0, 0);
+    }
+
+    const netSc = 2.08 - cp * 0.25 + Math.sin(now * 0.025) * 0.05;
+    if (st.tearingNetGroup) {
+      st.tearingNetGroup.position.copy(st.netWorldPos);
+      st.tearingNetGroup.scale.set(netSc, netSc * 0.92, netSc);
+    }
+    st.tearingNetFishes.forEach(fItem => {
+      fItem.mesh.position.set(
+        fItem.bx + Math.sin(tSec * 16 + fItem.phase) * 0.10,
+        fItem.by + Math.cos(tSec * 14 + fItem.phase) * 0.09,
+        fItem.bz + Math.sin(tSec * 12 + fItem.phase) * 0.08
+      );
+      fItem.mesh.rotation.z = Math.sin(tSec * 22 + fItem.phase) * 0.48;
+    });
+    if (st.tearingNetRopeMat) {
+      st.tearingNetRopeMat.color.setHex(0xf59e0b).lerp(new THREE.Color(0x22c55e), cp);
+      st.tearingNetRopeMat.emissive.setHex(0x000000);
+    }
+    updateMiracleRopeBundle(st.tearingNetRopes, ship, st.netWorldPos, netSc, 0.8 + Math.min(0.2, st.coopTapImpulse * 0.35), st, now);
+    updateMiracleRopeBundle(st.partnerNetRopes, st.partnerBoatGroup, st.netWorldPos, netSc, 0.8 + Math.min(0.2, st.coopTapImpulse * 0.35), st, now);
+
+    // 4명(베드로·야고보·요한·플레이어) 모두 힘껏 협동 당기기 애니메이션!
+    const pullInt = 0.85 + st.coopTapImpulse * 1.1;
+    if (typeof window.updateDiscipleSmoothPose === 'function') {
+      if (st.peterMesh) window.updateDiscipleSmoothPose(st.peterMesh, dt, now, 'pull_net', { intensity: pullInt });
+      if (st.jamesMesh) window.updateDiscipleSmoothPose(st.jamesMesh, dt, now, 'pull_net', { intensity: pullInt });
+      if (st.johnMesh)  window.updateDiscipleSmoothPose(st.johnMesh,  dt, now, 'pull_net', { intensity: pullInt });
+    }
+    syncPlayerOntoShipDeck(st, 2.55, 0.06, -0.4, Math.PI * 0.5, ship ? ship.rotation.z : 0);
+    window.__ep4SkipArmAnimThisFrame = true;
+    if (playerLimbs && playerLimbs.lArm && playerLimbs.rArm) {
+      const pullBob = Math.sin(now * 0.024) * 0.28 + st.coopTapImpulse * 0.9;
+      playerLimbs.lArm.rotation.x = -1.30 - pullBob;
+      playerLimbs.rArm.rotation.x = -1.30 - pullBob;
+    }
+
+    syncMiracleStage1UI();
+
+    if (cp >= 0.995) {
+      // Step 10: 두 배 모두 물고기가 넘치도록 가득 참!
+      st.phase = 'boats_full_celebration';
+      st.phaseTimer = 0;
+      if (st.tearingNetGroup) st.tearingNetGroup.visible = false;
+      hideMiracleRopeBundle(st.tearingNetRopes);
+      hideMiracleRopeBundle(st.partnerNetRopes);
+
+      populateBoatFishPile(st.fishPileGroup, 44, 2.7, 5.2);
+      populateBoatFishPile(st.partnerFishPileGroup, 30, 1.9, 3.6);
+      playSfx('clear');
+      syncMiracleStage1HudControlsVisibility();
+      syncMiracleStage1UI();
+      updateStageHUD();
+    }
+    return;
+  }
+
+  // Step 10: 두 배 모두 물고기 만선 축하 연출 (4.6초 후 또는 클릭으로 해변 장면 전환)
+  if (st.phase === 'boats_full_celebration') {
+    if (ship) {
+      ship.position.y = -0.28 + Math.sin(now * 0.0028) * 0.10; // 물고기가 가득해 배가 낮게 잠김
+      ship.rotation.z = THREE.MathUtils.lerp(ship.rotation.z, Math.sin(now * 0.0022) * 0.03, dt * 3.0);
+    }
+    if (st.partnerBoatGroup && ship) {
+      const worldP = st.partnerBoatEndLocal.clone();
+      ship.updateMatrixWorld(true);
+      ship.localToWorld(worldP);
+      st.partnerBoatGroup.position.set(worldP.x, -0.24 + Math.sin(now * 0.0028 + 1.0) * 0.10, worldP.z);
+      st.partnerBoatGroup.rotation.z = THREE.MathUtils.lerp(st.partnerBoatGroup.rotation.z, Math.sin(now * 0.0022 + 0.6) * 0.03, dt * 3.0);
+    }
+    if (typeof window.updateDiscipleSmoothPose === 'function') {
+      if (st.peterMesh) window.updateDiscipleSmoothPose(st.peterMesh, dt, now, 'celebrate');
+      if (st.jamesMesh) window.updateDiscipleSmoothPose(st.jamesMesh, dt, now, 'celebrate');
+      if (st.johnMesh)  window.updateDiscipleSmoothPose(st.johnMesh,  dt, now, 'celebrate');
+      if (st.jesusMesh) window.updateDiscipleSmoothPose(st.jesusMesh, dt, now, 'bless');
+    }
+    syncPlayerOntoShipDeck(st, 2.35, 0.06, -0.4, Math.PI * 0.35, ship ? ship.rotation.z : 0);
+    window.__ep4SkipArmAnimThisFrame = true;
+    if (playerLimbs && playerLimbs.lArm && playerLimbs.rArm) {
+      playerLimbs.lArm.rotation.x = -2.35 + Math.sin(now * 0.012) * 0.22;
+      playerLimbs.rArm.rotation.x = -2.35 - Math.sin(now * 0.012) * 0.22;
+    }
+    if (st.phaseTimer >= 4.8 && !st._beachTransitioning) {
+      transitionToGalileeBeachCalling(st);
+    }
+    return;
+  }
+
+  // Step 11: 갈릴리 해변에서 예수님의 제자 부르심
+  if (st.phase === 'beach_calling') {
+    if (typeof window.updateDiscipleSmoothPose === 'function') {
+      if (st.beachJesusMesh) window.updateDiscipleSmoothPose(st.beachJesusMesh, dt, now, 'bless');
+      if (st.beachPeterMesh) window.updateDiscipleSmoothPose(st.beachPeterMesh, dt, now, 'idle');
+      if (st.beachJamesMesh) window.updateDiscipleSmoothPose(st.beachJamesMesh, dt, now, 'idle');
+      if (st.beachJohnMesh)  window.updateDiscipleSmoothPose(st.beachJohnMesh,  dt, now, 'idle');
+    }
+    return;
+  }
+
+  // Step 12: 배와 그물을 뒤로하고 베드로·야고보·요한·플레이어가 예수님 뒤를 천천히 따라 걸어감 + 5줄 내레이션
+  if (st.phase === 'beach_follow_narration') {
+    st.narrationLineTimer = (st.narrationLineTimer || 0) + dt;
+    st.beachWalkDist = Math.min(52.0, (st.beachWalkDist || 0) + dt * 0.78);
+    const wd = st.beachWalkDist;
+
+    // 예수님이 해변 길을 따라 남쪽(+Z)으로 천천히 걸어가시고 세 제자 및 플레이어가 내레이션이 끝날 때까지 계속 뒤따름
+    const followT = Math.min(1.0, st.phaseTimer / 2.2);
+    if (st.beachJesusMesh) {
+      const jx = 30.8;
+      const jz = -1.8 + wd;
+      const jy = getGalileeBeachCallingGroundHeight(jx, jz) + 0.012;
+      st.beachJesusMesh.position.set(jx, jy, jz);
+      st.beachJesusMesh.rotation.y = lerpAngle(st.beachJesusMesh.rotation.y, 0, dt * 4.5);
+      if (typeof window.updateDiscipleSmoothPose === 'function') {
+        window.updateDiscipleSmoothPose(st.beachJesusMesh, dt, now, 'walk', { speed: 0.62 });
+      }
+    }
+    const moveDisciple = (mesh, startX, targetX, startZ, targetZOff, spd) => {
+      if (!mesh) return;
+      const nx = THREE.MathUtils.lerp(startX, targetX, followT);
+      const nz = startZ + Math.max(0, wd - 0.35) + targetZOff * followT;
+      const ny = getGalileeBeachCallingGroundHeight(nx, nz) + 0.012;
+      mesh.position.set(nx, ny, nz);
+      mesh.rotation.y = lerpAngle(mesh.rotation.y, 0.05 * (targetX - nx), dt * 4.0);
+      if (typeof window.updateDiscipleSmoothPose === 'function') {
+        window.updateDiscipleSmoothPose(mesh, dt, now, 'walk', { speed: spd });
+      }
+    };
+    moveDisciple(st.beachPeterMesh, 27.8, 30.5, -3.2, -0.7, 0.63);
+    moveDisciple(st.beachJamesMesh, 27.3, 29.3, -1.8, -3.5, 0.60);
+    moveDisciple(st.beachJohnMesh,  27.8, 31.6, -0.3, -5.2, 0.62);
+
+    // 플레이어도 제자들 뒤에서 지형 높이에 맞춰 다리·팔을 저으며 함께 걸어감
+    const plX = THREE.MathUtils.lerp(28.8, 30.5, followT);
+    const plZ = -5.4 + Math.max(0, wd - 1.2);
+    const plY = getGalileeBeachCallingGroundHeight(plX, plZ) + 0.012;
+    playerPos.set(plX, plY, plZ);
+    lastGroundedY = plY;
+    playerFacing = lerpAngle(playerFacing, 0, dt * 4.0);
+    window.__ep4ForcedWalkSpeed = (st.beachWalkDist < 51.8) ? 2.35 : 0;
+    if (playerGroup) {
+      playerGroup.position.copy(playerPos);
+      playerGroup.rotation.y = playerFacing;
+    }
+
+    // MP3 재생 중이면 자연 종료(onended)를 우선 대기하고, 미재생/오류 환경에서만 안전 자동 진행!
+    const activeNarAud = window.__activeNpcAudio;
+    const isNarMp3Playing = Boolean(activeNarAud && !activeNarAud.paused && !activeNarAud.ended && activeNarAud.readyState >= 2);
+    const safeMaxNarWait = isNarMp3Playing ? 18.0 : 5.8;
+    if (st.narrationLineTimer >= safeMaxNarWait) {
+      advanceGalileeBeachNarrationLine(st, (st.narrationIdx || 0) + 1);
+    }
+    return;
+  }
+
+  // Step 13~14: 화이트 전환(white_out) → 마가복음 1장 17절 클리어 모달!
+  if (st.phase === 'white_out') {
+    const u = Math.min(1.0, st.phaseTimer / 1.15);
+    const wf = document.getElementById('white-fade');
+    if (wf) wf.style.opacity = String(u.toFixed(3));
+    if (st.phaseTimer >= 1.25 && !st._whiteOutCompleted) {
+      st._whiteOutCompleted = true;
+      miracleMainStagesCleared[1] = true;
+      unlockMiracleNotebookEntry('mir_fish', true);
+      saveMiracleNotebookProgress();
+      if (typeof window.recordMiracleMissionCompleted === 'function') {
+        window.recordMiracleMissionCompleted('main_1', { deferPopup: true });
+      }
+      openStageClearModal(1);
+      setTimeout(() => {
+        if (wf) wf.style.opacity = '0';
+      }, 280);
+    }
+  }
+}
+
+// =========================================================================
+// 2-B. [야간 전용 스테이지 1] 갈릴리 밤바다의 풍랑 (기존 게임 야간 전용 이관)
+//      - 바로 2단계(밤 풍랑 균형 잡기) → 3단계(주무시는 예수님 깨우기) → 폭풍 잠잠케 하심(막 4:39)
+// =========================================================================
+function buildMiracleMainStage1NightStorm() {
+  clearWorld();
+  resetMiracleBoatRockingTransform();
+  stopMiracleStage1TTS();
+  miracleSubMode = 'main1_storm_night';
+  miracleStageObjects = [];
+
+  const dn1 = window.MiracleDayNight;
+  if (dn1) {
+    dn1.clearNightLightSources();
+    dn1.stageControlled = true;
+    dn1.freezeForNightMission = false;
+    dn1.stormDarkness = 0.68;
+    dn1.setTime(0.83); // 깊은 밤
+  }
+  if (typeof setupMiracleDynamicSunAndShadows === 'function') {
+    setupMiracleDynamicSunAndShadows();
+  }
+
+  scene.background = new THREE.Color(0x0b1730);
+  scene.fog = new THREE.Fog(0x0f172a, 55, 200);
+
+  const isKinder = (currentMode === 'kinder');
+  const balanceGoal = isKinder ? 10.5 : 14.5;
+
+  miracleActiveMiniState = {
+    phase: 'storm_balance', // 'storm_balance' | 'wake_jesus' | 'calm'
+    sternLightPower: 1.0,
+    boatTilt: 0.28,
+    waveGustForce: isKinder ? 0.50 : 0.68,
+    waveGustDir: 1,
+    waveGustTimer: 1.6,
+    holdLeft: false,
+    holdRight: false,
+    balanceProgress: 0,
+    balanceGoal,
+    noBalanceInputTimer: 0,
+    isDrainingGauge: false,
+    tiltWarnCooldown: 0,
+    seaMesh: null,
+    boatRootGroup: null,
+    sailPivot: null,
+    sternGlow: null,
+    sternGlowMat: null,
+    lanternLampMat: null,
+    jesusMesh: null,
+    jesusLabel: null,
+    peterMesh: null,
+    waves: [],
+    skyClouds: [],
+    seaBirds: []
+  };
+
+  currentMapRectBounds = { minX: -3.8, maxX: 3.8, minZ: -7.5, maxZ: 7.5 };
+
+  const env = buildSharedGalileeSeaAndCoast(true);
+  miracleActiveMiniState.seaMesh = env.seaFloor;
+  miracleActiveMiniState.skyClouds = env.skyClouds;
+  miracleActiveMiniState.seaBirds = env.seaBirds;
+  miracleActiveMiniState.waves = env.waves;
+
+  const shipBuilt = buildDetailedPlayableGalileeShip();
+  const { ship, sailPivot, syncShipSailSheets, sternGlow, sternGlowMat, lanternLampMat } = shipBuilt;
+  worldGroup.add(ship);
+  miracleActiveMiniState.boatRootGroup = ship;
+  miracleActiveMiniState.sailPivot = sailPivot;
+  miracleActiveMiniState.syncShipSailSheets = syncShipSailSheets;
+  miracleActiveMiniState.sternGlow = sternGlow;
+  miracleActiveMiniState.sternGlowMat = sternGlowMat;
+  miracleActiveMiniState.lanternLampMat = lanternLampMat;
+  if (sternGlow) sternGlow.visible = true;
+  if (sternGlowMat) sternGlowMat.opacity = 0.36;
+
+  const _s1SternLightPos = new THREE.Vector3(-1.3, 2.2, 9.6);
+  if (window.MiracleDayNight && typeof window.MiracleDayNight.registerNightLightSource === 'function') {
+    window.MiracleDayNight.registerNightLightSource({
+      getPos: () => {
+        if (ship && ship.parent) {
+          _s1SternLightPos.set(-1.3, 2.2, 9.6);
+          ship.localToWorld(_s1SternLightPos);
+        }
+        return _s1SternLightPos;
+      },
+      yOffset: 0.0,
+      color: 0xffad48,
+      intensity: 3.1,
+      distance: 17.5,
+      phase: 0.7,
+      isActive: () => Boolean(miracleSubMode === 'main1_storm_night' && miracleActiveMiniState && miracleActiveMiniState.sternLightPower > 0.05)
+    });
+  }
+
+  // 고물 베개에 평안히 누워 주무시는 예수님
+  const jesusMesh = createLowPolyPersonMesh('jesus', 0);
+  jesusMesh.position.set(0, 0.72, 9.45);
+  jesusMesh.rotation.set(-Math.PI / 2, 0, 0);
+  if (jesusMesh.userData) {
+    if (jesusMesh.userData.lArm) jesusMesh.userData.lArm.rotation.set(-0.25, 0, 0.20);
+    if (jesusMesh.userData.rArm) jesusMesh.userData.rArm.rotation.set(-0.25, 0, -0.20);
+  }
+  ship.add(jesusMesh);
+  miracleActiveMiniState.jesusMesh = jesusMesh;
+  miracleActiveMiniState.jesusLabel = createWorldLabel('😴 밤 풍랑 속에서도 등불 아래 베개에 누워 평안히 주무시는 예수님');
+  miracleActiveMiniState.jesusLabel.style.opacity = '0';
+
+  // 이물(선수) 쪽 신규 베드로 캐릭터
+  const peterMesh = createLowPolyPersonMesh('peter', 1);
+  peterMesh.position.set(1.6, 0.05, -6.2);
+  peterMesh.rotation.y = -Math.PI * 0.25;
+  ship.add(peterMesh);
+  miracleActiveMiniState.peterMesh = peterMesh;
+
+  window.globalCameraViewMode = 'default';
+  const camLblEl = document.getElementById('global-camera-view-label');
+  if (camLblEl) camLblEl.textContent = '기본';
+
+  playerPos.set(0, 0.06, -0.8);
+  lastGroundedY = 0.06;
+  playerVelY = 0;
+  isGrounded = true;
+  playerFacing = 0;
+  cameraYaw = 0;
+  cameraTargetYaw = 0;
+  if (typeof rebuildPlayerAppearance === 'function') rebuildPlayerAppearance();
+  if (typeof guideArrowGroup !== 'undefined' && guideArrowGroup) guideArrowGroup.visible = false;
+  snapCameraToPlayer();
+
+  if (typeof updateMiracleDynamicSun === 'function') {
+    updateMiracleDynamicSun(0, performance.now());
+  }
+  playRainOrSeaSound(5.5, true);
+  playSfx('thunder');
+  syncMiracleStage1HudControlsVisibility();
+  syncMiracleStage1UI();
+  if (typeof window.syncMiracleTimeHUD === 'function') window.syncMiracleTimeHUD();
+}
+
+function triggerGalileeCalmStormCutscene() {
+  const st = miracleActiveMiniState;
+  if (!st || st.phase === 'calm') return;
+  st.phase = 'calm';
+  isTimeAttackActive = false;
+  st.holdLeft = false;
+  st.holdRight = false;
+
+  const s1Ui = document.getElementById('miracle-s1-ui');
+  if (s1Ui) s1Ui.classList.add('hidden');
+  if (st.jesusLabel) st.jesusLabel.style.opacity = '0';
+  syncMiracleStage1HudControlsVisibility();
+
+  const wf = document.getElementById('white-fade');
+  if (wf) wf.style.opacity = '0.82';
+  setTimeout(() => {
+    if (window.MiracleDayNight) {
+      window.MiracleDayNight.stageControlled = true;
+      window.MiracleDayNight.stormDarkness = 0;
+      window.MiracleDayNight.setTime(0.85);
+    }
+    if (st.seaMesh && typeof tintIrregularLowPolyWater === 'function') {
+      tintIrregularLowPolyWater(st.seaMesh, false);
+    }
+    if (st.skyClouds) {
+      st.skyClouds.forEach(cl => {
+        cl.traverse(ch => {
+          if (ch.isMesh && !ch.userData._isCloudDepthPrepass) ch.material = matLowPoly('#475569');
+        });
+        cl._cloudMats = null;
+      });
+    }
+    if (wf) wf.style.opacity = '0';
+  }, 340);
+
+  miracleStageCutscene.active = true;
+  miracleStageCutscene.timer = 0;
+  miracleStageCutscene.stageNum = 1;
+  startStageBgm(1);
+  playSfx('clear');
+  showToast('✨ 예수께서 밤바다 바람을 꾸짖으시며 "잠잠하라! 고요하라!" 하시니 달빛 아래 바다가 아주 잔잔하여졌습니다!');
+}
+
+function updateMiracleMainStage1NightStormFrame(dt, now) {
+  if (typeof updateMiracleDynamicSun === 'function') {
+    updateMiracleDynamicSun(dt, now);
+  }
+  const st = miracleActiveMiniState;
+  if (!st) return;
+
+  if (typeof guideArrowGroup !== 'undefined' && guideArrowGroup) {
+    guideArrowGroup.visible = false;
+  }
+  const isStorming = (st.phase === 'storm_balance' || st.phase === 'wake_jesus');
+
+  if (st.waves) {
+    const amp = isStorming ? 1.05 : 0.20;
+    const spd = isStorming ? 0.0095 : 0.003;
+    st.waves.forEach(w => {
+      w.mesh.position.y = w.baseY + Math.sin(now * spd + w.phase) * amp;
+    });
+  }
+  if (st.seaBirds) {
+    st.seaBirds.forEach(b => { if (b && b.mesh) b.mesh.visible = false; });
+  }
+  if (st.sailPivot) {
+    st.sailPivot.rotation.x = isStorming
+      ? (0.14 + Math.sin(now * 0.014) * 0.14)
+      : (0.04 + Math.sin(now * 0.003) * 0.04);
+    if (typeof st.syncShipSailSheets === 'function') st.syncShipSailSheets();
+  }
+  if (st.peterMesh && typeof window.updateDiscipleSmoothPose === 'function') {
+    window.updateDiscipleSmoothPose(st.peterMesh, dt, now, isStorming ? 'shout' : 'idle');
+  }
   if (st.sternGlow && st.sternLightPower > 0.05) {
     st.sternGlow.visible = true;
     if (st.sternGlowMat) {
-      st.sternGlowMat.opacity = (0.14 + Math.sin(now * 0.011) * 0.04) * st.sternLightPower;
+      st.sternGlowMat.opacity = (0.16 + Math.sin(now * 0.011) * 0.05) * st.sternLightPower;
     }
   }
 
-  // 4) [2단계: 깊은 밤 풍랑 중 균형 잡기 + 등불 아래 주무시는 예수님]
+  // 폭풍 잠잠케 하심 컷신
+  if (miracleStageCutscene.active) {
+    miracleStageCutscene.timer += dt;
+    const t = miracleStageCutscene.timer;
+    if (st.boatRootGroup) {
+      st.boatRootGroup.rotation.z = THREE.MathUtils.lerp(st.boatRootGroup.rotation.z, 0, dt * 5.0);
+      st.boatRootGroup.position.y = THREE.MathUtils.lerp(st.boatRootGroup.position.y, 0, dt * 5.0);
+    }
+    if (playerGroup) playerGroup.rotation.z = 0;
+
+    if (st.jesusMesh) {
+      const riseT = Math.min(1, t / 0.85);
+      st.jesusMesh.rotation.x = THREE.MathUtils.lerp(-Math.PI / 2, 0, riseT);
+      st.jesusMesh.rotation.y = Math.PI;
+      st.jesusMesh.position.y = THREE.MathUtils.lerp(0.72, 0.48, riseT);
+      st.jesusMesh.position.z = THREE.MathUtils.lerp(9.45, 8.2, riseT);
+      if (typeof window.updateDiscipleSmoothPose === 'function') {
+        window.updateDiscipleSmoothPose(st.jesusMesh, dt, now, 'calm_storm');
+      } else if (st.jesusMesh.userData && st.jesusMesh.userData.rArm) {
+        st.jesusMesh.userData.rArm.rotation.x = -2.25 + Math.sin(now * 0.008) * 0.18;
+      }
+    }
+    cameraTargetYaw = Math.PI;
+    if (typeof applyCoreCameraByMode === 'function') applyCoreCameraByMode();
+
+    if (t >= 3.3) {
+      miracleStageCutscene.active = false;
+      unlockMiracleNotebookEntry('mir_storm', true);
+      saveMiracleNotebookProgress();
+      openStageClearModal(1);
+    }
+    return;
+  }
+
+  // 야간 1단계: 풍랑 균형 잡기
   if (st.phase === 'storm_balance') {
     const isKinder = (currentMode === 'kinder');
     st.waveGustTimer -= dt;
@@ -1694,27 +4202,18 @@ function updateMiracleMainStage1Frame(dt, now) {
       st.boatRootGroup.position.y = Math.sin(now * 0.006) * 0.48;
       st.boatRootGroup.rotation.x = Math.cos(now * 0.0048) * 0.055;
     }
-    if (playerGroup) {
-      playerGroup.rotation.z = rollAngle;
-    }
-    // CharacterAnimator와 양팔 균형 자세가 겹치지 않도록 플래그 설정
+    if (playerGroup) playerGroup.rotation.z = rollAngle;
     window.__ep4SkipArmAnimThisFrame = true;
     if (playerLimbs && playerLimbs.lArm && playerLimbs.rArm) {
       playerLimbs.lArm.rotation.z = 0.75 - st.boatTilt * 0.45;
       playerLimbs.rArm.rotation.z = -0.75 - st.boatTilt * 0.45;
     }
-
-    // 예수님 누워서 평안히 호흡하는 미세 움직임
     if (st.jesusMesh) {
       st.jesusMesh.position.y = 0.72 + Math.sin(now * 0.003) * 0.02;
     }
 
-    // 좌·우 버튼을 계속 안 누르고 방치하거나 배가 크게 기울면 균형 게이지가 실제로 깎이도록 처리!
-    if (st.holdLeft || st.holdRight) {
-      st.noBalanceInputTimer = 0;
-    } else {
-      st.noBalanceInputTimer = (st.noBalanceInputTimer || 0) + dt;
-    }
+    if (st.holdLeft || st.holdRight) st.noBalanceInputTimer = 0;
+    else st.noBalanceInputTimer = (st.noBalanceInputTimer || 0) + dt;
 
     if (st.tiltWarnCooldown > 0) st.tiltWarnCooldown -= dt;
     const outOfSafeZone = Math.abs(st.boatTilt) > 0.56;
@@ -1750,12 +4249,13 @@ function updateMiracleMainStage1Frame(dt, now) {
         playerLimbs.rArm.rotation.z = 0;
       }
       playSfx('rescue');
+      syncMiracleStage1HudControlsVisibility();
       syncMiracleStage1UI();
       updateStageHUD();
     }
   }
 
-  // 5) [3단계: 주무시는 예수님 깨우기 (버튼 클릭 또는 가까이 걸어가기 모두 지원)]
+  // 야간 2단계: 주무시는 예수님 깨우기
   if (st.phase === 'wake_jesus') {
     const gentleRoll = Math.sin(now * 0.004) * 0.14;
     if (st.boatRootGroup) {
@@ -1775,7 +4275,6 @@ function updateMiracleMainStage1Frame(dt, now) {
     }
   }
 
-  // 예수님 머리 위 태그 표시
   if (st.jesusMesh && st.jesusLabel) {
     const worldJPos = new THREE.Vector3();
     st.jesusMesh.getWorldPosition(worldJPos);
@@ -1783,6 +4282,140 @@ function updateMiracleMainStage1Frame(dt, now) {
     updateWorldLabelPos(st.jesusLabel, worldJPos, showTag);
   }
 }
+
+// =========================================================================
+// 2-C. [스테이지 1 공용 카메라 컨트롤러] 주간 12페이즈 & 야간 풍랑 전용 시네마틱 카메라
+// =========================================================================
+window.applyMiracleStage1Camera = function (cam, aspect) {
+  const st = miracleActiveMiniState;
+  if (!st || !cam) return false;
+
+  const isPortrait = aspect < 1.0;
+  const distScale = isPortrait ? Math.min(1.52, 0.90 + 0.38 / aspect) : (aspect < 1.3 ? 1.08 : 1.0);
+
+  if (miracleSubMode === 'main1_storm_night') {
+    const phase = st.phase;
+    if (phase === 'calm') {
+      const calmScale = isPortrait ? Math.min(1.36, 0.95 + 0.22 / aspect) : 1.0;
+      const jx = (st.jesusMesh) ? st.jesusMesh.position.x : 0;
+      const jz = (st.jesusMesh) ? st.jesusMesh.position.z : 8.2;
+      const targetCam = new THREE.Vector3(jx + 2.1 * calmScale, 2.55 + 0.48 * calmScale, jz - 5.4 * calmScale);
+      const cTimer = (typeof miracleStageCutscene !== 'undefined' && miracleStageCutscene.active) ? miracleStageCutscene.timer : 2.0;
+      const alpha = Math.min(1.0, 0.14 + cTimer * 0.18);
+      cam.position.lerp(targetCam, alpha);
+      cam.lookAt(jx, 1.78, jz);
+    } else {
+      const stormScale = isPortrait
+        ? Math.min(1.52, 0.92 + 0.40 / aspect)
+        : (aspect < 1.3 ? 1.10 : 1.0);
+      cam.position.set(
+        4.8 * stormScale,
+        5.8 + 2.8 * stormScale,
+        11.6 + 9.2 * stormScale
+      );
+      cam.lookAt(0, 1.05, 3.6);
+    }
+    return true;
+  }
+
+  if (miracleSubMode !== 'main1_galilee') return false;
+
+  const desiredPos = new THREE.Vector3();
+  const desiredLook = new THREE.Vector3();
+  let lerpAlpha = 0.085;
+  const ship = st.boatRootGroup;
+
+  const shipToWorld = (lx, ly, lz, out) => {
+    if (!ship) return out.set(lx, ly, lz);
+    ship.updateMatrixWorld(true);
+    out.set(lx, ly, lz);
+    return ship.localToWorld(out);
+  };
+
+  const ph = st.phase;
+  if (ph === 'intro_jesus') {
+    // 플레이어(2.45, 2.15)와 마스트(-3.4)가 전혀 가리지 않는 따뜻한 예수님 사선 클로즈업
+    shipToWorld(-2.25 * distScale, 2.75, 2.55, desiredPos);
+    shipToWorld(0.0, 1.72, 7.6, desiredLook);
+    lerpAlpha = 0.09;
+  } else if (ph === 'intro_peter') {
+    // 좌현(-X) 개방 공간에서 베드로를 비춰 중앙 마스트(0, -3.4) 및 플레이어(+2.45, +2.15) 가림 원천 차단!
+    const dExtra = Math.max(0, distScale - 1.0);
+    shipToWorld(-2.35 - dExtra * 0.95, 2.16 + dExtra * 0.32, -1.45 + dExtra * 1.65, desiredPos);
+    shipToWorld(-1.25, 1.48, -4.40, desiredLook);
+    lerpAlpha = 0.09;
+  } else if (ph === 'sail_to_deep') {
+    // 1세기 어선 선미 뒤쪽 상공 추적 카메라 (노 젓기 + 선수 나침반 화살표 + 전방 깊은 바다 비콘 조망)
+    shipToWorld(0, 11.2 * distScale, 18.8 * distScale, desiredPos);
+    shipToWorld(0, 1.2, -11.5, desiredLook);
+    lerpAlpha = 0.11;
+  } else if (ph === 'cast_net') {
+    shipToWorld(6.5 * distScale, 10.6 * distScale, 13.6 * distScale, desiredPos);
+    if (st.targetFishPos && st.targetFishPos.lengthSq() > 0.01) {
+      desiredLook.set(
+        playerPos.x * 0.42 + st.targetFishPos.x * 0.58,
+        0.2,
+        playerPos.z * 0.52 + st.targetFishPos.z * 0.48
+      );
+    } else {
+      shipToWorld(6.0, 0.2, -0.8, desiredLook);
+    }
+    lerpAlpha = 0.10;
+  } else if (ph === 'fish_gathering') {
+    shipToWorld(8.2 * distScale, 7.2 * distScale, 10.2 * distScale, desiredPos);
+    desiredLook.copy(st.netWorldPos).add(new THREE.Vector3(0, 0.25, 0));
+    lerpAlpha = 0.08;
+  } else if (ph === 'hold_net_tap') {
+    // 배의 기울기와 거대해지는 그물이 한눈에 보이는 드라마틱 측면 앵글
+    shipToWorld(9.4 * distScale, 6.8 * distScale, 11.4 * distScale, desiredPos);
+    shipToWorld(3.8, 0.5, -0.8, desiredLook);
+    lerpAlpha = 0.09;
+  } else if (ph === 'call_partners') {
+    // 베드로의 배 + 다가오는 야고보·요한의 배를 함께 담는 와이드 투샷
+    shipToWorld(7.8 * distScale, 9.6 * distScale, 17.8 * distScale, desiredPos);
+    shipToWorld(6.8, 0.8, -2.5, desiredLook);
+    lerpAlpha = 0.075;
+  } else if (ph === 'coop_haul_tap') {
+    // 두 배 사이 중앙의 거대 그물과 4명의 협동 당기기를 선명하게 담는 균형 앵글
+    shipToWorld(6.4 * distScale, 9.2 * distScale, 15.6 * distScale, desiredPos);
+    shipToWorld(6.2, 0.9, -0.8, desiredLook);
+    lerpAlpha = 0.085;
+  } else if (ph === 'boats_full_celebration') {
+    const orbit = st.phaseTimer * 0.28;
+    shipToWorld(6.2 + Math.sin(orbit) * 14.5 * distScale, 9.8 * distScale, -0.8 + Math.cos(orbit) * 15.5 * distScale, desiredPos);
+    shipToWorld(5.8, 0.9, -0.8, desiredLook);
+    lerpAlpha = 0.07;
+  } else if (ph === 'beach_calling') {
+    // 오픈월드 스타일 갈릴리 바닷가: 예수님·세 제자 + 뒤편 선착장·만선 두 배·갈대·바다가 함께 보이는 황금 구도!
+    desiredPos.set(30.4 + 4.4 * distScale, 4.3 * distScale, -10.4 * distScale);
+    desiredLook.set(27.8, 1.48, -1.8);
+    lerpAlpha = 0.08;
+  } else if (ph === 'beach_follow_narration') {
+    // 예수님 뒤를 따르는 베드로·야고보·요한과 멀어져 가는 선착장·배·그물을 함께 담는 영화적 트래킹 샷!
+    const jz = st.beachJesusMesh ? st.beachJesusMesh.position.z : -1.8;
+    desiredPos.set(36.4 + 2.2 * distScale, 5.2 * distScale, jz - 9.2 * distScale);
+    desiredLook.set(28.6, 1.50, jz - 1.4);
+    lerpAlpha = 0.065;
+  } else if (ph === 'white_out') {
+    const jz = st.beachJesusMesh ? st.beachJesusMesh.position.z : 14;
+    desiredPos.set(36.2, 6.2 + st.phaseTimer * 4.0, jz - 8.5);
+    desiredLook.set(29.8, 2.2 + st.phaseTimer * 1.5, jz + 2.0);
+    lerpAlpha = 0.06;
+  }
+
+  if (!st._camInitialized || st._camSnapNext) {
+    st._camPos.copy(desiredPos);
+    st._camLook.copy(desiredLook);
+    st._camInitialized = true;
+    st._camSnapNext = false;
+  } else {
+    st._camPos.lerp(desiredPos, lerpAlpha);
+    st._camLook.lerp(desiredLook, lerpAlpha);
+  }
+  cam.position.copy(st._camPos);
+  cam.lookAt(st._camLook);
+  return true;
+};
 
 // -------------------------------------------------------------------------
 // 3. [메인 스테이지 2] 오병이어 사건 (오픈월드 동북쪽 외곽 전망 언덕 지형 그대로 연동)
@@ -4470,38 +7103,36 @@ function buildMiracleEndingWorld() {
   }
 
   scene.background = new THREE.Color(0x38bdf8);
-  scene.fog = new THREE.Fog(0xe0f2fe, 75, 250);
-  currentMapRectBounds = { minX: -28, maxX: 28, minZ: -28, maxZ: 28 };
+  scene.fog = new THREE.Fog(0xe0f2fe, 95, 290);
+  currentMapRectBounds = { minX: -24, maxX: 24, minZ: -24, maxZ: 24 };
 
-  // 감람산 지형 — getMiracleGroundHeight(vx, vz, 4)와 100% 동일한 함수를 사용해 서쪽 원경 건물과 성전이 땅에 정확히 밀착!
+  // 감람산 3D 언덕 지형 (220x220 확장 · 정상 고원 y≈12m에서 사방 아래쪽 골짜기로 부드럽게 하강)
   const ascHeightFn = (vx, vz) => getMiracleGroundHeight(vx, vz, 4);
-  const cAscTop    = new THREE.Color('#7c9a45');
+  const cAscTop    = new THREE.Color('#739441');
   const cAscOlive  = new THREE.Color('#8ea854');
   const cAscMeadow = new THREE.Color('#b6b968');
   const cAscOchre  = new THREE.Color('#d8b674');
-  const cAscSlope  = new THREE.Color('#cf9f60');
+  const cAscSlope  = new THREE.Color('#c79b5c');
   const mountMesh = (typeof createCrispLowPolyFacetedTerrain === 'function')
-    ? createCrispLowPolyFacetedTerrain(160, 160, 44, 44, ascHeightFn, (mx, my, mz, slopeFlat, hash2, outCol) => {
-        if (mx < -30) {
-          outCol.copy(cAscOchre);
-        } else if (my > 1.6) {
-          outCol.copy(cAscTop);
-        } else if (slopeFlat < 0.945) {
-          outCol.copy(cAscSlope);
+    ? createCrispLowPolyFacetedTerrain(220, 220, 56, 56, ascHeightFn, (mx, my, mz, slopeFlat, hash2, outCol) => {
+        const patch = hash2(Math.floor(mx * 0.14), Math.floor(mz * 0.14));
+        if (my > 10.6) {
+          outCol.copy(cAscTop).lerp(cAscOlive, 0.20 + patch * 0.35);
+        } else if (my > 3.2) {
+          outCol.copy(slopeFlat < 0.96 ? cAscSlope : cAscOlive).lerp(cAscMeadow, patch * 0.35);
         } else {
-          const patch = hash2(Math.floor(mx * 0.16), Math.floor(mz * 0.16));
-          outCol.copy(cAscOlive).lerp(cAscMeadow, 0.25 + patch * 0.45);
+          outCol.copy(mx < -44 ? cAscOchre : cAscMeadow).lerp(cAscOlive, 0.20 + patch * 0.40);
         }
       }, 0.72)
-    : new THREE.Mesh(new THREE.PlaneGeometry(160, 160, 44, 44), new THREE.MeshPhongMaterial({ color: '#82a84d', flatShading: true, shininess: 0, specular: 0x000000 }));
+    : new THREE.Mesh(new THREE.PlaneGeometry(220, 220, 56, 56), new THREE.MeshPhongMaterial({ color: '#82a84d', flatShading: true, shininess: 0, specular: 0x000000 }));
   worldGroup.add(mountMesh);
 
   if (typeof buildStageDryStoneTerraceWalls === 'function') {
     buildStageDryStoneTerraceWalls(
       [
-        { pts: [[-22, -16], [-18, -4], [-20, 10], [-14, 20]], courses: 3 },
-        { pts: [[ 22, -16], [ 18, -4], [ 20, 10], [ 14, 20]], courses: 3 },
-        { pts: [[-16, -24], [0, -26], [16, -24]], courses: 2 }
+        { pts: [[-20, -14], [-17, -4], [-19, 8], [-13, 18]], courses: 3 },
+        { pts: [[ 20, -14], [ 17, -4], [ 19, 8], [ 13, 18]], courses: 3 },
+        { pts: [[-15, -22], [0, -24], [15, -22]], courses: 2 }
       ],
       ascHeightFn,
       860
@@ -4512,34 +7143,79 @@ function buildMiracleEndingWorld() {
   const summitPad = createLowPolyMesh(new THREE.CylinderGeometry(7.5, 8.5, 0.35, 16), '#f5e6c8', 0, summitPadY + 0.12, -8);
   worldGroup.add(summitPad);
 
-  // 서쪽 골짜기 원경 건물 3채: 경사면에 살짝 깊이 묻히도록 Y 오프셋 -0.25 보정하여 절대 뜨지 않게 밀착!
-  const b1 = addJudeanRoadsideBuilding(-44, -12, 1, Math.PI / 2, 0.95, false, 'stonebrick');
-  if (b1) b1.position.y -= 0.25;
-  const b2 = addJudeanRoadsideBuilding(-46,   8, 0, Math.PI / 2, 0.95, false, 'plaster');
-  if (b2) b2.position.y -= 0.25;
-  const b3 = addJudeanRoadsideBuilding(-56,  -2, 2, Math.PI / 2, 1.00, false, 'stonebrick');
-  if (b3) b3.position.y -= 0.25;
-
-  // ✅ 감람산 서쪽 골짜기 너머 예루살렘 성전 원경도 실제 지형 높이(getMiracleGroundHeight(-62, -2, 4))에 밀착 배치!
+  // 언덕 아래 기드론 골짜기 예루살렘 성전 원경
   if (typeof buildStageJerusalemTemple === 'function') {
-    const templeGroundY = getMiracleGroundHeight(-62, -2, 4);
-    buildStageJerusalemTemple(-62, templeGroundY - 0.35, -2, 0.85, Math.PI / 2, false);
+    const templeGroundY = getMiracleGroundHeight(-74, -10, 4);
+    buildStageJerusalemTemple(-74, templeGroundY - 0.55, -10, 0.92, Math.PI / 2, false);
   }
 
-  if (typeof createBumpyLowPolyHillMesh === 'function') {
-    createBumpyLowPolyHillMesh( 46, -24, 20, 6.5, 18, '#529336', 31, true);
-    createBumpyLowPolyHillMesh( 48,  16, 20, 6.8, 18, '#6da344', 32, true);
-    createBumpyLowPolyHillMesh(  0, -52, 24, 7.2, 18, '#428329', 33, true);
-  }
+  // 언덕 아래쪽 사방 기슭·골짜기에 배치되는 유대 마을 가옥 16채 (경사 밀착 보정)
+  const lowerHouseSpecs = [
+    [-56, -24, 1,  Math.PI * 0.42, 0.96, 'stonebrick'],
+    [-58,   8, 0,  Math.PI * 0.52, 0.98, 'plaster'],
+    [-68,  24, 2,  Math.PI * 0.35, 1.04, 'stonebrick'],
+    [-72, -32, 3,  Math.PI * 0.60, 1.02, 'plaster'],
+    [-38, -62, 4,  0.25,           0.95, 'plaster'],
+    [-14, -72, 1, -0.10,           1.05, 'stonebrick'],
+    [ 18, -70, 2, -0.35,           1.00, 'plaster'],
+    [ 44, -60, 0, -0.55,           0.94, 'stonebrick'],
+    [ 58, -32, 3, -Math.PI * 0.45, 1.02, 'plaster'],
+    [ 66,  -8, 1, -Math.PI * 0.50, 1.08, 'stonebrick'],
+    [ 64,  18, 4, -Math.PI * 0.62, 0.98, 'plaster'],
+    [ 78,   4, 0, -Math.PI * 0.55, 1.06, 'plaster'],
+    [ 44,  54, 2,  Math.PI * 0.80, 1.00, 'stonebrick'],
+    [ 16,  64, 1,  Math.PI * 0.95, 0.96, 'plaster'],
+    [-18,  62, 3, -Math.PI * 0.90, 1.04, 'plaster'],
+    [-48,  48, 4,  Math.PI * 0.68, 0.96, 'stonebrick']
+  ];
+  const lowerHouseCoords = [];
+  lowerHouseSpecs.forEach(([hx, hz, variant, yaw, sc, style]) => {
+    lowerHouseCoords.push([hx, hz]);
+    const b = addJudeanRoadsideBuilding(hx, hz, variant, yaw, sc, false, style);
+    if (b) {
+      const rFootDist = Math.hypot(hx / 1.05, hz + 4);
+      b.position.y -= (rFootDist < 62 ? 0.55 : 0.22);
+    }
+  });
 
+  // 감람산 정상 가장자리 좌·우 프레이밍 나무 (중앙 -Z 승천 시야 개방 유지)
   if (typeof addLowPolyCanopyTree === 'function') {
-    addLowPolyCanopyTree(-16, -12, 1.25, true);
-    addLowPolyCanopyTree( 16, -12, 1.25, true);
+    addLowPolyCanopyTree(-16.5, -11, 1.25, true);
+    addLowPolyCanopyTree( 16.5, -11, 1.25, true);
   }
+  [[-15, 7], [15, 7], [-18.5, -4], [18.5, -4], [-13, -18], [13, -18], [-21, 15], [21, 15]].forEach(([tx, tz], i) => {
+    if (i % 3 === 0) addLowPolyCypressPineTree(tx, tz, 1.18, true);
+    else addLowPolyOliveTree(tx, tz, 1.18 + (i % 2) * 0.14, true);
+  });
 
-  [[-14, 8], [14, 8], [-18, -6], [18, -6], [-12, -18], [12, -18], [-22, 16], [22, 16]].forEach(([tx, tz], i) => {
-    if (i % 3 === 0) addLowPolyCypressPineTree(tx, tz, 1.2, true);
-    else addLowPolyOliveTree(tx, tz, 1.2 + (i % 2) * 0.15, true);
+  // 언덕 중턱 아래~하단 골짜기 전역 수림대 (올리브·측백·캐노피·야자수 약 68그루, 건물 주변 회피)
+  const lowerTreeRings = [
+    { r: 34, count: 20, offset: 0.12 },
+    { r: 52, count: 24, offset: 0.27 },
+    { r: 74, count: 24, offset: 0.08 }
+  ];
+  let ascTreeIdx = 0;
+  lowerTreeRings.forEach(ring => {
+    for (let i = 0; i < ring.count; i++) {
+      const ang = (i / ring.count) * Math.PI * 2 + ring.offset;
+      const rad = ring.r + (((ascTreeIdx * 17) % 9) - 4) * 1.4;
+      const tx = Number((Math.cos(ang) * rad).toFixed(1));
+      const tz = Number((-4 + Math.sin(ang) * rad).toFixed(1));
+      ascTreeIdx++;
+      if (Math.hypot(tx + 74, tz + 10) < 20) continue;
+      if (lowerHouseCoords.some(([hx, hz]) => Math.hypot(tx - hx, tz - hz) < 8.8)) continue;
+      const tScale = 1.05 + (ascTreeIdx % 4) * 0.16;
+      const kindMod = ascTreeIdx % 11;
+      if (kindMod === 0 && typeof addLowPolyPalmTree === 'function') {
+        addLowPolyPalmTree(tx, tz, tScale * 1.05, false);
+      } else if ((kindMod === 1 || kindMod === 5) && typeof addLowPolyCanopyTree === 'function') {
+        addLowPolyCanopyTree(tx, tz, tScale, false);
+      } else if (kindMod % 3 === 2) {
+        addLowPolyCypressPineTree(tx, tz, tScale * 1.08, false);
+      } else {
+        addLowPolyOliveTree(tx, tz, tScale, false);
+      }
+    }
   });
 
   if (typeof addLowPolyWildflowerCluster === 'function') {
@@ -4548,7 +7224,7 @@ function buildMiracleEndingWorld() {
     });
   }
 
-  [[-18, 20, -22, 1.2], [18, 22, -20, 1.3], [-24, 18, 8, 1.15], [24, 19, 10, 1.2]].forEach(([cx, cy, cz, sc]) => {
+  [[-18, summitPadY + 19, -22, 1.2], [18, summitPadY + 21, -20, 1.3], [-24, summitPadY + 18, 8, 1.15], [24, summitPadY + 19, 10, 1.2]].forEach(([cx, cy, cz, sc]) => {
     const cl = createLowPolyCloudGroup(sc, false);
     cl.position.set(cx, cy, cz);
     worldGroup.add(cl);
@@ -5422,6 +8098,10 @@ REGISTER_EPISODE('miracle', {
     window.miracleWorldTreePositions = [];
     window.miracleZacchaeusGroveTrees = [];
     miracleStageCutscene.active = false;
+    if (typeof miracleActiveMiniState !== 'undefined' && miracleActiveMiniState && miracleActiveMiniState._narrationAutoTimer) {
+      clearTimeout(miracleActiveMiniState._narrationAutoTimer);
+      miracleActiveMiniState._narrationAutoTimer = null;
+    }
     if (typeof miracleAscensionState !== 'undefined' && miracleAscensionState) {
       miracleAscensionState.active = false;
       if (miracleAscensionState._endMinTimer) { clearTimeout(miracleAscensionState._endMinTimer); miracleAscensionState._endMinTimer = null; }
@@ -5432,6 +8112,7 @@ REGISTER_EPISODE('miracle', {
     _isEnteringMiracleStage = false;
     if (typeof playerGroup !== 'undefined' && playerGroup) {
       playerGroup.rotation.x = 0;
+      playerGroup.rotation.z = 0;
       playerGroup.scale.set(1, 1, 1);
     }
     window.__ep4SkipArmAnimThisFrame = false;
@@ -5514,27 +8195,56 @@ REGISTER_EPISODE('miracle', {
           : `빛기둥이 비추는 [메인 스테이지 ${nextSt}]을(를) 순서대로 진행하고, 반짝이는 빛의 원이 있는 비유·사건을 체험하세요!`;
       }
     } else if (miracleSubMode === 'main1_galilee') {
-      const ms = miracleActiveMiniState;
-      badge.textContent = '갈릴리 바다 · 스테이지 1';
-      countIcon.textContent = (ms.phase === 'cast_net' || ms.phase === 'haul_net') ? '🎣' : (ms.phase === 'sunset_to_night' ? '🌅' : '⛵');
-      countText.textContent = ms.phase === 'cast_net'
-        ? '낮 · 그물 던지기'
-        : (ms.phase === 'haul_net'
-          ? `만선 끌어올리기 ${Math.min(100, Math.round((ms.haulProgress || 0) * 100))}%`
-          : (ms.phase === 'sunset_to_night'
-            ? '노을 → 밤 전환'
-            : (ms.phase === 'storm_balance'
-              ? `밤 풍랑 균형 ${Math.min(100, Math.round((ms.balanceProgress / ms.balanceGoal) * 100))}%`
-              : '예수님 깨우기!')));
-      missionText.textContent = ms.phase === 'cast_net'
-        ? '예수님 말씀대로 배 오른편 물고기 떼를 향해 초록 구간에서 그물을 던지세요!'
-        : (ms.phase === 'haul_net'
-          ? '물고기 24마리가 걸려 그물이 찢어질 듯해요! 연타로 그물을 힘껏 끌어올리세요!'
-          : (ms.phase === 'sunset_to_night'
-            ? '해가 저물고 깊은 밤이 찾아오며 갈릴리 바다에 풍랑이 일고 있어요...'
-            : (ms.phase === 'storm_balance'
-              ? '어두운 밤 거센 풍랑으로 배가 기울어요! 반대쪽 버튼을 눌러 균형을 유지하세요!'
-              : '고물 등불 아래 베개에 누워 주무시는 예수님을 깨워 폭풍우를 잠재워 달라고 구하세요!')));
+      const ms = miracleActiveMiniState || {};
+      badge.textContent = '깊은 곳으로! · 스테이지 1';
+      const ph = ms.phase || 'intro_jesus';
+      if (ph === 'intro_jesus' || ph === 'intro_peter') {
+        countIcon.textContent = '✨';
+        countText.textContent = '제자 부르심';
+        missionText.textContent = '예수님과 베드로의 대화를 듣고 깊은 바다로 출항할 준비를 하세요!';
+      } else if (ph === 'sail_to_deep') {
+        countIcon.textContent = '⛵';
+        countText.textContent = '깊은 바다 항해';
+        missionText.textContent = '조이스틱·방향키로 어선의 노를 저어 먼 깊은 바다 목적지까지 이동하세요!';
+      } else if (ph === 'cast_net') {
+        countIcon.textContent = '🎣';
+        countText.textContent = '그물 던지기';
+        missionText.textContent = '깊은 바다 물고기 떼를 향해 초록 구간에서 손을 떼어 그물을 던지세요!';
+      } else if (ph === 'fish_gathering') {
+        countIcon.textContent = '🐟';
+        countText.textContent = '만선 조짐!';
+        missionText.textContent = '수많은 물고기가 그물 속으로 끝없이 몰려들고 있어요!';
+      } else if (ph === 'hold_net_tap') {
+        countIcon.textContent = '✊';
+        countText.textContent = `그물 유지 ${Math.min(100, Math.round((ms.holdSustainProgress || 0) * 100))}%`;
+        missionText.textContent = '쉬지 말고 빠르게 연타해서 무거운 그물을 끝까지 붙잡고 있으세요!';
+      } else if (ph === 'call_partners') {
+        countIcon.textContent = '📣';
+        countText.textContent = '야고보·요한 호출';
+        missionText.textContent = '배가 뒤집힐 것 같아요! 야고보와 요한의 배가 도우러 다가오고 있어요!';
+      } else if (ph === 'coop_haul_tap') {
+        countIcon.textContent = '🕸️';
+        countText.textContent = `협동 올리기 ${Math.min(100, Math.round((ms.coopProgress || 0) * 100))}%`;
+        missionText.textContent = '야고보·요한의 배와 함께 연타로 거대한 그물을 힘껏 끌어올리세요!';
+      } else if (ph === 'boats_full_celebration') {
+        countIcon.textContent = '🎉';
+        countText.textContent = '두 배 만선!';
+        missionText.textContent = '두 배 모두 물고기가 가득 찼어요! 갈릴리 해변으로 돌아갑니다!';
+      } else {
+        countIcon.textContent = '🏖️';
+        countText.textContent = '갈릴리 해변';
+        missionText.textContent = '예수님의 부르심을 받고 배와 그물을 뒤로한 채 새로운 여정을 시작해요!';
+      }
+    } else if (miracleSubMode === 'main1_storm_night') {
+      const ms = miracleActiveMiniState || {};
+      badge.textContent = '갈릴리 밤 풍랑 · 야간 스테이지 1';
+      countIcon.textContent = '🌙';
+      countText.textContent = ms.phase === 'storm_balance'
+        ? `밤 풍랑 균형 ${Math.min(100, Math.round(((ms.balanceProgress || 0) / (ms.balanceGoal || 12)) * 100))}%`
+        : (ms.phase === 'wake_jesus' ? '예수님 깨우기!' : '폭풍 잠잠!');
+      missionText.textContent = ms.phase === 'storm_balance'
+        ? '어두운 밤 거센 풍랑으로 배가 기울어요! 반대쪽 버튼을 눌러 균형을 유지하세요!'
+        : '고물 등불 아래 베개에 누워 주무시는 예수님을 깨워 폭풍우를 잠재워 달라고 구하세요!';
     } else if (miracleSubMode === 'main2_loaves') {
       const ms = miracleActiveMiniState;
       badge.textContent = '오병이어 · 스테이지 2';
@@ -5591,6 +8301,9 @@ REGISTER_EPISODE('miracle', {
     if (s1Ui) s1Ui.classList.add('hidden');
     const wf = document.getElementById('white-fade');
     if (wf) wf.style.opacity = '0';
+    if (typeof setInGameHudControlsVisible === 'function') {
+      setInGameHudControlsVisible(true);
+    }
     buildMiracleOpenWorld(true);
     if (typeof syncMiracleMainStageSequentialBeams === 'function') {
       syncMiracleMainStageSequentialBeams();
@@ -5605,6 +8318,7 @@ REGISTER_EPISODE('miracle', {
   updateStageFrame: function (dt, now, st) {
     if (miracleSubMode === 'openworld') updateMiracleOpenWorldFrame(dt, now);
     else if (miracleSubMode === 'main1_galilee') updateMiracleMainStage1Frame(dt, now);
+    else if (miracleSubMode === 'main1_storm_night') updateMiracleMainStage1NightStormFrame(dt, now);
     else if (miracleSubMode === 'main2_loaves') updateMiracleMainStage2Frame(dt, now);
     else if (miracleSubMode === 'main3_cross') updateMiracleMainStage3Frame(dt, now);
     else if (miracleSubMode === 'main4_tomb') updateMiracleMainStage4Frame(dt, now);

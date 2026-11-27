@@ -6,6 +6,9 @@
 // - 조준창 골리앗 놋투구·청동 비늘갑옷 픽셀 디테일 강화
 // =========================================================================
 
+window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
+window.__GAME_BUILD_VERSIONS__.ep3_base = '3.12.3';
+
 const DAVID_SCRIPTURE = {
   1: {
     title: '스테이지 1 클리어! 양 떼를 지키고 기름부음을 받았어요!',

@@ -883,6 +883,9 @@
         white-space: nowrap;
         flex-shrink: 0;
       }
+      #episode-stage-select-modal #ep-select-buttons > button.stage-select-hidden-btn {
+        grid-column: 1 / -1 !important;
+      }
       #episode-stage-select-modal .stage-select-back-btn {
         padding: 0.36rem 0.75rem !important;
         border-radius: 0.85rem !important;
@@ -2223,6 +2226,12 @@
         </div>
 
         <div class="opening-footer-row">
+          <button id="btn-opening-version" type="button"
+                  onclick="if(typeof openGameChangelogModal==='function') openGameChangelogModal();"
+                  title="업데이트 기록 보기"
+                  class="absolute left-0 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded-md bg-amber-900/10 hover:bg-amber-900/20 text-amber-900/80 hover:text-amber-950 font-jua text-[10px] sm:text-[11px] leading-none transition-colors cursor-pointer">
+            v3.12.3
+          </button>
           <p class="opening-footer font-jua text-amber-900/75 tracking-wide">
             광릉내 재림교회 어린이부
           </p>
@@ -2629,24 +2638,265 @@
     </div>
   </div>
 
-<!-- 게임 스크립트 로드 (전체 스크립트 캐시 강제 갱신 ?v=50 및 버전 일관성 자동 검증 적용) -->
-  <script src="core.js?v=50"></script>
-  <script src="ep1_noah.js?v=50"></script>
-  <script src="ep2_exodus.js?v=50"></script>
-  <script src="ep3_david_base.js?v=50"></script>
-  <script src="ep3_david_st1_2.js?v=50"></script>
-  <script src="ep3_david_st3_end.js?v=50"></script>
-  <script src="ep4_miracle_base.js?v=50"></script>
-  <script src="ep4_miracle_assets.js?v=50"></script>
-  <script src="ep4_miracle_world.js?v=50"></script>
-  <script src="ep4_miracle_stages.js?v=50"></script>
-  <script src="ep4_multiplayer.js?v=50"></script>
+  <!-- =================================================================== -->
+  <!-- [공통] 게임 버전 정보 & 전체 업데이트 기록 모달 (v3.12.3) -->
+  <!-- =================================================================== -->
+  <div id="changelog-modal"
+       onclick="if(event.target===this && typeof closeGameChangelogModal==='function') closeGameChangelogModal();"
+       class="hidden fixed inset-0 z-[95] flex items-center justify-center p-3 sm:p-5 bg-slate-950/75 backdrop-blur-sm">
+    <div class="mc-card w-full max-w-2xl max-h-[86dvh] rounded-3xl overflow-hidden flex flex-col bg-amber-50/95 border-4 border-amber-700/80 text-slate-800 shadow-2xl">
+      <!-- 상단 고정 헤더 -->
+      <div class="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 bg-gradient-to-r from-amber-100 to-amber-50 border-b border-amber-300/80 shrink-0">
+        <div class="flex items-center gap-2 flex-wrap">
+          <h2 class="font-jua text-lg sm:text-xl text-amber-950 leading-tight">📜 업데이트 기록</h2>
+          <span id="changelog-modal-ver-badge" class="px-2.5 py-0.5 rounded-full bg-amber-400/90 text-amber-950 font-jua text-xs border border-amber-600/40">v3.12.3</span>
+        </div>
+        <button type="button" onclick="if(typeof closeGameChangelogModal==='function') closeGameChangelogModal();"
+                class="mc-btn-slim px-3 py-1 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-jua text-xs sm:text-sm">
+          ✕ 닫기
+        </button>
+      </div>
+
+      <!-- 본문 스크롤 영역 -->
+      <div class="overflow-y-auto px-4 sm:px-6 py-4 space-y-4 text-left text-xs sm:text-[13px] leading-relaxed">
+        <!-- 🚀 최신 업데이트 (v3.9.0 ~ v3.12.3) -->
+        <section class="space-y-2.5">
+          <h3 class="font-jua text-sm sm:text-base text-rose-700 border-b border-amber-200 pb-1">🚀 최신 업데이트 (v3.9.0 ~ v3.12.3)</h3>
+
+          <div class="rounded-2xl bg-white/90 border border-amber-300 p-3 shadow-sm space-y-1">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-jua text-amber-950 text-sm">[v3.12.3]</span>
+              <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">최신</span>
+            </div>
+            <p class="font-bold text-slate-800">EP2 스테이지 1 미션 안내문 개편, EP1 카운트 실시간 연동 &amp; 골리앗 갑옷 깜빡임 해결</p>
+            <ul class="list-disc pl-4 space-y-0.5 text-slate-700">
+              <li><b>EP2 스테이지 1 안내문 변경</b>: 출애굽 스테이지 1 안내 문구를 "🪵 모세가 백성들을 데리고 이집트를 탈출했어요. 나무를 구해서 다리를 짓고 서둘러 홍해바다 앞으로 가세요."로 정비했습니다.</li>
+              <li><b>EP1 스테이지 3 미션안내 카운트 수정</b>: 동물을 구출해 상단 카운트(예: <code>3/7쌍</code>)가 올라갈 때 미션안내 버튼 내부 숫자도 실시간으로 함께 갱신되도록 수정했습니다.</li>
+              <li><b>EP3 골리앗 갑옷 깜빡임 해결</b>: 겹쳐 있던 청동 비늘·투구·견갑·방패·경갑 레이어를 계단식으로 분리하고 밉맵 필터와 자체 그림자 차단을 적용해 매끄럽게 보이도록 개선했습니다.</li>
+            </ul>
+          </div>
+
+          <div class="rounded-2xl bg-white/75 border border-amber-200 p-3 space-y-1">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-jua text-amber-950 text-sm">[v3.12.2]</span>
+            </div>
+            <p class="font-bold text-slate-800">EP4 스테이지 3·승천 언덕 배경 개편, 숨겨진 스테이지 버튼 &amp; 업데이트 팝업 정비</p>
+            <ul class="list-disc pl-4 space-y-0.5 text-slate-700">
+              <li><b>스테이지 3 시작 NPC 정비</b>: 골고다로 가는 길 시작 지점의 캐릭터를 예루살렘 여인으로 변경하고, 바로 옆에 로마 군인을 함께 배치했습니다.</li>
+              <li><b>승천 스테이지 감람산 언덕 개편</b>: 완만하게 솟은 3D 감람산 언덕 정상에서 아래쪽 골짜기의 유대 가옥·예루살렘 성전과 풍성한 나무 숲을 내려다보며 승천 장면을 감상할 수 있도록 개선했습니다.</li>
+              <li><b>숨겨진 스테이지 버튼 추가</b>: 에피소드 4까지 완주한 탐험대원에게 각 에피소드 스테이지 선택창 하단 <code>✨ 숨겨진 스테이지</code>(준비 중) 버튼을 표시하고, 버전 기록 팝업을 한층 간결하게 정리했습니다.</li>
+            </ul>
+          </div>
+
+          <div class="rounded-2xl bg-white/75 border border-amber-200 p-3 space-y-1">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-jua text-amber-950 text-sm">[v3.12.1]</span>
+            </div>
+            <p class="font-bold text-slate-800">곡선 어선 선체 업그레이드, 노-손 2-Bone IK 동기화 &amp; 스테이지 1 표현 정비</p>
+            <ul class="list-disc pl-4 space-y-0.5 text-slate-700">
+              <li><b>곡선 목선 선체(소프트 로우폴리)</b>: 주간 어선과 야고보·요한 동업자 어선의 계단식 선체를 13구간 연속 로프트 곡선, 베벨 뱃전 테두리, 테이퍼드 고물 단상 및 곡선 정렬 리깅으로 업그레이드했습니다.</li>
+              <li><b>노 젓기 양손 IK 1:1 동기화</b>: 항해 중 플레이어·베드로·야고보·요한의 양손이 노 손잡이(<code>gripL</code>·<code>gripR</code>)를 2-Bone IK로 정확히 파지해 함께 움직입니다.</li>
+              <li><b>스테이지 1 용어 정비</b>: 어선 출항 안내 및 HUD·업데이트 기록에서 불필요한 '1세기' 표현을 정비했습니다.</li>
+            </ul>
+          </div>
+
+          <div class="rounded-2xl bg-white/75 border border-amber-200 p-3 space-y-1">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-jua text-amber-950 text-sm">[v3.12.0]</span>
+            </div>
+            <p class="font-bold text-slate-800">월드맵 픽셀아트 개편(EP3·EP4) &amp; 탐험수첩·발자취 구글 시트 통합 저장/관리자 수정</p>
+            <ul class="list-disc pl-4 space-y-0.5 text-slate-700">
+              <li><b>픽셀 월드맵 개편</b>: 에피소드 3을 고대 사암 석조 요새(다윗의 성)와 베들레헴 작은 양 떼·유대 가옥으로, 에피소드 4를 흰 석조·황금 지붕의 예루살렘 성전과 갈릴리 호수·어선·요단강·올리브 숲으로 개편하고 이집트 피라미드를 EP2 구역으로 정돈했습니다.</li>
+              <li><b>탐험수첩·발자취·에피소드 시트 통합 동기화</b>: 기기를 바꾸더라도 에피소드 진행·인증서, 탐험수첩(37종), 완료 미션(22종), 예수님의 발자취 카드(5단계)가 구글 시트(<code>PlayerProgress</code>)를 통해 합집합 병합 및 자동 복원됩니다.</li>
+              <li><b>관리자 조회·수정 기능</b>: <code>admin.html</code>에서 어린이별 에피소드·인증서·발자취·탐험수첩을 한눈에 조회하고 직접 추가·수정·회수할 수 있으며, 관리자 수정본이 다음 접속 시 우선 반영됩니다.</li>
+              <li><b>공통 카탈로그 자동 연동(<code>game_catalog.js</code>)</b>: 발자취 카드·미션·탐험수첩 목록을 공통 모듈로 통합해 향후 항목 확장 시 게임·관리자·구글 시트에 자동 반영되며, 미등록 확장 항목도 유실 없이 보존합니다.</li>
+            </ul>
+          </div>
+
+          <div class="rounded-2xl bg-white/75 border border-amber-200 p-3 space-y-1">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-jua text-amber-950 text-sm">[v3.11.2]</span>
+            </div>
+            <p class="font-bold text-slate-800">스테이지 1 배경 평지화, 플레이어 경사 발 &amp; 전체 에피소드 쉐브론 화살표 개편</p>
+            <ul class="list-disc pl-4 space-y-0.5 text-slate-700">
+              <li>에피소드 4 스테이지 1(주간·야간)의 노란 3D 화살표를 모두 제거했습니다.</li>
+              <li>비현실적인 산·언덕 덩어리(14개)를 제거하고, 완만한 갈릴리 평지 위에 다층 가옥(48채)·돌담·수림대(180그루)를 배치해 맵 가장자리를 자연스럽게 차폐했습니다.</li>
+              <li>에피소드 4 공통 플레이어 캐릭터 발을 예수님·베드로처럼 앞부분이 경사진 다면체로 조형하고 샌들 끈과 버클이 선명히 보이도록 조정했습니다.</li>
+              <li>전체 에피소드(EP1~EP4) 공통 3D 가이드 화살표를 뒤에서 정방향으로 볼 때도 사각형으로 뭉개지지 않는 카메라 경사 보정 <b>2톤 입체 쉐브론 화살표</b>로 업그레이드했습니다(소년반 미표시 유지).</li>
+            </ul>
+          </div>
+
+          <div class="rounded-2xl bg-white/75 border border-amber-200 p-3 space-y-1">
+            <div class="font-jua text-amber-950">[v3.11.1] — 스테이지 1 2차 폴리싱, 바다 확장·곡선 해안 &amp; 난이도 정비</div>
+            <ul class="list-disc pl-4 space-y-0.5 text-slate-700">
+              <li>예수님·베드로·야고보·요한 의복 전면 주름 숄 복구, 마지막 해변 씬 플레이어 보행 연동 및 느린 연속 걷기, 베드로 대사 시 마스트 가림 해소, 퀴즈 하단 버튼 문구 수정 및 해변 돌 위 그물 제거.</li>
+              <li>갈릴리 바다 확장(840×840)과 완만한 곡선 해안선 적용, 항해 중 베드로·플레이어 노 잡기 위치 및 동작을 동기화했습니다.</li>
+              <li>1·2차 그물 잡기 게임을 유치·유년·소년반 수준별로 정비(2차 소년반 난이도 상향)하고 플레이어 샌들 끈 디테일을 강화했습니다.</li>
+            </ul>
+          </div>
+
+          <div class="rounded-2xl bg-white/75 border border-amber-200 p-3 space-y-1">
+            <div class="font-jua text-amber-950">[v3.11.0] — 스테이지 1 성우 음성 MP3(12종) 연동 &amp; 예수님 턴어라운드 리뉴얼</div>
+            <ul class="list-disc pl-4 space-y-0.5 text-slate-700">
+              <li>주간 스테이지 1 대사·내레이션·성경절 12종(<code>ep4_st1_*.mp3</code>) MP3 우선 재생 및 TTS 자동 폴백을 연동하고 중복 TTS를 억제했습니다.</li>
+              <li>예수님 캐릭터 5면 턴어라운드 소프트 로우폴리 모델 및 다관절 애니메이션을 적용하고, 어선 돛 리깅·6분절 곡선 그물 밧줄·해변 발 빠짐 수정을 반영했습니다.</li>
+            </ul>
+          </div>
+
+          <div class="rounded-2xl bg-white/75 border border-amber-200 p-3 space-y-1">
+            <div class="font-jua text-amber-950">[v3.10.0] — 에피소드 4 스테이지 1 전면 개편 ("깊은 곳으로!") &amp; 야간 풍랑 분리</div>
+            <ul class="list-disc pl-4 space-y-0.5 text-slate-700">
+              <li>주간 스테이지 1을 어선 항해 → 그물 투척 → 1차 그물 유지 → 야고보·요한 동업자 배 합류 협동 끌어올리기 → 갈릴리 해변 부르심(마가복음 1:17) 14단계 체험으로 전면 개편했습니다.</li>
+              <li>기존 갈릴리 밤바다 풍랑 미션(마가복음 4:39)은 야간 시간대 및 월드맵 야간 전용 버튼으로 분리 보존하고, 베드로·야고보·요한 턴어라운드 모델과 다관절 모션을 도입했습니다.</li>
+            </ul>
+          </div>
+
+          <div class="rounded-2xl bg-white/75 border border-amber-200 p-3 space-y-1">
+            <div class="font-jua text-amber-950">[v3.9.0] — 겨자씨 비유 미니게임 개편 &amp; 에피소드 4 음성 시스템 통합</div>
+            <ul class="list-disc pl-4 space-y-0.5 text-slate-700">
+              <li>겨자씨 비유(<code>par_mustard</code>)를 씨앗 탐색 → 흙밭 심기 → 물 항아리 찾아 붓기 → 5분 실시간 관목 성장·개화·작은 새 3마리 영구 복원 미니게임으로 개편했습니다.</li>
+              <li>에피소드 4 성우 음성 16종 MP3 통합 및 창 닫기·백그라운드 즉시 정지를 연동하고, EP2 스테이지 2 <code>topdown</code> 카메라 초기화 및 삭개오 돌무화과나무 열매 밀착을 보정했습니다.</li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- 🚀 안정화 및 UI/UX 개편 (v3.5.0 ~ v3.8.5) -->
+        <section class="space-y-2.5">
+          <h3 class="font-jua text-sm sm:text-base text-amber-900 border-b border-amber-200 pb-1">🚀 안정화·생활·멀티플레이 (v3.5.0 ~ v3.8.5)</h3>
+
+          <div class="rounded-2xl bg-white/75 border border-amber-200 p-3 space-y-1">
+            <div class="font-jua text-amber-950">[v3.8.5] — 안정화·용어 정비 및 UI/UX 최종 보정</div>
+            <ul class="list-disc pl-4 space-y-0.5 text-slate-700">
+              <li><b>교리 및 용어 정비</b>: 에피소드 4 내 용어를 '세례'에서 '침례'로 통일하고, '모험의 증표' 예수님의 발자취 카드의 불필요한 색상명 표기를 제거했으며, TTS가 이모티콘을 읽지 않도록 개선했습니다.</li>
+              <li><b>UI 및 화면 비율 최적화</b>: 모바일 가로·세로 전환 시 인증카드 스크롤바 제거 및 비율 보정, 수집 카드 플립 안내·본문 겹침 해소, 말풍선 출력 직후 액션 시작 타이밍 보정, 종료/'오픈월드로 돌아가기' 버튼 정리 및 2회차 엔딩 SKIP 버튼을 지원합니다.</li>
+              <li><b>밸런스 및 버그 수정</b>: 중풍병자 친구 2명 조정 및 들것·밧줄 보완, 삭개오 나무 위 가시성 보정, EP1 엔딩 인증카드 1회 출력 수정, EP4 밤 시간대 '반석 위의 집' 사라짐·가로모드 낚시 모션·월드맵 직접 진입 캐릭터 오류를 수정했습니다.</li>
+            </ul>
+          </div>
+
+          <div class="rounded-2xl bg-white/75 border border-amber-200 p-3 space-y-1">
+            <div class="font-jua text-amber-950">[v3.7.0 ~ v3.8.0] — 생활 콘텐츠 확장 및 모바일 성능 최적화</div>
+            <ul class="list-disc pl-4 space-y-0.5 text-slate-700">
+              <li><b>신규 생활 시스템</b>: 플레이어 집 추가(잠자기로 밤 시간대 연결) 및 오픈월드를 함께 탐험하는 반려동물 시스템을 추가했습니다.</li>
+              <li><b>모바일 프레임 최적화 및 카메라 개편</b>: 원거리 건물·나무·NPC 단계별 디테일(LOD) 도입, 가로·세로 화면 비율별 시야각/거리 자동 보정 및 벽·천장 통과 시점 가림 방지(Wall Clipping) 레이캐스트 보정을 적용했습니다.</li>
+            </ul>
+          </div>
+
+          <div class="rounded-2xl bg-white/75 border border-amber-200 p-3 space-y-1">
+            <div class="font-jua text-amber-950">[v3.5.0 ~ v3.6.0] — 온라인 멀티플레이 고도화 및 탐험 편의 기능</div>
+            <ul class="list-disc pl-4 space-y-0.5 text-slate-700">
+              <li><b>멀티플레이 전용 기능</b>: 패스파인더 대원·어드벤처러 대원 캐릭터 추가, 나무 20개·돌 20개 채집 및 대형 '반석 위의 집' 공동 건축, 실시간 접속 인원 표시창·감정표현·소년반 내비게이터를 추가했습니다.</li>
+              <li><b>연출 및 초보자 튜토리얼</b>: 에피소드 4 오프닝 영상·탑뷰 조망 연출, 엔딩 후 오픈월드 복귀/엔딩 세상 둘러보기, 최초 접속 플레이어 대상 움직이는 화살표 튜토리얼을 추가했습니다.</li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- 🌟 주요 기능 업데이트 (v3.0.0 ~ v3.4.0) -->
+        <section class="space-y-2.5">
+          <h3 class="font-jua text-sm sm:text-base text-indigo-800 border-b border-amber-200 pb-1">🌟 주요 기능 업데이트 (v3.0.0 ~ v3.4.0)</h3>
+
+          <div class="rounded-2xl bg-white/75 border border-amber-200 p-3 space-y-1">
+            <div class="font-jua text-amber-950">[v3.3.0 ~ v3.4.0] — 성경 사건·비유 미니게임 추가 및 수집 도감 개편</div>
+            <ul class="list-disc pl-4 space-y-0.5 text-slate-700">
+              <li><b>신규 체험 미니게임 12종</b>: 부활 후 예수님과 아침식사(낚시·굽기), 씨뿌리기(돌·가시·잡초 제거 및 성장), 잃어버린 어린양·삭개오·중풍병자·선한 사마리아인·가나 잔치집·수가성 여인·돌아온 1명·마가의 다락방·호산나·과부의 두 렙돈 구현.</li>
+              <li><b>모험의 증표 &amp; 탐험수첩(36종)</b>: '에피소드'/'예수님의 발자취' 3D 플립 인증카드 수집함 신설 및 탐험수첩 36종·실시간 수집 현황창 개편.</li>
+            </ul>
+          </div>
+
+          <div class="rounded-2xl bg-white/75 border border-amber-200 p-3 space-y-1">
+            <div class="font-jua text-amber-950">[v3.1.0 ~ v3.2.0] — 30분 주기 낮/밤 생태계 및 사운드 리뉴얼</div>
+            <ul class="list-disc pl-4 space-y-0.5 text-slate-700">
+              <li><b>실시간 낮/밤 사이클(30분 주기)</b>: 낮(20분)→일몰(2분)→밤(6분)→일출(2분) 순환, 상단 게이지·빨리감기 배속, 해/달·노을·별똥별 및 화롯대·모닥불·등잔·횃불 동적 조명 구현.</li>
+              <li><b>밤 전용 콘텐츠 &amp; 사운드</b>: 로마 군인 순찰·니고데모 이야기·갈릴리 밤 풍랑·주민 귀가 및 양 떼 수면 생태계, 남성 성우 오프닝·엔딩 내레이션과 1분 루프 전용 BGM·자연 환경음 추가.</li>
+            </ul>
+          </div>
+
+          <div class="rounded-2xl bg-white/75 border border-amber-200 p-3 space-y-1">
+            <div class="font-jua text-amber-950">[v3.0.0] — 에피소드 4 (예수님 오픈월드) &amp; 멀티플레이 출시</div>
+            <ul class="list-disc pl-4 space-y-0.5 text-slate-700">
+              <li>1세기 이스라엘 자유 탐험형 오픈월드와 4대 메인 스테이지(갈릴리 풍랑 / 오병이어의 기적 / 골고다 십자가의 길 / 빈 무덤과 승천)를 출시했습니다.</li>
+              <li>에피소드 4 클리어 시 온라인 멀티플레이 모드가 해금되며 소프트 로우 폴리곤(Soft Low-Poly) 3D 스타일을 전 맵에 적용했습니다.</li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- 📖 초기 에피소드 출시 이력 (v1.0.0 ~ v2.0.0) -->
+        <section class="space-y-2.5">
+          <h3 class="font-jua text-sm sm:text-base text-slate-700 border-b border-amber-200 pb-1">📖 초기 에피소드 출시 이력 (v1.0.0 ~ v2.0.0)</h3>
+
+          <div class="rounded-2xl bg-white/75 border border-amber-200 p-3 space-y-1">
+            <div class="font-jua text-amber-950">[v2.0.0] — 에피소드 3 (다윗) 출시 및 기록·해금 시스템 구축</div>
+            <ul class="list-disc pl-4 space-y-0.5 text-slate-700">
+              <li>에피소드 3(양 떼 돌보기 및 디펜스 / 엘라 골짜기 물맷돌·골리앗 결투 / 예루살렘 성읍 건설 / 왕좌 엔딩)을 추가했습니다.</li>
+              <li>이름·생일 기반 구글 스프레드시트 개인 기록 저장·순차 해금 시스템 및 전 에피소드 타임어택 난이도를 도입했습니다.</li>
+            </ul>
+          </div>
+
+          <div class="rounded-2xl bg-white/75 border border-amber-200 p-3 space-y-1">
+            <div class="font-jua text-amber-950">[v1.0.0] — 정식 출시 (에피소드 1 노아의 방주 · 에피소드 2 엑소더스)</div>
+            <ul class="list-disc pl-4 space-y-0.5 text-slate-700">
+              <li>에피소드 1(동물 7쌍 모으기, 흔들리는 방주 내부 미로 탐험, 아라랏산 무지개 엔딩) 및 에피소드 2(광야 다리 건설, 홍해 추격전, 시내산 수직 파쿠르 및 십계명 돌판 획득) 정식 출시.</li>
+            </ul>
+          </div>
+        </section>
+      </div>
+
+      <!-- 하단 닫기 버튼 -->
+      <div class="px-4 sm:px-6 py-2.5 bg-amber-100/70 border-t border-amber-300/70 flex justify-end shrink-0">
+        <button type="button" onclick="if(typeof closeGameChangelogModal==='function') closeGameChangelogModal();"
+                class="mc-btn px-5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-jua text-sm">
+          확인
+        </button>
+      </div>
+    </div>
+  </div>
+
+<!-- 게임 스크립트 로드 (v3.12.3 캐시 강제 갱신 및 12개 전 모듈 일관성 자동 검증 적용) -->
+  <script>
+    window.GAME_VERSION = '3.12.3';
+    window.GAME_BUILD_DATE = '2026-11-27';
+    function openGameChangelogModal() {
+      const m = document.getElementById('changelog-modal');
+      if (m) m.classList.remove('hidden');
+    }
+    function closeGameChangelogModal() {
+      const m = document.getElementById('changelog-modal');
+      if (m) m.classList.add('hidden');
+    }
+    window.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        const m = document.getElementById('changelog-modal');
+        if (m && !m.classList.contains('hidden')) closeGameChangelogModal();
+      }
+    });
+    (function syncOpeningVersionLabels() {
+      const verLabel = 'v' + window.GAME_VERSION;
+      const btn = document.getElementById('btn-opening-version');
+      const badge = document.getElementById('changelog-modal-ver-badge');
+      if (btn) btn.textContent = verLabel;
+      if (badge) badge.textContent = verLabel;
+    })();
+  </script>
+  <script src="game_catalog.js?v=3.12.3"></script>
+  <script src="core.js?v=3.12.3"></script>
+  <script src="ep1_noah.js?v=3.12.3"></script>
+  <script src="ep2_exodus.js?v=3.12.3"></script>
+  <script src="ep3_david_base.js?v=3.12.3"></script>
+  <script src="ep3_david_st1_2.js?v=3.12.3"></script>
+  <script src="ep3_david_st3_end.js?v=3.12.3"></script>
+  <script src="ep4_miracle_base.js?v=3.12.3"></script>
+  <script src="ep4_miracle_assets.js?v=3.12.3"></script>
+  <script src="ep4_miracle_world.js?v=3.12.3"></script>
+  <script src="ep4_miracle_stages.js?v=3.12.3"></script>
+  <script src="ep4_multiplayer.js?v=3.12.3"></script>
   <script>
     // GitHub Pages CDN·브라우저 부분 캐시로 신·구버전 스크립트가 뒤섞여 로드되는 현상을 자동 감지해 1회 강제 새로고침
     (function verifyScriptBuildConsistency() {
-      const EXPECTED = '20261126_v50';
+      const EXPECTED = window.GAME_VERSION || '3.12.3';
       const vers = window.__GAME_BUILD_VERSIONS__ || {};
-      const keys = ['core', 'ep4_base', 'ep4_assets', 'ep4_world', 'ep4_stages', 'ep4_mp'];
+      const keys = [
+        'catalog', 'core', 'ep1_noah', 'ep2_exodus', 'ep3_base', 'ep3_st1_2', 'ep3_st3_end',
+        'ep4_base', 'ep4_assets', 'ep4_world', 'ep4_stages', 'ep4_mp'
+      ];
       const mismatch = keys.some(k => vers[k] !== EXPECTED);
       if (mismatch && location.protocol !== 'file:') {
         const u = new URL(location.href);
@@ -2811,9 +3061,10 @@
         [258, 122, 68, 46]
       ];
       const greenBlobs = [
-        [244, 68, 64, 46],
-        [262, 108, 52, 36],
-        [210, 52, 36, 26],
+        [232, 68, 56, 42],
+        [268, 74, 48, 42],
+        [266, 114, 46, 34],
+        [218, 98, 34, 24],
         // 우측 상단 작은 섬 전용 비대칭 녹지 군락 (자연스러운 곡선 형태)
         [329, 21, 20, 12],
         [338, 25, 15, 10]
@@ -2857,7 +3108,7 @@
         }
       }
       markWaterDisk(122, 92, 18, 11);
-      markWaterDisk(264, 62, 19, 12);
+      markWaterDisk(264, 68, 20, 12);
 
       for (let t = 0; t <= 120; t++) {
         const p = t / 120;
@@ -2865,9 +3116,10 @@
         const ry1 = Math.round(192 - p * 84);
         markWaterDisk(rx1, ry1, 2.2, 2.2);
 
-        const rx2 = Math.round(235 + Math.sin(p * 6) * 6 + p * 38);
-        const ry2 = Math.round(28 + p * 74);
-        markWaterDisk(rx2, ry2, 1.8, 1.8);
+        // 요단강: 갈릴리 호수 남쪽에서 유대·갈릴리 마을 사이로 구불구불 흐르는 물길
+        const rx2 = Math.round(256 + Math.sin(p * 5.2) * 5 + p * 12);
+        const ry2 = Math.round(44 + p * 80);
+        markWaterDisk(rx2, ry2, 1.7, 1.7);
       }
 
       function buildStaticPixelMap() {
@@ -2916,7 +3168,7 @@
           }
         }
 
-        const dunes = [[155, 76], [168, 92], [182, 82], [112, 128], [132, 136], [176, 118], [92, 152]];
+        const dunes = [[155, 76], [168, 92], [182, 82], [112, 128], [132, 136], [176, 118], [92, 152], [206, 168], [268, 174]];
         dunes.forEach(([dx, dy]) => {
           pLine(bctx, dx - 6, dy + 2, dx, dy - 2, '#d6a461', 1);
           pLine(bctx, dx, dy - 2, dx + 7, dy + 2, '#c48f4c', 1);
@@ -2934,6 +3186,7 @@
         drawSeaRocks(126, 202);
         drawSeaRocks(338, 178);
 
+        // EP 1: 노아의 방주 & 무지개 & 오아시스
         drawPixelRainbow(bctx, 88, 34);
         drawPixelNoahArk(bctx, 98, 52);
 
@@ -2947,29 +3200,38 @@
         drawPixelCamel(bctx, 162, 68);
         drawPixelCamel(bctx, 106, 122);
 
-        drawPixelSinaiMountain(bctx, 74, 136);
-        drawPixelStatue(bctx, 108, 156);
-        drawPixelStatue(bctx, 128, 158);
+        // EP 2: 이집트 피라미드 · 석상 · 홍해 건너기 · 불타는 시내산
+        drawPixelPyramid(bctx, 72, 142, 18, 13);
+        drawPixelPyramid(bctx, 92, 146, 13, 10);
+        drawPixelStatue(bctx, 114, 148);
+        drawPixelStatue(bctx, 132, 150);
         pRect(bctx, 145, 156, 16, 8, '#9bc6e6');
         pRect(bctx, 145, 158, 16, 4, '#e7bf7e');
-        drawPixelPyramid(bctx, 204, 158, 22, 15);
-        drawPixelPyramid(bctx, 226, 164, 28, 19);
-        drawPixelPyramid(bctx, 248, 156, 20, 14);
-        drawPixelSphinx(bctx, 192, 172);
+        drawPixelSinaiMountain(bctx, 163, 148);
 
-        [[62, 126], [68, 162], [86, 168], [166, 182], [278, 162]].forEach(([cx, cy]) => drawPixelCactus(bctx, cx, cy));
-        [[92, 176], [136, 178], [176, 148], [268, 168]].forEach(([px, py]) => drawPixelPot(bctx, px, py));
+        [[58, 132], [68, 162], [86, 168], [168, 184], [282, 166]].forEach(([cx, cy]) => drawPixelCactus(bctx, cx, cy));
+        [[134, 176], [184, 178]].forEach(([px, py]) => drawPixelPot(bctx, px, py));
 
-        drawPixelGrandPalace(bctx, 226, 122);
-        drawPixelHouse(bctx, 168, 118);
-        drawPixelHouse(bctx, 178, 124);
-        drawPixelHouse(bctx, 286, 126);
-        drawPixelHouse(bctx, 294, 136);
-        drawPixelTent(bctx, 258, 92, 18, 15);
-        drawPixelTent(bctx, 280, 88, 13, 11);
-        drawPixelTent(bctx, 286, 102, 12, 10);
+        // EP 3: 다윗의 성(고대 사암 석조 요새) & 베들레헴 작은 양 떼 & 유대 가옥
+        drawPixelDavidFortress(bctx, 222, 122);
+        drawPixelHouse(bctx, 166, 118);
+        drawPixelHouse(bctx, 178, 126);
+        drawPixelSheep(bctx, 192, 140);
+        drawPixelSheep(bctx, 202, 143);
+        drawPixelSheep(bctx, 185, 146);
 
-        [[222, 36], [236, 40], [274, 42], [292, 52], [302, 68], [298, 86], [242, 82], [228, 94]].forEach(([tx, ty]) => {
+        // EP 4: 예루살렘 성전(흰 석조 + 황금 지붕) & 갈릴리·유대 마을 & 올리브 숲
+        drawPixelJerusalemTemple(bctx, 212, 62);
+        drawPixelHouse(bctx, 246, 94);
+        drawPixelHouse(bctx, 282, 86);
+        drawPixelHouse(bctx, 294, 92);
+        drawPixelHouse(bctx, 274, 102);
+        drawPixelHouse(bctx, 292, 108);
+        drawPixelHouse(bctx, 256, 114);
+        drawPixelHouse(bctx, 284, 126);
+        drawPixelHouse(bctx, 296, 134);
+
+        [[186, 78], [234, 42], [244, 78], [292, 68], [304, 80], [244, 104], [304, 104], [266, 90]].forEach(([tx, ty]) => {
           drawPixelRoundTree(bctx, tx, ty);
         });
       }
@@ -3003,23 +3265,23 @@
       }
 
       function drawPixelSinaiMountain(c, cx, cy) {
-        for (let y = 0; y < 18; y++) {
-          const w = 4 + Math.floor(y * 1.35);
-          pRect(c, cx - w, cy - 12 + y, w * 2, 1, '#8c6239');
-          pRect(c, cx - w, cy - 12 + y, 2, 1, '#593b1f');
-          pRect(c, cx + w - 2, cy - 12 + y, 2, 1, '#593b1f');
+        for (let y = 0; y < 14; y++) {
+          const w = 3 + Math.floor(y * 1.1);
+          pRect(c, cx - w, cy - 9 + y, w * 2, 1, '#8c6239');
+          pRect(c, cx - w, cy - 9 + y, 1, 1, '#593b1f');
+          pRect(c, cx + w - 1, cy - 9 + y, 1, 1, '#593b1f');
         }
-        pRect(c, cx - 3, cy - 13, 6, 3, '#f97316');
-        pRect(c, cx - 2, cy - 12, 4, 5, '#facc15');
+        pRect(c, cx - 3, cy - 10, 6, 3, '#f97316');
+        pRect(c, cx - 2, cy - 9, 4, 4, '#facc15');
       }
 
       function drawPixelStatue(c, cx, cy) {
-        pRect(c, cx - 5, cy + 8, 10, 4, '#b88b4a');
-        pRect(c, cx - 4, cy - 10, 8, 18, '#d9ab66');
-        pRect(c, cx - 4, cy - 10, 2, 18, '#efca8c');
-        pRect(c, cx + 2, cy - 10, 2, 18, '#a6793b');
-        pRect(c, cx - 3, cy - 15, 6, 5, '#d9ab66');
-        pRect(c, cx - 1, cy - 13, 2, 2, '#4a2c18');
+        pRect(c, cx - 4, cy + 7, 8, 3, '#b88b4a');
+        pRect(c, cx - 3, cy - 8, 6, 15, '#d9ab66');
+        pRect(c, cx - 3, cy - 8, 2, 15, '#efca8c');
+        pRect(c, cx + 1, cy - 8, 2, 15, '#a6793b');
+        pRect(c, cx - 3, cy - 12, 6, 4, '#d9ab66');
+        pRect(c, cx - 1, cy - 10, 2, 2, '#4a2c18');
       }
 
       function drawPixelPyramid(c, cx, cy, halfW, h) {
@@ -3033,42 +3295,122 @@
         pRect(c, cx - 2, cy - h, 4, 3, '#fef08a');
       }
 
-      function drawPixelSphinx(c, cx, cy) {
-        pRect(c, cx - 12, cy, 22, 8, '#d9ab66');
-        pRect(c, cx - 12, cy, 22, 2, '#efca8c');
-        pRect(c, cx - 16, cy + 4, 6, 4, '#c4934e');
-        pRect(c, cx - 11, cy - 8, 9, 9, '#e5b873');
-        pRect(c, cx - 9, cy - 6, 5, 6, '#f3ca82');
-        pRect(c, cx - 8, cy - 4, 1, 1, '#4a2c18');
-        pRect(c, cx - 6, cy - 4, 1, 1, '#4a2c18');
-      }
+      function drawPixelDavidFortress(c, cx, cy) {
+        // 다윗의 성 (고대 유대 사암 석조 요새 · 좌/중/우 망루 + 아치 대문 + 성가퀴)
+        pRect(c, cx - 24, cy - 12, 48, 25, '#d9b57e');
+        pRect(c, cx - 24, cy - 12, 48, 2, '#6b4c28');
+        pRect(c, cx - 24, cy + 12, 48, 2, '#6b4c28');
+        pRect(c, cx - 24, cy - 10, 48, 2, '#ecd09d');
 
-      function drawPixelGrandPalace(c, cx, cy) {
-        pRect(c, cx - 26, cy - 8, 52, 22, '#f5d6ce');
-        pRect(c, cx - 26, cy - 8, 52, 2, '#7c3f38');
-        pRect(c, cx - 26, cy + 12, 52, 2, '#7c3f38');
-        pRect(c, cx - 6, cy - 2, 12, 14, '#c98c82');
-        pRect(c, cx - 4, cy, 8, 12, '#8c4f47');
-        pRect(c, cx - 18, cy, 5, 9, '#c98c82');
-        pRect(c, cx + 13, cy, 5, 9, '#c98c82');
-        pDisk(c, cx, cy - 14, 12, 8, '#d95b72');
-        pDisk(c, cx - 3, cy - 15, 6, 5, '#f28fa1');
-        pRect(c, cx - 1, cy - 24, 2, 3, '#fde047');
-        pDisk(c, cx - 16, cy - 11, 6, 4, '#d95b72');
-        pDisk(c, cx + 16, cy - 11, 6, 4, '#d95b72');
-        pRect(c, cx - 31, cy - 18, 4, 32, '#f5d6ce');
-        pRect(c, cx + 27, cy - 18, 4, 32, '#f5d6ce');
-        pRect(c, cx - 32, cy - 20, 6, 3, '#d95b72');
-        pRect(c, cx + 26, cy - 20, 6, 3, '#d95b72');
-      }
+        // 좌·우 망루
+        [-22, 14].forEach(tx => {
+          pRect(c, cx + tx, cy - 21, 10, 34, '#d2aa70');
+          pRect(c, cx + tx, cy - 21, 2, 34, '#ecd09d');
+          pRect(c, cx + tx + 8, cy - 21, 2, 34, '#b58b52');
+          pRect(c, cx + tx - 1, cy - 21, 12, 2, '#6b4c28');
+          // 망루 성가퀴(배틀먼트)
+          pRect(c, cx + tx, cy - 24, 3, 3, '#d9b57e');
+          pRect(c, cx + tx + 4, cy - 24, 3, 3, '#d9b57e');
+          pRect(c, cx + tx + 8, cy - 24, 2, 3, '#d9b57e');
+          pRect(c, cx + tx, cy - 24, 3, 1, '#6b4c28');
+          pRect(c, cx + tx + 4, cy - 24, 3, 1, '#6b4c28');
+          pRect(c, cx + tx + 8, cy - 24, 2, 1, '#6b4c28');
+          // 망루 화살구멍 창문
+          pRect(c, cx + tx + 4, cy - 16, 2, 4, '#4a3018');
+          pRect(c, cx + tx + 4, cy - 5, 2, 4, '#4a3018');
+        });
 
-      function drawPixelTent(c, cx, cy, halfW, h) {
-        for (let y = 0; y < h; y++) {
-          const w = Math.max(1, Math.round((y / h) * halfW));
-          pRect(c, cx - w, cy - h + y, w, 1, '#d69e6b');
-          pRect(c, cx, cy - h + y, w, 1, '#ab7446');
+        // 중앙 본성 망루
+        pRect(c, cx - 10, cy - 24, 20, 37, '#e2be88');
+        pRect(c, cx - 10, cy - 24, 2, 37, '#f2d9ad');
+        pRect(c, cx + 8, cy - 24, 2, 37, '#bc945a');
+        pRect(c, cx - 10, cy - 24, 20, 2, '#6b4c28');
+        for (let bx = -10; bx <= 8; bx += 4) {
+          pRect(c, cx + bx, cy - 27, 3, 3, '#e2be88');
+          pRect(c, cx + bx, cy - 27, 3, 1, '#6b4c28');
         }
-        pRect(c, cx - 3, cy - 6, 6, 6, '#3b2313');
+        // 성벽 상단 성가퀴
+        for (let wx = -12; wx <= 10; wx += 4) {
+          pRect(c, cx + wx, cy - 15, 2, 3, '#d9b57e');
+          pRect(c, cx + wx, cy - 15, 2, 1, '#6b4c28');
+        }
+
+        // 성벽 창문 및 석재 벽돌 질감
+        pRect(c, cx - 3, cy - 18, 2, 4, '#4a3018');
+        pRect(c, cx + 2, cy - 18, 2, 4, '#4a3018');
+        pRect(c, cx - 17, cy - 5, 2, 3, '#4a3018');
+        pRect(c, cx + 15, cy - 5, 2, 3, '#4a3018');
+        [[cx - 18, cy + 4], [cx - 14, cy - 1], [cx + 12, cy + 3], [cx + 16, cy - 1], [cx - 7, cy - 9], [cx + 5, cy - 8]].forEach(([sx, sy]) => {
+          pRect(c, sx, sy, 3, 1, '#b58b52');
+        });
+
+        // 중앙 아치형 나무 대문
+        pRect(c, cx - 6, cy - 2, 12, 14, '#5c3c24');
+        pRect(c, cx - 4, cy - 4, 8, 2, '#5c3c24');
+        pRect(c, cx - 4, cy, 8, 12, '#8c552b');
+        pRect(c, cx - 3, cy - 2, 6, 2, '#a1663a');
+        pRect(c, cx - 1, cy - 2, 2, 14, '#6b3e1d');
+
+        // 중앙 깃대 (깃발은 renderPixelMapFrame에서 애니메이션)
+        pRect(c, cx, cy - 35, 1, 9, '#4a3018');
+      }
+
+      function drawPixelJerusalemTemple(c, cx, cy) {
+        // 예루살렘 성전 (흰 석조 외곽 성벽 + 황금 지붕 중앙 성소)
+        // 외곽 성전 뜰 담장
+        pRect(c, cx - 23, cy - 5, 46, 18, '#efeae0');
+        pRect(c, cx - 23, cy - 5, 46, 2, '#6b6254');
+        pRect(c, cx - 23, cy + 12, 46, 2, '#5c5346');
+        pRect(c, cx - 23, cy - 5, 2, 18, '#5c5346');
+        pRect(c, cx + 21, cy - 5, 2, 18, '#5c5346');
+        pRect(c, cx - 21, cy - 3, 42, 2, '#d8d0be');
+        // 외벽 좌우 코너 망루 & 성가퀴
+        [-23, 17].forEach(ox => {
+          pRect(c, cx + ox, cy - 8, 6, 21, '#f7f4ec');
+          pRect(c, cx + ox, cy - 8, 6, 1, '#5c5346');
+          pRect(c, cx + ox, cy - 8, 1, 21, '#5c5346');
+          pRect(c, cx + ox + 5, cy - 8, 1, 21, '#5c5346');
+          pRect(c, cx + ox + 2, cy - 2, 2, 3, '#6b6254');
+        });
+        for (let sx = -16; sx <= 14; sx += 4) {
+          pRect(c, cx + sx, cy - 7, 2, 2, '#efeae0');
+          pRect(c, cx + sx, cy - 7, 2, 1, '#6b6254');
+        }
+
+        // 중앙 성소 본당 (높게 솟은 흰 대리석 + 황금 지붕)
+        pRect(c, cx - 12, cy - 17, 24, 17, '#faf8f2');
+        pRect(c, cx - 12, cy - 17, 1, 17, '#5c5346');
+        pRect(c, cx + 11, cy - 17, 1, 17, '#5c5346');
+        // 황금 지붕 & 황금 띠
+        pRect(c, cx - 13, cy - 20, 26, 3, '#facc15');
+        pRect(c, cx - 13, cy - 21, 26, 1, '#92400e');
+        pRect(c, cx - 10, cy - 20, 20, 1, '#fef08a');
+        pRect(c, cx - 12, cy - 16, 24, 2, '#eab308');
+
+        // 본당 정면 기둥(열주) & 성소 출입구
+        [-9, -5, 3, 7].forEach(px => {
+          pRect(c, cx + px, cy - 13, 2, 12, '#e2dac7');
+          pRect(c, cx + px + 1, cy - 13, 1, 12, '#b8ae98');
+        });
+        pRect(c, cx - 3, cy - 9, 6, 9, '#5c4f42');
+        pRect(c, cx - 2, cy - 10, 4, 2, '#eab308');
+
+        // 성전 뜰 중앙 아치 성문
+        pRect(c, cx - 6, cy + 1, 12, 12, '#e2dac7');
+        pRect(c, cx - 4, cy + 3, 8, 10, '#5c5346');
+        pRect(c, cx - 3, cy + 4, 6, 9, '#3e372e');
+        pRect(c, cx - 17, cy + 3, 3, 5, '#6b6254');
+        pRect(c, cx + 14, cy + 3, 3, 5, '#6b6254');
+      }
+
+      function drawPixelSheep(c, cx, cy) {
+        // 베들레헴 작은 양 (다윗 이야기)
+        pRect(c, cx - 2, cy + 1, 1, 2, '#4a2c18');
+        pRect(c, cx + 1, cy + 1, 1, 2, '#4a2c18');
+        pRect(c, cx - 3, cy - 2, 6, 3, '#ffffff');
+        pRect(c, cx - 2, cy - 3, 4, 1, '#ffffff');
+        pRect(c, cx - 3, cy, 5, 1, '#cbd5e1');
+        pRect(c, cx + 2, cy - 2, 2, 2, '#4a2c18');
       }
 
       function drawPixelHouse(c, cx, cy) {
@@ -3180,14 +3522,24 @@
             pRect(ctx, wx - 1, wy - 1, 3, 2, '#ffffff');
           });
 
+          // 시내산 불꽃 애니메이션
           const flameH = 2 + (tick % 3);
-          pRect(ctx, 72, 121 - flameH, 4, flameH, '#fef08a');
-          pRect(ctx, 73, 118 - flameH, 2, 2, '#ef4444');
+          pRect(ctx, 161, 136 - flameH, 4, flameH, '#fef08a');
+          pRect(ctx, 162, 133 - flameH, 2, 2, '#ef4444');
 
-          const boatY = 61 + (tick % 2);
-          pRect(ctx, 259, boatY, 10, 3, '#78350f');
-          pRect(ctx, 263, boatY - 6, 1, 6, '#451a03');
-          pRect(ctx, 264, boatY - 5, 4, 4, '#ffffff');
+          // 다윗의 성 펄럭이는 깃발
+          const flagWave = tick % 2;
+          pRect(ctx, 223, 87 + flagWave, 5, 3, '#fef3c7');
+          pRect(ctx, 224, 88 + flagWave, 3, 1, '#dc2626');
+
+          // 갈릴리 호수 위 어선 애니메이션
+          const boatY = 67 + (tick % 2);
+          pRect(ctx, 256, boatY + 3, 12, 1, '#bae6fd');
+          pRect(ctx, 257, boatY, 11, 3, '#7c4d2b');
+          pRect(ctx, 258, boatY + 2, 9, 1, '#451a03');
+          pRect(ctx, 262, boatY - 7, 1, 7, '#451a03');
+          pRect(ctx, 263, boatY - 6, 4, 5, '#fef9c3');
+          pRect(ctx, 263, boatY - 2, 5, 1, '#e2e8f0');
 
           for (let i = 0; i < routePoints.length; i++) {
             const [rx, ry] = routePoints[i];

@@ -5,6 +5,9 @@
 // - 좌측 세로형 가변 배부름 게이지(height%) 및 디펜스 시작 시 배부름 게이지 즉시 숨김
 // =========================================================================
 
+window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
+window.__GAME_BUILD_VERSIONS__.ep3_st1_2 = '3.12.3';
+
 function getDavidStage1GroundHeight(x, z) {
   if (z >= DAVID_HILL_SLOPE_SOUTH_Z) return DAVID_HILL_TOP_Y;
   if (z <= DAVID_HILL_SLOPE_NORTH_Z) return 0.0;
@@ -1950,12 +1953,12 @@ function makeGoliathBronzeScaleTex() {
       ctx.fillStyle = '#d97706';
       ctx.fillRect(x + 3, y + 3, cellW - 6, cellH - 6);
 
-      // 청동 비늘 상단 금속 반사광 하이라이트
-      ctx.fillStyle = '#fbbf24';
+      // 청동 비늘 상단 금속 반사광 하이라이트 (원거리 밉맵 시 깜빡임 방지 톤)
+      ctx.fillStyle = '#f59e0b';
       ctx.fillRect(x + 4, y + 3, cellW - 8, 2);
 
       // 비늘 고정용 작은 청동 리벳 점
-      ctx.fillStyle = '#fef08a';
+      ctx.fillStyle = '#fde68a';
       ctx.fillRect(x + cellW * 0.5 - 1, y + 4, 2, 2);
 
       // 비늘 하단 겹침 음영
@@ -1966,7 +1969,9 @@ function makeGoliathBronzeScaleTex() {
 
   const tex = new THREE.CanvasTexture(c);
   tex.magFilter = THREE.NearestFilter;
-  tex.minFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  tex.anisotropy = 4;
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
   _goliathBronzeScaleTex = tex;
@@ -1988,96 +1993,96 @@ function createGiantGoliathMesh() {
   const ironMat = matDavidCached('#64748b', '#334155');
   const eyeMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
 
-  // 1) 다리 & 놋 경갑(청동 정강이 보호대와 발등 청동 판금)
+  // 1) 다리 & 놋 경갑(청동 정강이 보호대와 발등 청동 판금 — 모든 파츠 계단형 비겹침 배치)
   const lLeg = new THREE.Group(); lLeg.position.set(-0.26 * s, 0.75 * s, 0);
   lLeg.add(
-    createBox(0.38 * s, 0.72 * s, 0.38 * s, bronzeMat, 0, -0.36 * s, 0),
-    createBox(0.41 * s, 0.56 * s, 0.12 * s, brightBronzeMat, 0, -0.36 * s, 0.17 * s),
-    createBox(0.42 * s, 0.12 * s, 0.42 * s, polishedBrassMat, 0, -0.10 * s, 0.02 * s),
-    createBox(0.42 * s, 0.22 * s, 0.46 * s, darkBronze, 0, -0.68 * s, 0.04 * s)
+    createBox(0.36 * s, 0.68 * s, 0.36 * s, bronzeMat, 0, -0.34 * s, 0),
+    createBox(0.40 * s, 0.44 * s, 0.08 * s, brightBronzeMat, 0, -0.38 * s, 0.20 * s),
+    createBox(0.44 * s, 0.12 * s, 0.48 * s, polishedBrassMat, 0, -0.08 * s, 0.02 * s),
+    createBox(0.44 * s, 0.22 * s, 0.50 * s, darkBronze, 0, -0.68 * s, 0.04 * s)
   );
   const rLeg = new THREE.Group(); rLeg.position.set(0.26 * s, 0.75 * s, 0);
   rLeg.add(
-    createBox(0.38 * s, 0.72 * s, 0.38 * s, bronzeMat, 0, -0.36 * s, 0),
-    createBox(0.41 * s, 0.56 * s, 0.12 * s, brightBronzeMat, 0, -0.36 * s, 0.17 * s),
-    createBox(0.42 * s, 0.12 * s, 0.42 * s, polishedBrassMat, 0, -0.10 * s, 0.02 * s),
-    createBox(0.42 * s, 0.22 * s, 0.46 * s, darkBronze, 0, -0.68 * s, 0.04 * s)
+    createBox(0.36 * s, 0.68 * s, 0.36 * s, bronzeMat, 0, -0.34 * s, 0),
+    createBox(0.40 * s, 0.44 * s, 0.08 * s, brightBronzeMat, 0, -0.38 * s, 0.20 * s),
+    createBox(0.44 * s, 0.12 * s, 0.48 * s, polishedBrassMat, 0, -0.08 * s, 0.02 * s),
+    createBox(0.44 * s, 0.22 * s, 0.50 * s, darkBronze, 0, -0.68 * s, 0.04 * s)
   );
 
-  // 2) 몸통: 비늘처럼 청동 조각을 겹쳐 만든 어린갑(Scale Armor) 본체 + 입체 겹침 비늘 층
-  const torso = createBox(1.14 * s, 1.18 * s, 0.64 * s, scaleArmorMat, 0, 1.32 * s, 0);
-  const chestPlate = createBox(1.18 * s, 0.52 * s, 0.68 * s, scaleArmorMat, 0, 1.56 * s, 0);
-  const collarGuard = createBox(1.06 * s, 0.14 * s, 0.70 * s, polishedBrassMat, 0, 1.86 * s, 0);
+  // 2) 몸통: 비늘처럼 청동 조각을 겹쳐 만든 어린갑(Scale Armor) 본체 + 비겹침 입체 겹침 비늘 층
+  const torso = createBox(1.06 * s, 0.88 * s, 0.56 * s, scaleArmorMat, 0, 1.44 * s, 0);
+  const chestPlate = createBox(1.12 * s, 0.48 * s, 0.64 * s, scaleArmorMat, 0, 1.58 * s, 0);
+  const collarGuard = createBox(1.00 * s, 0.11 * s, 0.68 * s, polishedBrassMat, 0, 1.885 * s, 0);
   g.add(lLeg, rLeg, torso, chestPlate, collarGuard);
 
-  // 앞가슴과 등판에 실제로 층층이 겹쳐진 입체 청동 비늘 조각(Scale Lamellae) 배치
+  // 앞가슴과 등판에 층층이 분리 배치된 입체 청동 비늘 조각(Scale Lamellae — Z-Fighting 제거)
   for (let r = 0; r < 5; r++) {
-    const rowY = (1.08 + r * 0.16) * s;
+    const rowY = (1.15 + r * 0.15) * s;
     const isEven = (r % 2 === 0);
     const numScales = isEven ? 6 : 5;
     for (let c = 0; c < numScales; c++) {
       const sx = ((c - (numScales - 1) * 0.5) * 0.18) * s;
       const scMat = ((r + c) % 2 === 0) ? brightBronzeMat : bronzeMat;
       const rimMat = ((r + c) % 2 === 0) ? polishedBrassMat : brightBronzeMat;
-      // 전면 청동 비늘 조각
+      // 전면 청동 비늘 조각 (chestPlate 전면에 명확히 돌출 & 후면 매입)
       g.add(
-        createBox(0.165 * s, 0.145 * s, 0.06 * s, scMat, sx, rowY, 0.345 * s, false),
-        createBox(0.145 * s, 0.04 * s, 0.07 * s, rimMat, sx, rowY + 0.045 * s, 0.35 * s, false)
+        createBox(0.155 * s, 0.115 * s, 0.075 * s, scMat, sx, rowY, 0.3425 * s, false),
+        createBox(0.135 * s, 0.032 * s, 0.042 * s, rimMat, sx, rowY + 0.034 * s, 0.385 * s, false)
       );
       // 후면 청동 비늘 조각
       g.add(
-        createBox(0.165 * s, 0.145 * s, 0.06 * s, scMat, sx, rowY, -0.345 * s, false)
+        createBox(0.155 * s, 0.115 * s, 0.075 * s, scMat, sx, rowY, -0.3425 * s, false)
       );
     }
   }
 
-  // 허리 벨트 및 청동 비늘 치마(Tassets)
-  const skirt = createBox(1.16 * s, 0.46 * s, 0.66 * s, kiltMat, 0, 0.78 * s, 0);
-  const belt = createBox(1.22 * s, 0.20 * s, 0.72 * s, darkBronze, 0, 0.98 * s, 0);
-  const beltBuckle = createBox(0.32 * s, 0.24 * s, 0.76 * s, polishedBrassMat, 0, 0.98 * s, 0);
+  // 허리 벨트 및 청동 비늘 치마(Tassets) — 벨트·치마 경계 분리
+  const skirt = createBox(1.08 * s, 0.32 * s, 0.58 * s, kiltMat, 0, 0.71 * s, 0);
+  const belt = createBox(1.18 * s, 0.18 * s, 0.68 * s, darkBronze, 0, 0.97 * s, 0);
+  const beltBuckle = createBox(0.30 * s, 0.19 * s, 0.76 * s, polishedBrassMat, 0, 0.985 * s, 0);
   g.add(skirt, belt, beltBuckle);
 
   for (let t = -2; t <= 2; t++) {
-    const tx = t * 0.22 * s;
+    const tx = t * 0.20 * s;
     g.add(
-      createBox(0.19 * s, 0.34 * s, 0.70 * s, (t % 2 === 0 ? bronzeMat : brightBronzeMat), tx, 0.76 * s, 0),
-      createBox(0.16 * s, 0.08 * s, 0.72 * s, polishedBrassMat, tx, 0.88 * s, 0, false)
+      createBox(0.13 * s, 0.28 * s, 0.64 * s, (t % 2 === 0 ? bronzeMat : brightBronzeMat), tx, 0.72 * s, 0),
+      createBox(0.10 * s, 0.06 * s, 0.68 * s, polishedBrassMat, tx, 0.80 * s, 0, false)
     );
   }
 
   // 3) 얼굴과 수염
-  const head = createBox(0.76 * s, 0.76 * s, 0.76 * s, skinMat, 0, 2.28 * s, 0);
-  const beard = createBox(0.80 * s, 0.42 * s, 0.35 * s, matDavidCached('#1e293b'), 0, 2.04 * s, 0.32 * s);
-  const lEye = createBox(0.12 * s, 0.10 * s, 0.06 * s, eyeMat, -0.18 * s, 2.32 * s, 0.39 * s, false);
-  const rEye = createBox(0.12 * s, 0.10 * s, 0.06 * s, eyeMat,  0.18 * s, 2.32 * s, 0.39 * s, false);
+  const head = createBox(0.74 * s, 0.74 * s, 0.74 * s, skinMat, 0, 2.28 * s, 0);
+  const beard = createBox(0.78 * s, 0.40 * s, 0.28 * s, matDavidCached('#1e293b'), 0, 2.04 * s, 0.30 * s);
+  const lEye = createBox(0.12 * s, 0.10 * s, 0.06 * s, eyeMat, -0.18 * s, 2.34 * s, 0.385 * s, false);
+  const rEye = createBox(0.12 * s, 0.10 * s, 0.06 * s, eyeMat,  0.18 * s, 2.34 * s, 0.385 * s, false);
   g.add(head, beard, lEye, rEye);
 
   // 4) [요청사항] 골리앗의 디테일한 놋투구(Bronze Helmet: 다단 청동 돔, 리벳 테두리, 코 보호대, 경첩식 볼 가리개, 뒷목 가리개)
   const helmetGroup = new THREE.Group();
   helmetGroup.position.set(0, 2.58 * s, 0);
   helmetGroup.add(
-    // 놋투구 하단 메인 바디 & 상단 다단 청동 돔
-    createBox(0.90 * s, 0.36 * s, 0.90 * s, bronzeMat, 0, -0.02 * s, 0),
-    createBox(0.82 * s, 0.22 * s, 0.82 * s, brightBronzeMat, 0, 0.22 * s, 0),
-    createBox(0.70 * s, 0.14 * s, 0.70 * s, polishedBrassMat, 0, 0.36 * s, 0),
+    // 놋투구 하단 메인 바디 & 상단 다단 청동 돔 (뒷면·전면 공면 제거)
+    createBox(0.86 * s, 0.34 * s, 0.86 * s, bronzeMat, 0, 0.00 * s, 0),
+    createBox(0.78 * s, 0.18 * s, 0.78 * s, brightBronzeMat, 0, 0.24 * s, 0),
+    createBox(0.64 * s, 0.12 * s, 0.64 * s, polishedBrassMat, 0, 0.37 * s, 0),
     // 투구 중앙 마루(Crest Ridge)
-    createBox(0.22 * s, 0.16 * s, 0.92 * s, polishedBrassMat, 0, 0.38 * s, 0),
-    // 이마 청동 테두리 밴드 & 챙(Brim)
-    createBox(0.95 * s, 0.14 * s, 0.96 * s, darkBronze, 0, -0.16 * s, 0.03 * s),
-    createBox(0.97 * s, 0.07 * s, 0.98 * s, polishedBrassMat, 0, -0.12 * s, 0.04 * s),
+    createBox(0.20 * s, 0.16 * s, 0.90 * s, polishedBrassMat, 0, 0.38 * s, 0),
+    // 이마 청동 테두리 밴드 & 챙(Brim) — 4면 순차 확장
+    createBox(0.94 * s, 0.13 * s, 0.96 * s, darkBronze, 0, -0.17 * s, 0.02 * s),
+    createBox(0.98 * s, 0.06 * s, 1.02 * s, polishedBrassMat, 0, -0.11 * s, 0.02 * s),
     // 코 보호대 (Nasal Guard)
-    createBox(0.13 * s, 0.36 * s, 0.12 * s, polishedBrassMat, 0, -0.32 * s, 0.45 * s),
-    // 좌우 놋투구 뺨 보호대 (비늘/판금 겹침 형태)
-    createBox(0.18 * s, 0.50 * s, 0.52 * s, bronzeMat, -0.43 * s, -0.36 * s, 0.16 * s),
-    createBox(0.20 * s, 0.38 * s, 0.42 * s, brightBronzeMat, -0.44 * s, -0.36 * s, 0.18 * s),
-    createBox(0.18 * s, 0.50 * s, 0.52 * s, bronzeMat,  0.43 * s, -0.36 * s, 0.16 * s),
-    createBox(0.20 * s, 0.38 * s, 0.42 * s, brightBronzeMat,  0.44 * s, -0.36 * s, 0.18 * s),
+    createBox(0.12 * s, 0.28 * s, 0.10 * s, polishedBrassMat, 0, -0.39 * s, 0.46 * s),
+    // 좌우 놋투구 뺨 보호대 (비늘/판금 겹침 형태 — 내측 공면 제거)
+    createBox(0.16 * s, 0.46 * s, 0.48 * s, bronzeMat, -0.43 * s, -0.45 * s, 0.16 * s),
+    createBox(0.08 * s, 0.32 * s, 0.36 * s, brightBronzeMat, -0.52 * s, -0.46 * s, 0.18 * s),
+    createBox(0.16 * s, 0.46 * s, 0.48 * s, bronzeMat,  0.43 * s, -0.45 * s, 0.16 * s),
+    createBox(0.08 * s, 0.32 * s, 0.36 * s, brightBronzeMat,  0.52 * s, -0.46 * s, 0.18 * s),
     // 뒷목 청동 비늘 보호대(Neck Guard)
-    createBox(0.88 * s, 0.42 * s, 0.18 * s, scaleArmorMat, 0, -0.34 * s, -0.42 * s)
+    createBox(0.82 * s, 0.34 * s, 0.14 * s, scaleArmorMat, 0, -0.42 * s, -0.43 * s)
   );
-  // 놋투구 둘레 청동 리벳 징 장식
+  // 놋투구 둘레 청동 리벳 징 장식 (이마 챙 아래에서 전방 돌출)
   [-0.34, -0.17, 0, 0.17, 0.34].forEach(rx => {
-    helmetGroup.add(createBox(0.06 * s, 0.06 * s, 0.06 * s, polishedBrassMat, rx * s, -0.16 * s, 0.50 * s, false));
+    helmetGroup.add(createBox(0.055 * s, 0.055 * s, 0.05 * s, polishedBrassMat, rx * s, -0.185 * s, 0.515 * s, false));
   });
 
   // 놋투구 위 우상 장식 (타격 목표물)
@@ -2105,34 +2110,39 @@ function createGiantGoliathMesh() {
   helmetGroup.add(idolGroup);
 
   // 5) 양팔 & 겹겹이 층진 청동 비늘 어깨 견갑(Pauldrons) & 대형 청동 방패와 베틀채 같은 창
-  const lArm = new THREE.Group(); lArm.position.set(-0.78 * s, 1.68 * s, 0);
+  // 가슴판(±0.56s)과의 관통·Z-Fighting을 막기 위해 어깨 피벗 X를 ±0.82s로 이격
+  const lArm = new THREE.Group(); lArm.position.set(-0.82 * s, 1.66 * s, 0);
   lArm.add(
-    // 3단 겹침 청동 어깨 견갑
-    createBox(0.50 * s, 0.26 * s, 0.52 * s, scaleArmorMat, -0.06 * s, 0.08 * s, 0),
-    createBox(0.54 * s, 0.12 * s, 0.56 * s, polishedBrassMat, -0.08 * s, -0.02 * s, 0),
-    createBox(0.48 * s, 0.12 * s, 0.50 * s, brightBronzeMat, -0.06 * s, -0.14 * s, 0),
-    createBox(0.36 * s, 0.78 * s, 0.36 * s, skinMat, 0, -0.38 * s, 0),
-    createBox(0.40 * s, 0.36 * s, 0.40 * s, bronzeMat, 0, -0.52 * s, 0),
-    // 거대한 청동 방패
-    createBox(0.98 * s, 1.48 * s, 0.18 * s, bronzeMat, -0.22 * s, -0.45 * s, 0.38 * s),
-    createBox(0.82 * s, 1.30 * s, 0.22 * s, brightBronzeMat, -0.22 * s, -0.45 * s, 0.40 * s),
-    createBox(0.32 * s, 0.32 * s, 0.26 * s, polishedBrassMat, -0.22 * s, -0.45 * s, 0.43 * s)
+    // 3단 겹침 청동 어깨 견갑 (수직·수평 완전 이격)
+    createBox(0.44 * s, 0.20 * s, 0.48 * s, scaleArmorMat, -0.02 * s, 0.13 * s, 0),
+    createBox(0.48 * s, 0.10 * s, 0.52 * s, polishedBrassMat, -0.05 * s, -0.03 * s, 0),
+    createBox(0.42 * s, 0.10 * s, 0.46 * s, brightBronzeMat, -0.02 * s, -0.15 * s, 0),
+    createBox(0.32 * s, 0.74 * s, 0.32 * s, skinMat, 0, -0.44 * s, 0),
+    createBox(0.38 * s, 0.34 * s, 0.38 * s, bronzeMat, 0, -0.56 * s, 0),
+    // 거대한 청동 방패 (전방 계단식 레이어로 뒷면 공면 제거 · 가슴판/벨트와 비충돌 이격)
+    createBox(0.98 * s, 1.48 * s, 0.16 * s, bronzeMat, -0.28 * s, -0.45 * s, 0.38 * s),
+    createBox(0.82 * s, 1.30 * s, 0.08 * s, brightBronzeMat, -0.28 * s, -0.45 * s, 0.48 * s),
+    createBox(0.32 * s, 0.32 * s, 0.08 * s, polishedBrassMat, -0.28 * s, -0.45 * s, 0.54 * s)
   );
 
-  const rArm = new THREE.Group(); rArm.position.set(0.78 * s, 1.68 * s, 0);
+  const rArm = new THREE.Group(); rArm.position.set(0.82 * s, 1.66 * s, 0);
   rArm.add(
     // 3단 겹침 청동 어깨 견갑
-    createBox(0.50 * s, 0.26 * s, 0.52 * s, scaleArmorMat, 0.06 * s, 0.08 * s, 0),
-    createBox(0.54 * s, 0.12 * s, 0.56 * s, polishedBrassMat, 0.08 * s, -0.02 * s, 0),
-    createBox(0.48 * s, 0.12 * s, 0.50 * s, brightBronzeMat, 0.06 * s, -0.14 * s, 0),
-    createBox(0.36 * s, 0.78 * s, 0.36 * s, skinMat, 0, -0.38 * s, 0),
-    createBox(0.40 * s, 0.36 * s, 0.40 * s, bronzeMat, 0, -0.52 * s, 0),
+    createBox(0.44 * s, 0.20 * s, 0.48 * s, scaleArmorMat, 0.02 * s, 0.13 * s, 0),
+    createBox(0.48 * s, 0.10 * s, 0.52 * s, polishedBrassMat, 0.05 * s, -0.03 * s, 0),
+    createBox(0.42 * s, 0.10 * s, 0.46 * s, brightBronzeMat, 0.02 * s, -0.15 * s, 0),
+    createBox(0.32 * s, 0.74 * s, 0.32 * s, skinMat, 0, -0.44 * s, 0),
+    createBox(0.38 * s, 0.34 * s, 0.38 * s, bronzeMat, 0, -0.56 * s, 0),
     // 거대한 창
     createBox(0.14 * s, 2.85 * s, 0.14 * s, darkBronze, 0.08 * s, -0.15 * s, 0.42 * s),
-    createBox(0.26 * s, 0.65 * s, 0.26 * s, ironMat, 0.08 * s, 1.42 * s, 0.42 * s)
+    createBox(0.24 * s, 0.65 * s, 0.24 * s, ironMat, 0.08 * s, 1.50 * s, 0.42 * s)
   );
 
   g.add(helmetGroup, lArm, rArm);
+  // 갑옷 다층 파츠 간 자체 그림자 아크네(Shadow Acne) 깜빡임 차단 (지면에 그림자 드리우기는 유지)
+  g.traverse(obj => {
+    if (obj && obj.isMesh) obj.receiveShadow = false;
+  });
   g.userData = {
     scale: s,
     lArm, rArm, helmetGroup, idolGroup,

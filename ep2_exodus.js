@@ -2,6 +2,9 @@
 // [ep2_exodus.js - 파트 1/2] 에피소드 2 : 출애굽과 시내산 언약 (스테이지 1 백성 다리 이동 및 절벽 경계 보정, 스테이지 2 번개 아이콘 제거 및 최적화)
 // =========================================================================
 
+window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
+window.__GAME_BUILD_VERSIONS__.ep2_exodus = '3.12.3';
+
 EPISODE_SCRIPTURE.exodus = {
   1: {
     title: '스테이지 1 클리어! 홍해 바다 앞에 도착했어요!',
@@ -2584,7 +2587,8 @@ function updateStage3Sinai(dt, now) {
   }
 
   const pct = Math.min(100, Math.max(0, Math.round((playerPos.y / sinaiCutscene.summitY) * 100)));
-  document.getElementById('hud-counter-text').textContent = `등반 ${pct}%`;
+  if (typeof window.syncStageHudCounter === 'function') window.syncStageHudCounter(`등반 ${pct}%`);
+  else document.getElementById('hud-counter-text').textContent = `등반 ${pct}%`;
 }
 
 // -------------------------------------------------------------------------

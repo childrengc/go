@@ -4,7 +4,7 @@
 // - 계단으로 건물 2층 등반 후 인접한 옆 건물 옥상·2층으로 점프 이동할 수 있는 근접 마을 배치
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_world = '20261126_v50';
+window.__GAME_BUILD_VERSIONS__.ep4_world = '3.12.3';
 
 window.miracleOpenWorldIntroFlyover = {
   active: false,
@@ -2075,6 +2075,8 @@ function syncMiracleMainStageSequentialBeams() {
   const activeStageNum = getNextActiveMainStageNumber();
   const missionRunning = Boolean(miracleActiveFieldEvent);
 
+  const isNightTimeNow = Boolean(window.MiracleDayNight && typeof window.MiracleDayNight.isNight === 'function' && window.MiracleDayNight.isNight());
+
   miracleStageSpots.forEach(sp => {
     const isCleared = Boolean(miracleMainStagesCleared[sp.stageNum]);
     sp.cleared = isCleared;
@@ -2090,14 +2092,17 @@ function syncMiracleMainStageSequentialBeams() {
       sp.ring.visible = !missionRunning && isAccessible;
     }
     if (sp.label) {
+      const displayTitle = (sp.stageNum === 1 && isNightTimeNow && sp.nightTitle) ? sp.nightTitle : sp.title;
+      const isNightStormCleared = Boolean(typeof miracleCollectedIds !== 'undefined' && miracleCollectedIds.has('mir_storm'));
+      const effCleared = (sp.stageNum === 1 && isNightTimeNow) ? isNightStormCleared : isCleared;
       if (sp.stageNum === 5 && miracleAscensionSeen) {
         sp.label.innerHTML = '☁️ [감람산 언덕] 승천하신 주님을 바라보는 제자들 (다가가면 엔딩 세상)';
-      } else if (isCleared) {
-        sp.label.innerHTML = `✅ ${sp.title}${allUnlocked ? ' (자유 입장)' : ''}`;
+      } else if (effCleared) {
+        sp.label.innerHTML = `✅ ${displayTitle}${allUnlocked ? ' (자유 입장)' : ''}`;
       } else if (isAccessible) {
-        sp.label.innerHTML = `✨ ${sp.title}`;
+        sp.label.innerHTML = `✨ ${displayTitle}`;
       } else {
-        sp.label.innerHTML = `🔒 ${sp.title} (스테이지 ${sp.stageNum - 1} 완료 후 진행)`;
+        sp.label.innerHTML = `🔒 ${displayTitle} (스테이지 ${sp.stageNum - 1} 완료 후 진행)`;
       }
     }
   });
@@ -2140,14 +2145,21 @@ function spawnMiracleMainStageSpots() {
       subModeKey: 'main1_galilee',
       x: -82, z: -68,
       color: 0x38bdf8,
-      npcPreset: 'disciple',
-      title: '⛵ [메인 스테이지 1] 갈릴리 바다: 물고기 잡기와 폭풍우',
-      introSpeaker: '어부 시몬 베드로',
-      introText: '"선생님께서 배에 오르셨네! 함께 갈릴리 바다 깊은 곳으로 나가 그물을 내리고 항해를 시작해 볼까?"',
-      audioUrl: 'assets/voice/ep4_stage01_petro01.mp3',
-      greetingText: '"할렐루야! 그때 거센 폭풍우를 말씀 한마디로 잠잠하게 하신 예수님의 권능은 정말 놀라웠어! 다음 여정도 힘내서 다녀오게!"',
-      greetingAudioUrl: 'assets/voice/ep4_stage01_petro02.mp3',
-      verseAudioUrl: 'assets/voice/ep4_stage01_bible.mp3'
+      npcPreset: 'peter',
+      title: '⛵ [메인 스테이지 1] 깊은 곳으로! (제자 부르심)',
+      introSpeaker: '어부 베드로',
+      introText: '"밤새도록 물고기를 잡지 못했어, 좀 도와줄래?"',
+      audioUrl: 'assets/voice/ep4_st1_peter01.mp3',
+      greetingText: '"예수님과 함께 물고기를 잡았던 기억은 정말 놀라워! 너도 예수님의 제자가 되어보는 건 어때?"',
+      greetingAudioUrl: 'assets/voice/ep4_st1_peter02.mp3',
+      verseAudioUrl: 'assets/voice/ep4_st1_bible01.mp3',
+      nightTitle: '🌙 [야간 전용 · 스테이지 1] 갈릴리 밤바다의 풍랑',
+      nightIntroSpeaker: '어부 시몬 베드로',
+      nightIntroText: '"밤바다에 거센 풍랑이 몰려오고 있어! 예수님께서 함께 배에 오르셨으니 어서 나가 풍랑을 이겨내 볼까?"',
+      nightAudioUrl: 'assets/voice/ep4_stage01_petro01.mp3',
+      nightGreetingText: '"할렐루야! 그때 거센 폭풍우를 말씀 한마디로 잠잠하게 하신 예수님의 권능은 정말 놀라웠어! 다음 여정도 힘내서 다녀오게!"',
+      nightGreetingAudioUrl: 'assets/voice/ep4_stage01_petro02.mp3',
+      nightVerseAudioUrl: 'assets/voice/ep4_stage01_bible.mp3'
     },
     {
       stageNum: 2,
@@ -2168,7 +2180,7 @@ function spawnMiracleMainStageSpots() {
       subModeKey: 'main3_cross',
       x: -36, z: 68,
       color: 0xf43f5e,
-      npcPreset: 'soldier',
+      npcPreset: 'female_1',
       title: '✝️ [메인 스테이지 3] 십자가 사건: 골고다로 가는 길',
       introSpeaker: '예루살렘 여인들',
       introText: '"예수님께서 무거운 십자가를 지고 골고다 언덕으로 가고 계셔! 어서 그분이 가시는 길을 찾아가 도와드리자!"',
@@ -2203,9 +2215,23 @@ function spawnMiracleMainStageSpots() {
       cfg.npcPreset,
       true
     );
+    let companionSoldier = null;
+    if (cfg.stageNum === 3 && marker.group) {
+      companionSoldier = (typeof window.createRomanSoldierMesh === 'function')
+        ? window.createRomanSoldierMesh(0)
+        : createLowPolyPersonMesh('soldier', 3);
+      const sdx = 1.75;
+      const sdz = -0.55;
+      const baseY = getMiracleOpenWorldGroundHeight(cfg.x, cfg.z);
+      const soldierY = getMiracleOpenWorldGroundHeight(cfg.x + sdx, cfg.z + sdz);
+      companionSoldier.position.set(sdx, soldierY - baseY, sdz);
+      companionSoldier.rotation.y = 0.28;
+      marker.group.add(companionSoldier);
+    }
     miracleStageSpots.push({
       ...cfg,
       ...marker,
+      companionSoldier,
       cleared,
       _requireLeaveZone: false
     });
@@ -2282,7 +2308,7 @@ function spawnMiracleRumorNpcs() {
     { x:  12, z:  60, cat: 'eyewitness', nbId: 'rumor_widow',     speaker: '성전 문지기',      text: '"성전 헌금함 앞에서 예수님이 부자들보다 두 렙돈을 넣은 가난한 과부를 가장 크게 칭찬하셨소!"' },
     { x: -14, z:  54, cat: 'word',       nbId: 'wd_john146',      speaker: '다락방 제자',      text: '"예수님께서 저희의 발을 직접 씻겨 주시며 \'내가 곧 길이요 진리요 생명이니\'라고 말씀하셨습니다."' },
     // 성전 전면 계단 앞 바깥뜰 광장(x: -5.5, z: 59.5)에 배치하여 성전 기단과 겹치지 않게 보정
-    { x: -5.5, z: 59.5, cat: 'rumor',    nbId: 'rumor_identity',  speaker: '예루살렘 순례객',  text: '"어떤 사람은 세례 요한이나 선지자라 하지만, 베드로는 \'주는 그리스도시요 살아 계신 하나님의 아들이시니이다\'라고 고백했대!"',
+    { x: -5.5, z: 59.5, cat: 'rumor',    nbId: 'rumor_identity',  speaker: '예루살렘 순례객',  text: '"어떤 사람은 침례 요한이나 선지자라 하지만, 베드로는 \'주는 그리스도시요 살아 계신 하나님의 아들이시니이다\'라고 고백했대!"',
       quiz: {
         q: '시몬 베드로가 고백한 예수님은 누구이신가요?',
         opts: ['그리스도시요 살아 계신 하나님의 아들', '로마 제국의 장군', '애굽의 지혜로운 학자'],
@@ -10263,6 +10289,7 @@ window.returnToMiracleOpenWorld = function () {
   if (wf) wf.style.opacity = '0';
   if (bf) bf.style.opacity = '0';
   if (s1Ui) s1Ui.classList.add('hidden');
+  if (typeof setInGameHudControlsVisible === 'function') setInGameHudControlsVisible(true);
   buildMiracleOpenWorld(true);
   startStageBgm(currentStage);
   if (typeof playMiracleOpenWorldOgg === 'function') playMiracleOpenWorldOgg();
@@ -10386,8 +10413,11 @@ function updateMiracleOpenWorldFrame(dt, now) {
     window.MiracleMultiplayer.updateFrame(dt, now);
   }
 
-  // 대화창이 열려있으면 필드 이벤트 진행 중지
-  if (miracleDialogState.active) return;
+  // 대화창이 열려있으면 머리 위 3D 화살표 숨김 및 필드 이벤트 진행 중지
+  if (miracleDialogState.active) {
+    if (typeof guideArrowGroup !== 'undefined' && guideArrowGroup) guideArrowGroup.visible = false;
+    return;
+  }
 
   if (miracleActiveFieldEvent) {
     updateMiracleFieldEventFrame(dt, now);
@@ -10400,6 +10430,7 @@ function updateMiracleOpenWorldFrame(dt, now) {
   const activeStageNum = getNextActiveMainStageNumber();
   const isStage3Cleared = Boolean(allUnlocked || miracleMainStagesCleared[3] || miracleMainStagesCleared[4] || miracleIsPostResurrection);
   const isFieldMissionActive = Boolean(miracleActiveFieldEvent);
+  const isNightTimeNow = Boolean(window.MiracleDayNight && typeof window.MiracleDayNight.isNight === 'function' && window.MiracleDayNight.isNight());
   let currentActiveStageSpot = null;
 
   // [이전 스테이지 클리어 확인 동기화 보완 + 미션 중 타 스테이지 진입 불가 & 머리 위 태그 일시 해제 + 2회차 전체 해금]
@@ -10407,6 +10438,15 @@ function updateMiracleOpenWorldFrame(dt, now) {
     if (sp.beam && sp.beam.visible) {
       const pulse = 1.0 + Math.sin(now * 0.004 + idx) * 0.15;
       sp.beam.scale.set(pulse, 1, pulse);
+    }
+
+    // 스테이지 1 스팟은 낮/밤 전환에 맞춰 라벨 제목 자동 갱신
+    if (sp.stageNum === 1 && sp.label && sp._lastNightMode !== isNightTimeNow) {
+      sp._lastNightMode = isNightTimeNow;
+      const nightStormCleared = Boolean(typeof miracleCollectedIds !== 'undefined' && miracleCollectedIds.has('mir_storm'));
+      const stage1Title = (isNightTimeNow && sp.nightTitle) ? sp.nightTitle : sp.title;
+      const isThisModeCleared = isNightTimeNow ? nightStormCleared : Boolean(sp.cleared);
+      sp.label.innerHTML = isThisModeCleared ? `✅ ${stage1Title} (완료)` : stage1Title;
     }
 
     if (sp.stageNum === activeStageNum) {
@@ -10418,6 +10458,9 @@ function updateMiracleOpenWorldFrame(dt, now) {
     if (sp.npcMesh && d < 9.0) {
       const targetAng = Math.atan2(playerPos.x - sp.pos.x, playerPos.z - sp.pos.z);
       sp.npcMesh.rotation.y = lerpAngle(sp.npcMesh.rotation.y, targetAng, dt * 6.0);
+      if (sp.npcPreset === 'peter' && typeof window.updateDiscipleSmoothPose === 'function') {
+        window.updateDiscipleSmoothPose(sp.npcMesh, dt, now, d < 4.5 ? 'talk' : 'idle', { intensity: 0.7 });
+      }
     }
 
     // 오픈월드 미션 진행 중일 때는 모든 메인 스테이지 머리 위 태그 일시 해제 & 진입 차단
@@ -10442,14 +10485,53 @@ function updateMiracleOpenWorldFrame(dt, now) {
       sp._prompted = now;
       sp._requireLeaveZone = true;
 
+      const isNightStage1 = (sp.stageNum === 1 && isNightTimeNow);
       const launchThisStage = () => {
         saveSafeOpenWorldReturnPosition(sp.x, sp.z);
         if (sp.stageNum === 5 && typeof startMiracleAscensionEnding === 'function') {
           startMiracleAscensionEnding();
         } else if (typeof enterMiracleMainStage === 'function') {
-          enterMiracleMainStage(sp.stageNum);
+          if (sp.stageNum === 1) {
+            enterMiracleMainStage(1, isNightStage1 ? 'night' : 'day');
+          } else {
+            enterMiracleMainStage(sp.stageNum);
+          }
         }
       };
+
+      // 스테이지 1 야간 전용: 기존 갈릴리 밤바다 풍랑 미니게임 분기
+      if (isNightStage1) {
+        const nightCleared = Boolean(typeof miracleCollectedIds !== 'undefined' && miracleCollectedIds.has('mir_storm'));
+        if (nightCleared) {
+          openMiracleDialog({
+            sourceRef: sp,
+            speaker: sp.nightIntroSpeaker || sp.introSpeaker,
+            category: 'greeting',
+            text: sp.nightGreetingText || sp.greetingText,
+            audioUrl: sp.nightGreetingAudioUrl || null,
+            btnText: '반갑게 인사 나누기 👋',
+            replayText: '🌙 밤 풍랑 스테이지 다시하기',
+            onReplay: launchThisStage
+          });
+        } else {
+          openMiracleDialog({
+            sourceRef: sp,
+            speaker: sp.nightIntroSpeaker || sp.introSpeaker,
+            category: 'story',
+            text: sp.nightIntroText || sp.introText,
+            audioUrl: sp.nightAudioUrl || null,
+            showCancel: true,
+            cancelText: '거절 (나중에 하기) ✕',
+            btnText: '🌙 갈릴리 밤 풍랑 시작하기 ▶',
+            onConfirm: launchThisStage,
+            onCancel: () => {
+              sp._prompted = performance.now();
+              showToast('✋ 야간 풍랑 입장을 보류했어요. 밤 시간대에 언제든 다시 도전할 수 있어요!');
+            }
+          });
+        }
+        return;
+      }
 
       // 승천 이후 다시 감람산 언덕(제자들)에 다가온 경우 → 승천 이후 상태의 엔딩 세상 열기!
       if (sp.stageNum === 5 && miracleAscensionSeen) {
@@ -10472,7 +10554,7 @@ function updateMiracleOpenWorldFrame(dt, now) {
           text: sp.greetingText || `"반가워요! 함께 완수했던 메인 스테이지 ${sp.stageNum}의 감동이 아직도 생생하네요!"`,
           audioUrl: sp.greetingAudioUrl,
           btnText: '반갑게 인사 나누기 👋',
-          replayText: `🔄 스테이지 ${sp.stageNum} 다시하기`,
+          replayText: sp.stageNum === 1 ? '⛵ 깊은 곳으로! 다시하기' : `🔄 스테이지 ${sp.stageNum} 다시하기`,
           onReplay: launchThisStage
         });
       } else if (!allUnlocked && sp.stageNum > activeStageNum) {
@@ -10492,7 +10574,9 @@ function updateMiracleOpenWorldFrame(dt, now) {
           audioUrl: sp.audioUrl,
           showCancel: true,
           cancelText: '거절 (나중에 하기) ✕',
-          btnText: sp.stageNum === 5 ? '👑 감람산 승천·재림 언약 보기 ▶' : `🚀 메인 스테이지 ${sp.stageNum} 시작하기 ▶`,
+          btnText: sp.stageNum === 5
+            ? '👑 감람산 승천·재림 언약 보기 ▶'
+            : (sp.stageNum === 1 ? '⛵ 깊은 곳으로! 시작하기 ▶' : `🚀 메인 스테이지 ${sp.stageNum} 시작하기 ▶`),
           onConfirm: launchThisStage,
           onCancel: () => {
             sp._prompted = performance.now();
@@ -10503,7 +10587,6 @@ function updateMiracleOpenWorldFrame(dt, now) {
     }
   });
 
-  const isNightTimeNow = Boolean(window.MiracleDayNight && typeof window.MiracleDayNight.isNight === 'function' && window.MiracleDayNight.isNight());
   miracleEventSpots.forEach((ev) => {
     if (ev.isNightOnly) {
       const keepVisible = isNightTimeNow || (isFieldMissionActive && miracleActiveFieldEvent.spot === ev);
@@ -10757,9 +10840,15 @@ function updateMiracleOpenWorldFrame(dt, now) {
     }
   }
 
-  if (!isMpMode && guideArrowGroup && guideArrowGroup.visible && guideTarget) {
-    const baseFacing = (window.globalCameraViewMode === 'fps') ? (cameraYaw + Math.PI) : playerFacing;
-    guideArrowGroup.rotation.y = Math.atan2(guideTarget.x - playerPos.x, guideTarget.z - playerPos.z) - baseFacing;
+  const isSeniorEquivGuide = (typeof isEffectiveSeniorMode === 'function')
+    ? isEffectiveSeniorMode('miracle', currentMode)
+    : (currentMode === 'senior' || currentMode === 'timeattack');
+  if (!isMpMode && guideArrowGroup) {
+    guideArrowGroup.visible = !isSeniorEquivGuide;
+    if (guideArrowGroup.visible && guideTarget) {
+      const baseFacing = (window.globalCameraViewMode === 'fps') ? (cameraYaw + Math.PI) : playerFacing;
+      guideArrowGroup.rotation.y = Math.atan2(guideTarget.x - playerPos.x, guideTarget.z - playerPos.z) - baseFacing;
+    }
   }
 
   // [소년반(senior)·타임어택(에피소드4 소년반 동일 구성) 및 멀티플레이 전용 초슬림 미니 나침반/거리 내비게이터]
