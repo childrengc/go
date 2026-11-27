@@ -3,7 +3,7 @@
 // =========================================================================
 
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep2_exodus = '3.12.3';
+window.__GAME_BUILD_VERSIONS__.ep2_exodus = '3.12.6';
 
 EPISODE_SCRIPTURE.exodus = {
   1: {

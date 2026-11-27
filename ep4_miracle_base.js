@@ -4,7 +4,7 @@
 // - 확장된 오픈월드 지형 고도 계산기(넓어진 골고다 언덕 포함) 및 소프트 로우 폴리곤 자연물 팩토리
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_base = '3.12.3';
+window.__GAME_BUILD_VERSIONS__.ep4_base = '3.12.6';
 window.EP4_VOICE_VOLUME = 0.75;
 
 // =========================================================================
@@ -6968,11 +6968,26 @@ window.applyMiracleNpcLimbAnimation = function (mesh, opts = {}, dt = 0.016) {
       moveBlend: 0,
       lLegX: (u.lLeg ? u.lLeg.rotation.x : 0),
       rLegX: (u.rLeg ? u.rLeg.rotation.x : 0),
+      lKneeX: (u.lKnee ? u.lKnee.rotation.x : 0),
+      rKneeX: (u.rKnee ? u.rKnee.rotation.x : 0),
+      lAnkleX: (u.lAnkle ? u.lAnkle.rotation.x : 0),
+      rAnkleX: (u.rAnkle ? u.rAnkle.rotation.x : 0),
       lArmX: (u.lArm ? u.lArm.rotation.x : 0),
       rArmX: (u.rArm ? u.rArm.rotation.x : 0),
       lArmZ: (u.lArm ? u.lArm.rotation.z : 0),
       rArmZ: (u.rArm ? u.rArm.rotation.z : 0),
-      headX: (u.head ? u.head.rotation.x : 0)
+      lElbowX: (u.lElbow ? u.lElbow.rotation.x : -0.10),
+      rElbowX: (u.rElbow ? u.rElbow.rotation.x : -0.10),
+      lWristX: (u.lWrist ? u.lWrist.rotation.x : 0),
+      rWristX: (u.rWrist ? u.rWrist.rotation.x : 0),
+      torsoPitch: 0,
+      torsoYaw: 0,
+      torsoRoll: 0,
+      headX: (u.head ? u.head.rotation.x : 0),
+      headY: (u.head ? u.head.rotation.y : 0),
+      capeX: 0.04,
+      scarfX: 0.02,
+      packY: 0
     };
   }
   const st = u._limbAnim;
@@ -6985,6 +7000,7 @@ window.applyMiracleNpcLimbAnimation = function (mesh, opts = {}, dt = 0.016) {
   }
 
   const sw = Math.sin(st.walkPhase);
+  const cw = Math.cos(st.walkPhase);
   const breath = Math.sin(st.idlePhase);
   const mb = st.moveBlend;
 
@@ -7004,36 +7020,85 @@ window.applyMiracleNpcLimbAnimation = function (mesh, opts = {}, dt = 0.016) {
     return { bobY: Math.abs(sw) * 0.024 * mb, moveBlend: mb };
   }
 
+  const runT = isMoving ? THREE.MathUtils.clamp((speed - 4.5) / 4.5, 0, 1) : 0;
+  const maxYaw = u.hasLongSash ? 0.07 : 0.12;
   const targetLLegX = sw * legAmp * mb;
   const targetRLegX = -sw * legAmp * mb;
+  const targetLKneeX = (Math.max(0, -cw) * THREE.MathUtils.lerp(0.54, 0.78, runT) * mb) + 0.02 * (1 - mb);
+  const targetRKneeX = (Math.max(0,  cw) * THREE.MathUtils.lerp(0.54, 0.78, runT) * mb) + 0.02 * (1 - mb);
+  const targetLAnkleX = ((sw > 0 ? -0.18 * sw : -0.24 * sw) * mb);
+  const targetRAnkleX = ((-sw > 0 ? 0.18 * sw : 0.24 * sw) * mb);
   const defaultLArmX = (-sw * armAmp * mb) + (breath * 0.035 * (1 - mb));
   const defaultRArmX = (sw * armAmp * mb) + (-breath * 0.035 * (1 - mb));
   const targetLArmX = (opts.lArmX !== undefined) ? opts.lArmX : defaultLArmX;
   const targetRArmX = (opts.rArmX !== undefined) ? opts.rArmX : defaultRArmX;
-  const targetLArmZ = (opts.lArmZ !== undefined) ? opts.lArmZ : 0;
-  const targetRArmZ = (opts.rArmZ !== undefined) ? opts.rArmZ : 0;
+  const targetLArmZ = (opts.lArmZ !== undefined) ? opts.lArmZ : (-0.03 * (1 - mb));
+  const targetRArmZ = (opts.rArmZ !== undefined) ? opts.rArmZ : (0.03 * (1 - mb));
+  const defaultLElbowX = (-0.18 - Math.max(0, sw) * 0.34) * mb + (-0.12 - Math.max(0, breath) * 0.03) * (1 - mb);
+  const defaultRElbowX = (-0.18 - Math.max(0, -sw) * 0.34) * mb + (-0.12 - Math.max(0, -breath) * 0.03) * (1 - mb);
+  const targetLElbowX = (opts.lElbowX !== undefined) ? opts.lElbowX : defaultLElbowX;
+  const targetRElbowX = (opts.rElbowX !== undefined) ? opts.rElbowX : defaultRElbowX;
+  const targetLWristX = (opts.lWristX !== undefined) ? opts.lWristX : (-sw * 0.14 * mb);
+  const targetRWristX = (opts.rWristX !== undefined) ? opts.rWristX : (sw * 0.14 * mb);
+  const targetTorsoPitch = (0.04 + 0.08 * runT) * mb + breath * 0.012 * (1 - mb);
+  const targetTorsoYaw = sw * maxYaw * mb;
+  const targetTorsoRoll = cw * 0.025 * mb;
   const targetHeadX = (0.025 * mb) + (breath * 0.022 * (1 - mb));
+  const targetHeadY = (-targetTorsoYaw * 0.68) + (Math.sin(st.idlePhase * 0.42) * 0.07 * (1 - mb));
+  const targetCapeX = 0.05 + mb * (0.22 + 0.12 * runT) + Math.sin(st.walkPhase * 2.0 + st.idlePhase) * 0.04;
+  const targetScarfX = 0.02 + mb * (0.06 + 0.04 * runT) + Math.sin(st.walkPhase * 2.0 + st.idlePhase) * 0.02;
+  const targetPackY = -Math.abs(cw) * 0.022 * mb;
 
-  st.lLegX = THREE.MathUtils.damp(st.lLegX, targetLLegX, dampRate, safeDt);
-  st.rLegX = THREE.MathUtils.damp(st.rLegX, targetRLegX, dampRate, safeDt);
-  st.lArmX = THREE.MathUtils.damp(st.lArmX, targetLArmX, dampRate, safeDt);
-  st.rArmX = THREE.MathUtils.damp(st.rArmX, targetRArmX, dampRate, safeDt);
-  st.lArmZ = THREE.MathUtils.damp(st.lArmZ, targetLArmZ, dampRate, safeDt);
-  st.rArmZ = THREE.MathUtils.damp(st.rArmZ, targetRArmZ, dampRate, safeDt);
-  st.headX = THREE.MathUtils.damp(st.headX, targetHeadX, 10, safeDt);
+  st.lLegX      = THREE.MathUtils.damp(st.lLegX,      targetLLegX,      dampRate, safeDt);
+  st.rLegX      = THREE.MathUtils.damp(st.rLegX,      targetRLegX,      dampRate, safeDt);
+  st.lKneeX     = THREE.MathUtils.damp(st.lKneeX,     targetLKneeX,     dampRate, safeDt);
+  st.rKneeX     = THREE.MathUtils.damp(st.rKneeX,     targetRKneeX,     dampRate, safeDt);
+  st.lAnkleX    = THREE.MathUtils.damp(st.lAnkleX,    targetLAnkleX,    dampRate, safeDt);
+  st.rAnkleX    = THREE.MathUtils.damp(st.rAnkleX,    targetRAnkleX,    dampRate, safeDt);
+  st.lArmX      = THREE.MathUtils.damp(st.lArmX,      targetLArmX,      dampRate, safeDt);
+  st.rArmX      = THREE.MathUtils.damp(st.rArmX,      targetRArmX,      dampRate, safeDt);
+  st.lArmZ      = THREE.MathUtils.damp(st.lArmZ,      targetLArmZ,      dampRate, safeDt);
+  st.rArmZ      = THREE.MathUtils.damp(st.rArmZ,      targetRArmZ,      dampRate, safeDt);
+  st.lElbowX    = THREE.MathUtils.damp(st.lElbowX,    targetLElbowX,    dampRate, safeDt);
+  st.rElbowX    = THREE.MathUtils.damp(st.rElbowX,    targetRElbowX,    dampRate, safeDt);
+  st.lWristX    = THREE.MathUtils.damp(st.lWristX,    targetLWristX,    dampRate, safeDt);
+  st.rWristX    = THREE.MathUtils.damp(st.rWristX,    targetRWristX,    dampRate, safeDt);
+  st.torsoPitch = THREE.MathUtils.damp(st.torsoPitch, targetTorsoPitch, dampRate, safeDt);
+  st.torsoYaw   = THREE.MathUtils.damp(st.torsoYaw,   targetTorsoYaw,   dampRate, safeDt);
+  st.torsoRoll  = THREE.MathUtils.damp(st.torsoRoll,  targetTorsoRoll,  dampRate, safeDt);
+  st.headX      = THREE.MathUtils.damp(st.headX,      targetHeadX,      10, safeDt);
+  st.headY      = THREE.MathUtils.damp(st.headY,      targetHeadY,      10, safeDt);
+  st.capeX      = THREE.MathUtils.damp(st.capeX,      targetCapeX,      9, safeDt);
+  st.scarfX     = THREE.MathUtils.damp(st.scarfX,     targetScarfX,     9, safeDt);
+  st.packY      = THREE.MathUtils.damp(st.packY,      targetPackY,      12, safeDt);
 
   if (u.lLeg && u.rLeg) {
     u.lLeg.rotation.x = st.lLegX;
     u.rLeg.rotation.x = st.rLegX;
   }
+  if (u.lKnee) u.lKnee.rotation.x = st.lKneeX;
+  if (u.rKnee) u.rKnee.rotation.x = st.rKneeX;
+  if (u.lAnkle) u.lAnkle.rotation.x = st.lAnkleX;
+  if (u.rAnkle) u.rAnkle.rotation.x = st.rAnkleX;
   if (u.lArm && u.rArm) {
     u.lArm.rotation.x = st.lArmX;
     u.rArm.rotation.x = st.rArmX;
     u.lArm.rotation.z = st.lArmZ;
     u.rArm.rotation.z = st.rArmZ;
   }
+  if (u.lElbow) u.lElbow.rotation.x = st.lElbowX;
+  if (u.rElbow) u.rElbow.rotation.x = st.rElbowX;
+  if (u.lWrist) u.lWrist.rotation.x = st.lWristX;
+  if (u.rWrist) u.rWrist.rotation.x = st.rWristX;
+  if (u.torsoPivot) {
+    u.torsoPivot.rotation.set(st.torsoPitch, st.torsoYaw, st.torsoRoll);
+  }
+  if (u.capePivot) u.capePivot.rotation.x = st.capeX;
+  if (u.scarfPivot) u.scarfPivot.rotation.x = st.scarfX;
+  if (u.packPivot) u.packPivot.position.y = 1.32 + st.packY;
   if (u.head) {
     u.head.rotation.x = st.headX;
+    u.head.rotation.y = st.headY;
   }
 
   return {

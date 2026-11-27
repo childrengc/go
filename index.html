@@ -564,6 +564,148 @@
     }
 
     /* ================================================================
+       [에피소드 4 스테이지 1 & 일반 대화창] 모바일 가로모드 슬림 대화창 (화면 가림 최소화)
+       ================================================================ */
+    @media (orientation: landscape) and (max-height: 540px) {
+      #miracle-s1-ui {
+        bottom: 0.3rem !important;
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
+      }
+      #ms1-cinema-panel:not(.hidden) {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 0.65rem !important;
+        max-width: min(90vw, 660px) !important;
+        padding: 0.38rem 0.72rem !important;
+        border-radius: 0.9rem !important;
+        border-width: 1.5px !important;
+        background: rgba(2, 6, 23, 0.78) !important;
+      }
+      #ms1-cinema-panel.hidden,
+      #ms1-cinema-btn-wrap.hidden {
+        display: none !important;
+      }
+      #ms1-cinema-panel .ms1-cinema-head {
+        margin-bottom: 0.14rem !important;
+        justify-content: flex-start !important;
+        gap: 0.4rem !important;
+      }
+      #ms1-cinema-speaker {
+        font-size: 10.5px !important;
+        padding: 0.05rem 0.45rem !important;
+        line-height: 1.2 !important;
+      }
+      #ms1-cinema-step {
+        font-size: 10px !important;
+      }
+      #ms1-cinema-text {
+        font-size: clamp(11.5px, 3.1dvh, 13.5px) !important;
+        line-height: 1.28 !important;
+        margin-bottom: 0 !important;
+      }
+      #ms1-cinema-next-btn {
+        padding: 0.36rem 0.78rem !important;
+        font-size: clamp(11px, 2.9dvh, 12.5px) !important;
+        border-radius: 0.68rem !important;
+        white-space: nowrap !important;
+      }
+
+      #ms1-sail-panel {
+        padding: 0.28rem 0.65rem !important;
+        border-radius: 0.85rem !important;
+        margin-bottom: 0 !important;
+        background: rgba(15, 23, 42, 0.76) !important;
+      }
+      #ms1-sail-dist {
+        font-size: 12px !important;
+        line-height: 1.2 !important;
+      }
+      #ms1-sail-panel > div:last-child {
+        font-size: 10px !important;
+        margin-top: 0.1rem !important;
+      }
+
+      #ms1-cast-panel,
+      #ms1-hold-panel,
+      #ms1-coop-panel,
+      #ms1-bal-panel,
+      #ms1-wake-panel {
+        padding: 0.42rem 0.68rem !important;
+        border-radius: 0.9rem !important;
+        max-width: min(86vw, 520px) !important;
+        background: rgba(15, 23, 42, 0.82) !important;
+      }
+      #ms1-cast-panel > div,
+      #ms1-hold-panel > div,
+      #ms1-coop-panel > div,
+      #ms1-bal-panel > div {
+        margin-bottom: 0.24rem !important;
+      }
+      #ms1-cast-panel .h-6,
+      #ms1-bal-panel .h-6 {
+        height: 1.15rem !important;
+      }
+      #ms1-hold-panel .h-3\.5,
+      #ms1-coop-panel .h-3\.5 {
+        height: 0.65rem !important;
+      }
+      #ms1-hold-panel .h-2 {
+        height: 0.42rem !important;
+      }
+      #ms1-cast-btn,
+      #ms1-hold-btn,
+      #ms1-coop-btn,
+      #ms1-wake-btn {
+        padding-top: 0.42rem !important;
+        padding-bottom: 0.42rem !important;
+        font-size: 0.84rem !important;
+      }
+      #ms1-bal-left,
+      #ms1-bal-right {
+        padding-top: 0.42rem !important;
+        padding-bottom: 0.42rem !important;
+        font-size: 0.82rem !important;
+      }
+
+      #miracle-dialog-overlay:not(.is-quiz-overlay) {
+        padding-bottom: 0.45rem !important;
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
+      }
+      #miracle-dialog-overlay:not(.is-quiz-overlay) #miracle-dialog-modal {
+        max-width: min(88vw, 580px) !important;
+        padding: 0.48rem 0.78rem !important;
+        border-width: 2.5px !important;
+        border-radius: 1rem !important;
+        gap: 0.25rem !important;
+        background: rgba(255, 251, 235, 0.92) !important;
+      }
+      #miracle-dialog-overlay:not(.is-quiz-overlay) #miracle-dialog-speaker,
+      #miracle-dialog-overlay:not(.is-quiz-overlay) #miracle-dialog-cat-badge {
+        font-size: 10.5px !important;
+        padding: 0.08rem 0.5rem !important;
+      }
+      #miracle-dialog-overlay:not(.is-quiz-overlay) #miracle-dialog-text {
+        font-size: clamp(11.5px, 3dvh, 13px) !important;
+        line-height: 1.3 !important;
+        min-height: 0 !important;
+      }
+      #miracle-dialog-overlay:not(.is-quiz-overlay) #miracle-dialog-modal button {
+        padding: 0.26rem 0.68rem !important;
+        font-size: 11.5px !important;
+        border-radius: 0.65rem !important;
+      }
+    }
+    @media (orientation: landscape) and (max-height: 410px) {
+      #ms1-coop-hint {
+        display: none !important;
+      }
+    }
+
+    /* ================================================================
        [에피소드 4 삭개오 미션] 가로모드 반투명 콤팩트 자막·돈주머니 게이지 레이어
        ================================================================ */
     @media (orientation: landscape) {
@@ -1823,6 +1965,233 @@
         font-size: 7.2px !important;
       }
     }
+
+    /* EP4 온라인 멀티플레이 3D 캐릭터 좌우 스와이프 선택 캐러셀 */
+    #mp-entry-modal .mp-entry-card {
+      overflow: hidden !important;
+      max-height: 94dvh;
+    }
+    .mp-char-carousel-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+      min-height: 0;
+    }
+    .mp-char-scroll-track {
+      --mp-card-w: clamp(162px, 44vw, 204px);
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      width: 100%;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      padding: 0.45rem calc(50% - var(--mp-card-w) / 2);
+      cursor: grab;
+      touch-action: pan-y;
+      user-select: none;
+      -webkit-user-select: none;
+      perspective: 1100px;
+    }
+    .mp-char-scroll-track.is-pointer-dragging {
+      cursor: grabbing;
+      scroll-snap-type: none !important;
+    }
+    .mp-char-scroll-track::-webkit-scrollbar {
+      display: none;
+    }
+    .mp-char-slot {
+      flex: 0 0 auto;
+      scroll-snap-align: center;
+      width: var(--mp-card-w);
+    }
+    .mp-char-card {
+      width: 100%;
+      border-radius: 1.15rem;
+      overflow: hidden;
+      background: #fffbeb;
+      border: 2.5px solid rgba(217, 119, 6, 0.35);
+      box-shadow: 0 6px 16px rgba(15, 23, 42, 0.22);
+      transform: scale(0.90) rotateY(var(--swipe-tilt, 0deg));
+      opacity: 0.76;
+      transition: transform 0.24s ease-out, opacity 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+      cursor: pointer;
+    }
+    .mp-char-card.is-selected {
+      transform: scale(1.03) rotateY(var(--swipe-tilt, 0deg));
+      opacity: 1;
+      border-color: #d97706;
+      box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.45), 0 12px 26px rgba(15, 23, 42, 0.35);
+      background: #fef3c7;
+    }
+    .mp-char-portrait-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 4 / 5;
+      background: #3d5e80;
+      overflow: hidden;
+    }
+    .mp-char-portrait-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      pointer-events: none;
+    }
+    .mp-char-selected-badge {
+      position: absolute;
+      top: 0.42rem;
+      left: 0.42rem;
+      padding: 0.14rem 0.48rem;
+      border-radius: 9999px;
+      background: rgba(5, 150, 105, 0.94);
+      color: #ffffff;
+      border: 1.5px solid rgba(255, 255, 255, 0.85);
+      font-family: 'Jua', sans-serif;
+      font-size: 10px;
+      line-height: 1.2;
+      opacity: 0;
+      visibility: hidden;
+      transform: scale(0.85);
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      pointer-events: none;
+    }
+    .mp-char-card.is-selected .mp-char-selected-badge {
+      opacity: 1;
+      visibility: visible;
+      transform: scale(1);
+    }
+    .mp-char-flip-btn {
+      position: absolute;
+      bottom: 0.42rem;
+      right: 0.42rem;
+      padding: 0.18rem 0.5rem;
+      border-radius: 9999px;
+      background: rgba(15, 23, 42, 0.78);
+      color: #fef3c7;
+      border: 1px solid rgba(251, 191, 36, 0.7);
+      font-family: 'Jua', sans-serif;
+      font-size: 10px;
+      line-height: 1.2;
+      cursor: pointer;
+      backdrop-filter: blur(4px);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.18s ease, background 0.18s ease, transform 0.15s ease;
+    }
+    .mp-char-card.is-selected .mp-char-flip-btn {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+    }
+    .mp-char-flip-btn:hover {
+      background: rgba(30, 41, 59, 0.94);
+      transform: scale(1.05);
+    }
+    .mp-char-meta {
+      padding: 0.38rem 0.5rem 0.45rem;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(255, 251, 235, 0.96) 0%, rgba(254, 243, 199, 0.96) 100%);
+    }
+    .mp-char-nav-btn {
+      position: absolute;
+      top: 44%;
+      transform: translateY(-50%);
+      z-index: 6;
+      width: 2rem;
+      height: 2rem;
+      border-radius: 9999px;
+      background: rgba(15, 23, 42, 0.72);
+      color: #fef3c7;
+      border: 1.5px solid rgba(251, 191, 36, 0.75);
+      font-size: 1.35rem;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.35);
+    }
+    .mp-char-nav-prev { left: 0.25rem; }
+    .mp-char-nav-next { right: 0.25rem; }
+
+    @media (orientation: landscape) and (max-height: 540px) {
+      #mp-entry-modal .mp-entry-card {
+        padding: 0.5rem 0.75rem !important;
+        max-height: 96dvh !important;
+        max-width: 720px !important;
+      }
+      #mp-entry-modal .mp-entry-header {
+        padding-bottom: 0.28rem !important;
+        margin-bottom: 0.3rem !important;
+      }
+      #mp-entry-modal .mp-entry-header h2 {
+        font-size: 0.98rem !important;
+        line-height: 1.15 !important;
+      }
+      #mp-entry-modal .mp-room-row {
+        display: flex !important;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.26rem 0.5rem !important;
+        margin-bottom: 0.28rem !important;
+      }
+      #mp-entry-modal .mp-room-label {
+        margin-bottom: 0 !important;
+        white-space: nowrap;
+        font-size: 0.72rem !important;
+      }
+      #mp-entry-modal #mp-room-input {
+        padding: 0.2rem 0.5rem !important;
+        font-size: 0.78rem !important;
+      }
+      #mp-entry-modal .mp-char-section {
+        margin-bottom: 0.25rem !important;
+      }
+      #mp-entry-modal .mp-char-scroll-track {
+        --mp-card-w: clamp(114px, 28dvh, 148px);
+        gap: 0.65rem !important;
+        padding-top: 0.2rem !important;
+        padding-bottom: 0.2rem !important;
+      }
+      #mp-entry-modal .mp-char-meta {
+        padding: 0.22rem 0.35rem 0.26rem !important;
+      }
+      #mp-entry-modal .mp-char-swipe-hint {
+        display: none !important;
+      }
+      #mp-entry-modal .mp-mission-banner {
+        display: none !important;
+      }
+      #mp-entry-modal .mp-enter-btn {
+        padding: 0.36rem 0.75rem !important;
+        font-size: 0.88rem !important;
+      }
+    }
+    @media (orientation: landscape) and (max-height: 430px) {
+      #mp-entry-modal .mp-char-scroll-track {
+        --mp-card-w: clamp(118px, 30dvh, 138px);
+      }
+      #mp-entry-modal .mp-char-portrait-wrap {
+        aspect-ratio: 1 / 1;
+      }
+      #mp-entry-modal .mp-char-meta {
+        padding: 0.2rem 0.25rem 0.24rem !important;
+      }
+      #mp-entry-modal .mp-char-meta .font-jua {
+        font-size: 11px !important;
+      }
+      #mp-entry-modal .mp-char-flip-btn,
+      #mp-entry-modal .mp-char-selected-badge {
+        font-size: 8.5px !important;
+        padding: 0.1rem 0.35rem !important;
+      }
+    }
   </style>
 </head>
 <body class="relative w-full h-full select-none">
@@ -2230,7 +2599,7 @@
                   onclick="if(typeof openGameChangelogModal==='function') openGameChangelogModal();"
                   title="업데이트 기록 보기"
                   class="absolute left-0 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded-md bg-amber-900/10 hover:bg-amber-900/20 text-amber-900/80 hover:text-amber-950 font-jua text-[10px] sm:text-[11px] leading-none transition-colors cursor-pointer">
-            v3.12.3
+            v3.12.6
           </button>
           <p class="opening-footer font-jua text-amber-900/75 tracking-wide">
             광릉내 재림교회 어린이부
@@ -2639,7 +3008,7 @@
   </div>
 
   <!-- =================================================================== -->
-  <!-- [공통] 게임 버전 정보 & 전체 업데이트 기록 모달 (v3.12.3) -->
+  <!-- [공통] 게임 버전 정보 & 전체 업데이트 기록 모달 (v3.12.6) -->
   <!-- =================================================================== -->
   <div id="changelog-modal"
        onclick="if(event.target===this && typeof closeGameChangelogModal==='function') closeGameChangelogModal();"
@@ -2649,7 +3018,7 @@
       <div class="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 bg-gradient-to-r from-amber-100 to-amber-50 border-b border-amber-300/80 shrink-0">
         <div class="flex items-center gap-2 flex-wrap">
           <h2 class="font-jua text-lg sm:text-xl text-amber-950 leading-tight">📜 업데이트 기록</h2>
-          <span id="changelog-modal-ver-badge" class="px-2.5 py-0.5 rounded-full bg-amber-400/90 text-amber-950 font-jua text-xs border border-amber-600/40">v3.12.3</span>
+          <span id="changelog-modal-ver-badge" class="px-2.5 py-0.5 rounded-full bg-amber-400/90 text-amber-950 font-jua text-xs border border-amber-600/40">v3.12.6</span>
         </div>
         <button type="button" onclick="if(typeof closeGameChangelogModal==='function') closeGameChangelogModal();"
                 class="mc-btn-slim px-3 py-1 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-jua text-xs sm:text-sm">
@@ -2659,14 +3028,49 @@
 
       <!-- 본문 스크롤 영역 -->
       <div class="overflow-y-auto px-4 sm:px-6 py-4 space-y-4 text-left text-xs sm:text-[13px] leading-relaxed">
-        <!-- 🚀 최신 업데이트 (v3.9.0 ~ v3.12.3) -->
+        <!-- 🚀 최신 업데이트 (v3.9.0 ~ v3.12.6) -->
         <section class="space-y-2.5">
-          <h3 class="font-jua text-sm sm:text-base text-rose-700 border-b border-amber-200 pb-1">🚀 최신 업데이트 (v3.9.0 ~ v3.12.3)</h3>
+          <h3 class="font-jua text-sm sm:text-base text-rose-700 border-b border-amber-200 pb-1">🚀 최신 업데이트 (v3.9.0 ~ v3.12.6)</h3>
 
           <div class="rounded-2xl bg-white/90 border border-amber-300 p-3 shadow-sm space-y-1">
             <div class="flex items-center gap-2 flex-wrap">
-              <span class="font-jua text-amber-950 text-sm">[v3.12.3]</span>
+              <span class="font-jua text-amber-950 text-sm">[v3.12.6]</span>
               <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">최신</span>
+            </div>
+            <p class="font-bold text-slate-800">EP4 스테이지 1 가로모드 슬림 대화창, 두 배 만선 연출 강화 &amp; 클리어 후 조이스틱 복원</p>
+            <ul class="list-disc pl-4 space-y-0.5 text-slate-700">
+              <li><b>모바일 가로모드 대화창 슬림화</b>: 스테이지 1 하단 대화창과 일반 NPC 대화창을 가로모드에서 한 줄 콤팩트 자막 바 형태로 축소해 바다와 배가 시원하게 보이도록 개선했습니다.</li>
+              <li><b>두 배 만선(물고기 가득) 연출 강화</b>: 그물을 끌어올린 직후 연타 오터치로 바로 넘어가지 않도록 보호하고, 베드로 배와 야고보·요한 배에 물고기 더미가 가득 차오르며 배가 물에 잠기는 만선 장면을 충분히 감상한 뒤 <code>🏖️ 갈릴리 해변으로 ▶</code> 버튼으로 이동하도록 개선했습니다.</li>
+              <li><b>클리어 후 조이스틱 복원 수정</b>: 스테이지 1 클리어 또는 오픈월드 복귀 시 조이스틱·시점 회전·점프 버튼이 항상 정상 표시되도록 보완했습니다.</li>
+            </ul>
+          </div>
+
+          <div class="rounded-2xl bg-white/75 border border-amber-200 p-3 space-y-1">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-jua text-amber-950 text-sm">[v3.12.5]</span>
+            </div>
+            <p class="font-bold text-slate-800">EP4 온라인 제자 3인 추가, 의상 색상 표기 일치, 비정형 소프트 로우폴리 발 &amp; 전신 다관절 모션 고도화</p>
+            <ul class="list-disc pl-4 space-y-0.5 text-slate-700">
+              <li><b>베드로 · 야고보 · 요한 추가 (총 13종)</b>: 온라인 멀티플레이 캐릭터 선택창과 관리자 모드에 베드로·야고보·요한을 추가하고, 모든 캐릭터의 이름·의상 색상 설명·팔레트를 실제 3D 의상과 일치시켰습니다.</li>
+              <li><b>비정형 소프트 로우폴리 발 통일</b>: 패스파인더·어드벤처러 대원의 운동화와 일반 제자·자매·어린이 캐릭터의 발을 플레이어 캐릭터와 동일한 5단 경사 로프팅 소프트 로우폴리 조형으로 개편했습니다.</li>
+              <li><b>전신 다관절 · 애니메이션 고도화</b>: 무릎·발목·팔꿈치·손목·허리 비틀림·망토/배낭 보조 모션을 전 캐릭터에 통합하고, 달리기·선회 뱅킹·전신 도끼질·멀티플레이 감정표현 제스처를 한층 자연스럽게 다듬었습니다.</li>
+            </ul>
+          </div>
+
+          <div class="rounded-2xl bg-white/75 border border-amber-200 p-3 space-y-1">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-jua text-amber-950 text-sm">[v3.12.4]</span>
+            </div>
+            <p class="font-bold text-slate-800">EP4 온라인 멀티플레이 실제 인게임 3D 캐릭터 스와이프 선택창 개편</p>
+            <ul class="list-disc pl-4 space-y-0.5 text-slate-700">
+              <li><b>인게임 3D 캐릭터 표시</b>: 온라인 캐릭터 선택창에서 10종 캐릭터를 실제 게임 속 고해상도(LOD 0) 3D 모습으로 보여주며, 과도한 밝기 없이 차분한 자연광 균형으로 색감을 살렸습니다.</li>
+              <li><b>좌우 터치 스와이프 &amp; 뒷모습 보기</b>: 수집한 카드첩처럼 좌우 터치·드래그로 캐릭터를 넘기며 선택하고, <code>↻ 뒷모습</code> 버튼으로 망토·가방·베일 뒷모습까지 확인할 수 있습니다.</li>
+            </ul>
+          </div>
+
+          <div class="rounded-2xl bg-white/75 border border-amber-200 p-3 space-y-1">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-jua text-amber-950 text-sm">[v3.12.3]</span>
             </div>
             <p class="font-bold text-slate-800">EP2 스테이지 1 미션 안내문 개편, EP1 카운트 실시간 연동 &amp; 골리앗 갑옷 깜빡임 해결</p>
             <ul class="list-disc pl-4 space-y-0.5 text-slate-700">
@@ -2850,9 +3254,9 @@
     </div>
   </div>
 
-<!-- 게임 스크립트 로드 (v3.12.3 캐시 강제 갱신 및 12개 전 모듈 일관성 자동 검증 적용) -->
+<!-- 게임 스크립트 로드 (v3.12.6 캐시 강제 갱신 및 12개 전 모듈 일관성 자동 검증 적용) -->
   <script>
-    window.GAME_VERSION = '3.12.3';
+    window.GAME_VERSION = '3.12.6';
     window.GAME_BUILD_DATE = '2026-11-27';
     function openGameChangelogModal() {
       const m = document.getElementById('changelog-modal');
@@ -2876,22 +3280,22 @@
       if (badge) badge.textContent = verLabel;
     })();
   </script>
-  <script src="game_catalog.js?v=3.12.3"></script>
-  <script src="core.js?v=3.12.3"></script>
-  <script src="ep1_noah.js?v=3.12.3"></script>
-  <script src="ep2_exodus.js?v=3.12.3"></script>
-  <script src="ep3_david_base.js?v=3.12.3"></script>
-  <script src="ep3_david_st1_2.js?v=3.12.3"></script>
-  <script src="ep3_david_st3_end.js?v=3.12.3"></script>
-  <script src="ep4_miracle_base.js?v=3.12.3"></script>
-  <script src="ep4_miracle_assets.js?v=3.12.3"></script>
-  <script src="ep4_miracle_world.js?v=3.12.3"></script>
-  <script src="ep4_miracle_stages.js?v=3.12.3"></script>
-  <script src="ep4_multiplayer.js?v=3.12.3"></script>
+  <script src="game_catalog.js?v=3.12.6"></script>
+  <script src="core.js?v=3.12.6"></script>
+  <script src="ep1_noah.js?v=3.12.6"></script>
+  <script src="ep2_exodus.js?v=3.12.6"></script>
+  <script src="ep3_david_base.js?v=3.12.6"></script>
+  <script src="ep3_david_st1_2.js?v=3.12.6"></script>
+  <script src="ep3_david_st3_end.js?v=3.12.6"></script>
+  <script src="ep4_miracle_base.js?v=3.12.6"></script>
+  <script src="ep4_miracle_assets.js?v=3.12.6"></script>
+  <script src="ep4_miracle_world.js?v=3.12.6"></script>
+  <script src="ep4_miracle_stages.js?v=3.12.6"></script>
+  <script src="ep4_multiplayer.js?v=3.12.6"></script>
   <script>
     // GitHub Pages CDN·브라우저 부분 캐시로 신·구버전 스크립트가 뒤섞여 로드되는 현상을 자동 감지해 1회 강제 새로고침
     (function verifyScriptBuildConsistency() {
-      const EXPECTED = window.GAME_VERSION || '3.12.3';
+      const EXPECTED = window.GAME_VERSION || '3.12.6';
       const vers = window.__GAME_BUILD_VERSIONS__ || {};
       const keys = [
         'catalog', 'core', 'ep1_noah', 'ep2_exodus', 'ep3_base', 'ep3_st1_2', 'ep3_st3_end',

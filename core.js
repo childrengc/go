@@ -5,7 +5,7 @@
 // =========================================================================
 
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.core = '3.12.3';
+window.__GAME_BUILD_VERSIONS__.core = '3.12.6';
 
 function installEp4MattePhongSpecGuard() {
   if (typeof THREE !== 'undefined' && THREE.ShaderChunk && THREE.ShaderChunk.lights_phong_pars_fragment) {
@@ -3744,6 +3744,9 @@ function resumeGameFromWorldMap() {
     restoreVis('miracle-breakfast-ui', v.miracleBreakfast);
     restoreVis('miracle-zacchaeus-ui', v.miracleZacchaeus);
     restoreVis('miracle-zac-drag-layer', v.miracleZacDrag);
+    if (typeof miracleSubMode !== 'undefined' && (miracleSubMode === 'main1_galilee' || miracleSubMode === 'main1_storm_night') && typeof syncMiracleStage1HudControlsVisibility === 'function') {
+      syncMiracleStage1HudControlsVisibility();
+    }
     if (typeof updateMiracleNotebookHudBadge === 'function') updateMiracleNotebookHudBadge();
     if (typeof window.syncMiracleTimeHUD === 'function') window.syncMiracleTimeHUD();
     if (snap.wasMultiplayer) {
@@ -9274,11 +9277,14 @@ function initEngine(skipInitialPreview = false) {
           moveSpeed: effectiveMoveSpeed,
           maxSpeed: baseSpeed,
           isMoving: effectiveIsMoving,
+          facingYaw: playerFacing,
           playerGroup,
           limbs: playerLimbs,
           skipArms: Boolean(window.__ep4SkipArmAnimThisFrame),
           skipBodyScale: Boolean(window.__ep4SkipBodyScaleThisFrame || skipWaterScale),
-          isChopping: playerChopAnimTimer > 0
+          isChopping: playerChopAnimTimer > 0,
+          chopTimer: playerChopAnimTimer,
+          chopDuration: 0.35
         });
         window.__ep4SkipArmAnimThisFrame = false;
         window.__ep4SkipBodyScaleThisFrame = false;
@@ -9288,7 +9294,9 @@ function initEngine(skipInitialPreview = false) {
       if (playerLimbs.axeTool) {
         if (playerChopAnimTimer > 0) {
           playerLimbs.axeTool.visible = true;
-          playerLimbs.lArm.rotation.x = -1.7 + Math.sin(now * 0.05) * 1.1;
+          if (!(currentEpisode === 'miracle' && window.ep4CharacterAnimator)) {
+            playerLimbs.lArm.rotation.x = -1.7 + Math.sin(now * 0.05) * 1.1;
+          }
         } else {
           playerLimbs.axeTool.visible = false;
         }

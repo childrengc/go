@@ -4,7 +4,7 @@
 // - 스테이지 3(십자가 사건): 넓어진 골고다 언덕 정상 고원과 세 십자가 등장 연출 적용
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_stages = '3.12.3';
+window.__GAME_BUILD_VERSIONS__.ep4_stages = '3.12.6';
 
 // 스테이지 1 완만한 곡선 해안선 X 계산기 (중앙 선착장 x≈20에서 북/남 양쪽으로 갈수록 뒤쪽(+X)으로 부드럽게 만곡)
 function getGalileeStage1ShoreX(wz) {
@@ -474,12 +474,14 @@ function ensureMiracleStage1UI() {
     root.innerHTML = `
       <!-- 시네마틱 대사 / 내레이션 패널 (Steps 2, 3, 6, 8, 10, 11, 12) -->
       <div id="ms1-cinema-panel" class="hidden pointer-events-auto w-full max-w-xl bg-slate-950/86 backdrop-blur-md border-2 border-amber-300/85 rounded-2xl p-3.5 sm:p-4 shadow-2xl text-white">
-        <div class="flex items-center justify-between gap-2 mb-1.5">
-          <span id="ms1-cinema-speaker" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-400/20 border border-amber-300/60 text-amber-200 font-jua text-xs sm:text-sm">✨ 예수님</span>
-          <span id="ms1-cinema-step" class="text-[11px] sm:text-xs font-bold text-sky-200/90"></span>
+        <div class="ms1-cinema-main min-w-0 flex-1">
+          <div class="ms1-cinema-head flex items-center justify-between gap-2 mb-1.5">
+            <span id="ms1-cinema-speaker" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-400/20 border border-amber-300/60 text-amber-200 font-jua text-xs sm:text-sm">✨ 예수님</span>
+            <span id="ms1-cinema-step" class="text-[11px] sm:text-xs font-bold text-sky-200/90"></span>
+          </div>
+          <p id="ms1-cinema-text" class="font-jua text-sm sm:text-base md:text-lg leading-relaxed text-white whitespace-pre-line mb-2.5"></p>
         </div>
-        <p id="ms1-cinema-text" class="font-jua text-sm sm:text-base md:text-lg leading-relaxed text-white whitespace-pre-line mb-2.5"></p>
-        <div id="ms1-cinema-btn-wrap" class="flex justify-end">
+        <div id="ms1-cinema-btn-wrap" class="flex justify-end shrink-0">
           <button id="ms1-cinema-next-btn" type="button"
             class="mc-btn px-5 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-400 active:scale-95 text-slate-950 font-jua text-sm sm:text-base shadow-lg border-2 border-yellow-100">
             다음 ▶
@@ -697,7 +699,7 @@ function ensureMiracleStage1UI() {
           if (
             st.phase === 'intro_jesus' ||
             st.phase === 'intro_peter' ||
-            st.phase === 'boats_full_celebration' ||
+            (st.phase === 'boats_full_celebration' && (st.fullBoatReadyToAdvance || (st.phaseTimer || 0) >= (st.fullBoatMinViewSec || 2.6))) ||
             st.phase === 'beach_calling' ||
             st.phase === 'beach_follow_narration'
           ) {
@@ -825,9 +827,16 @@ function syncMiracleStage1UI() {
       btnLabel = '🕸️ 함께 그물 끌어올리기 ▶';
     } else if (st.phase === 'boats_full_celebration') {
       speaker = '🐟 만선의 기적!';
-      stepTag = '두 배 모두 가득!';
-      bodyText = '우와! 베드로의 배와 야고보·요한의 배 모두 물고기가 넘치도록 가득 찼어요!';
-      btnLabel = '🏖️ 갈릴리 해변으로 ▶';
+      if (!st.fullBoatReadyToAdvance) {
+        stepTag = '두 배에 가득 차는 중!';
+        bodyText = '와아! 그물에서 쏟아진 물고기가 베드로의 배와 야고보·요한의 배에 가득 차오르고 있어요!';
+        showBtn = false;
+      } else {
+        stepTag = '두 배 모두 만선!';
+        bodyText = '우와! 두 배 모두 물고기가 넘치도록 가득 차서 배가 물에 잠길 지경이에요!';
+        showBtn = true;
+        btnLabel = '🏖️ 갈릴리 해변으로 ▶';
+      }
     } else if (st.phase === 'beach_calling') {
       speaker = '✨ 예수님';
       stepTag = '갈릴리 해변';
@@ -980,33 +989,194 @@ function syncMiracleStage1UI() {
   }
 }
 
-function populateBoatFishPile(fishPileGroup, count, halfW, halfZ) {
+function populateBoatFishPile(fishPileGroup, count, halfW, halfZ, opts = {}) {
   if (!fishPileGroup) return;
   while (fishPileGroup.children.length > 0) {
     fishPileGroup.remove(fishPileGroup.children[0]);
   }
   const fishCount = Math.max(12, count || 36);
-  for (let i = 0; i < fishCount; i++) {
-    const layer = Math.floor(i / 10);
-    const t = (i % 10) / 10;
-    const angle = i * 2.39996;
-    const radFrac = Math.sqrt(0.15 + ((i * 37) % 100) / 118) * Math.max(0.45, 1.0 - layer * 0.14);
-    const fx = Math.cos(angle) * halfW * radFrac;
-    const fz = Math.sin(angle) * halfZ * radFrac;
-    const fy = 0.14 + layer * 0.20 + (1.0 - radFrac) * 0.26 + Math.sin(t * Math.PI) * 0.08;
-    const sc = 0.72 + (i % 4) * 0.11;
-    const fMesh = (typeof createLowPolyFishMesh === 'function')
-      ? createLowPolyFishMesh(null, sc, i + 3)
-      : createLowPolyMesh(new THREE.ConeGeometry(0.20, 0.68, 5), '#38bdf8', 0, 0, 0, false);
-    fMesh.position.set(fx, fy, fz);
-    fMesh.rotation.set(
-      ((i % 5) - 2) * 0.16,
-      angle + (i % 3) * 0.7,
-      (i % 2 === 0 ? 1 : -1) * (0.35 + (i % 3) * 0.18)
-    );
-    fishPileGroup.add(fMesh);
+  const hull = opts.hull || (fishPileGroup.userData && fishPileGroup.userData.shipHull) || null;
+  const zOffset = (typeof opts.zOffset === 'number')
+    ? opts.zOffset
+    : ((fishPileGroup.userData && typeof fishPileGroup.userData.zOffset === 'number') ? fishPileGroup.userData.zOffset : 0);
+  const minZ = (typeof opts.minZ === 'number') ? opts.minZ : -(halfZ || 4.8) * 0.96;
+  const maxZ = (typeof opts.maxZ === 'number') ? opts.maxZ :  (halfZ || 4.8) * 0.96;
+  const zMid = (minZ + maxZ) * 0.5;
+  const zSpanHalf = Math.max(1.0, (maxZ - minZ) * 0.5);
+  const defaultGunwale = (typeof opts.gunwaleY === 'number') ? opts.gunwaleY : 1.02;
+  const moundH = (typeof opts.moundH === 'number') ? opts.moundH : 1.28;
+  const animateTopCount = (typeof opts.animateTopCount === 'number') ? opts.animateTopCount : 22;
+  const leapingCount = (typeof opts.leapingCount === 'number') ? opts.leapingCount : 0;
+  const seed = (typeof opts.seed === 'number') ? opts.seed : 7;
+
+  const getInnerHalfWAt = (localZ) => {
+    if (hull && typeof hull.getInnerHalfW === 'function') {
+      return Math.max(0.55, hull.getInnerHalfW(localZ + zOffset) - 0.14);
+    }
+    const zNorm = THREE.MathUtils.clamp((localZ - zMid) / zSpanHalf, -1, 1);
+    return Math.max(0.55, (halfW || 2.8) * Math.sqrt(Math.max(0.10, 1.0 - zNorm * zNorm * 0.72)));
+  };
+  const getGunwaleAt = (localZ) => {
+    if (hull && typeof hull.getGunwaleY === 'function') {
+      return hull.getGunwaleY(localZ + zOffset) - 0.06;
+    }
+    return defaultGunwale;
+  };
+
+  // 1) 선체 내벽을 빈틈없이 꽉 메우는 다면체 물고기 더미 베이스 (갑판 바닥 노출 원천 차단)
+  const moundCols = ['#64748b', '#0284c7', '#94a3b8', '#0ea5e9', '#cbd5e1', '#d97706'];
+  const segCount = 6;
+  const segStepZ = (maxZ - minZ) / segCount;
+  for (let si = 0; si < segCount; si++) {
+    const u = (si + 0.5) / segCount;
+    const sz = THREE.MathUtils.lerp(minZ + segStepZ * 0.32, maxZ - segStepZ * 0.32, u);
+    const wLim = getInnerHalfWAt(sz);
+    const crownBoost = 0.74 + Math.sin(u * Math.PI) * 0.34;
+    const rx = Math.max(0.6, wLim * 0.94);
+    const ry = moundH * 0.50 * crownBoost;
+    const rz = Math.max(0.75, segStepZ * 0.88);
+    const moundGeo = new THREE.IcosahedronGeometry(1.0, 1);
+    const moundMesh = createLowPolyMesh(moundGeo, moundCols[(si + seed) % moundCols.length], 0, ry * 0.62, sz, false);
+    moundMesh.scale.set(rx, ry, rz);
+    moundMesh.rotation.y = ((si % 2 === 0 ? 1 : -1) * 0.12);
+    fishPileGroup.add(moundMesh);
   }
+
+  // 2) 다층 3D 물고기 군락 (가장자리 뱃전 밀착 + 중앙 수북한 만선 왕관)
+  const animFishes = [];
+  for (let i = 0; i < fishCount; i++) {
+    const u = (i + 0.5) / fishCount;
+    const golden = i * 2.399963 + seed * 0.61;
+    const isRimLayer = (i % 3 === 0);
+    const zNoise = Math.sin(golden * 1.37) * 0.14;
+    const zNorm = THREE.MathUtils.clamp((u * 2 - 1) * 0.94 + zNoise, -0.96, 0.96);
+    const fz = zMid + zNorm * zSpanHalf;
+    const wLim = getInnerHalfWAt(fz);
+    const gunY = getGunwaleAt(fz);
+
+    const radialFrac = isRimLayer
+      ? (0.64 + ((i * 29 + seed) % 30) / 100)
+      : Math.sqrt(0.06 + ((i * 43 + seed) % 72) / 100) * 0.82;
+    const xSign = Math.cos(golden) >= 0 ? 1 : -1;
+    const fxRaw = Math.cos(golden) * wLim * Math.min(0.92, radialFrac);
+    const fx = THREE.MathUtils.clamp(fxRaw, -(wLim - 0.18), (wLim - 0.18)) || xSign * 0.15;
+
+    const domeFactor = Math.max(0, 1.0 - (fx / Math.max(0.5, wLim)) * (fx / Math.max(0.5, wLim)) * 0.68)
+      * (0.72 + Math.cos(zNorm * Math.PI * 0.48) * 0.28);
+    const tierFrac = isRimLayer ? (0.45 + (i % 4) * 0.12) : (0.72 + (i % 5) * 0.11);
+    const baseFy = isRimLayer
+      ? (0.48 + (gunY - 0.48) * (0.58 + (i % 3) * 0.18))
+      : Math.max(0.68, 0.52 + (moundH * 0.84) * domeFactor * tierFrac);
+
+    const sc = isRimLayer ? (0.86 + (i % 3) * 0.11) : (0.94 + (i % 4) * 0.12);
+    const fMesh = (typeof createLowPolyFishMesh === 'function')
+      ? createLowPolyFishMesh(null, sc, i + seed)
+      : createLowPolyMesh(new THREE.ConeGeometry(0.20, 0.68, 5), '#38bdf8', 0, 0, 0, false);
+
+    const rotX = ((i % 5) - 2) * 0.18;
+    const rotY = golden + (i % 3) * 0.65;
+    const rotZ = (i % 2 === 0 ? 1 : -1) * (0.28 + (i % 4) * 0.16);
+    fMesh.position.set(fx, baseFy, fz);
+    fMesh.rotation.set(rotX, rotY, rotZ);
+    fishPileGroup.add(fMesh);
+
+    if (!isRimLayer && animFishes.length < animateTopCount) {
+      animFishes.push({
+        mesh: fMesh,
+        baseY: baseFy,
+        baseRotX: rotX,
+        baseRotZ: rotZ,
+        phase: i * 0.85 + seed,
+        hopAmp: 0.03 + (i % 3) * 0.025
+      });
+    }
+  }
+
+  // 3) 만선 축하용 공중 튀어오르는 물고기 연출
+  const leapingFishes = [];
+  for (let li = 0; li < leapingCount; li++) {
+    const zBase = THREE.MathUtils.lerp(minZ * 0.58, maxZ * 0.52, (li + 0.5) / Math.max(1, leapingCount));
+    const wLim = getInnerHalfWAt(zBase) * 0.58;
+    const startX = ((li % 2 === 0) ? -1 : 1) * (0.25 + (li % 3) * 0.35) * wLim;
+    const endX = -startX * 0.72;
+    const startZ = zBase - 0.5;
+    const endZ = zBase + 0.75;
+    const fMesh = (typeof createLowPolyFishMesh === 'function')
+      ? createLowPolyFishMesh(null, 1.05 + (li % 2) * 0.15, li * 2 + seed)
+      : createLowPolyMesh(new THREE.ConeGeometry(0.22, 0.74, 5), '#38bdf8', 0, 0, 0, false);
+    fMesh.visible = false;
+    fishPileGroup.add(fMesh);
+    leapingFishes.push({
+      mesh: fMesh,
+      startX,
+      startZ,
+      endX,
+      endZ,
+      baseY: moundH * 0.88,
+      peakY: moundH + 0.95 + (li % 2) * 0.45,
+      phase: (li / Math.max(1, leapingCount)) * 0.92,
+      speed: 0.58 + (li % 3) * 0.11
+    });
+  }
+
+  fishPileGroup.userData = fishPileGroup.userData || {};
+  fishPileGroup.userData.fishCount = fishCount;
+  fishPileGroup.userData.hasMoundBase = true;
+  fishPileGroup.userData.maxFishY = moundH + 0.25;
+  fishPileGroup.userData.animFishes = animFishes;
+  fishPileGroup.userData.leapingFishes = leapingFishes;
+  fishPileGroup.scale.set(1.0, 1.0, 1.0);
   fishPileGroup.visible = true;
+}
+
+function animateBoatFishPile(fishPileGroup, tSec, fillEase = 1.0) {
+  if (!fishPileGroup) return;
+  fishPileGroup.visible = true;
+  const yScale = THREE.MathUtils.lerp(0.16, 1.0, THREE.MathUtils.clamp(fillEase, 0, 1));
+  fishPileGroup.scale.set(1.0, yScale, 1.0);
+  const ud = fishPileGroup.userData || {};
+  if (Array.isArray(ud.animFishes)) {
+    for (let i = 0; i < ud.animFishes.length; i++) {
+      const af = ud.animFishes[i];
+      if (!af || !af.mesh) continue;
+      const w = tSec * 11.5 + af.phase;
+      af.mesh.position.y = af.baseY + Math.max(0, Math.sin(w)) * af.hopAmp;
+      af.mesh.rotation.z = af.baseRotZ + Math.sin(w * 1.35) * 0.22;
+      if (af.mesh.userData && af.mesh.userData.tailPivot) {
+        af.mesh.userData.tailPivot.rotation.y = Math.sin(tSec * 20 + af.phase) * 0.52;
+      }
+    }
+  }
+  if (Array.isArray(ud.leapingFishes)) {
+    const showLeaps = fillEase > 0.38;
+    for (let i = 0; i < ud.leapingFishes.length; i++) {
+      const lf = ud.leapingFishes[i];
+      if (!lf || !lf.mesh) continue;
+      if (!showLeaps) {
+        lf.mesh.visible = false;
+        continue;
+      }
+      const cyc = (tSec * lf.speed + lf.phase) % 1.0;
+      const inAir = cyc < 0.72;
+      if (!inAir) {
+        lf.mesh.visible = false;
+        continue;
+      }
+      const u = cyc / 0.72;
+      lf.mesh.visible = true;
+      const lx = THREE.MathUtils.lerp(lf.startX, lf.endX, u);
+      const lz = THREE.MathUtils.lerp(lf.startZ, lf.endZ, u);
+      const arc = 4 * u * (1 - u);
+      const ly = lf.baseY + arc * (lf.peakY - lf.baseY);
+      lf.mesh.position.set(lx, ly, lz);
+      const yaw = Math.atan2(lf.endX - lf.startX, lf.endZ - lf.startZ);
+      const pitch = (u - 0.5) * 1.45;
+      lf.mesh.rotation.set(pitch, yaw, Math.sin(u * Math.PI * 3) * 0.25);
+      if (lf.mesh.userData && lf.mesh.userData.tailPivot) {
+        lf.mesh.userData.tailPivot.rotation.y = Math.sin(tSec * 28 + lf.phase * 7) * 0.58;
+      }
+    }
+  }
 }
 
 // 자연스러운 중력 처짐(catenary)을 가진 소프트 로우폴리 곡선 밧줄 생성기 (정적 배 리깅용)
@@ -1552,6 +1722,8 @@ function buildDetailedPlayableGalileeShip() {
 
   const fishPileGroup = new THREE.Group();
   fishPileGroup.position.set(0, 0.06, 0.2);
+  fishPileGroup.userData.shipHull = hull;
+  fishPileGroup.userData.zOffset = 0.2;
   fishPileGroup.visible = false;
 
   const lanternRail = hull.getRailPoint(10.6, -1);
@@ -1665,6 +1837,8 @@ function buildPartnerGalileeBoat(includeCrew = true) {
 
   const fishPileGroup = new THREE.Group();
   fishPileGroup.position.set(0, 0.05, 0.3);
+  fishPileGroup.userData.shipHull = hull;
+  fishPileGroup.userData.zOffset = 0.3;
   fishPileGroup.visible = false;
 
   boat.add(prowPost, sternPost, mast, furledSail, netCoil, rudderPivot, fishPileGroup);
@@ -1742,6 +1916,7 @@ function solveSingleArmTwoBoneIK(armGrp, isLeft, targetWorldPos) {
   const upperPivot = (armGrp.children[0] && armGrp.children[0].isGroup) ? armGrp.children[0] : null;
   const elbowPivot = armGrp.getObjectByName('elbowPivot');
   if (!elbowPivot) return false;
+  const wristPivot = elbowPivot.getObjectByName('wristPivot');
 
   if (!armGrp.userData) armGrp.userData = {};
   if (!armGrp.userData._ikBaseZ) {
@@ -1753,11 +1928,22 @@ function solveSingleArmTwoBoneIK(armGrp, isLeft, targetWorldPos) {
   armGrp.userData._ikActive = true;
   if (upperPivot) upperPivot.rotation.z = 0;
   elbowPivot.rotation.z = 0;
+  if (wristPivot) wristPivot.rotation.set(0, 0, 0);
 
   const L1 = Math.max(0.14, Math.abs(elbowPivot.position.y));
   const gripObj = elbowPivot.getObjectByName('gripPoint');
-  const gripY = gripObj ? gripObj.position.y : -0.33;
-  const gripZ = gripObj ? gripObj.position.z : 0.014;
+  let gripY = -0.33;
+  let gripZ = 0.014;
+  if (gripObj) {
+    gripY = 0;
+    gripZ = 0;
+    let cur = gripObj;
+    while (cur && cur !== elbowPivot) {
+      gripY += cur.position ? cur.position.y : 0;
+      gripZ += cur.position ? cur.position.z : 0;
+      cur = cur.parent;
+    }
+  }
   const L2 = Math.max(0.16, Math.hypot(gripY, gripZ));
   const gripZAngle = Math.atan2(gripZ, Math.max(0.05, -gripY));
 
@@ -1842,6 +2028,10 @@ function applyRowingOarHandIK(actorRoot, limbs, oarPivot, isPlayer, shipRoot) {
       actorRoot.userData.bodyRoot.rotation.x = pitch;
     }
   }
+  if (actorRoot.userData && actorRoot.userData.torsoPivot) {
+    actorRoot.userData.torsoPivot.rotation.set(0, 0, 0);
+    actorRoot.userData.torsoPivot.position.y = 0.96;
+  }
 
   actorRoot.updateMatrixWorld(true);
   solveSingleArmTwoBoneIK(limbs.lArm, true, _ikTmpGripLW);
@@ -1860,17 +2050,22 @@ function resetActorRowingArmIK(actorRoot, limbs, isPlayer = false) {
   } else if (actorRoot && actorRoot.userData && actorRoot.userData.bodyRoot) {
     actorRoot.userData.bodyRoot.rotation.x = 0;
   }
+  if (actorRoot && actorRoot.userData && actorRoot.userData.torsoPivot) {
+    actorRoot.userData.torsoPivot.rotation.set(0, 0, 0);
+  }
   if (!limbs) return;
   [limbs.lArm, limbs.rArm].forEach(armGrp => {
     if (!armGrp) return;
     if (armGrp.userData && armGrp.userData._ikBaseZ) {
       const upperPivot = (armGrp.children[0] && armGrp.children[0].isGroup) ? armGrp.children[0] : null;
       const elbowPivot = armGrp.getObjectByName('elbowPivot');
+      const wristPivot = elbowPivot ? elbowPivot.getObjectByName('wristPivot') : null;
       if (upperPivot) upperPivot.rotation.z = armGrp.userData._ikBaseZ.upperZ;
       if (elbowPivot) {
         elbowPivot.rotation.z = armGrp.userData._ikBaseZ.elbowZ;
         elbowPivot.rotation.x = 0;
       }
+      if (wristPivot) wristPivot.rotation.set(0, 0, 0);
       armGrp.userData._ikActive = false;
     }
     armGrp.rotation.set(0, 0, 0);
@@ -2379,16 +2574,20 @@ function buildGalileeBeachCallingScene(st) {
   // 4) 선착장 좌·우 얕은 물가에 정박된 만선 어선 2척 (베드로의 배 + 야고보·요한의 조금 작은 배 — 배와 그물을 뒤로하고 떠나는 모습)
   const beachedMain = buildDetailedPlayableGalileeShip();
   beachedMain.ship.scale.setScalar(0.68);
-  beachedMain.ship.position.set(16.6, -0.10, -10.8);
+  beachedMain.ship.position.set(16.6, -0.18, -10.8);
   beachedMain.ship.rotation.set(0.02, 0.45, 0.06);
-  populateBoatFishPile(beachedMain.fishPileGroup, 36, 2.6, 4.8);
+  populateBoatFishPile(beachedMain.fishPileGroup, 76, 3.25, 6.2, {
+    moundH: 1.32, gunwaleY: 1.04, minZ: -7.2, maxZ: 5.8, animateTopCount: 0, leapingCount: 0, seed: 11
+  });
   grp.add(beachedMain.ship);
 
   const beachedPartner = buildPartnerGalileeBoat(false);
   beachedPartner.boat.scale.setScalar(0.68);
-  beachedPartner.boat.position.set(17.4, -0.12, 3.6);
+  beachedPartner.boat.position.set(17.4, -0.18, 3.6);
   beachedPartner.boat.rotation.set(-0.02, 0.72, 0.06);
-  populateBoatFishPile(beachedPartner.fishPileGroup, 26, 1.9, 3.4);
+  populateBoatFishPile(beachedPartner.fishPileGroup, 54, 2.45, 4.9, {
+    moundH: 1.18, gunwaleY: 0.96, minZ: -5.6, maxZ: 5.2, animateTopCount: 0, leapingCount: 0, seed: 29
+  });
   grp.add(beachedPartner.boat);
 
   // 5) 해변 캐릭터 배치: 모든 캐릭터 Y를 getGalileeBeachCallingGroundHeight + 0.012로 정확히 안착 (발 빠짐 0%!)
@@ -2571,6 +2770,7 @@ window.advanceMiracleStage1Cinema = function () {
     syncMiracleStage1UI();
     updateStageHUD();
   } else if (st.phase === 'boats_full_celebration') {
+    if (!st.fullBoatReadyToAdvance && (st.phaseTimer || 0) < (st.fullBoatMinViewSec || 2.6)) return;
     transitionToGalileeBeachCalling(st);
   } else if (st.phase === 'beach_calling') {
     st.phase = 'beach_follow_narration';
@@ -3782,15 +3982,25 @@ function updateMiracleMainStage1Frame(dt, now) {
     syncMiracleStage1UI();
 
     if (cp >= 0.995) {
-      // Step 10: 두 배 모두 물고기가 넘치도록 가득 참!
+      // Step 10: 두 배 모두 물고기가 넘치도록 가득 참! (연타 오터치 방지 2.6초 가드 후 수동 전환 대기)
       st.phase = 'boats_full_celebration';
       st.phaseTimer = 0;
+      st.fullBoatMinViewSec = 2.6;
+      st.fullBoatReadyToAdvance = false;
+      st._fullBoatRippleTimer = 0;
+      st._lastCinemaAdvanceAt = performance.now();
       if (st.tearingNetGroup) st.tearingNetGroup.visible = false;
       hideMiracleRopeBundle(st.tearingNetRopes);
       hideMiracleRopeBundle(st.partnerNetRopes);
 
-      populateBoatFishPile(st.fishPileGroup, 44, 2.7, 5.2);
-      populateBoatFishPile(st.partnerFishPileGroup, 30, 1.9, 3.6);
+      populateBoatFishPile(st.fishPileGroup, 96, 3.25, 6.2, {
+        moundH: 1.36, gunwaleY: 1.04, minZ: -7.2, maxZ: 5.8, animateTopCount: 28, leapingCount: 5, seed: 11
+      });
+      populateBoatFishPile(st.partnerFishPileGroup, 68, 2.45, 4.9, {
+        moundH: 1.22, gunwaleY: 0.96, minZ: -5.6, maxZ: 5.2, animateTopCount: 22, leapingCount: 4, seed: 29
+      });
+      if (st.fishPileGroup) st.fishPileGroup.scale.set(1.0, 0.16, 1.0);
+      if (st.partnerFishPileGroup) st.partnerFishPileGroup.scale.set(1.0, 0.16, 1.0);
       playSfx('clear');
       syncMiracleStage1HudControlsVisibility();
       syncMiracleStage1UI();
@@ -3799,18 +4009,48 @@ function updateMiracleMainStage1Frame(dt, now) {
     return;
   }
 
-  // Step 10: 두 배 모두 물고기 만선 축하 연출 (4.6초 후 또는 클릭으로 해변 장면 전환)
+  // Step 10: 두 배 모두 물고기 만선 축하 연출 (물고기 차오름·배 가라앉음 + 수동 버튼으로 해변 전환)
   if (st.phase === 'boats_full_celebration') {
+    const minViewSec = st.fullBoatMinViewSec || 2.6;
+    const fillU = Math.min(1.0, st.phaseTimer / 2.2);
+    const fillEase = 1.0 - Math.pow(1.0 - fillU, 3);
+    animateBoatFishPile(st.fishPileGroup, tSec, fillEase);
+    animateBoatFishPile(st.partnerFishPileGroup, tSec, fillEase);
+
     if (ship) {
-      ship.position.y = -0.28 + Math.sin(now * 0.0028) * 0.10; // 물고기가 가득해 배가 낮게 잠김
-      ship.rotation.z = THREE.MathUtils.lerp(ship.rotation.z, Math.sin(now * 0.0022) * 0.03, dt * 3.0);
+      ship.position.y = THREE.MathUtils.lerp(-0.14, -0.54, fillEase) + Math.sin(now * 0.0028) * 0.08; // 만선 무게로 뱃전이 낮게 가라앉음
+      ship.rotation.z = THREE.MathUtils.lerp(ship.rotation.z, Math.sin(now * 0.0022) * 0.032, dt * 3.0);
     }
     if (st.partnerBoatGroup && ship) {
       const worldP = st.partnerBoatEndLocal.clone();
       ship.updateMatrixWorld(true);
       ship.localToWorld(worldP);
-      st.partnerBoatGroup.position.set(worldP.x, -0.24 + Math.sin(now * 0.0028 + 1.0) * 0.10, worldP.z);
-      st.partnerBoatGroup.rotation.z = THREE.MathUtils.lerp(st.partnerBoatGroup.rotation.z, Math.sin(now * 0.0022 + 0.6) * 0.03, dt * 3.0);
+      st.partnerBoatGroup.position.set(
+        worldP.x,
+        THREE.MathUtils.lerp(-0.12, -0.48, fillEase) + Math.sin(now * 0.0028 + 1.0) * 0.08,
+        worldP.z
+      );
+      st.partnerBoatGroup.rotation.z = THREE.MathUtils.lerp(st.partnerBoatGroup.rotation.z, Math.sin(now * 0.0022 + 0.6) * 0.032, dt * 3.0);
+    }
+    if (st.phaseTimer < 3.0 && ship) {
+      st._fullBoatRippleTimer = (st._fullBoatRippleTimer || 0) + dt;
+      if (st._fullBoatRippleTimer >= 0.44) {
+        st._fullBoatRippleTimer = 0;
+        const spawnBoatRipple = (bx, bz, radStart) => {
+          const rMesh = new THREE.Mesh(
+            new THREE.RingGeometry(radStart, radStart + 0.75, 18),
+            new THREE.MeshBasicMaterial({ color: 0xe0f2fe, side: THREE.DoubleSide, transparent: true, opacity: 0.56 })
+          );
+          rMesh.rotation.x = -Math.PI / 2;
+          rMesh.position.set(bx, -0.94, bz);
+          worldGroup.add(rMesh);
+          st.wakeRings.push({ mesh: rMesh, age: 0, life: 1.3 });
+        };
+        spawnBoatRipple(ship.position.x, ship.position.z, 3.6);
+        if (st.partnerBoatGroup) {
+          spawnBoatRipple(st.partnerBoatGroup.position.x, st.partnerBoatGroup.position.z, 2.8);
+        }
+      }
     }
     if (typeof window.updateDiscipleSmoothPose === 'function') {
       if (st.peterMesh) window.updateDiscipleSmoothPose(st.peterMesh, dt, now, 'celebrate');
@@ -3824,8 +4064,9 @@ function updateMiracleMainStage1Frame(dt, now) {
       playerLimbs.lArm.rotation.x = -2.35 + Math.sin(now * 0.012) * 0.22;
       playerLimbs.rArm.rotation.x = -2.35 - Math.sin(now * 0.012) * 0.22;
     }
-    if (st.phaseTimer >= 4.8 && !st._beachTransitioning) {
-      transitionToGalileeBeachCalling(st);
+    if (!st.fullBoatReadyToAdvance && st.phaseTimer >= minViewSec) {
+      st.fullBoatReadyToAdvance = true;
+      syncMiracleStage1UI();
     }
     return;
   }
@@ -4381,10 +4622,16 @@ window.applyMiracleStage1Camera = function (cam, aspect) {
     shipToWorld(6.2, 0.9, -0.8, desiredLook);
     lerpAlpha = 0.085;
   } else if (ph === 'boats_full_celebration') {
-    const orbit = st.phaseTimer * 0.28;
-    shipToWorld(6.2 + Math.sin(orbit) * 14.5 * distScale, 9.8 * distScale, -0.8 + Math.cos(orbit) * 15.5 * distScale, desiredPos);
-    shipToWorld(5.8, 0.9, -0.8, desiredLook);
-    lerpAlpha = 0.07;
+    const sweep = Math.sin(st.phaseTimer * 0.32) * 0.56;
+    const zoomPull = THREE.MathUtils.lerp(0.86, 1.0, Math.min(1.0, st.phaseTimer / 2.4));
+    shipToWorld(
+      6.0 + Math.sin(sweep) * 12.6 * distScale * zoomPull,
+      (11.4 + Math.cos(sweep) * 1.1) * distScale * zoomPull,
+      -0.4 + Math.cos(sweep) * 14.4 * distScale * zoomPull,
+      desiredPos
+    );
+    shipToWorld(6.0, 1.05, -0.4, desiredLook);
+    lerpAlpha = 0.068;
   } else if (ph === 'beach_calling') {
     // 오픈월드 스타일 갈릴리 바닷가: 예수님·세 제자 + 뒤편 선착장·만선 두 배·갈대·바다가 함께 보이는 황금 구도!
     desiredPos.set(30.4 + 4.4 * distScale, 4.3 * distScale, -10.4 * distScale);
@@ -8301,10 +8548,13 @@ REGISTER_EPISODE('miracle', {
     if (s1Ui) s1Ui.classList.add('hidden');
     const wf = document.getElementById('white-fade');
     if (wf) wf.style.opacity = '0';
+    buildMiracleOpenWorld(true);
     if (typeof setInGameHudControlsVisible === 'function') {
       setInGameHudControlsVisible(true);
     }
-    buildMiracleOpenWorld(true);
+    if (typeof syncOverlayModalBodyClass === 'function') {
+      syncOverlayModalBodyClass();
+    }
     if (typeof syncMiracleMainStageSequentialBeams === 'function') {
       syncMiracleMainStageSequentialBeams();
     }

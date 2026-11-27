@@ -18,7 +18,29 @@
 
 ---
 
-## 🚀 최신 업데이트 (v3.9.0 ~ v3.12.3)
+## 🚀 최신 업데이트 (v3.9.0 ~ v3.12.6)
+
+### [v3.12.6] - 2026-11-27 (`Patch`)
+- **EP4 스테이지 1 가로모드 슬림 대화창 (`index.html`, `ep4_miracle_stages.js`)**:
+  - `@media (orientation: landscape) and (max-height: 540px)`에서 `#ms1-cinema-panel`을 하단 밀착 1단 가로 자막 바(`flex-row`, 반투명)로 슬림화해 바다·어선 시야 확보를 극대화하고, 그물 던지기·유지·협동·밤 풍랑 패널과 `#miracle-dialog-overlay:not(.is-quiz-overlay)` 일반 대화창 여백·높이를 축소했습니다.
+- **EP4 스테이지 1 두 배 만선(물고기 가득) 연출 강화 (`ep4_miracle_stages.js`)**:
+  - `populateBoatFishPile`에 선체 곡선 맞춤 다면체 물고기 더미 베이스(6단 돔)와 다층 3D 물고기 군락(베드로 배 **96마리**·야고보/요한 배 **68마리**), 파닥임·튀어오름 애니메이션(`animateBoatFishPile`)을 구현해 갑판 빈 틈 없이 뱃전 위까지 넘치도록 채웠습니다.
+  - `coop_haul_tap` → `boats_full_celebration` 전환 직후 `2.6초` 연타 오터치 방지 가드(`fullBoatMinViewSec` / `fullBoatReadyToAdvance`)와 배 가라앉는 침강 연출(누가복음 5:7), 돛에 가리지 않는 높은 3/4 카메라 스윕을 적용하고, 자동 스킵 없이 아이들이 `[🏖️ 갈릴리 해변으로 ▶]` 버튼을 직접 눌러 넘어가도록 개선했습니다.
+- **EP4 스테이지 1 클리어 후 조이스틱 복원 (`ep4_miracle_stages.js`, `ep4_miracle_world.js`, `core.js`)**:
+  - `proceedNextStage` 및 `returnToMiracleOpenWorld` 실행 순서를 `buildMiracleOpenWorld(true)` 직후 `setInGameHudControlsVisible(true)` + `syncOverlayModalBodyClass()` 호출로 정렬하고, `buildMiracleOpenWorld` 자체에서 `miracleActiveMiniState = {}` 초기화 및 오프닝 인트로 제외 시 조작 컨트롤 자동 복원을 보장했습니다.
+
+### [v3.12.5] - 2026-11-27 (`Minor`)
+- **EP4 온라인 캐릭터 확장 & 의상 색상 일치 + 비정형 발 · 다관절 애니메이션 고도화 (개발 폴더 전용)**:
+  - **베드로 · 야고보 · 요한 추가 (10종 → 13종)**: `MP_SELECTABLE_CHARACTERS` (`ep4_multiplayer.js`) 및 `admin.html` 드롭다운에 `peter`·`james`·`john`을 추가했습니다.
+  - **실제 의상 색상-표기 100% 일치**: `disciple_1`(올리브 로브 · 아이보리 숄), `disciple_2`(`갈릴리 목자` · 남청색 로브 · 크림 숄), `female_0~2`, `child_0~1`의 설명·이름·폴백 팔레트를 `ep4_miracle_assets.js` 실제 3D 색상과 1:1 동기화했습니다.
+  - **비정형 소프트 로우폴리 발 모델링 (`createClubKidLeg`)**: 패스파인더·어드벤처러 대원의 각진 박스 신발을 플레이어(`hero`)와 동일한 5단 경사 로프팅 소프트 로우폴리 운동화(`getClubSneakerUpperGeo`/`SoleGeo`/`ToeCapGeo`)로 교체하고, 일반 NPC(`else` 분기)의 박스 발도 소프트 로우폴리 단화·샌들로 통일했습니다 (`world minY = 0.000`).
+  - **전신 다관절 및 애니메이션 고도화**: 전 프리셋에 `kneePivot`, `anklePivot`, `elbowPivot`, `wristPivot`, `torsoPivot` 및 `capePivot`/`scarfPivot`/`packPivot`을 통일(`collectCharacterJointRig`), `CharacterAnimator`·`applyMiracleNpcLimbAnimation`·`updateDiscipleSmoothPose`·멀티플레이 원격 아바타·3D 선택창 포즈에 달리기·발목 롤·허리 비틀림·선회 뱅킹·전신 도끼질·감정표현 제스처를 적용했습니다(스테이지 1 노 젓기 2-Bone IK 오차 `0.0000m` 유지).
+
+### [v3.12.4] - 2026-11-27 (`Minor`)
+- **EP4 온라인 멀티플레이 3D 캐릭터 스와이프 선택창 개편 (개발 폴더 선적용)**:
+  - 기존 2열 이모지 버튼 그리드(`#mp-char-grid`)를 수집 카드첩과 동일한 **좌우 터치 스와이프·드래그 캐러셀(`#mp-char-track`)**으로 교체해, 스와이프·화살표·점 인디케이터·카드 탭으로 10종 캐릭터를 둘러보고 즉시 선택할 수 있게 했습니다.
+  - `createLowPolyPersonMesh`의 실제 인게임 3D 고해상도(LOD 0) 캐릭터를 차분한 자연광 조명(총합 1.48)으로 렌더링해 과도한 밝기 없이 실제 캐릭터 모습을 보여주며, `↻ 뒷모습` 토글로 망토·탐험가방·베일 뒷모습까지 확인할 수 있습니다.
+  - 패스파인더·어드벤처러 대원 어깨 로고 텍스처가 비동기로 로드되면 3D 카드 이미지가 자동 갱신되며, 모바일 가로 화면 레이아웃까지 최적화했습니다.
 
 ### [v3.12.3] - 2026-11-27 (`Patch`)
 - **EP2 스테이지 1 미션 안내문 개편**: 출애굽 스테이지 1 시작·HUD·미션 안내 버튼 문구를 `"🪵 모세가 백성들을 데리고 이집트를 탈출했어요. 나무를 구해서 다리를 짓고 서둘러 홍해바다 앞으로 가세요."`로 변경했습니다.

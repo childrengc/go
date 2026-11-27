@@ -5,36 +5,54 @@
 // - 멀티플레이 미션 1: 반석 위의 집 확장형 (돌 20 + 나무 20, 도끼질 5회 / 돌 캐기 5회, 완료 시 말씀 출력)
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_mp = '3.12.3';
+window.__GAME_BUILD_VERSIONS__.ep4_mp = '3.12.6';
 
 // [선택적 온라인 릴레이 설정] 무료 Firebase Realtime Database URL을 넣으면 서로 다른 기기 간 실시간 온라인 접속!
 // 예: window.MP_FIREBASE_DB_URL = 'https://your-church-game-default-rtdb.asia-southeast1.firebasedatabase.app';
 window.MP_FIREBASE_DB_URL = window.MP_FIREBASE_DB_URL || 'https://gwangneung-bible-game-default-rtdb.asia-southeast1.firebasedatabase.app/';
 
-// 멀티플레이 선택 가능 캐릭터 10종 (온라인 전용 패스파인더·어드벤처러 대원 포함 · 예수님/천사 제외)
+// 멀티플레이 선택 가능 캐릭터 13종 (베드로·야고보·요한 및 온라인 전용 대원 포함 · 예수님/천사 제외 · 실제 3D 의상 색상 일치)
 const MP_FORBIDDEN_PRESETS = ['jesus', 'angel'];
 const MP_SELECTABLE_CHARACTERS = [
-  { id: 'hero',       preset: 'hero',       idx: 0, icon: '🧭', name: '갈릴리 탐험가',  desc: '청록 망토 · 아이보리 튜닉' },
-  { id: 'pathfinder', preset: 'pathfinder', idx: 0, icon: '🏕️', name: '패스파인더 대원', desc: '파란 반팔 티셔츠 어린이' },
-  { id: 'adventurer', preset: 'adventurer', idx: 0, icon: '⭐', name: '어드벤처러 대원', desc: '노란 반팔 티셔츠 어린이' },
-  { id: 'disciple_1', preset: 'disciple',   idx: 1, icon: '🎣', name: '어부 제자',      desc: '따뜻한 황토 로브' },
-  { id: 'disciple_2', preset: 'disciple',   idx: 2, icon: '🌿', name: '올리브 목자',    desc: '올리브빛 숄' },
-  { id: 'female_0',   preset: 'female_0',   idx: 0, icon: '👩', name: '갈릴리 자매',    desc: '코랄 베일과 로브' },
-  { id: 'female_1',   preset: 'female_1',   idx: 1, icon: '🌸', name: '베다니 자매',    desc: '청록빛 숄' },
-  { id: 'female_2',   preset: 'female_2',   idx: 2, icon: '🧺', name: '나사렛 자매',    desc: '황금빛 베일' },
-  { id: 'child_0',    preset: 'child',      idx: 0, icon: '👦', name: '꼬마 탐험가(남)', desc: '씩씩한 소년 대원' },
-  { id: 'child_1',    preset: 'child',      idx: 1, icon: '👧', name: '꼬마 탐험가(여)', desc: '활발한 소녀 대원' }
+  { id: 'hero',       preset: 'hero',       idx: 0, icon: '🧭', name: '갈릴리 탐험가',   desc: '청록 망토 · 아이보리 튜닉',   palette: { skyTop: '#3e648c', skyBot: '#5782ab', body: '#efe9d8', accent: '#1e6f7d', hair: '#4a3222' } },
+  { id: 'pathfinder', preset: 'pathfinder', idx: 0, icon: '🏕️', name: '패스파인더 대원', desc: '파란 반팔 · 노란 스카프',     palette: { skyTop: '#355a82', skyBot: '#4c79a8', body: '#2563eb', accent: '#facc15', hair: '#261910' } },
+  { id: 'adventurer', preset: 'adventurer', idx: 0, icon: '⭐', name: '어드벤처러 대원', desc: '노란 반팔 · 자주 스카프',     palette: { skyTop: '#3c5e84', skyBot: '#567ea8', body: '#facc15', accent: '#b91c1c', hair: '#3b2314' } },
+  { id: 'peter',      preset: 'peter',      idx: 0, icon: '⚓', name: '베드로',          desc: '청록 바다색 로브 · 황토 숄',  palette: { skyTop: '#385d82', skyBot: '#527ca6', body: '#46768e', accent: '#b26c2d', hair: '#533522' } },
+  { id: 'james',      preset: 'james',      idx: 0, icon: '⛵', name: '야고보',          desc: '올리브 로브 · 베이지 숄',     palette: { skyTop: '#3e6486', skyBot: '#5882a6', body: '#7c8f52', accent: '#e2d3b3', hair: '#6b4328' } },
+  { id: 'john',       preset: 'john',       idx: 0, icon: '❤️', name: '요한',            desc: '테라코타 로브 · 아이보리 숄', palette: { skyTop: '#45668a', skyBot: '#5e83a8', body: '#b35a40', accent: '#e8ddc4', hair: '#8c5e3a' } },
+  { id: 'disciple_1', preset: 'disciple',   idx: 1, icon: '🎣', name: '어부 제자',       desc: '올리브 로브 · 아이보리 숄',   palette: { skyTop: '#3e6386', skyBot: '#5780a5', body: '#5c6446', accent: '#f0e8d5', hair: '#2b1d12' } },
+  { id: 'disciple_2', preset: 'disciple',   idx: 2, icon: '🐑', name: '갈릴리 목자',     desc: '남청색 로브 · 크림 숄',       palette: { skyTop: '#3b5f86', skyBot: '#537ba3', body: '#3f5166', accent: '#f4efe6', hair: '#1e1b18' } },
+  { id: 'female_0',   preset: 'female_0',   idx: 0, icon: '👩', name: '갈릴리 자매',     desc: '아이보리 베일 · 밤색 치마',   palette: { skyTop: '#46688d', skyBot: '#5e84ac', body: '#4e2f1e', accent: '#f4f4f2', hair: '#4a2c18' } },
+  { id: 'female_1',   preset: 'female_1',   idx: 1, icon: '🌸', name: '베다니 자매',     desc: '버건디 치마 · 크림 베일',     palette: { skyTop: '#3c6285', skyBot: '#557da3', body: '#6b2c2e', accent: '#f7f0e4', hair: '#3b2212' } },
+  { id: 'female_2',   preset: 'female_2',   idx: 2, icon: '🧺', name: '나사렛 자매',     desc: '남청색 치마 · 하늘빛 베일',   palette: { skyTop: '#3b6085', skyBot: '#547da6', body: '#2c4257', accent: '#f0f4f8', hair: '#29170b' } },
+  { id: 'child_0',    preset: 'child',      idx: 0, icon: '👦', name: '꼬마 탐험가(남)', desc: '황토 로브 · 아이보리 두건',   palette: { skyTop: '#3d638b', skyBot: '#5882ac', body: '#8d6649', accent: '#ece6d8', hair: '#221a15' } },
+  { id: 'child_1',    preset: 'child',      idx: 1, icon: '👧', name: '꼬마 탐험가(여)', desc: '버건디 치마 · 크림 베일',     palette: { skyTop: '#46688e', skyBot: '#6086ad', body: '#6b2c2e', accent: '#f7f0e4', hair: '#3b2212' } }
 ];
 window.MP_SELECTABLE_CHARACTERS = MP_SELECTABLE_CHARACTERS;
 window.MP_FORBIDDEN_PRESETS = MP_FORBIDDEN_PRESETS;
+window.__mpCharPortraitCache = window.__mpCharPortraitCache || {};
 
 window.isMiracleMultiplayerMode = false;
+
+function _getKoreanParticleRo(word) {
+  const s = String(word || '').trim();
+  if (!s) return '로';
+  let lastCode = s.charCodeAt(s.length - 1);
+  // 괄호로 끝나는 이름("꼬마 탐험가(남)" 등)은 괄호 앞이나 닫는 글자 기준 처리
+  if (s.endsWith(')') && s.length >= 2) {
+    lastCode = s.charCodeAt(s.length - 2);
+  }
+  if (lastCode < 0xac00 || lastCode > 0xd7a3) return '로';
+  const jong = (lastCode - 0xac00) % 28;
+  return (jong !== 0 && jong !== 8) ? '으로' : '로';
+}
 
 const MiracleMultiplayer = {
   active: false,
   peerId: 'mp_' + Math.random().toString(36).slice(2, 10),
   roomId: '광릉내1방',
   selectedCharId: 'hero',
+  charViewAngles: {},
   channel: null,
   syncTimer: 0,
   remoteSyncTimer: 0,
@@ -74,7 +92,7 @@ const MiracleMultiplayer = {
     window.__mpAdminBypassUnlock = true;
     const room = String(opts.room || '광릉내1방').trim().slice(0, 16) || '광릉내1방';
     const charId = String(opts.charId || 'hero').trim() || 'hero';
-    this.selectCharacter(charId);
+    this.selectCharacter(charId, { silent: true });
     const modal = this.ensureEntryModal();
     const roomInput = modal ? modal.querySelector('#mp-room-input') : document.getElementById('mp-room-input');
     if (roomInput) roomInput.value = room;
@@ -93,18 +111,499 @@ const MiracleMultiplayer = {
     return found;
   },
 
-  selectCharacter(charId) {
+  getCharacterViewSide(charId) {
+    return this.charViewAngles[charId] === 'back' ? 'back' : 'front';
+  },
+
+  buildCharacterShowcaseScene(cfg, viewSide = 'front') {
+    if (typeof THREE === 'undefined' || typeof window.createLowPolyPersonMesh !== 'function') return null;
+
+    const cardScene = new THREE.Scene();
+    cardScene.background = new THREE.Color(0x4b77a3);
+    const cardCam = new THREE.PerspectiveCamera(34, 320 / 400, 0.1, 60);
+
+    // 수집 카드 대비 과도하게 밝지 않도록 차분한 자연광 균형(총합 ~1.48)으로 3점 조명 구성
+    const amb = new THREE.AmbientLight(0xfffaf0, 0.40);
+    const hemi = new THREE.HemisphereLight(0xdbeafe, 0x64748b, 0.26);
+    const keySun = new THREE.DirectionalLight(0xfff5e4, 0.66);
+    keySun.position.set(4.5, 8.5, 6.5);
+    const rim = new THREE.DirectionalLight(0xfde68a, 0.16);
+    rim.position.set(-5.0, 4.5, -5.0);
+    cardScene.add(amb, hemi, keySun, rim);
+
+    const tempGeos = [];
+    const tempMats = [];
+
+    const stoneGeo = new THREE.CylinderGeometry(0.68, 0.78, 0.22, 12);
+    const stoneMat = new THREE.MeshLambertMaterial({ color: 0x7c6d58 });
+    const pedestal = new THREE.Mesh(stoneGeo, stoneMat);
+    pedestal.position.set(0, -0.11, 0);
+    tempGeos.push(stoneGeo);
+    tempMats.push(stoneMat);
+
+    const grassGeo = new THREE.CylinderGeometry(0.72, 0.74, 0.05, 12);
+    const grassMat = new THREE.MeshLambertMaterial({ color: 0x557a46 });
+    const grassRim = new THREE.Mesh(grassGeo, grassMat);
+    grassRim.position.set(0, -0.015, 0);
+    tempGeos.push(grassGeo);
+    tempMats.push(grassMat);
+
+    const shadowGeo = new THREE.CircleGeometry(0.42, 16);
+    const shadowMat = new THREE.MeshBasicMaterial({ color: 0x1e293b, transparent: true, opacity: 0.28 });
+    const contactShadow = new THREE.Mesh(shadowGeo, shadowMat);
+    contactShadow.rotation.x = -Math.PI / 2;
+    contactShadow.position.set(0, 0.012, 0);
+    tempGeos.push(shadowGeo);
+    tempMats.push(shadowMat);
+
+    cardScene.add(pedestal, grassRim, contactShadow);
+
+    // 실제 인게임 3D 캐릭터 고해상도(LOD 0) 모델 그대로 생성
+    const lod = window.createLowPolyPersonMesh(cfg.preset, cfg.idx);
+    const charGrp = (lod && lod.levels && lod.levels[0] && lod.levels[0].object) ? lod.levels[0].object : lod;
+    if (!charGrp) return null;
+    if (lod && lod.scale && charGrp !== lod && charGrp.scale) {
+      charGrp.scale.copy(lod.scale);
+    }
+    const sc = (lod && lod.scale && typeof lod.scale.y === 'number') ? lod.scale.y : 1.0;
+
+    charGrp.position.set(0, 0.02, 0);
+    // 앞모습(0.32 rad): 패스파인더·어드벤처러 오른팔 어깨 패치가 정면 카메라를 향하도록 3/4 회전
+    // 뒷모습(PI + 0.30 rad): 망토·탐험가방·배낭·베일 뒷태가 자연스럽게 보이도록 회전
+    charGrp.rotation.y = (viewSide === 'back') ? (Math.PI + 0.30) : 0.32;
+
+    const rig = (lod && lod.userData) ? lod.userData : null;
+    if (rig) {
+      if (rig.lArm) rig.lArm.rotation.x = 0.08;
+      if (rig.rArm) rig.rArm.rotation.x = -0.10;
+      if (rig.lElbow) rig.lElbow.rotation.x = -0.18;
+      if (rig.rElbow) rig.rElbow.rotation.x = -0.18;
+      if (rig.lWrist) rig.lWrist.rotation.x = 0.06;
+      if (rig.rWrist) rig.rWrist.rotation.x = 0.06;
+      if (rig.lKnee) rig.lKnee.rotation.x = 0.04;
+      if (rig.rKnee) rig.rKnee.rotation.x = 0.03;
+      if (rig.torsoPivot) rig.torsoPivot.rotation.y = (viewSide === 'back') ? -0.05 : 0.06;
+      if (rig.head) rig.head.rotation.y = (viewSide === 'back') ? 0.04 : -0.08;
+      if (rig.capePivot) rig.capePivot.rotation.x = 0.06;
+    }
+    cardScene.add(charGrp);
+
+    const lookY = sc * 1.05;
+    const camDist = Math.max(3.45, sc * 4.45);
+    cardCam.position.set(0, sc * 1.18, camDist);
+    cardCam.lookAt(0, lookY, 0);
+
+    const disposeScene = () => {
+      tempGeos.forEach(g => { try { if (g && typeof g.dispose === 'function') g.dispose(); } catch (e) {} });
+      tempMats.forEach(m => { try { if (m && typeof m.dispose === 'function') m.dispose(); } catch (e) {} });
+      if (typeof charGrp.traverse === 'function') {
+        charGrp.traverse(obj => {
+          if (!obj || !obj.isMesh) return;
+          if (obj.geometry && !(obj.geometry.userData && obj.geometry.userData._cached) && typeof obj.geometry.dispose === 'function') {
+            try { obj.geometry.dispose(); } catch (e) {}
+          }
+          const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+          mats.forEach(m => {
+            if (m && !(m.userData && m.userData._cached) && typeof m.dispose === 'function') {
+              try { m.dispose(); } catch (e) {}
+            }
+          });
+        });
+      }
+    };
+
+    return {
+      cardScene,
+      cardCam,
+      lightSum: amb.intensity + hemi.intensity + keySun.intensity + rim.intensity,
+      charScale: sc,
+      viewSide,
+      disposeScene
+    };
+  },
+
+  _drawCharPortraitFallback(ctx, W, H, cfg, viewSide) {
+    const pal = cfg.palette || { skyTop: '#3e648c', skyBot: '#5782ab', body: '#d6ccb4', accent: '#0f766e', hair: '#3b2314' };
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, pal.skyTop);
+    grad.addColorStop(0.72, pal.skyBot);
+    grad.addColorStop(1, '#334b63');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+
+    // 풀/돌 받침대
+    ctx.fillStyle = '#557a46';
+    ctx.beginPath();
+    ctx.ellipse(W * 0.5, H * 0.80, 90, 20, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#7c6d58';
+    ctx.fillRect(W * 0.5 - 86, H * 0.80, 172, 26);
+
+    // 차분한 캐릭터 실루엣
+    ctx.fillStyle = pal.body;
+    ctx.beginPath();
+    ctx.roundRect(W * 0.5 - 42, H * 0.43, 84, 128, 22);
+    ctx.fill();
+
+    ctx.fillStyle = pal.accent;
+    ctx.beginPath();
+    ctx.roundRect(viewSide === 'back' ? W * 0.5 - 32 : W * 0.5 - 20, H * 0.44, viewSide === 'back' ? 64 : 40, 88, 12);
+    ctx.fill();
+
+    ctx.fillStyle = viewSide === 'back' ? pal.hair : '#eac4a2';
+    ctx.beginPath();
+    ctx.arc(W * 0.5, H * 0.31, 34, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.font = '34px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(cfg.icon || '🧭', W * 0.5, H * 0.20);
+  },
+
+  renderCharacterPortraitDataURL(cfg, viewSide = 'front') {
+    const side = (viewSide === 'back') ? 'back' : 'front';
+    const cacheKey = `${cfg.id}_${side}`;
+    if (window.__mpCharPortraitCache[cacheKey]) {
+      return window.__mpCharPortraitCache[cacheKey];
+    }
+
+    const W = 320;
+    const H = 400;
+    let canvas = null;
+    try {
+      canvas = document.createElement('canvas');
+      canvas.width = W;
+      canvas.height = H;
+    } catch (e) {
+      return '';
+    }
+    const ctx = canvas && typeof canvas.getContext === 'function' ? canvas.getContext('2d') : null;
+    if (!ctx) return '';
+
+    let builtRef = null;
+    let rendered3D = false;
+    if (typeof _renderDioramaSceneToCanvas === 'function') {
+      rendered3D = _renderDioramaSceneToCanvas(ctx, W, H, () => {
+        builtRef = this.buildCharacterShowcaseScene(cfg, side);
+        return builtRef;
+      });
+      if (builtRef && typeof builtRef.disposeScene === 'function') {
+        builtRef.disposeScene();
+      }
+    }
+
+    if (!rendered3D) {
+      this._drawCharPortraitFallback(ctx, W, H, cfg, side);
+    } else {
+      // 과도한 밝기 없이 입체감을 살리는 하단 소프트 비네트
+      const vig = ctx.createLinearGradient(0, H * 0.65, 0, H);
+      vig.addColorStop(0, 'rgba(15, 23, 42, 0)');
+      vig.addColorStop(1, 'rgba(15, 23, 42, 0.34)');
+      ctx.fillStyle = vig;
+      ctx.fillRect(0, H * 0.65, W, H * 0.35);
+    }
+
+    try {
+      const dataUrl = canvas.toDataURL('image/png');
+      if (rendered3D && dataUrl) {
+        window.__mpCharPortraitCache[cacheKey] = dataUrl;
+      }
+      return dataUrl;
+    } catch (e) {
+      return '';
+    }
+  },
+
+  refreshAllCharacterPortraits() {
+    const track = document.getElementById('mp-char-track');
+    if (!track) return;
+    MP_SELECTABLE_CHARACTERS.forEach(cfg => {
+      const side = this.getCharacterViewSide(cfg.id);
+      const img = track.querySelector(`img[data-mp-portrait="${cfg.id}"]`);
+      if (img) {
+        const src = this.renderCharacterPortraitDataURL(cfg, side);
+        if (src) img.src = src;
+      }
+      const flipBtn = track.querySelector(`button[data-char-flip="${cfg.id}"]`);
+      if (flipBtn) {
+        flipBtn.textContent = side === 'back' ? '↻ 앞모습' : '↻ 뒷모습';
+      }
+    });
+  },
+
+  refreshPortraitForClubKey(clubKey) {
+    if (!clubKey) return;
+    delete window.__mpCharPortraitCache[`${clubKey}_front`];
+    delete window.__mpCharPortraitCache[`${clubKey}_back`];
+    const track = document.getElementById('mp-char-track');
+    if (!track) return;
+    const cfg = this.getCharConfig(clubKey);
+    if (!cfg || cfg.id !== clubKey) return;
+    const img = track.querySelector(`img[data-mp-portrait="${cfg.id}"]`);
+    if (img) {
+      const src = this.renderCharacterPortraitDataURL(cfg, this.getCharacterViewSide(cfg.id));
+      if (src) img.src = src;
+    }
+  },
+
+  toggleCharacterAngle(charId) {
     const cfg = this.getCharConfig(charId);
+    const curSide = this.getCharacterViewSide(cfg.id);
+    const nextSide = (curSide === 'back') ? 'front' : 'back';
+    this.charViewAngles[cfg.id] = nextSide;
+
+    const track = document.getElementById('mp-char-track');
+    if (track) {
+      const img = track.querySelector(`img[data-mp-portrait="${cfg.id}"]`);
+      if (img) {
+        const src = this.renderCharacterPortraitDataURL(cfg, nextSide);
+        if (src) img.src = src;
+      }
+      const flipBtn = track.querySelector(`button[data-char-flip="${cfg.id}"]`);
+      if (flipBtn) {
+        flipBtn.textContent = nextSide === 'back' ? '↻ 앞모습' : '↻ 뒷모습';
+      }
+    }
+    if (cfg.id !== this.selectedCharId) {
+      this.selectCharacter(cfg.id, { scroll: true, silent: true });
+    }
+    if (typeof playSfx === 'function') playSfx('switch');
+  },
+
+  scrollToCharacter(charId, instant = false) {
+    const track = document.getElementById('mp-char-track');
+    if (!track) return;
+    const slot = track.querySelector(`.mp-char-slot[data-char-id="${charId}"]`);
+    if (!slot) return;
+    this._programmaticScrollUntil = Date.now() + (instant ? 250 : 480);
+    const targetLeft = Math.max(0, slot.offsetLeft - (track.clientWidth - slot.offsetWidth) * 0.5);
+    if (typeof track.scrollTo === 'function') {
+      track.scrollTo({ left: targetLeft, behavior: instant ? 'auto' : 'smooth' });
+    } else {
+      track.scrollLeft = targetLeft;
+    }
+  },
+
+  stepCharacter(delta) {
+    const curIdx = MP_SELECTABLE_CHARACTERS.findIndex(c => c.id === this.selectedCharId);
+    const baseIdx = curIdx >= 0 ? curIdx : 0;
+    const nextIdx = Math.max(0, Math.min(MP_SELECTABLE_CHARACTERS.length - 1, baseIdx + delta));
+    const nextCfg = MP_SELECTABLE_CHARACTERS[nextIdx];
+    if (nextCfg) {
+      this.selectCharacter(nextCfg.id, { scroll: true });
+    }
+  },
+
+  selectCharacter(charId, opts = {}) {
+    const cfg = this.getCharConfig(charId);
+    const prevId = this.selectedCharId;
     this.selectedCharId = cfg.id;
     window.selectedMiracleHeroPreset = { preset: cfg.preset, idx: cfg.idx };
-    const cards = document.querySelectorAll('#mp-char-grid button[data-char-id]');
-    cards.forEach(btn => {
-      const isSel = btn.dataset.charId === cfg.id;
-      btn.className = isSel
-        ? 'mc-btn p-2 rounded-2xl bg-amber-300 border-2 border-amber-700 text-amber-950 text-left shadow-md scale-[1.02]'
-        : 'mc-btn p-2 rounded-2xl bg-white/90 hover:bg-amber-50 border-2 border-amber-200 text-slate-800 text-left';
+
+    const charIdx = MP_SELECTABLE_CHARACTERS.findIndex(c => c.id === cfg.id);
+    const cards = document.querySelectorAll('#mp-char-track .mp-char-card[data-char-id]');
+    cards.forEach(card => {
+      const isSel = card.dataset.charId === cfg.id;
+      card.classList.toggle('is-selected', isSel);
+      card.setAttribute('aria-pressed', isSel ? 'true' : 'false');
     });
-    if (typeof playSfx === 'function') playSfx('switch');
+
+    const dots = document.querySelectorAll('#mp-char-dots button[data-char-dot]');
+    dots.forEach(dot => {
+      const isAct = dot.dataset.charDot === cfg.id;
+      dot.className = isAct
+        ? 'w-5 h-2 rounded-full bg-amber-600 transition-all'
+        : 'w-2 h-2 rounded-full bg-amber-300/80 hover:bg-amber-400 transition-all';
+    });
+
+    const idxBadge = document.getElementById('mp-char-index-badge');
+    if (idxBadge && charIdx >= 0) {
+      idxBadge.textContent = `${charIdx + 1} / ${MP_SELECTABLE_CHARACTERS.length}`;
+    }
+
+    const enterBtn = document.getElementById('mp-enter-world-btn');
+    if (enterBtn) {
+      enterBtn.textContent = `🌐 ${cfg.name}${_getKoreanParticleRo(cfg.name)} 입장하기!`;
+    }
+
+    if (opts.scroll !== false) {
+      this.scrollToCharacter(cfg.id, Boolean(opts.instant));
+    }
+    if (!opts.silent && (prevId !== cfg.id || opts.forceSound)) {
+      if (typeof playSfx === 'function') playSfx('switch');
+    }
+  },
+
+  bindCharTrackSwipeInteraction(track) {
+    if (!track || track._mpSwipeBound) return;
+    track._mpSwipeBound = true;
+
+    track.addEventListener('wheel', (e) => {
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        track.scrollLeft += e.deltaY;
+        e.preventDefault();
+      }
+    }, { passive: false });
+
+    let isDown = false;
+    let pointerId = null;
+    let startX = 0;
+    let startY = 0;
+    let startScrollLeft = 0;
+    let lastX = 0;
+    let lastT = 0;
+    let velocity = 0;
+    let didDrag = false;
+    let momentumRaf = 0;
+    let scrollSyncTimer = null;
+
+    const setTrackTilt = (deg) => {
+      track.style.setProperty('--swipe-tilt', `${deg.toFixed(1)}deg`);
+    };
+
+    const stopMomentum = () => {
+      if (momentumRaf) {
+        cancelAnimationFrame(momentumRaf);
+        momentumRaf = 0;
+      }
+    };
+
+    const findNearestCharId = () => {
+      const slots = track.querySelectorAll('.mp-char-slot');
+      if (!slots || slots.length === 0) return null;
+      const center = track.scrollLeft + track.clientWidth * 0.5;
+      let bestId = null;
+      let bestDist = Infinity;
+      slots.forEach(slot => {
+        const slotCenter = slot.offsetLeft + slot.offsetWidth * 0.5;
+        const d = Math.abs(slotCenter - center);
+        if (d < bestDist) {
+          bestDist = d;
+          bestId = slot.dataset.charId;
+        }
+      });
+      return bestId;
+    };
+
+    const snapAndSelectNearest = () => {
+      track.classList.remove('is-pointer-dragging');
+      setTrackTilt(0);
+      const nearestId = findNearestCharId();
+      if (nearestId) {
+        this.selectCharacter(nearestId, { scroll: true });
+      }
+    };
+
+    track.addEventListener('dragstart', (e) => e.preventDefault());
+    track.addEventListener('pointerdown', (e) => {
+      if (e.target && e.target.closest && e.target.closest('button')) return;
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      stopMomentum();
+      if (scrollSyncTimer) { clearTimeout(scrollSyncTimer); scrollSyncTimer = null; }
+      isDown = true;
+      pointerId = e.pointerId;
+      startX = e.clientX;
+      startY = e.clientY;
+      lastX = e.clientX;
+      lastT = performance.now();
+      startScrollLeft = track.scrollLeft;
+      velocity = 0;
+      didDrag = false;
+    });
+
+    window.addEventListener('pointermove', (e) => {
+      if (!isDown || (pointerId !== null && e.pointerId !== pointerId)) return;
+      const now = performance.now();
+      const dt = Math.max(8, now - lastT);
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      const stepDx = e.clientX - lastX;
+      lastX = e.clientX;
+      lastT = now;
+
+      if (!didDrag && Math.abs(dx) > 6 && Math.abs(dx) >= Math.abs(dy) * 0.8) {
+        didDrag = true;
+        track.classList.add('is-pointer-dragging');
+      }
+      if (didDrag) {
+        track.scrollLeft = startScrollLeft - dx;
+        velocity = stepDx / dt;
+        setTrackTilt(Math.max(-9, Math.min(9, stepDx * 0.45)));
+      }
+    });
+
+    const endSwipe = () => {
+      if (!isDown) return;
+      isDown = false;
+      pointerId = null;
+      if (!didDrag) {
+        setTrackTilt(0);
+        return;
+      }
+      window._mpCharSuppressClickUntil = Date.now() + 360;
+
+      let coastV = Math.max(-2.6, Math.min(2.6, velocity)) * 16;
+      if (Math.abs(coastV) < 1.2) {
+        snapAndSelectNearest();
+        return;
+      }
+      const tick = () => {
+        track.scrollLeft -= coastV;
+        setTrackTilt(Math.max(-8, Math.min(8, coastV * 0.35)));
+        coastV *= 0.90;
+        if (Math.abs(coastV) > 0.65 && track.scrollLeft > 0 && track.scrollLeft < track.scrollWidth - track.clientWidth) {
+          momentumRaf = requestAnimationFrame(tick);
+        } else {
+          momentumRaf = 0;
+          snapAndSelectNearest();
+        }
+      };
+      momentumRaf = requestAnimationFrame(tick);
+    };
+
+    window.addEventListener('pointerup', (e) => {
+      if (!isDown || (pointerId !== null && e.pointerId !== pointerId)) return;
+      endSwipe();
+    });
+    window.addEventListener('pointercancel', (e) => {
+      if (!isDown || (pointerId !== null && e.pointerId !== pointerId)) return;
+      endSwipe();
+    });
+
+    // 모바일 네이티브 관성 터치 스크롤 종료 시에도 중앙 캐릭터 자동 선택
+    track.addEventListener('scroll', () => {
+      if (isDown || momentumRaf) return;
+      if (Date.now() < (this._programmaticScrollUntil || 0)) {
+        if (scrollSyncTimer) { clearTimeout(scrollSyncTimer); scrollSyncTimer = null; }
+        return;
+      }
+      if (scrollSyncTimer) clearTimeout(scrollSyncTimer);
+      scrollSyncTimer = setTimeout(() => {
+        scrollSyncTimer = null;
+        if (isDown || momentumRaf || Date.now() < (this._programmaticScrollUntil || 0)) return;
+        const nearestId = findNearestCharId();
+        if (nearestId && nearestId !== this.selectedCharId) {
+          this.selectCharacter(nearestId, { scroll: false });
+        }
+      }, 115);
+    }, { passive: true });
+
+    const modal = document.getElementById('mp-entry-modal');
+    if (modal && !modal._mpArrowBound) {
+      modal._mpArrowBound = true;
+      document.addEventListener('keydown', (e) => {
+        if (modal.classList.contains('hidden')) return;
+        const activeTag = document.activeElement && document.activeElement.tagName;
+        if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return;
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          this.stepCharacter(1);
+        } else if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          this.stepCharacter(-1);
+        }
+      });
+    }
   },
 
   ensureEntryModal() {
@@ -113,59 +612,90 @@ const MiracleMultiplayer = {
 
     modal = document.createElement('div');
     modal.id = 'mp-entry-modal';
-    modal.className = 'hidden fixed inset-0 z-50 items-center justify-center p-2.5 sm:p-4 bg-slate-950/75 backdrop-blur-sm';
-    const charCardsHtml = MP_SELECTABLE_CHARACTERS.map(c => `
-      <button type="button" data-char-id="${c.id}" onclick="window.MiracleMultiplayer.selectCharacter('${c.id}')"
-              class="mc-btn p-2 rounded-2xl bg-white/90 hover:bg-amber-50 border-2 border-amber-200 text-slate-800 text-left">
-        <div class="flex items-center gap-1.5">
-          <span class="text-xl leading-none">${c.icon}</span>
-          <div class="min-w-0">
-            <div class="font-jua text-xs sm:text-sm truncate">${c.name}</div>
-            <div class="text-[10px] text-slate-500 truncate">${c.desc}</div>
+    modal.className = 'hidden fixed inset-0 z-50 items-center justify-center p-2 sm:p-4 bg-slate-950/75 backdrop-blur-sm overflow-hidden';
+    const charSlotsHtml = MP_SELECTABLE_CHARACTERS.map(c => `
+      <div class="mp-char-slot" data-char-id="${c.id}">
+        <div role="button" tabindex="0" data-char-id="${c.id}" aria-label="${c.name} 선택"
+             onclick="if(Date.now()<(window._mpCharSuppressClickUntil||0))return; window.MiracleMultiplayer.selectCharacter('${c.id}');"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); window.MiracleMultiplayer.selectCharacter('${c.id}');}"
+             class="mp-char-card">
+          <div class="mp-char-portrait-wrap">
+            <img data-mp-portrait="${c.id}" class="mp-char-portrait-img" alt="${c.name} 3D 모습" draggable="false" />
+            <span class="mp-char-selected-badge">✓ 선택됨</span>
+            <button type="button" data-char-flip="${c.id}" aria-label="${c.name} 앞/뒷모습 전환"
+                    onclick="event.stopPropagation(); window.MiracleMultiplayer.toggleCharacterAngle('${c.id}');"
+                    class="mp-char-flip-btn">↻ 뒷모습</button>
+          </div>
+          <div class="mp-char-meta">
+            <div class="font-jua text-xs sm:text-sm text-amber-950 truncate">${c.icon} ${c.name}</div>
+            <div class="text-[10px] text-slate-600 truncate">${c.desc}</div>
           </div>
         </div>
-      </button>
+      </div>
+    `).join('');
+
+    const dotsHtml = MP_SELECTABLE_CHARACTERS.map(c => `
+      <button type="button" data-char-dot="${c.id}" aria-label="${c.name} 보기"
+              onclick="window.MiracleMultiplayer.selectCharacter('${c.id}')"
+              class="w-2 h-2 rounded-full bg-amber-300/80 hover:bg-amber-400 transition-all"></button>
     `).join('');
 
     modal.innerHTML = `
-      <div class="mc-card modal-scroll w-full max-w-lg rounded-3xl p-4 sm:p-5 text-center">
-        <div class="flex items-center justify-between border-b-2 border-amber-300 pb-2 mb-3">
-          <div class="text-left">
+      <div class="mp-entry-card mc-card modal-scroll w-full max-w-2xl rounded-3xl p-3 sm:p-5 text-center flex flex-col max-h-[94dvh] overflow-hidden">
+        <div class="mp-entry-header flex items-center justify-between border-b-2 border-amber-300 pb-2 mb-2 shrink-0">
+          <div class="text-left min-w-0">
             <span class="inline-block px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-950 font-jua text-[10px]">🌐 에피소드 4 오픈월드 협동</span>
-            <h2 class="font-jua text-lg sm:text-xl text-amber-950 mt-0.5">멀티플레이 캐릭터 & 방 입장</h2>
+            <h2 class="font-jua text-base sm:text-xl text-amber-950 mt-0.5 truncate">멀티플레이 캐릭터 &amp; 방 입장</h2>
           </div>
           <button type="button" onclick="window.MiracleMultiplayer.closeEntryModal()"
-                  class="mc-btn px-3 py-1 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-jua text-xs">닫기 ✕</button>
+                  class="mc-btn px-3 py-1 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-jua text-xs shrink-0">닫기 ✕</button>
         </div>
 
-        <div class="bg-amber-50/90 border-2 border-amber-300 rounded-2xl p-2.5 mb-3 text-left">
-          <label for="mp-room-input" class="block font-jua text-xs text-amber-900 mb-1">🏠 함께 들어갈 방 이름 (같은 방 이름 입력 시 친구와 연결)</label>
+        <div class="mp-room-row bg-amber-50/90 border-2 border-amber-300 rounded-2xl p-2 mb-2 text-left shrink-0">
+          <label for="mp-room-input" class="mp-room-label block font-jua text-xs text-amber-900 mb-1">🏠 함께 들어갈 방 이름 (같은 방 이름 입력 시 친구와 연결)</label>
           <input id="mp-room-input" type="text" maxlength="16" value="광릉내1방"
                  style="user-select: text; -webkit-user-select: text; touch-action: auto;"
                  class="w-full px-3 py-1.5 rounded-xl border-2 border-amber-400 bg-white font-bold text-slate-900 text-sm" />
         </div>
 
-        <div class="text-left mb-3">
-          <div class="flex items-center justify-between mb-1.5">
-            <span class="font-jua text-xs sm:text-sm text-amber-950">🎭 캐릭터 선택 (10종 · 온라인 전용 대원 포함)</span>
-            <span class="text-[10px] text-slate-500">미션 1: 반석 위의 집 확장형</span>
+        <div class="mp-char-section text-left mb-2 flex flex-col min-h-0 flex-1">
+          <div class="flex items-center justify-between gap-2 mb-1 shrink-0">
+            <span class="font-jua text-xs sm:text-sm text-amber-950 truncate">🎭 캐릭터 선택 (좌우 스와이프 · 인게임 3D)</span>
+            <span id="mp-char-index-badge" class="px-2 py-0.5 rounded-full bg-amber-200/90 text-amber-950 font-jua text-[10px] shrink-0">1 / ${MP_SELECTABLE_CHARACTERS.length}</span>
           </div>
-          <div id="mp-char-grid" class="grid grid-cols-2 gap-2">${charCardsHtml}</div>
+
+          <div class="mp-char-carousel-wrap relative flex items-center min-h-0 flex-1">
+            <button type="button" aria-label="이전 캐릭터" onclick="window.MiracleMultiplayer.stepCharacter(-1)"
+                    class="mp-char-nav-btn mp-char-nav-prev mc-btn-slim">‹</button>
+            <div id="mp-char-track" class="mp-char-scroll-track">${charSlotsHtml}</div>
+            <button type="button" aria-label="다음 캐릭터" onclick="window.MiracleMultiplayer.stepCharacter(1)"
+                    class="mp-char-nav-btn mp-char-nav-next mc-btn-slim">›</button>
+          </div>
+
+          <div class="mp-char-dots-row flex items-center justify-center gap-1.5 mt-1 shrink-0">
+            <div id="mp-char-dots" class="flex items-center gap-1">${dotsHtml}</div>
+          </div>
+          <p class="mp-char-swipe-hint text-[10px] sm:text-[11px] text-amber-900/75 font-bold text-center mt-0.5 shrink-0">
+            👈 좌우로 터치 스와이프해 캐릭터를 고르고, ↻ 뒷모습으로 전체 모습을 확인하세요 👉
+          </p>
         </div>
 
-        <div class="p-2.5 rounded-2xl bg-sky-50 border border-sky-300 text-left text-[11px] text-sky-950 mb-3 leading-snug">
-          <b>🏗️ 협동 미션 1 — 반석 위의 집 확장형:</b><br/>
-          외곽 나무(도끼질 5회 → 🪵나무 1)와 큼직한 바위(채굴 5회 → 🪨돌 1)를 캐서 <b>돌 20개 + 나무 20개</b>를 넓은 반석 위에 함께 모아 멋진 집을 세워 보세요!
+        <div class="mp-mission-banner p-2 rounded-2xl bg-sky-50 border border-sky-300 text-left text-[11px] text-sky-950 mb-2 leading-snug shrink-0">
+          <b>🏗️ 협동 미션 1 — 반석 위의 집 확장형:</b>
+          외곽 나무(도끼질 5회 → 🪵나무 1)와 바위(채굴 5회 → 🪨돌 1)를 캐서 <b>돌 20개 + 나무 20개</b>를 함께 모아 집을 세워 보세요!
         </div>
 
         <button id="mp-enter-world-btn" type="button" onclick="window.MiracleMultiplayer.enterMultiplayerWorld()"
-                class="mc-btn w-full py-2.5 sm:py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-white font-jua text-base sm:text-lg shadow-lg">
-          🌐 멀티플레이 오픈월드 입장하기!
+                class="mp-enter-btn mc-btn w-full py-2 sm:py-2.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-white font-jua text-sm sm:text-lg shadow-lg shrink-0">
+          🌐 갈릴리 탐험가로 입장하기!
         </button>
       </div>
     `;
     document.body.appendChild(modal);
-    this.selectCharacter(this.selectedCharId);
+    const track = document.getElementById('mp-char-track');
+    this.bindCharTrackSwipeInteraction(track);
+    this.refreshAllCharacterPortraits();
+    this.selectCharacter(this.selectedCharId, { scroll: true, instant: true, silent: true });
     return modal;
   },
 
@@ -292,7 +822,11 @@ const MiracleMultiplayer = {
     const modal = this.ensureEntryModal();
     modal.classList.remove('hidden');
     modal.classList.add('flex');
-    this.selectCharacter(this.selectedCharId);
+    this.refreshAllCharacterPortraits();
+    this.selectCharacter(this.selectedCharId, { scroll: true, instant: true, silent: true });
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => this.scrollToCharacter(this.selectedCharId, true));
+    }
   },
 
   closeEntryModal() {
@@ -657,11 +1191,24 @@ const MiracleMultiplayer = {
     if (typeof showToast === 'function') showToast(`💬 ${rp.name}: ${text}`);
   },
 
+  _mapEmoteTextToAnimKind(text) {
+    const t = String(text || '');
+    if (t.includes('👋')) return 'wave';
+    if (t.includes('🙌')) return 'cheer';
+    if (t.includes('❤️')) return 'bless';
+    if (t.includes('💪')) return 'pump';
+    if (t.includes('📍')) return 'beckon';
+    return 'wave';
+  },
+
   sendEmote(text) {
     if (!this.active) return;
     const nowAt = Date.now();
     const myName = (typeof explorerDisplayName !== 'undefined' && explorerDisplayName) ? explorerDisplayName : (window.explorerName || '대원');
     this.localEmote = { text: String(text || ''), at: nowAt, timer: 3.8 };
+    if (window.ep4CharacterAnimator && typeof window.ep4CharacterAnimator.triggerEmote === 'function') {
+      window.ep4CharacterAnimator.triggerEmote(this._mapEmoteTextToAnimKind(text), 1.65);
+    }
     const lb = document.getElementById('mp-local-bubble');
     if (lb) {
       lb.textContent = text;
@@ -1170,12 +1717,26 @@ const MiracleMultiplayer = {
         rp.mesh.position.lerp(rp.targetPos, Math.min(1, dt * 8.0));
         rp.mesh.rotation.y = (typeof lerpAngle === 'function') ? lerpAngle(rp.mesh.rotation.y, rp.rotY, dt * 10.0) : rp.rotY;
         const spd = Math.hypot(rp.mesh.position.x - prevX, rp.mesh.position.z - prevZ) / Math.max(0.001, dt);
-        const u = rp.mesh.userData || {};
-        const sw = spd > 0.4 ? Math.sin(now * 0.015) * 0.6 : 0;
-        if (u.lLeg && u.rLeg) { u.lLeg.rotation.x = sw; u.rLeg.rotation.x = -sw; }
-        if (u.lArm && u.rArm) {
-          u.lArm.rotation.x = rp.chopping ? (-1.6 + Math.sin(now * 0.045) * 0.9) : (-sw * 0.55);
-          u.rArm.rotation.x = sw * 0.55;
+        if (rp.chopping && typeof window.updateDiscipleSmoothPose === 'function') {
+          window.updateDiscipleSmoothPose(rp.mesh, dt, now, 'chop', { skipBodyOffset: true });
+        } else if (rp.emoteTimer > 2.2 && typeof window.updateDiscipleSmoothPose === 'function') {
+          window.updateDiscipleSmoothPose(rp.mesh, dt, now, this._mapEmoteTextToAnimKind(rp.emote), { skipBodyOffset: true });
+        } else if (typeof window.applyMiracleNpcLimbAnimation === 'function') {
+          window.applyMiracleNpcLimbAnimation(rp.mesh, {
+            speed: spd,
+            isMoving: spd > 0.35,
+            strideFactor: 1.45,
+            legAmp: 0.64,
+            armAmp: 0.56
+          }, dt);
+        } else {
+          const u = rp.mesh.userData || {};
+          const sw = spd > 0.4 ? Math.sin(now * 0.015) * 0.6 : 0;
+          if (u.lLeg && u.rLeg) { u.lLeg.rotation.x = sw; u.rLeg.rotation.x = -sw; }
+          if (u.lArm && u.rArm) {
+            u.lArm.rotation.x = rp.chopping ? (-1.6 + Math.sin(now * 0.045) * 0.9) : (-sw * 0.55);
+            u.rArm.rotation.x = sw * 0.55;
+          }
         }
         if (rp.emoteTimer > 0) {
           rp.emoteTimer -= dt;
@@ -1268,6 +1829,9 @@ const MiracleMultiplayer = {
   }
 };
 window.MiracleMultiplayer = MiracleMultiplayer;
+window.onMiracleClubLogoLoaded = function (clubKey) {
+  MiracleMultiplayer.refreshPortraitForClubKey(clubKey);
+};
 
 // PC 키보드 [E] / [F] 키로 채집·건축 즉시 실행 지원
 window.positionMultiplayerRightHud = function () {

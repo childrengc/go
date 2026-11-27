@@ -6,7 +6,7 @@
 // =========================================================================
 
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_assets = '3.12.3';
+window.__GAME_BUILD_VERSIONS__.ep4_assets = '3.12.6';
 
 const _miracleDoubleSideMatCache = {};
 function matLowPolyDouble(hexColor) {
@@ -3094,9 +3094,72 @@ function createContouredFrontShawlPanel(width, length, shawlHex, stripe1Hex, str
   return panelGrp;
 }
 
+function wrapPivotWithContent(name, x, y, z, parts) {
+  const pivot = new THREE.Group();
+  pivot.name = name;
+  pivot.position.set(x, y, z);
+  const content = new THREE.Group();
+  content.name = name + 'Content';
+  content.position.set(-x, -y, -z);
+  for (let i = 0; i < parts.length; i++) {
+    if (parts[i]) content.add(parts[i]);
+  }
+  pivot.add(content);
+  return pivot;
+}
+
+function wrapWristPivot(wristY, handParts) {
+  return wrapPivotWithContent('wristPivot', 0, wristY, 0, handParts);
+}
+
+function wrapAnklePivot(footParts, ankleY = -0.312) {
+  return wrapPivotWithContent('anklePivot', 0, ankleY, 0, footParts);
+}
+
+function wrapUpperBodyWithTorsoPivot(rootGroup, upperNodes) {
+  const torsoPivot = wrapPivotWithContent('torsoPivot', 0, 0.96, 0, upperNodes);
+  rootGroup.add(torsoPivot);
+  return torsoPivot;
+}
+
+function collectCharacterJointRig(rootGroup, extra = {}) {
+  const lLeg = rootGroup.getObjectByName('lLeg') || rootGroup.children[0] || null;
+  const rLeg = rootGroup.getObjectByName('rLeg') || rootGroup.children[1] || null;
+  const torsoPivot = rootGroup.getObjectByName('torsoPivot') || null;
+  const lArm = rootGroup.getObjectByName('lArm') || null;
+  const rArm = rootGroup.getObjectByName('rArm') || null;
+  const head = rootGroup.getObjectByName('headPivot') || null;
+
+  const lKnee = lLeg ? (lLeg.getObjectByName('kneePivot') || null) : null;
+  const rKnee = rLeg ? (rLeg.getObjectByName('kneePivot') || null) : null;
+  const lAnkle = lLeg ? (lLeg.getObjectByName('anklePivot') || null) : null;
+  const rAnkle = rLeg ? (rLeg.getObjectByName('anklePivot') || null) : null;
+
+  const lElbow = lArm ? (lArm.getObjectByName('elbowPivot') || null) : null;
+  const rElbow = rArm ? (rArm.getObjectByName('elbowPivot') || null) : null;
+  const lWrist = lArm ? (lArm.getObjectByName('wristPivot') || null) : null;
+  const rWrist = rArm ? (rArm.getObjectByName('wristPivot') || null) : null;
+  const lGrip = lArm ? (lArm.getObjectByName('gripPoint') || null) : null;
+  const rGrip = rArm ? (rArm.getObjectByName('gripPoint') || null) : null;
+
+  const capePivot = rootGroup.getObjectByName('capePivot') || null;
+  const scarfPivot = rootGroup.getObjectByName('scarfPivot') || null;
+  const packPivot = rootGroup.getObjectByName('packPivot') || null;
+
+  return Object.assign({
+    lLeg, rLeg, lKnee, rKnee, lAnkle, rAnkle,
+    torsoPivot,
+    lArm, rArm, lElbow, rElbow, lWrist, rWrist, lGrip, rGrip,
+    head,
+    capePivot, scarfPivot, packPivot,
+    bodyRoot: rootGroup
+  }, extra);
+}
+
 function createSeamlessPonchoArm(isLeft, shawlHex, stripe1Hex, stripe2Hex, innerSleeveHex, skinHex) {
   const side = isLeft ? -1 : 1;
   const armGrp = new THREE.Group();
+  armGrp.name = isLeft ? 'lArm' : 'rArm';
   armGrp.position.set(side * 0.27, 1.46, 0.0);
 
   const sleevePivot = new THREE.Group();
@@ -3132,29 +3195,32 @@ function createSeamlessPonchoArm(isLeft, shawlHex, stripe1Hex, stripe2Hex, inner
   }
 
   const lowerArmGrp = new THREE.Group();
+  lowerArmGrp.name = 'elbowPivot';
   lowerArmGrp.position.set(0, -0.38, 0);
   lowerArmGrp.rotation.z = -side * 0.15;
 
-  const innerGeo = new THREE.CylinderGeometry(0.092, 0.112, 0.18, 6, 1, false);
+  const elbowCap = createLowPolyMesh(new THREE.DodecahedronGeometry(0.082, 0), innerSleeveHex, 0, 0, 0, false);
+  elbowCap.scale.set(0.95, 0.90, 0.95);
+  const innerGeo = new THREE.CylinderGeometry(0.092, 0.106, 0.18, 6, 1, false);
   const innerSleeve = createLowPolyMesh(innerGeo.toNonIndexed(), innerSleeveHex, 0, -0.08, 0);
-  lowerArmGrp.add(innerSleeve);
 
-  const palm = createLowPolyMesh(new THREE.BoxGeometry(0.10, 0.12, 0.12), skinHex, 0, -0.22, 0.01);
-  const fingers = createLowPolyMesh(new THREE.BoxGeometry(0.09, 0.08, 0.10), skinHex, -side * 0.015, -0.29, 0.01);
-  fingers.rotation.z = -side * 0.24;
-  const thumb = createLowPolyMesh(new THREE.BoxGeometry(0.045, 0.075, 0.055), skinHex, -side * 0.05, -0.23, 0.065, false);
-  thumb.rotation.x = 0.3;
+  const palm = createLowPolyMesh(new THREE.CylinderGeometry(0.056, 0.050, 0.086, 6), skinHex, 0, -0.215, 0.008);
+  palm.scale.set(0.84, 1.0, 1.04);
+  const fingers = createLowPolyMesh(getZacchaeusFingersGeo(isLeft), skinHex, 0, -0.247, 0.010);
+  const thumb = createLowPolyMesh(new THREE.CylinderGeometry(0.018, 0.023, 0.064, 6), skinHex, -side * 0.044, -0.224, 0.048, false);
+  thumb.rotation.x = 0.28;
+  thumb.rotation.z = side * 0.16;
 
   const handGrip = new THREE.Object3D();
   handGrip.name = isLeft ? 'handGripL' : 'handGripR';
-  handGrip.position.set(0, -0.24, 0.03);
+  handGrip.position.set(0, -0.23, 0.025);
 
   const gripPoint = new THREE.Object3D();
   gripPoint.name = 'gripPoint';
-  gripPoint.position.set(0, -0.235, 0.012);
+  gripPoint.position.set(0, -0.225, 0.012);
 
-  lowerArmGrp.name = 'elbowPivot';
-  lowerArmGrp.add(palm, fingers, thumb, handGrip, gripPoint);
+  const wristPivot = wrapWristPivot(-0.17, [palm, fingers, thumb, handGrip, gripPoint]);
+  lowerArmGrp.add(elbowCap, innerSleeve, wristPivot);
   sleevePivot.add(lowerArmGrp);
   armGrp.add(sleevePivot);
   return armGrp;
@@ -3310,6 +3376,9 @@ function getClubShoulderLogoMaterial(clubKey) {
       tex.image = img;
       tex.needsUpdate = true;
       mat.needsUpdate = true;
+      if (typeof window.onMiracleClubLogoLoaded === 'function') {
+        window.onMiracleClubLogoLoaded(clubKey);
+      }
     };
     img.src = uri;
   };
@@ -3325,6 +3394,9 @@ function getClubShoulderLogoMaterial(clubKey) {
         tex.needsUpdate = true;
         mat.needsUpdate = true;
         loadedTex.dispose();
+        if (typeof window.onMiracleClubLogoLoaded === 'function') {
+          window.onMiracleClubLogoLoaded(clubKey);
+        }
       },
       undefined,
       applyDataUriFallback
@@ -3351,6 +3423,7 @@ function getClubShoulderPatchGeo(clubKey) {
 function createKidShortSleeveArm(isLeft, shirtHex, cuffHex, skinHex, clubLogoKey = null) {
   const side = isLeft ? -1 : 1;
   const armGrp = new THREE.Group();
+  armGrp.name = isLeft ? 'lArm' : 'rArm';
   armGrp.position.set(side * 0.27, 1.46, 0.0);
 
   const sleevePivot = new THREE.Group();
@@ -3377,24 +3450,28 @@ function createKidShortSleeveArm(isLeft, shirtHex, cuffHex, skinHex, clubLogoKey
     }
   }
 
-  // 반팔 아래 드러난 맨팔(전완)과 소프트 로우폴리 손
+  // 반팔 아래 드러난 맨팔(전완)과 팔꿈치·손목 관절 + 소프트 로우폴리 손
   const lowerArmGrp = new THREE.Group();
+  lowerArmGrp.name = 'elbowPivot';
   lowerArmGrp.position.set(0, -0.23, 0);
   lowerArmGrp.rotation.z = -side * 0.10;
 
-  const bareArm = createLowPolyMesh(new THREE.CylinderGeometry(0.076, 0.068, 0.30, 6), skinHex, 0, -0.15, 0);
-  const palm = createLowPolyMesh(new THREE.BoxGeometry(0.095, 0.11, 0.11), skinHex, 0, -0.34, 0.01);
-  const fingers = createLowPolyMesh(new THREE.BoxGeometry(0.084, 0.075, 0.095), skinHex, -side * 0.014, -0.41, 0.01);
-  fingers.rotation.z = -side * 0.22;
-  const thumb = createLowPolyMesh(new THREE.BoxGeometry(0.042, 0.07, 0.05), skinHex, -side * 0.048, -0.35, 0.06, false);
+  const elbowCap = createLowPolyMesh(new THREE.DodecahedronGeometry(0.068, 0), skinHex, 0, 0, 0, false);
+  elbowCap.scale.set(0.95, 0.88, 0.95);
+  const bareArm = createLowPolyMesh(new THREE.CylinderGeometry(0.076, 0.064, 0.30, 7), skinHex, 0, -0.15, 0);
+  const palm = createLowPolyMesh(new THREE.CylinderGeometry(0.056, 0.050, 0.088, 6), skinHex, 0, -0.34, 0.01);
+  palm.scale.set(0.84, 1.0, 1.04);
+  const fingers = createLowPolyMesh(getZacchaeusFingersGeo(isLeft), skinHex, 0, -0.372, 0.012);
+  const thumb = createLowPolyMesh(new THREE.CylinderGeometry(0.018, 0.023, 0.064, 6), skinHex, -side * 0.044, -0.350, 0.048, false);
   thumb.rotation.x = 0.28;
+  thumb.rotation.z = side * 0.16;
 
   const gripPoint = new THREE.Object3D();
   gripPoint.name = 'gripPoint';
-  gripPoint.position.set(0, -0.355, 0.014);
+  gripPoint.position.set(0, -0.345, 0.014);
 
-  lowerArmGrp.name = 'elbowPivot';
-  lowerArmGrp.add(bareArm, palm, fingers, thumb, gripPoint);
+  const wristPivot = wrapWristPivot(-0.295, [palm, fingers, thumb, gripPoint]);
+  lowerArmGrp.add(elbowCap, bareArm, wristPivot);
   sleevePivot.add(lowerArmGrp);
   armGrp.add(sleevePivot);
   return armGrp;
@@ -4234,9 +4311,13 @@ function createHeroCapeGroup() {
   const upGeos = getHeroCapeUpperGeos();
   const loGeos = getHeroCapeLowerGeos();
 
-  capeGrp.add(
+  const capePivot = wrapPivotWithContent('capePivot', 0, 1.46, -0.14, [
     createHeroClayMesh(loGeos.outerGeo, HERO_CLAY_PALETTE.cape,      0, 0, 0, { roughness: 0.87, metalness: 0.03 }),
-    createHeroClayMesh(loGeos.innerGeo, HERO_CLAY_PALETTE.capeInner, 0, 0, 0, { roughness: 0.90, metalness: 0.02, castShadow: false }),
+    createHeroClayMesh(loGeos.innerGeo, HERO_CLAY_PALETTE.capeInner, 0, 0, 0, { roughness: 0.90, metalness: 0.02, castShadow: false })
+  ]);
+
+  capeGrp.add(
+    capePivot,
     createHeroClayMesh(upGeos.outerGeo, HERO_CLAY_PALETTE.cape,      0, 0, 0, { roughness: 0.87, metalness: 0.03 }),
     createHeroClayMesh(upGeos.innerGeo, HERO_CLAY_PALETTE.capeInner, 0, 0, 0, { roughness: 0.90, metalness: 0.02, castShadow: false })
   );
@@ -4425,6 +4506,7 @@ function createHeroGearGroup() {
 function createHeroBoyArm(isLeft) {
   const side = isLeft ? -1 : 1;
   const armGrp = new THREE.Group();
+  armGrp.name = isLeft ? 'lArm' : 'rArm';
   armGrp.position.set(side * 0.285, 1.375, 0.0);
 
   const pivot = new THREE.Group();
@@ -4438,11 +4520,14 @@ function createHeroBoyArm(isLeft) {
   const tealBand = createHeroClayMesh(new THREE.CylinderGeometry(0.096, 0.101, 0.042, 8), HERO_CLAY_PALETTE.tunicTeal, 0, -0.220, 0, { roughness: 0.86, metalness: 0.03, castShadow: false });
   pivot.add(shCap, sleeve, goldBand, tealBand);
 
-  // 2) 소매 아래 맨팔 + 손목 가죽 아대 (#633E24) + 로우폴리 손
+  // 2) 소매 아래 맨팔 + 팔꿈치/손목 피벗 + 손목 가죽 아대 (#633E24) + 로우폴리 손
   const lowerArmGrp = new THREE.Group();
+  lowerArmGrp.name = 'elbowPivot';
   lowerArmGrp.position.set(0, -0.232, 0);
   lowerArmGrp.rotation.z = -side * 0.08;
 
+  const elbowCap = createHeroClayMesh(new THREE.DodecahedronGeometry(0.062, 0), HERO_CLAY_PALETTE.skin, 0, 0, 0, { roughness: 0.84, metalness: 0.02, castShadow: false });
+  elbowCap.scale.set(0.95, 0.88, 0.95);
   const bareArm = createHeroClayMesh(new THREE.CylinderGeometry(0.072, 0.060, 0.27, 8), HERO_CLAY_PALETTE.skin, 0, -0.135, 0, { roughness: 0.84, metalness: 0.02 });
   const bracer  = createHeroClayMesh(new THREE.CylinderGeometry(0.074, 0.069, 0.086, 8), HERO_CLAY_PALETTE.bracerLeather, 0, -0.195, 0, { roughness: 0.82, metalness: 0.05 });
 
@@ -4458,43 +4543,35 @@ function createHeroBoyArm(isLeft) {
   gripPoint.name = 'gripPoint';
   gripPoint.position.set(0, -0.318, 0.014);
 
-  lowerArmGrp.name = 'elbowPivot';
-  lowerArmGrp.add(bareArm, bracer, palm, fingers, thumb, gripPoint);
+  const wristPivot = wrapWristPivot(-0.245, [palm, fingers, thumb, gripPoint]);
+  lowerArmGrp.add(elbowCap, bareArm, bracer, wristPivot);
   pivot.add(lowerArmGrp);
   armGrp.add(pivot);
   return armGrp;
 }
 
-let _heroFootGeo = null;
-function getHeroFootGeo() {
-  if (_heroFootGeo) return _heroFootGeo;
-
-  // 예수님·베드로(getZacchaeusFootGeo)와 동일한 5단 경사 로프팅 발 조형 — 앞코가 자연스럽게 낮아져 샌들 끈이 선명히 노출됨
-  const sections = [
-    { z: -0.095, rx: 0.056, yBot: -0.044, yTop:  0.036 },
-    { z: -0.015, rx: 0.066, yBot: -0.044, yTop:  0.055 },
-    { z:  0.052, rx: 0.072, yBot: -0.044, yTop:  0.038 },
-    { z:  0.114, rx: 0.076, yBot: -0.044, yTop:  0.013 },
-    { z:  0.168, rx: 0.050, yBot: -0.038, yTop: -0.014 }
-  ];
+function buildLoftedFootGeo(sections, apexBack, apexFront, shapeFn = null) {
   const cols = 8;
-  const rings = sections.map(sp => {
+  const rings = sections.map((sp, rIdx) => {
     const arr = [];
     for (let c = 0; c < cols; c++) {
       const th = (c / cols) * Math.PI * 2;
       const sT = Math.sin(th);
       const cT = Math.cos(th);
-      const x = -sT * sp.rx;
-      const y = (cT >= 0)
+      let x = -sT * sp.rx;
+      let y = (cT >= 0)
         ? ((sp.yBot + sp.yTop) * 0.5 + cT * (sp.yTop - sp.yBot) * 0.52)
         : (sp.yBot + (1 + cT) * 0.008);
+      if (shapeFn) {
+        const pt = shapeFn(x, y, sp, c, rIdx, sT, cT);
+        x = pt[0];
+        y = pt[1];
+      }
       arr.push([x, y, sp.z]);
     }
     return arr;
   });
 
-  const apexBack  = [0, -0.006, -0.108];
-  const apexFront = [0, -0.026,  0.184];
   const v = [];
   for (let c = 0; c < cols; c++) {
     const cn = (c + 1) % cols;
@@ -4507,56 +4584,163 @@ function getHeroFootGeo() {
       pushQuad(v, rings[r][c], rings[r][cn], rings[r + 1][cn], rings[r + 1][c]);
     }
   }
+  return markCachedGeo(buildBufferGeoFromTriangles(v));
+}
 
-  _heroFootGeo = markCachedGeo(buildBufferGeoFromTriangles(v));
+let _heroFootGeo = null;
+function getHeroFootGeo() {
+  if (_heroFootGeo) return _heroFootGeo;
+  // 예수님·베드로(getZacchaeusFootGeo)와 동일한 5단 경사 로프팅 발 조형 — 앞코가 자연스럽게 낮아져 샌들 끈이 선명히 노출됨
+  _heroFootGeo = buildLoftedFootGeo(
+    [
+      { z: -0.095, rx: 0.056, yBot: -0.044, yTop:  0.036 },
+      { z: -0.015, rx: 0.066, yBot: -0.044, yTop:  0.055 },
+      { z:  0.052, rx: 0.072, yBot: -0.044, yTop:  0.038 },
+      { z:  0.114, rx: 0.076, yBot: -0.044, yTop:  0.013 },
+      { z:  0.168, rx: 0.050, yBot: -0.038, yTop: -0.014 }
+    ],
+    [0, -0.006, -0.108],
+    [0, -0.026,  0.184]
+  );
   return _heroFootGeo;
 }
 
 let _heroSandalSoleGeo = null;
 function getHeroSandalSoleGeo() {
   if (_heroSandalSoleGeo) return _heroSandalSoleGeo;
-
   // 앞코 경사 발(getHeroFootGeo) 윤곽에 정밀 정합되는 라운드 로우폴리 샌들 밑창 (yBot = -0.022 → world y = 0.000)
-  const sections = [
-    { z: -0.116, rx: 0.068, yBot: -0.022, yTop: 0.018 },
-    { z: -0.018, rx: 0.065, yBot: -0.022, yTop: 0.018 },
-    { z:  0.088, rx: 0.090, yBot: -0.022, yTop: 0.018 },
-    { z:  0.156, rx: 0.072, yBot: -0.019, yTop: 0.013 },
-    { z:  0.194, rx: 0.042, yBot: -0.012, yTop: 0.006 }
-  ];
-  const cols = 8;
-  const rings = sections.map(sp => {
-    const arr = [];
-    for (let c = 0; c < cols; c++) {
-      const th = (c / cols) * Math.PI * 2;
-      const x = -Math.sin(th) * sp.rx;
-      const y = (Math.cos(th) >= 0) ? sp.yTop : sp.yBot;
-      arr.push([x, y, sp.z]);
-    }
-    return arr;
-  });
-
-  const apexBack  = [0, 0.000, -0.128];
-  const apexFront = [0, -0.002, 0.204];
-  const v = [];
-  for (let c = 0; c < cols; c++) {
-    const cn = (c + 1) % cols;
-    pushTriangle(v, rings[0][cn], rings[0][c], apexBack);
-    pushTriangle(v, rings[sections.length - 1][c], rings[sections.length - 1][cn], apexFront);
-  }
-  for (let r = 0; r < sections.length - 1; r++) {
-    for (let c = 0; c < cols; c++) {
-      const cn = (c + 1) % cols;
-      pushQuad(v, rings[r][c], rings[r][cn], rings[r + 1][cn], rings[r + 1][c]);
-    }
-  }
-
-  _heroSandalSoleGeo = markCachedGeo(buildBufferGeoFromTriangles(v));
+  _heroSandalSoleGeo = buildLoftedFootGeo(
+    [
+      { z: -0.116, rx: 0.068, yBot: -0.022, yTop: 0.018 },
+      { z: -0.018, rx: 0.065, yBot: -0.022, yTop: 0.018 },
+      { z:  0.088, rx: 0.090, yBot: -0.022, yTop: 0.018 },
+      { z:  0.156, rx: 0.072, yBot: -0.019, yTop: 0.013 },
+      { z:  0.194, rx: 0.042, yBot: -0.012, yTop: 0.006 }
+    ],
+    [0, 0.000, -0.128],
+    [0, -0.002, 0.204],
+    (x, _y, sp, _c, _rIdx, _sT, cT) => [x, (cT >= 0) ? sp.yTop : sp.yBot]
+  );
   return _heroSandalSoleGeo;
+}
+
+let _clubSneakerUpperGeo = null;
+function getClubSneakerUpperGeo() {
+  if (_clubSneakerUpperGeo) return _clubSneakerUpperGeo;
+  // 패스파인더·어드벤처러 전용: 플레이어(getHeroFootGeo)와 동일한 5단 경사 로프팅 비정형 소프트 로우폴리 운동화 갑피
+  _clubSneakerUpperGeo = buildLoftedFootGeo(
+    [
+      { z: -0.100, rx: 0.068, yBot: -0.044, yTop: 0.048 },
+      { z: -0.015, rx: 0.076, yBot: -0.044, yTop: 0.064 },
+      { z:  0.056, rx: 0.082, yBot: -0.044, yTop: 0.044 },
+      { z:  0.122, rx: 0.086, yBot: -0.044, yTop: 0.022 },
+      { z:  0.172, rx: 0.056, yBot: -0.036, yTop: 0.002 }
+    ],
+    [0, 0.004, -0.114],
+    [0, -0.016, 0.192],
+    (x, y, _sp, c, rIdx) => {
+      // 미세 비정형 패싯 오프셋으로 인위적 대칭 박스감을 지운 소프트 로우폴리 운동화 볼륨
+      const facetY = (c % 2 === 0 ? 0.002 : -0.002) * (rIdx >= 1 ? 1 : 0);
+      const outerSkewX = (rIdx === 3 && x > 0) ? 0.004 : 0;
+      return [x + outerSkewX, y + facetY];
+    }
+  );
+  return _clubSneakerUpperGeo;
+}
+
+let _clubSneakerSoleGeo = null;
+function getClubSneakerSoleGeo() {
+  if (_clubSneakerSoleGeo) return _clubSneakerSoleGeo;
+  // 운동화 윤곽 맞춤 곡선 라운드 밑창 (yBot = -0.022 → world minY = 0.000)
+  _clubSneakerSoleGeo = buildLoftedFootGeo(
+    [
+      { z: -0.120, rx: 0.074, yBot: -0.022, yTop: 0.022 },
+      { z: -0.018, rx: 0.072, yBot: -0.022, yTop: 0.022 },
+      { z:  0.092, rx: 0.094, yBot: -0.022, yTop: 0.022 },
+      { z:  0.160, rx: 0.078, yBot: -0.019, yTop: 0.016 },
+      { z:  0.198, rx: 0.046, yBot: -0.012, yTop: 0.008 }
+    ],
+    [0, 0.002, -0.132],
+    [0, 0.000,  0.210],
+    (x, _y, sp, _c, _rIdx, _sT, cT) => [x, (cT >= 0) ? sp.yTop : sp.yBot]
+  );
+  return _clubSneakerSoleGeo;
+}
+
+let _clubSneakerToeCapGeo = null;
+function getClubSneakerToeCapGeo() {
+  if (_clubSneakerToeCapGeo) return _clubSneakerToeCapGeo;
+  // 갑피 앞코 위로 살짝 도드라져 Z-fighting 없이 감싸는 소프트 로우폴리 러버 토캡
+  _clubSneakerToeCapGeo = buildLoftedFootGeo(
+    [
+      { z: 0.118, rx: 0.091, yBot: -0.045, yTop: 0.026 },
+      { z: 0.152, rx: 0.078, yBot: -0.042, yTop: 0.015 },
+      { z: 0.180, rx: 0.054, yBot: -0.036, yTop: 0.004 }
+    ],
+    [0, -0.006, 0.106],
+    [0, -0.014, 0.200]
+  );
+  return _clubSneakerToeCapGeo;
+}
+
+let _softSlipperUpperGeo = null;
+function getSoftSlipperUpperGeo() {
+  if (_softSlipperUpperGeo) return _softSlipperUpperGeo;
+  // 여성 NPC·소녀용 비정형 5단 로프팅 소프트 로우폴리 단화
+  _softSlipperUpperGeo = buildLoftedFootGeo(
+    [
+      { z: -0.098, rx: 0.060, yBot: -0.044, yTop: 0.040 },
+      { z: -0.015, rx: 0.068, yBot: -0.044, yTop: 0.046 },
+      { z:  0.054, rx: 0.074, yBot: -0.044, yTop: 0.032 },
+      { z:  0.116, rx: 0.076, yBot: -0.044, yTop: 0.012 },
+      { z:  0.168, rx: 0.048, yBot: -0.036, yTop: -0.008 }
+    ],
+    [0, 0.000, -0.110],
+    [0, -0.020, 0.186]
+  );
+  return _softSlipperUpperGeo;
+}
+
+function createClubKidLeg(isLeft, cfg) {
+  const legGrp = new THREE.Group();
+  legGrp.name = isLeft ? 'lLeg' : 'rLeg';
+  legGrp.position.set(isLeft ? -0.14 : 0.14, 0.72, 0);
+
+  const shortLeg = createLowPolyMesh(new THREE.CylinderGeometry(0.110, 0.102, 0.22, 8), cfg.shorts, 0, -0.09, 0);
+  const thighSkin = createLowPolyMesh(new THREE.CylinderGeometry(0.076, 0.066, 0.20, 8), cfg.skin, 0, -0.23, 0);
+
+  const kneePivot = new THREE.Group();
+  kneePivot.name = 'kneePivot';
+  kneePivot.position.set(0, -0.32, 0);
+
+  const kneeCap = createLowPolyMesh(new THREE.DodecahedronGeometry(0.064, 0), cfg.skin, 0, 0, 0.004, false);
+  kneeCap.scale.set(0.96, 0.90, 0.96);
+  const shin = createLowPolyMesh(new THREE.CylinderGeometry(0.066, 0.058, 0.24, 8), cfg.skin, 0, -0.11, 0);
+  const sock = createLowPolyMesh(new THREE.CylinderGeometry(0.072, 0.066, 0.13, 8), cfg.sock, 0, -0.255, 0, false);
+  const sockStripe = createLowPolyMesh(new THREE.CylinderGeometry(0.075, 0.074, 0.020, 8), cfg.shoe, 0, -0.202, 0, false);
+
+  const shoeCollar = createLowPolyMesh(new THREE.TorusGeometry(0.066, 0.015, 5, 10), cfg.shoe, 0, -0.282, 0.004, false);
+  shoeCollar.rotation.x = Math.PI * 0.5;
+  shoeCollar.scale.set(1.02, 1.15, 0.90);
+
+  const sneakerUpper = createLowPolyMesh(getClubSneakerUpperGeo(), cfg.shoe, 0, -0.312, 0.048);
+  const sneakerSole  = createLowPolyMesh(getClubSneakerSoleGeo(), cfg.shoeTrim, 0, -0.378, 0.048);
+  const sneakerToeCap = createLowPolyMesh(getClubSneakerToeCapGeo(), cfg.shoeTrim, 0, -0.313, 0.048, false);
+
+  const lace1 = createLowPolyMesh(getZacchaeusArchStrapGeo(0.074, 0.040, -0.026, 0.022, 0.012), cfg.shoeTrim, 0, -0.312, 0.056, false);
+  lace1.rotation.x = 0.22;
+  const lace2 = createLowPolyMesh(getZacchaeusArchStrapGeo(0.078, 0.028, -0.026, 0.022, 0.012), cfg.shoeTrim, 0, -0.326, 0.114, false);
+  lace2.rotation.x = 0.26;
+
+  const anklePivot = wrapAnklePivot([shoeCollar, sneakerUpper, sneakerSole, sneakerToeCap, lace1, lace2]);
+  kneePivot.add(kneeCap, shin, sock, sockStripe, anklePivot);
+  legGrp.add(shortLeg, thighSkin, kneePivot);
+  return legGrp;
 }
 
 function createHeroBoyLeg(isLeft) {
   const legGrp = new THREE.Group();
+  legGrp.name = isLeft ? 'lLeg' : 'rLeg';
   legGrp.position.set(isLeft ? -0.135 : 0.135, 0.72, 0);
 
   const skinOpt   = { roughness: 0.84, metalness: 0.02 };
@@ -4567,11 +4751,13 @@ function createHeroBoyLeg(isLeft) {
   // 1) 윗다리(허벅지) — 무릎 피벗 상단까지 0.02m 겹쳐 굽혀도 틈이 생기지 않도록 설계
   const thigh = createHeroClayMesh(new THREE.CylinderGeometry(0.078, 0.068, 0.34, 8), HERO_CLAY_PALETTE.skin, 0, -0.17, 0, skinOpt);
 
-  // 2) 무릎 피벗(kneePivot) & 아랫다리/발목/경사진 발 + 가시성 높은 가죽 끈 샌들 일체 그룹
+  // 2) 무릎 피벗(kneePivot) & 아랫다리/발목 피벗/경사진 발 + 가시성 높은 가죽 끈 샌들 일체 그룹
   const kneePivot = new THREE.Group();
   kneePivot.name = 'kneePivot';
   kneePivot.position.set(0, -0.32, 0);
 
+  const kneeCap = createHeroClayMesh(new THREE.DodecahedronGeometry(0.064, 0), HERO_CLAY_PALETTE.skin, 0, 0, 0.004, { ...skinOpt, castShadow: false });
+  kneeCap.scale.set(0.96, 0.90, 0.96);
   const shin = createHeroClayMesh(new THREE.CylinderGeometry(0.068, 0.060, 0.31, 8), HERO_CLAY_PALETTE.skin, 0, -0.135, 0, skinOpt);
 
   // 앞부분이 자연스럽게 경사진 소프트 로우폴리 발 (예수님·베드로 동일 조형)
@@ -4607,6 +4793,12 @@ function createHeroBoyLeg(isLeft) {
   const sideStayR = createHeroClayMesh(new THREE.CylinderGeometry(0.012, 0.014, 0.108, 6), HERO_CLAY_PALETTE.soleLeather,  0.068, -0.280, -0.018, { ...strapOpt, castShadow: false });
   sideStayR.rotation.set(0.32, 0,  0.10);
 
+  const anklePivot = wrapAnklePivot([
+    foot, sole, soleInsole,
+    foreStrap, midStrap, tBridge, instepRiser, instepBuckle,
+    heelStrap, sideStayL, sideStayR
+  ]);
+
   // 실제 발목 커프 + 종아리 하부 타이 밴드 + 바깥쪽 매듭 + 360° X자 교차 가죽 끈 (짙은 가죽 대비)
   const ankleCuff = createHeroClayMesh(new THREE.CylinderGeometry(0.071, 0.070, 0.030, 10), HERO_CLAY_PALETTE.bracerLeather, 0, -0.242, 0, strapOpt);
   const calfTieBand = createHeroClayMesh(new THREE.CylinderGeometry(0.074, 0.072, 0.026, 10), HERO_CLAY_PALETTE.bracerLeather, 0, -0.158, 0, strapOpt);
@@ -4622,9 +4814,7 @@ function createHeroBoyLeg(isLeft) {
   crossLaceB.scale.set(1.05, 1.0, 1.07);
 
   kneePivot.add(
-    shin, foot, sole, soleInsole,
-    foreStrap, midStrap, tBridge, instepRiser, instepBuckle,
-    heelStrap, sideStayL, sideStayR,
+    kneeCap, shin, anklePivot,
     ankleCuff, calfTieBand, calfKnot, crossLaceA, crossLaceB
   );
   legGrp.add(thigh, kneePivot);
@@ -4880,6 +5070,7 @@ function createZacchaeusArm(isLeft) {
   const zp = ZACCHAEUS_CLAY_PALETTE;
   const side = isLeft ? -1 : 1;
   const armGrp = new THREE.Group();
+  armGrp.name = isLeft ? 'lArm' : 'rArm';
   armGrp.position.set(side * 0.285, 1.375, 0.0);
 
   const pivot = new THREE.Group();
@@ -4898,6 +5089,8 @@ function createZacchaeusArm(isLeft) {
   lowerArmGrp.position.set(0, -0.232, 0);
   lowerArmGrp.rotation.z = -side * 0.08;
 
+  const elbowCap = createHeroClayMesh(new THREE.DodecahedronGeometry(0.062, 0), zp.skin, 0, 0, 0, { roughness: 0.84, metalness: 0.02, castShadow: false });
+  elbowCap.scale.set(0.95, 0.88, 0.95);
   const bareArm = createHeroClayMesh(new THREE.CylinderGeometry(0.072, 0.058, 0.27, 8), zp.skin, 0, -0.135, 0, { roughness: 0.84, metalness: 0.02 });
   const bracer  = createHeroClayMesh(new THREE.CylinderGeometry(0.074, 0.068, 0.088, 8), zp.bracer, 0, -0.195, 0, { roughness: 0.82, metalness: 0.05 });
   const brTop   = createHeroClayMesh(new THREE.CylinderGeometry(0.076, 0.075, 0.016, 8), zp.bracerTrim, 0, -0.152, 0, { roughness: 0.82, metalness: 0.05, castShadow: false });
@@ -4914,7 +5107,8 @@ function createZacchaeusArm(isLeft) {
   gripPoint.name = 'gripPoint';
   gripPoint.position.set(0, -0.312, 0.012);
 
-  lowerArmGrp.add(bareArm, bracer, brTop, brBot, palm, fingers, thumb, gripPoint);
+  const wristPivot = wrapWristPivot(-0.245, [palm, fingers, thumb, gripPoint]);
+  lowerArmGrp.add(elbowCap, bareArm, bracer, brTop, brBot, wristPivot);
   pivot.add(lowerArmGrp);
   armGrp.add(pivot);
   return armGrp;
@@ -4927,90 +5121,35 @@ function createZacchaeusArm(isLeft) {
 let _zacFootGeo = null;
 function getZacchaeusFootGeo() {
   if (_zacFootGeo) return _zacFootGeo;
-
-  const sections = [
-    { z: -0.095, rx: 0.056, yBot: -0.044, yTop:  0.036 },
-    { z: -0.015, rx: 0.066, yBot: -0.044, yTop:  0.056 },
-    { z:  0.052, rx: 0.072, yBot: -0.044, yTop:  0.040 },
-    { z:  0.114, rx: 0.076, yBot: -0.044, yTop:  0.015 },
-    { z:  0.168, rx: 0.050, yBot: -0.038, yTop: -0.012 }
-  ];
-  const cols = 8;
-  const rings = sections.map(sp => {
-    const arr = [];
-    for (let c = 0; c < cols; c++) {
-      const th = (c / cols) * Math.PI * 2;
-      const sT = Math.sin(th);
-      const cT = Math.cos(th);
-      const x = -sT * sp.rx;
-      const y = (cT >= 0)
-        ? ((sp.yBot + sp.yTop) * 0.5 + cT * (sp.yTop - sp.yBot) * 0.52)
-        : (sp.yBot + (1 + cT) * 0.008);
-      arr.push([x, y, sp.z]);
-    }
-    return arr;
-  });
-
-  const apexBack  = [0, -0.006, -0.108];
-  const apexFront = [0, -0.026,  0.184];
-  const v = [];
-
-  for (let c = 0; c < cols; c++) {
-    const cn = (c + 1) % cols;
-    pushTriangle(v, rings[0][cn], rings[0][c], apexBack);
-    pushTriangle(v, rings[sections.length - 1][c], rings[sections.length - 1][cn], apexFront);
-  }
-  for (let r = 0; r < sections.length - 1; r++) {
-    for (let c = 0; c < cols; c++) {
-      const cn = (c + 1) % cols;
-      pushQuad(v, rings[r][c], rings[r][cn], rings[r + 1][cn], rings[r + 1][c]);
-    }
-  }
-
-  _zacFootGeo = markCachedGeo(buildBufferGeoFromTriangles(v));
+  _zacFootGeo = buildLoftedFootGeo(
+    [
+      { z: -0.095, rx: 0.056, yBot: -0.044, yTop:  0.036 },
+      { z: -0.015, rx: 0.066, yBot: -0.044, yTop:  0.056 },
+      { z:  0.052, rx: 0.072, yBot: -0.044, yTop:  0.040 },
+      { z:  0.114, rx: 0.076, yBot: -0.044, yTop:  0.015 },
+      { z:  0.168, rx: 0.050, yBot: -0.038, yTop: -0.012 }
+    ],
+    [0, -0.006, -0.108],
+    [0, -0.026,  0.184]
+  );
   return _zacFootGeo;
 }
 
 let _zacSandalSoleGeo = null;
 function getZacchaeusSandalSoleGeo() {
   if (_zacSandalSoleGeo) return _zacSandalSoleGeo;
-
-  const sections = [
-    { z: -0.116, rx: 0.068, yBot: -0.022, yTop: 0.018 },
-    { z: -0.018, rx: 0.065, yBot: -0.022, yTop: 0.018 },
-    { z:  0.088, rx: 0.090, yBot: -0.022, yTop: 0.018 },
-    { z:  0.156, rx: 0.072, yBot: -0.019, yTop: 0.013 },
-    { z:  0.194, rx: 0.042, yBot: -0.012, yTop: 0.006 }
-  ];
-  const cols = 8;
-  const rings = sections.map(sp => {
-    const arr = [];
-    for (let c = 0; c < cols; c++) {
-      const th = (c / cols) * Math.PI * 2;
-      const x = -Math.sin(th) * sp.rx;
-      const y = (Math.cos(th) >= 0) ? sp.yTop : sp.yBot;
-      arr.push([x, y, sp.z]);
-    }
-    return arr;
-  });
-
-  const apexBack  = [0, 0.000, -0.128];
-  const apexFront = [0, -0.002, 0.204];
-  const v = [];
-
-  for (let c = 0; c < cols; c++) {
-    const cn = (c + 1) % cols;
-    pushTriangle(v, rings[0][cn], rings[0][c], apexBack);
-    pushTriangle(v, rings[sections.length - 1][c], rings[sections.length - 1][cn], apexFront);
-  }
-  for (let r = 0; r < sections.length - 1; r++) {
-    for (let c = 0; c < cols; c++) {
-      const cn = (c + 1) % cols;
-      pushQuad(v, rings[r][c], rings[r][cn], rings[r + 1][cn], rings[r + 1][c]);
-    }
-  }
-
-  _zacSandalSoleGeo = markCachedGeo(buildBufferGeoFromTriangles(v));
+  _zacSandalSoleGeo = buildLoftedFootGeo(
+    [
+      { z: -0.116, rx: 0.068, yBot: -0.022, yTop: 0.018 },
+      { z: -0.018, rx: 0.065, yBot: -0.022, yTop: 0.018 },
+      { z:  0.088, rx: 0.090, yBot: -0.022, yTop: 0.018 },
+      { z:  0.156, rx: 0.072, yBot: -0.019, yTop: 0.013 },
+      { z:  0.194, rx: 0.042, yBot: -0.012, yTop: 0.006 }
+    ],
+    [0, 0.000, -0.128],
+    [0, -0.002, 0.204],
+    (x, _y, sp, _c, _rIdx, _sT, cT) => [x, (cT >= 0) ? sp.yTop : sp.yBot]
+  );
   return _zacSandalSoleGeo;
 }
 
@@ -5056,6 +5195,7 @@ function getZacchaeusArchStrapGeo(halfW = 0.080, archH = 0.036, sideDrop = -0.02
 function createZacchaeusLeg(isLeft) {
   const zp = ZACCHAEUS_CLAY_PALETTE;
   const legGrp = new THREE.Group();
+  legGrp.name = isLeft ? 'lLeg' : 'rLeg';
   legGrp.position.set(isLeft ? -0.135 : 0.135, 0.72, 0);
 
   const skinOpt  = { roughness: 0.84, metalness: 0.02 };
@@ -5067,6 +5207,8 @@ function createZacchaeusLeg(isLeft) {
   kneePivot.name = 'kneePivot';
   kneePivot.position.set(0, -0.32, 0);
 
+  const kneeCap = createHeroClayMesh(new THREE.DodecahedronGeometry(0.064, 0), zp.skin, 0, 0, 0.004, { ...skinOpt, castShadow: false });
+  kneeCap.scale.set(0.96, 0.90, 0.96);
   const shin       = createHeroClayMesh(new THREE.CylinderGeometry(0.068, 0.060, 0.31, 8), zp.skin, 0, -0.135, 0, skinOpt);
   const ankleStrap = createHeroClayMesh(new THREE.CylinderGeometry(0.073, 0.070, 0.064, 8), zp.sandalStrap, 0, -0.138, 0, strapOpt);
 
@@ -5083,7 +5225,8 @@ function createZacchaeusLeg(isLeft) {
   tBridge.rotation.x = 0.42;
   const heelStrap  = createHeroClayMesh(new THREE.CylinderGeometry(0.070, 0.074, 0.068, 8, 1, false, Math.PI * 0.55, Math.PI * 0.90), zp.sandalStrap, 0, -0.326, -0.040, { ...strapOpt, castShadow: false });
 
-  kneePivot.add(shin, ankleStrap, foot, sole, foreStrap, midStrap, tBridge, heelStrap);
+  const anklePivot = wrapAnklePivot([foot, sole, foreStrap, midStrap, tBridge, heelStrap]);
+  kneePivot.add(kneeCap, shin, ankleStrap, anklePivot);
   legGrp.add(thigh, kneePivot);
   return legGrp;
 }
@@ -5480,6 +5623,7 @@ function createTurnaroundDiagonalSashAndBeltGroup(pal) {
 function createTurnaroundDiscipleArm(isLeft, pal) {
   const side = isLeft ? -1 : 1;
   const armGrp = new THREE.Group();
+  armGrp.name = isLeft ? 'lArm' : 'rArm';
   armGrp.position.set(side * 0.275, 1.44, 0.0);
 
   const upperPivot = new THREE.Group();
@@ -5502,6 +5646,8 @@ function createTurnaroundDiscipleArm(isLeft, pal) {
   elbowPivot.position.set(0, -0.255, 0);
   elbowPivot.rotation.z = -side * 0.08;
 
+  const elbowCap    = createHeroClayMesh(new THREE.DodecahedronGeometry(0.088, 0), pal.robeShade, 0, 0, 0, { ...rOpt, castShadow: false });
+  elbowCap.scale.set(0.95, 0.90, 0.95);
   const lowerGeo = new THREE.CylinderGeometry(0.145, 0.205, 0.26, 7, 1, false);
   lowerGeo.translate(0, -0.12, 0);
   const lowerSleeve = createHeroClayMesh(lowerGeo.toNonIndexed(), pal.robe, 0, 0.015, 0, rOpt);
@@ -5525,15 +5671,17 @@ function createTurnaroundDiscipleArm(isLeft, pal) {
   gripPoint.name = 'gripPoint';
   gripPoint.position.set(0, -0.330, 0.014);
 
-  elbowPivot.add(lowerSleeve, innerCuff, wrist, palm, fingers, thumb, handPivot, gripPoint);
+  const wristPivot = wrapWristPivot(-0.275, [palm, fingers, thumb, handPivot, gripPoint]);
+  elbowPivot.add(elbowCap, lowerSleeve, innerCuff, wrist, wristPivot);
   upperPivot.add(elbowPivot);
   armGrp.add(upperPivot);
-  armGrp.userData = { elbowPivot, handPivot };
+  armGrp.userData = { elbowPivot, wristPivot, handPivot };
   return armGrp;
 }
 
 function createTurnaroundDiscipleLeg(isLeft, pal) {
   const legGrp = new THREE.Group();
+  legGrp.name = isLeft ? 'lLeg' : 'rLeg';
   legGrp.position.set(isLeft ? -0.142 : 0.142, 0.72, 0);
 
   const skinOpt  = { roughness: 0.84, metalness: 0.02 };
@@ -5545,6 +5693,8 @@ function createTurnaroundDiscipleLeg(isLeft, pal) {
   kneePivot.name = 'kneePivot';
   kneePivot.position.set(0, -0.32, 0);
 
+  const kneeCap   = createHeroClayMesh(new THREE.DodecahedronGeometry(0.064, 0), pal.skin, 0, 0, 0.004, { ...skinOpt, castShadow: false });
+  kneeCap.scale.set(0.96, 0.90, 0.96);
   const shin      = createHeroClayMesh(new THREE.CylinderGeometry(0.068, 0.060, 0.31, 8), pal.skin, 0, -0.135, 0, skinOpt);
   const foot      = createHeroClayMesh(getZacchaeusFootGeo(), pal.skin, 0, -0.312, 0.048, skinOpt);
   const sole      = createHeroClayMesh(getZacchaeusSandalSoleGeo(), pal.sandalSole, 0, -0.378, 0.048, soleOpt);
@@ -5554,7 +5704,8 @@ function createTurnaroundDiscipleLeg(isLeft, pal) {
   midStrap.rotation.x = 0.14;
   const heelStrap = createHeroClayMesh(new THREE.CylinderGeometry(0.070, 0.074, 0.064, 8, 1, false, Math.PI * 0.55, Math.PI * 0.90), pal.sandal, 0, -0.326, -0.040, { ...strapOpt, castShadow: false });
 
-  kneePivot.add(shin, foot, sole, foreStrap, midStrap, heelStrap);
+  const anklePivot = wrapAnklePivot([foot, sole, foreStrap, midStrap, heelStrap]);
+  kneePivot.add(kneeCap, shin, anklePivot);
   legGrp.add(thigh, kneePivot);
   return legGrp;
 }
@@ -5572,19 +5723,24 @@ window.updateDiscipleSmoothPose = function (mesh, dt, now, mode = 'idle', opts =
 
   if (!u._smoothPose) {
     u._smoothPose = {
-      lLegX: 0, rLegX: 0, lKneeX: 0, rKneeX: 0,
+      lLegX: 0, rLegX: 0, lKneeX: 0, rKneeX: 0, lAnkleX: 0, rAnkleX: 0,
       lArmX: 0, rArmX: 0, lArmZ: 0, rArmZ: 0,
-      lElbowX: 0, rElbowX: 0, headX: 0, headY: 0,
-      bodyY: 0, bodyPitch: 0
+      lElbowX: 0, rElbowX: 0, lWristX: 0, rWristX: 0,
+      torsoPitch: 0, torsoYaw: 0, torsoRoll: 0,
+      headX: 0, headY: 0,
+      bodyY: 0, bodyPitch: 0,
+      capeX: 0, scarfX: 0, packY: 0
     };
   }
   const p = u._smoothPose;
 
-  let tlLegX = 0, trLegX = 0, tlKneeX = 0, trKneeX = 0;
+  let tlLegX = 0, trLegX = 0, tlKneeX = 0, trKneeX = 0, tlAnkleX = 0, trAnkleX = 0;
   let tlArmX = 0, trArmX = 0, tlArmZ = 0, trArmZ = 0;
-  let tlElbowX = -0.10, trElbowX = -0.10;
+  let tlElbowX = -0.10, trElbowX = -0.10, tlWristX = 0, trWristX = 0;
+  let tTorsoPitch = 0, tTorsoYaw = 0, tTorsoRoll = 0;
   let tHeadX = 0, tHeadY = 0;
   let tBodyY = 0, tBodyPitch = 0;
+  let tCapeX = 0.05, tScarfX = 0.04, tPackY = 0;
   let dampRate = 9.0;
 
   if (mode === 'walk') {
@@ -5592,21 +5748,54 @@ window.updateDiscipleSmoothPose = function (mesh, dt, now, mode = 'idle', opts =
     const cyc = (opts.cycle !== undefined) ? opts.cycle : (tSec * 6.4 * spd + phaseOff);
     const s = Math.sin(cyc);
     const c = Math.cos(cyc);
-    tlLegX =  s * 0.56;
-    trLegX = -s * 0.56;
-    tlKneeX = Math.max(0, -c) * 0.58;
-    trKneeX = Math.max(0,  c) * 0.58;
-    tlArmX = -s * 0.46;
-    trArmX =  s * 0.46;
+    const runT = THREE.MathUtils.clamp((spd - 0.85) / 0.85, 0, 1);
+    const legA = THREE.MathUtils.lerp(0.56, 0.72, runT);
+    const armA = THREE.MathUtils.lerp(0.46, 0.68, runT);
+    const maxYaw = u.hasLongSash ? 0.07 : 0.13;
+
+    tlLegX =  s * legA;
+    trLegX = -s * legA;
+    tlKneeX = Math.max(0, -c) * THREE.MathUtils.lerp(0.58, 0.84, runT);
+    trKneeX = Math.max(0,  c) * THREE.MathUtils.lerp(0.58, 0.84, runT);
+    tlAnkleX = (s > 0 ? -0.18 * s : -0.26 * s);
+    trAnkleX = (-s > 0 ? 0.18 * s : 0.26 * s);
+    tlArmX = -s * armA;
+    trArmX =  s * armA;
     tlArmZ =  0.06;
     trArmZ = -0.06;
-    tlElbowX = -0.18 - Math.max(0, -s) * 0.42;
-    trElbowX = -0.18 - Math.max(0,  s) * 0.42;
-    tHeadY = Math.sin(cyc * 0.5) * 0.05;
+    tlElbowX = -0.18 - Math.max(0, -s) * THREE.MathUtils.lerp(0.42, 0.62, runT);
+    trElbowX = -0.18 - Math.max(0,  s) * THREE.MathUtils.lerp(0.42, 0.62, runT);
+    tlWristX = -s * 0.14;
+    trWristX =  s * 0.14;
+    tTorsoPitch = THREE.MathUtils.lerp(0.04, 0.12, runT);
+    tTorsoYaw = s * maxYaw;
+    tHeadY = -tTorsoYaw * 0.65 + Math.sin(cyc * 0.5) * 0.04;
     tHeadX = -0.02 + Math.abs(s) * 0.03;
-    tBodyY = Math.abs(s) * 0.065;
-    tBodyPitch = 0.04;
+    tBodyY = Math.abs(s) * THREE.MathUtils.lerp(0.055, 0.085, runT);
+    tBodyPitch = 0.02;
+    tCapeX = 0.14 + 0.18 * runT + Math.sin(cyc * 2.0) * 0.06;
+    tScarfX = 0.06 + 0.06 * runT + Math.sin(cyc * 2.0) * 0.03;
+    tPackY = -Math.abs(Math.cos(cyc)) * 0.024;
     dampRate = 12.0;
+  } else if (mode === 'chop') {
+    const ch = Math.sin(tSec * 15.0 + phaseOff);
+    const snap = Math.max(0, ch);
+    tlArmX = -1.38 + ch * 0.78;
+    tlArmZ =  0.14;
+    tlElbowX = -0.42 - (1 - snap) * 0.45;
+    tlWristX = ch * 0.45;
+    trArmX = 0.24 - ch * 0.18;
+    trArmZ = -0.18;
+    trElbowX = -0.34;
+    tTorsoPitch = 0.12 + snap * 0.14;
+    tTorsoYaw = ch * 0.20;
+    tlKneeX = 0.20;
+    trKneeX = 0.22;
+    tlLegX = -0.14;
+    trLegX =  0.10;
+    tHeadX = 0.08;
+    tCapeX = 0.16 + Math.max(0, ch) * 0.10;
+    dampRate = 18.0;
   } else if (mode === 'row') {
     const rPhase = (opts.rowPhase !== undefined) ? opts.rowPhase : (tSec * 4.2 + phaseOff);
     const rInt = Math.min(1.25, (opts.intensity !== undefined) ? opts.intensity : 1.0);
@@ -5646,10 +5835,43 @@ window.updateDiscipleSmoothPose = function (mesh, dt, now, mode = 'idle', opts =
     trArmZ = -0.22 - g2 * 0.10;
     tlElbowX = -0.52 - Math.abs(g1) * 0.28;
     trElbowX = -0.62 - Math.abs(g2) * 0.30;
+    tlWristX = g1 * 0.18;
+    trWristX = g2 * 0.18;
+    tTorsoYaw = Math.sin(tSec * 1.4 + phaseOff) * 0.06;
     tHeadX = Math.sin(tSec * 2.2 + phaseOff) * 0.07;
     tHeadY = (opts.headYaw !== undefined) ? opts.headYaw : (Math.sin(tSec * 1.3 + phaseOff) * 0.14);
     tBodyY = Math.sin(tSec * 2.1 + phaseOff) * 0.016;
     dampRate = 8.5;
+  } else if (mode === 'wave') {
+    const wv = Math.sin(tSec * 10.5 + phaseOff);
+    tlArmX = -2.35;
+    tlArmZ = -0.24 + wv * 0.18;
+    tlElbowX = -0.48 + wv * 0.22;
+    tlWristX = wv * 0.34;
+    trArmX = -0.06; trArmZ = -0.06; trElbowX = -0.16;
+    tTorsoRoll = -0.05;
+    tHeadY = 0.10;
+    dampRate = 13.0;
+  } else if (mode === 'pump') {
+    const pm = Math.sin(tSec * 8.5 + phaseOff);
+    tlArmX = -1.65 + pm * 0.28;
+    trArmX = -1.65 - pm * 0.28;
+    tlArmZ = 0.20; trArmZ = -0.20;
+    tlElbowX = -1.10; trElbowX = -1.10;
+    tlKneeX = 0.14 + Math.max(0, pm) * 0.12;
+    trKneeX = 0.14 + Math.max(0, pm) * 0.12;
+    tTorsoPitch = -0.06;
+    dampRate = 14.0;
+  } else if (mode === 'beckon') {
+    const bk = Math.sin(tSec * 7.2 + phaseOff);
+    tlArmX = -1.55 + bk * 0.25;
+    tlArmZ = 0.18;
+    tlElbowX = -0.75 + bk * 0.35;
+    tlWristX = -0.28 + bk * 0.30;
+    trArmX = -0.10; trElbowX = -0.14;
+    tTorsoPitch = 0.06;
+    tHeadX = -0.06;
+    dampRate = 12.0;
   } else if (mode === 'shout') {
     const wave = Math.sin(tSec * 10.5 + phaseOff);
     tlArmX = -1.25;
@@ -5658,11 +5880,12 @@ window.updateDiscipleSmoothPose = function (mesh, dt, now, mode = 'idle', opts =
     trArmX = -2.45 + wave * 0.22;
     trArmZ = -0.35 + wave * 0.28; // 다른 손은 높이 흔들어 동료 배 호출
     trElbowX = -0.28 - Math.abs(wave) * 0.25;
+    trWristX = wave * 0.26;
     tHeadY = (opts.headYaw !== undefined) ? opts.headYaw : 0.22;
     tHeadX = -0.10 + Math.sin(tSec * 5.0) * 0.06;
     tBodyPitch = 0.06;
     dampRate = 12.0;
-  } else if (mode === 'celebrate') {
+  } else if (mode === 'celebrate' || mode === 'cheer') {
     const hop = Math.abs(Math.sin(tSec * 5.6 + phaseOff));
     const wave = Math.sin(tSec * 7.8 + phaseOff);
     tlArmX = -2.35 + wave * 0.25;
@@ -5670,9 +5893,12 @@ window.updateDiscipleSmoothPose = function (mesh, dt, now, mode = 'idle', opts =
     tlArmZ =  0.34; trArmZ = -0.34;
     tlElbowX = -0.26 - hop * 0.22;
     trElbowX = -0.26 - hop * 0.22;
+    tlWristX = wave * 0.22;
+    trWristX = -wave * 0.22;
     tlKneeX = hop * 0.18; trKneeX = hop * 0.18;
     tBodyY = hop * 0.14;
     tHeadX = -0.08;
+    tCapeX = 0.12 + hop * 0.18;
     dampRate = 12.0;
   } else if (mode === 'calm_storm') {
     const aura = Math.sin(tSec * 4.2 + phaseOff);
@@ -5694,6 +5920,8 @@ window.updateDiscipleSmoothPose = function (mesh, dt, now, mode = 'idle', opts =
     trArmZ = -0.26 - wave2 * 0.05;
     tlElbowX = -0.26 - Math.max(0, -gentle) * 0.18;
     trElbowX = -0.44 - Math.max(0, wave2) * 0.16;
+    tlWristX = -0.10 + gentle * 0.08;
+    trWristX = -0.10 + wave2 * 0.08;
     tHeadX = 0.03 + gentle * 0.04;
     tHeadY = (opts.headYaw !== undefined) ? opts.headYaw : (Math.sin(tSec * 1.1) * 0.12);
     tBodyY = gentle * 0.015;
@@ -5706,34 +5934,57 @@ window.updateDiscipleSmoothPose = function (mesh, dt, now, mode = 'idle', opts =
     tlArmZ =  0.04; trArmZ = -0.04;
     tlElbowX = -0.12 - Math.max(0, br) * 0.05;
     trElbowX = -0.12 - Math.max(0, -br) * 0.05;
+    tlKneeX = 0.02; trKneeX = 0.02;
     tHeadY = (opts.headYaw !== undefined) ? opts.headYaw : (Math.sin(tSec * 0.8 + phaseOff) * 0.10);
     tBodyY = br * 0.012;
+    tCapeX = 0.05 + Math.sin(tSec * 1.9 + phaseOff) * 0.03;
+    tScarfX = 0.03 + Math.sin(tSec * 2.3 + phaseOff) * 0.02;
     dampRate = 7.5;
   }
 
-  p.lLegX     = THREE.MathUtils.damp(p.lLegX,     tlLegX,     dampRate, safeDt);
-  p.rLegX     = THREE.MathUtils.damp(p.rLegX,     trLegX,     dampRate, safeDt);
-  p.lKneeX    = THREE.MathUtils.damp(p.lKneeX,    tlKneeX,    dampRate, safeDt);
-  p.rKneeX    = THREE.MathUtils.damp(p.rKneeX,    trKneeX,    dampRate, safeDt);
-  p.lArmX     = THREE.MathUtils.damp(p.lArmX,     tlArmX,     dampRate, safeDt);
-  p.rArmX     = THREE.MathUtils.damp(p.rArmX,     trArmX,     dampRate, safeDt);
-  p.lArmZ     = THREE.MathUtils.damp(p.lArmZ,     tlArmZ,     dampRate, safeDt);
-  p.rArmZ     = THREE.MathUtils.damp(p.rArmZ,     trArmZ,     dampRate, safeDt);
-  p.lElbowX   = THREE.MathUtils.damp(p.lElbowX,   tlElbowX,   dampRate, safeDt);
-  p.rElbowX   = THREE.MathUtils.damp(p.rElbowX,   trElbowX,   dampRate, safeDt);
-  p.headX     = THREE.MathUtils.damp(p.headX,     tHeadX,     dampRate, safeDt);
-  p.headY     = THREE.MathUtils.damp(p.headY,     tHeadY,     dampRate, safeDt);
-  p.bodyY     = THREE.MathUtils.damp(p.bodyY,     tBodyY,     dampRate, safeDt);
-  p.bodyPitch = THREE.MathUtils.damp(p.bodyPitch, tBodyPitch, dampRate, safeDt);
+  p.lLegX      = THREE.MathUtils.damp(p.lLegX,      tlLegX,      dampRate, safeDt);
+  p.rLegX      = THREE.MathUtils.damp(p.rLegX,      trLegX,      dampRate, safeDt);
+  p.lKneeX     = THREE.MathUtils.damp(p.lKneeX,     tlKneeX,     dampRate, safeDt);
+  p.rKneeX     = THREE.MathUtils.damp(p.rKneeX,     trKneeX,     dampRate, safeDt);
+  p.lAnkleX    = THREE.MathUtils.damp(p.lAnkleX,    tlAnkleX,    dampRate, safeDt);
+  p.rAnkleX    = THREE.MathUtils.damp(p.rAnkleX,    trAnkleX,    dampRate, safeDt);
+  p.lArmX      = THREE.MathUtils.damp(p.lArmX,      tlArmX,      dampRate, safeDt);
+  p.rArmX      = THREE.MathUtils.damp(p.rArmX,      trArmX,      dampRate, safeDt);
+  p.lArmZ      = THREE.MathUtils.damp(p.lArmZ,      tlArmZ,      dampRate, safeDt);
+  p.rArmZ      = THREE.MathUtils.damp(p.rArmZ,      trArmZ,      dampRate, safeDt);
+  p.lElbowX    = THREE.MathUtils.damp(p.lElbowX,    tlElbowX,    dampRate, safeDt);
+  p.rElbowX    = THREE.MathUtils.damp(p.rElbowX,    trElbowX,    dampRate, safeDt);
+  p.lWristX    = THREE.MathUtils.damp(p.lWristX,    tlWristX,    dampRate, safeDt);
+  p.rWristX    = THREE.MathUtils.damp(p.rWristX,    trWristX,    dampRate, safeDt);
+  p.torsoPitch = THREE.MathUtils.damp(p.torsoPitch, tTorsoPitch, dampRate, safeDt);
+  p.torsoYaw   = THREE.MathUtils.damp(p.torsoYaw,   tTorsoYaw,   dampRate, safeDt);
+  p.torsoRoll  = THREE.MathUtils.damp(p.torsoRoll,  tTorsoRoll,  dampRate, safeDt);
+  p.headX      = THREE.MathUtils.damp(p.headX,      tHeadX,      dampRate, safeDt);
+  p.headY      = THREE.MathUtils.damp(p.headY,      tHeadY,      dampRate, safeDt);
+  p.bodyY      = THREE.MathUtils.damp(p.bodyY,      tBodyY,      dampRate, safeDt);
+  p.bodyPitch  = THREE.MathUtils.damp(p.bodyPitch,  tBodyPitch,  dampRate, safeDt);
+  p.capeX      = THREE.MathUtils.damp(p.capeX,      tCapeX,      8.5, safeDt);
+  p.scarfX     = THREE.MathUtils.damp(p.scarfX,     tScarfX,     8.5, safeDt);
+  p.packY      = THREE.MathUtils.damp(p.packY,      tPackY,      12.0, safeDt);
 
   if (u.lLeg) u.lLeg.rotation.x = p.lLegX;
   if (u.rLeg) u.rLeg.rotation.x = p.rLegX;
   if (u.lKnee) u.lKnee.rotation.x = p.lKneeX;
   if (u.rKnee) u.rKnee.rotation.x = p.rKneeX;
+  if (u.lAnkle) u.lAnkle.rotation.x = p.lAnkleX;
+  if (u.rAnkle) u.rAnkle.rotation.x = p.rAnkleX;
   if (u.lArm) { u.lArm.rotation.x = p.lArmX; u.lArm.rotation.z = p.lArmZ; }
   if (u.rArm) { u.rArm.rotation.x = p.rArmX; u.rArm.rotation.z = p.rArmZ; }
   if (u.lElbow) u.lElbow.rotation.x = p.lElbowX;
   if (u.rElbow) u.rElbow.rotation.x = p.rElbowX;
+  if (u.lWrist) u.lWrist.rotation.x = p.lWristX;
+  if (u.rWrist) u.rWrist.rotation.x = p.rWristX;
+  if (u.torsoPivot) {
+    u.torsoPivot.rotation.set(p.torsoPitch, p.torsoYaw, p.torsoRoll);
+  }
+  if (u.capePivot) u.capePivot.rotation.x = p.capeX;
+  if (u.scarfPivot) u.scarfPivot.rotation.x = p.scarfX;
+  if (u.packPivot) u.packPivot.position.y = 1.32 + p.packY;
   if (u.head) { u.head.rotation.x = p.headX; u.head.rotation.y = p.headY; }
   if (u.bodyRoot && !opts.skipBodyOffset) {
     u.bodyRoot.position.y = p.bodyY;
@@ -5916,6 +6167,7 @@ window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
     const rArm = createTurnaroundDiscipleArm(false, jp);
 
     const head = new THREE.Group();
+    head.name = 'headPivot';
     head.position.set(0, 1.88, 0);
     const faceMesh = createHeroClayMesh(getHeroBoyHeadGeo(), jp.skin, 0, 0, 0, { roughness: 0.84, metalness: 0.02 });
     faceMesh.name = 'headBase';
@@ -5951,35 +6203,17 @@ window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
       createTurnaroundDiscipleBeardGroup(jp.beard)
     );
 
-    gHigh.add(lLeg, rLeg, skirtMesh, bodiceMesh, collarYoke, neck, sashBeltGrp, lArm, rArm, head);
-    customUserData = {
-      lLeg, rLeg,
-      lKnee: lLeg.getObjectByName('kneePivot') || null,
-      rKnee: rLeg.getObjectByName('kneePivot') || null,
-      lArm, rArm,
-      lElbow: lArm.getObjectByName('elbowPivot') || null,
-      rElbow: rArm.getObjectByName('elbowPivot') || null,
-      head,
-      bodyRoot: gHigh,
+    gHigh.add(lLeg, rLeg, skirtMesh);
+    wrapUpperBodyWithTorsoPivot(gHigh, [bodiceMesh, collarYoke, neck, sashBeltGrp, lArm, rArm, head]);
+    customUserData = collectCharacterJointRig(gHigh, {
       disciplePreset: 'jesus',
+      hasLongSash: true,
       walkPhase: idx * 0.9
-    };
+    });
   } else if (isClubKid) {
-    // [온라인 멀티플레이 전용] 소프트 로우폴리 반팔 티셔츠 어린이 대원 (인덱스 0..9 정확히 유지!)
-    const buildKidLeg = (isLeft) => {
-      const legGrp = new THREE.Group();
-      legGrp.position.set(isLeft ? -0.14 : 0.14, 0.68, 0);
-      const shortLeg = createLowPolyMesh(new THREE.CylinderGeometry(0.112, 0.105, 0.22, 6), cfg.shorts, 0, -0.06, 0);
-      const calf = createLowPolyMesh(new THREE.CylinderGeometry(0.080, 0.072, 0.30, 6), cfg.skin, 0, -0.30, 0);
-      const sock = createLowPolyMesh(new THREE.CylinderGeometry(0.078, 0.076, 0.11, 6), cfg.sock, 0, -0.48, 0, false);
-      const shoeBody = createLowPolyMesh(new THREE.BoxGeometry(0.19, 0.13, 0.34), cfg.shoe, 0, -0.58, 0.05);
-      const shoeSole = createLowPolyMesh(new THREE.BoxGeometry(0.20, 0.05, 0.36), cfg.shoeTrim, 0, -0.64, 0.05, false);
-      const shoeToe  = createLowPolyMesh(new THREE.BoxGeometry(0.16, 0.08, 0.10), cfg.shoeTrim, 0, -0.58, 0.20, false);
-      legGrp.add(shortLeg, calf, sock, shoeBody, shoeSole, shoeToe);
-      return legGrp;
-    };
-    const lLeg = buildKidLeg(true);
-    const rLeg = buildKidLeg(false);
+    // [온라인 멀티플레이 전용] 소프트 로우폴리 반팔 티셔츠 어린이 대원 (5단 비정형 운동화 + 전신 다관절)
+    const lLeg = createClubKidLeg(true, cfg);
+    const rLeg = createClubKidLeg(false, cfg);
 
     // [2] 반바지 골반부
     const shortsHip = createLowPolyMesh(new THREE.CylinderGeometry(0.24, 0.25, 0.28, 8), cfg.shorts, 0, 0.78, 0);
@@ -5999,7 +6233,7 @@ window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
     // [4] 목
     const neck = createLowPolyMesh(new THREE.CylinderGeometry(0.088, 0.108, 0.22, 8), cfg.skin, 0, 1.63, 0, false);
 
-    // [5] 패스파인더 / 어드벤처러 스카프(항건) & 등 뒤 탐험 배낭
+    // [5] 패스파인더 / 어드벤처러 스카프(항건) & 등 뒤 탐험 배낭 (보조 모션 피벗 포함)
     const clubGearGroup = new THREE.Group();
     const scarfCollar = createLowPolyMesh(new THREE.CylinderGeometry(0.165, 0.22, 0.08, 8), cfg.scarf, 0, 1.50, 0.01, false);
     scarfCollar.scale.set(1.05, 1.0, 0.80);
@@ -6011,16 +6245,18 @@ window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
     scarfBackTrim.rotation.x = Math.PI + 0.14;
     scarfBackTrim.rotation.y = Math.PI / 4;
     scarfBackTrim.scale.set(1.05, 1.0, 0.16);
+    const scarfPivot = wrapPivotWithContent('scarfPivot', 0, 1.46, -0.14, [scarfBackTrim, scarfBackTri]);
     const scarfSlide = createLowPolyMesh(new THREE.CylinderGeometry(0.048, 0.048, 0.07, 6), cfg.scarfTrim, 0, 1.43, 0.175, false);
     const scarfTipL = createLowPolyMesh(new THREE.BoxGeometry(0.065, 0.16, 0.032), cfg.scarf, -0.045, 1.32, 0.182, false);
     scarfTipL.rotation.z = -0.18;
     const scarfTipR = createLowPolyMesh(new THREE.BoxGeometry(0.065, 0.16, 0.032), cfg.scarf,  0.045, 1.32, 0.182, false);
     scarfTipR.rotation.z = 0.18;
-    // 등 뒤 앙증맞은 탐험 배낭
+    // 등 뒤 앙증맞은 탐험 배낭 (걷기·점프 바운스 피벗)
     const packBody = createLowPolyMesh(new THREE.BoxGeometry(0.36, 0.42, 0.18), cfg.pack, 0, 1.20, -0.25);
     const packFlap = createLowPolyMesh(new THREE.BoxGeometry(0.38, 0.13, 0.20), cfg.packFlap, 0, 1.38, -0.26, false);
     const packPocket = createLowPolyMesh(new THREE.BoxGeometry(0.24, 0.16, 0.08), cfg.scarf, 0, 1.09, -0.35, false);
-    clubGearGroup.add(scarfCollar, scarfBackTrim, scarfBackTri, scarfSlide, scarfTipL, scarfTipR, packBody, packFlap, packPocket);
+    const packPivot = wrapPivotWithContent('packPivot', 0, 1.32, -0.22, [packBody, packFlap, packPocket]);
+    clubGearGroup.add(scarfCollar, scarfPivot, scarfSlide, scarfTipL, scarfTipR, packPivot);
 
     // [6] 깔끔한 티셔츠 밑단 & 반바지 허리밴드
     const waistBand = createLowPolyMesh(new THREE.CylinderGeometry(0.252, 0.256, 0.065, 8), cfg.shirtTrim, 0, 0.89, 0, false);
@@ -6032,6 +6268,7 @@ window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
 
     // [9] 밝고 씩씩한 어린이 머리
     const head = new THREE.Group();
+    head.name = 'headPivot';
     head.position.set(0, 1.92, 0);
     const faceMesh = createLowPolyMesh(getSoftLowPolyHeadGeo(false, false), cfg.skin, 0, 0, 0);
     faceMesh.name = 'headBase';
@@ -6041,9 +6278,13 @@ window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
     earL.name = 'ear'; earR.name = 'ear';
     head.add(faceMesh, facialFeatures, earL, earR, createSoftMaleHairGroup(cfg.hair, preset === 'adventurer' ? 1 : 0));
 
-    gHigh.add(lLeg, rLeg, shortsHip, shirtGroup, neck, clubGearGroup, waistBand, lArm, rArm, head);
+    gHigh.add(lLeg, rLeg, shortsHip);
+    wrapUpperBodyWithTorsoPivot(gHigh, [shirtGroup, neck, clubGearGroup, waistBand, lArm, rArm, head]);
+    customUserData = collectCharacterJointRig(gHigh, {
+      walkPhase: idx * 0.9
+    });
   } else if (preset === 'hero') {
-    // [오픈월드 기본 캐릭터] 소프트 로우폴리 소년 모험가 (자식 인덱스 0..9 엄격 유지: lLeg=0, rLeg=1, lArm=7, rArm=8, head=9)
+    // [오픈월드 기본 캐릭터] 소프트 로우폴리 소년 모험가 (전신 다관절 리그)
     const lLeg = createHeroBoyLeg(true);
     const rLeg = createHeroBoyLeg(false);
 
@@ -6078,6 +6319,7 @@ window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
 
     // [9] 약 4~4.5등신 소년 역오각형 두상 + 이목구비 + 입체 귀 + 비대칭 가르마 헤어스타일
     const head = new THREE.Group();
+    head.name = 'headPivot';
     head.position.set(0, 1.88, 0);
     const faceMesh = createHeroClayMesh(getHeroBoyHeadGeo(), HERO_CLAY_PALETTE.skin, 0, 0, 0, { roughness: 0.84, metalness: 0.02 });
     faceMesh.name = 'headBase';
@@ -6112,21 +6354,13 @@ window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
 
     head.add(faceMesh, facialFeatures, earL, earR, createHeroBoyHairGroup());
 
-    gHigh.add(lLeg, rLeg, tunicSkirtGrp, tunicBodiceGrp, neck, capeGroup, gearGroup, lArm, rArm, head);
-    customUserData = {
-      lLeg, rLeg,
-      lKnee: lLeg.getObjectByName('kneePivot') || null,
-      rKnee: rLeg.getObjectByName('kneePivot') || null,
-      lArm, rArm,
-      lElbow: lArm.getObjectByName('elbowPivot') || null,
-      rElbow: rArm.getObjectByName('elbowPivot') || null,
-      head,
-      bodyRoot: gHigh,
+    gHigh.add(lLeg, rLeg, tunicSkirtGrp);
+    wrapUpperBodyWithTorsoPivot(gHigh, [tunicBodiceGrp, neck, capeGroup, gearGroup, lArm, rArm, head]);
+    customUserData = collectCharacterJointRig(gHigh, {
       walkPhase: idx * 0.9
-    };
+    });
   } else if (preset === 'peter' || preset === 'james' || preset === 'john') {
-    // [턴어라운드 레퍼런스 기반] 베드로 · 야고보 · 요한 고디테일 소프트 로우폴리 + 다관절 리그
-    // (자식 인덱스 0..9 엄격 유지: lLeg=0, rLeg=1, lArm=7, rArm=8, head=9)
+    // [턴어라운드 레퍼런스 기반] 베드로 · 야고보 · 요한 고디테일 소프트 로우폴리 + 전신 다관절 리그
     const tp = TURNAROUND_DISCIPLE_PALETTES[preset];
     const rOpt = { roughness: 0.88, metalness: 0.02 };
     const lLeg = createTurnaroundDiscipleLeg(true, tp);
@@ -6143,6 +6377,7 @@ window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
     const rArm = createTurnaroundDiscipleArm(false, tp);
 
     const head = new THREE.Group();
+    head.name = 'headPivot';
     head.position.set(0, 1.88, 0);
     const faceMesh = createHeroClayMesh(getHeroBoyHeadGeo(), tp.skin, 0, 0, 0, { roughness: 0.84, metalness: 0.02 });
     faceMesh.name = 'headBase';
@@ -6177,19 +6412,13 @@ window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
       head.add(createTurnaroundDiscipleBeardGroup(tp.beard));
     }
 
-    gHigh.add(lLeg, rLeg, skirtMesh, bodiceMesh, neck, collarYoke, sashBeltGrp, lArm, rArm, head);
-    customUserData = {
-      lLeg, rLeg,
-      lKnee: lLeg.getObjectByName('kneePivot') || null,
-      rKnee: rLeg.getObjectByName('kneePivot') || null,
-      lArm, rArm,
-      lElbow: lArm.getObjectByName('elbowPivot') || null,
-      rElbow: rArm.getObjectByName('elbowPivot') || null,
-      head,
-      bodyRoot: gHigh,
+    gHigh.add(lLeg, rLeg, skirtMesh);
+    wrapUpperBodyWithTorsoPivot(gHigh, [bodiceMesh, neck, collarYoke, sashBeltGrp, lArm, rArm, head]);
+    customUserData = collectCharacterJointRig(gHigh, {
       disciplePreset: preset,
+      hasLongSash: true,
       walkPhase: idx * 0.9
-    };
+    });
   } else if (preset === 'zacchaeus') {
     const zp = ZACCHAEUS_CLAY_PALETTE;
     const lLeg = createZacchaeusLeg(true);
@@ -6225,6 +6454,7 @@ window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
 
     // 짧은 키(0.66)에서도 이목구비·수염·미소가 돋보이도록 친근한 턴어라운드 비율(머리 ~1.08배)
     const head = new THREE.Group();
+    head.name = 'headPivot';
     head.position.set(0, 1.85, 0);
     head.scale.set(1.08, 1.04, 1.06);
 
@@ -6256,36 +6486,51 @@ window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
     earL.name = 'ear'; earR.name = 'ear';
 
     head.add(faceMesh, facialFeatures, earL, earR, createZacchaeusHairGroup(), createZacchaeusBeardGroup());
-    gHigh.add(lLeg, rLeg, tunicSkirtGrp, tunicBodiceGrp, neck, gearGroup, lArm, rArm, head);
+    gHigh.add(lLeg, rLeg, tunicSkirtGrp);
+    wrapUpperBodyWithTorsoPivot(gHigh, [tunicBodiceGrp, neck, gearGroup, lArm, rArm, head]);
 
-    customUserData = {
-      lLeg, rLeg,
-      lKnee: lLeg.getObjectByName('kneePivot') || null,
-      rKnee: rLeg.getObjectByName('kneePivot') || null,
-      lArm, rArm,
-      lElbow: lArm.getObjectByName('elbowPivot') || null,
-      rElbow: rArm.getObjectByName('elbowPivot') || null,
-      head,
+    customUserData = collectCharacterJointRig(gHigh, {
       walkPhase: idx * 0.9
-    };
+    });
   } else {
     const buildLeg = (isLeft) => {
       const legGrp = new THREE.Group();
-      legGrp.position.set(isLeft ? -0.15 : 0.15, 0.52, 0);
-      const ankle = createLowPolyMesh(new THREE.CylinderGeometry(0.085, 0.075, 0.34, 6), cfg.skin, 0, -0.18, 0);
-      legGrp.add(ankle);
+      legGrp.name = isLeft ? 'lLeg' : 'rLeg';
+      legGrp.position.set(isLeft ? -0.142 : 0.142, 0.72, 0);
 
+      const thigh = createLowPolyMesh(new THREE.CylinderGeometry(0.076, 0.066, 0.34, 8), cfg.skin, 0, -0.17, 0);
+      const kneePivot = new THREE.Group();
+      kneePivot.name = 'kneePivot';
+      kneePivot.position.set(0, -0.32, 0);
+
+      const kneeCap = createLowPolyMesh(new THREE.DodecahedronGeometry(0.062, 0), cfg.skin, 0, 0, 0.004, false);
+      kneeCap.scale.set(0.96, 0.90, 0.96);
+      const shin = createLowPolyMesh(new THREE.CylinderGeometry(0.066, 0.058, 0.31, 8), cfg.skin, 0, -0.135, 0);
+
+      let ankleParts = [];
       if (isFemale) {
-        const shoe = createLowPolyMesh(new THREE.BoxGeometry(0.20, 0.12, 0.34), cfg.shoe, 0, -0.40, 0.04);
-        const shoeFront = createLowPolyMesh(new THREE.BoxGeometry(0.18, 0.10, 0.15), cfg.shoe, 0, -0.41, 0.17);
-        legGrp.add(shoe, shoeFront);
+        const slipper = createLowPolyMesh(getSoftSlipperUpperGeo(), cfg.shoe, 0, -0.312, 0.048);
+        const shoeSole = createLowPolyMesh(getHeroSandalSoleGeo(), cfg.shoe, 0, -0.378, 0.048);
+        const collar = createLowPolyMesh(new THREE.TorusGeometry(0.062, 0.013, 5, 10), cfg.shoe, 0, -0.280, 0.006, false);
+        collar.rotation.x = Math.PI * 0.5;
+        ankleParts = [slipper, shoeSole, collar];
       } else {
-        const sole = createLowPolyMesh(new THREE.BoxGeometry(0.21, 0.065, 0.36), cfg.sandal, 0, -0.43, 0.05);
-        const foot = createLowPolyMesh(new THREE.BoxGeometry(0.17, 0.085, 0.26), cfg.skin, 0, -0.37, 0.05);
-        const strapFront = createLowPolyMesh(new THREE.BoxGeometry(0.22, 0.075, 0.11), cfg.sandal, 0, -0.37, 0.11, false);
-        const strapHeel  = createLowPolyMesh(new THREE.BoxGeometry(0.21, 0.095, 0.075), cfg.sandal, 0, -0.36, -0.08, false);
-        legGrp.add(sole, foot, strapFront, strapHeel);
+        const foot = createLowPolyMesh(getHeroFootGeo(), cfg.skin, 0, -0.312, 0.048);
+        const sole = createLowPolyMesh(getHeroSandalSoleGeo(), cfg.sandal, 0, -0.378, 0.048);
+        const foreStrap = createLowPolyMesh(getZacchaeusArchStrapGeo(0.082, 0.026, -0.022, 0.044, 0.015), cfg.sandal, 0, -0.330, 0.164, false);
+        foreStrap.rotation.x = 0.24;
+        const midStrap = createLowPolyMesh(getZacchaeusArchStrapGeo(0.076, 0.044, -0.024, 0.046, 0.015), cfg.sandal, 0, -0.312, 0.070, false);
+        midStrap.rotation.x = 0.16;
+        const heelStrap = createLowPolyMesh(
+          new THREE.CylinderGeometry(0.070, 0.074, 0.062, 8, 1, false, Math.PI * 0.55, Math.PI * 0.90),
+          cfg.sandal, 0, -0.326, -0.040, false
+        );
+        ankleParts = [foot, sole, foreStrap, midStrap, heelStrap];
       }
+
+      const anklePivot = wrapAnklePivot(ankleParts);
+      kneePivot.add(kneeCap, shin, anklePivot);
+      legGrp.add(thigh, kneePivot);
       return legGrp;
     };
     const lLeg = buildLeg(true);
@@ -6320,6 +6565,7 @@ window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
     const rArm = createSeamlessPonchoArm(false, cfg.shawl, cfg.stripe1, cfg.stripe2, cfg.sleeve, cfg.skin);
 
     const head = new THREE.Group();
+    head.name = 'headPivot';
     head.position.set(0, 1.92, 0);
 
     const isHelmet = (!isFemale && cfg.headwear === 'helmet');
@@ -6393,8 +6639,8 @@ window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
       haloRing.position.set(0, 0.14, -0.40);
       head.add(haloRing);
     }
-    gHigh.add(lLeg, rLeg, skirtMesh, bodiceMesh, neck, mantleGroup, beltGroup, lArm, rArm, head);
 
+    const upperNodes = [bodiceMesh, neck, mantleGroup, beltGroup, lArm, rArm, head];
     if (cfg.hasWings) {
       const wingL = createLowPolyMesh(new THREE.ConeGeometry(0.36, 1.25, 4), '#fef9c3', -0.44, 1.38, -0.32, false);
       wingL.rotation.z =  0.68;
@@ -6402,8 +6648,13 @@ window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
       const wingR = createLowPolyMesh(new THREE.ConeGeometry(0.36, 1.25, 4), '#fef9c3',  0.44, 1.38, -0.32, false);
       wingR.rotation.z = -0.68;
       wingR.scale.set(0.45, 1.0, 1.0);
-      gHigh.add(wingL, wingR);
+      upperNodes.push(wingL, wingR);
     }
+    gHigh.add(lLeg, rLeg, skirtMesh);
+    wrapUpperBodyWithTorsoPivot(gHigh, upperNodes);
+    customUserData = collectCharacterJointRig(gHigh, {
+      walkPhase: idx * 0.9
+    });
   }
 
   // ----------------------------------------------------
@@ -6426,16 +6677,8 @@ window.createLowPolyPersonMesh = function (preset = 'disciple', idx = 0) {
 
   lodGroup.scale.set(sc, sc, sc);
 
-  // High Mesh 기준으로 관절 제어 포인터 맵핑 (업데이트 함수용)
-  lodGroup.userData = customUserData || {
-    lLeg: preset === 'jesus' ? gHigh.children[0] : gHigh.children[0],
-    rLeg: preset === 'jesus' ? gHigh.children[1] : gHigh.children[1],
-    lArm: preset === 'jesus' ? gHigh.children[8] : gHigh.children[7],
-    rArm: preset === 'jesus' ? gHigh.children[9] : gHigh.children[8],
-    head: preset === 'jesus' ? gHigh.children[10] : gHigh.children[9],
-    bodyRoot: gHigh,
-    walkPhase: idx * 0.9
-  };
+  // High Mesh 기준 관절 제어 포인터 맵핑 (업데이트 함수용)
+  lodGroup.userData = customUserData || collectCharacterJointRig(gHigh, { walkPhase: idx * 0.9 });
   return lodGroup;
 };
 
@@ -6572,9 +6815,9 @@ function getMergedLowPolySilhouetteGeo(preset, cfg, isFemale) {
   appendPart(new THREE.IcosahedronGeometry(0.062, 0), skinCol, -0.38, 0.94, 0.02);
   appendPart(new THREE.IcosahedronGeometry(0.062, 0), skinCol,  0.38, 0.94, 0.02);
 
-  // 5) 두 발(샌들)
-  appendPart(new THREE.BoxGeometry(0.16, 0.11, 0.26), shoeCol, -0.14, 0.07, 0.04);
-  appendPart(new THREE.BoxGeometry(0.16, 0.11, 0.26), shoeCol,  0.14, 0.07, 0.04);
+  // 5) 두 발(경사 다면체 슈즈/샌들 실루엣)
+  appendPart(new THREE.CylinderGeometry(0.072, 0.095, 0.26, 6), shoeCol, -0.14, 0.065, 0.05, 1.0, 1.0, 0.72, Math.PI * 0.48, 0, 0);
+  appendPart(new THREE.CylinderGeometry(0.072, 0.095, 0.26, 6), shoeCol,  0.14, 0.065, 0.05, 1.0, 1.0, 0.72, Math.PI * 0.48, 0, 0);
 
   // 6) 천사 날개 실루엣
   if (hasWings) {
@@ -6596,15 +6839,15 @@ window.selectedMiracleHeroPreset = window.selectedMiracleHeroPreset || { preset:
 
 function createLowPolyHarvestAxeMesh() {
   const g = new THREE.Group();
-  const handle = createLowPolyMesh(new THREE.CylinderGeometry(0.036, 0.044, 1.05, 5), '#6b4226', 0, -0.32, 0.16, false);
-  handle.rotation.x = Math.PI * 0.42;
-  const bind = createLowPolyMesh(new THREE.CylinderGeometry(0.056, 0.056, 0.14, 6), '#92400e', 0, -0.58, 0.52, false);
-  bind.rotation.x = Math.PI * 0.42;
-  // 도끼날(철/돌) + 반대편 곡괭이 팁 (나무 베기와 돌 캐기 모두 자연스럽게 표현!)
-  const axeBlade = createLowPolyMesh(new THREE.ConeGeometry(0.18, 0.34, 4), '#94a3b8', 0, -0.74, 0.56, false);
+  const handle = createLowPolyMesh(new THREE.CylinderGeometry(0.034, 0.042, 0.92, 5), '#6b4226', 0, -0.02, 0.28, false);
+  handle.rotation.x = Math.PI * 0.45;
+  const bind = createLowPolyMesh(new THREE.CylinderGeometry(0.054, 0.054, 0.14, 6), '#92400e', 0, -0.07, 0.58, false);
+  bind.rotation.x = Math.PI * 0.45;
+  // 도끼날(철/돌) + 반대편 곡괭이 팁 — 손바닥 gripPoint(0,0,0)를 기준으로 손목·팔꿈치 스윙과 1:1 연동
+  const axeBlade = createLowPolyMesh(new THREE.ConeGeometry(0.18, 0.34, 4), '#94a3b8', 0, -0.22, 0.62, false);
   axeBlade.rotation.x = Math.PI;
   axeBlade.scale.set(0.35, 1.0, 1.15);
-  const pickTip = createLowPolyMesh(new THREE.ConeGeometry(0.08, 0.28, 4), '#cbd5e1', 0, -0.44, 0.54, false);
+  const pickTip = createLowPolyMesh(new THREE.ConeGeometry(0.08, 0.26, 4), '#cbd5e1', 0, 0.07, 0.60, false);
   pickTip.scale.set(0.55, 1.0, 0.85);
   g.add(handle, bind, axeBlade, pickTip);
   return g;
@@ -6620,41 +6863,32 @@ window.createMiracleHeroMesh = function () {
   const g = window.createLowPolyPersonMesh(safePreset, safeIdx);
   const heroGrp = g.levels[0].object.clone();
   heroGrp.scale.copy(g.scale);
-  const u = {
-    lLeg: heroGrp.children[0], rLeg: heroGrp.children[1],
-    lArm: heroGrp.children[7], rArm: heroGrp.children[8], head: heroGrp.children[9]
-  };
-  // Object3D.clone()은 userData를 얕은 복사하므로 반드시 복제된 계층에서 이름으로 무릎·팔꿈치 피벗을 다시 탐색!
-  const lKnee = u.lLeg ? u.lLeg.getObjectByName('kneePivot') : null;
-  const rKnee = u.rLeg ? u.rLeg.getObjectByName('kneePivot') : null;
-  const lElbow = u.lArm ? u.lArm.getObjectByName('elbowPivot') : null;
-  const rElbow = u.rArm ? u.rArm.getObjectByName('elbowPivot') : null;
-  u.lKnee = lKnee; u.rKnee = rKnee; u.lElbow = lElbow; u.rElbow = rElbow;
-  u.baseScale = g.scale.clone();
+  // Object3D.clone()은 userData를 얕은 복사하므로 반드시 복제된 계층에서 이름으로 전신 다관절 피벗을 다시 탐색!
+  const u = collectCharacterJointRig(heroGrp, {
+    baseScale: g.scale.clone(),
+    hasLongSash: (safePreset === 'peter' || safePreset === 'james' || safePreset === 'john'),
+    episodeHero: 'miracle'
+  });
 
   const toolGrp = createLowPolyHarvestAxeMesh();
   toolGrp.visible = false;
-  u.lArm.add(toolGrp);
+  const toolAnchor = u.lGrip || u.lWrist || u.lElbow || u.lArm;
+  if (toolAnchor) toolAnchor.add(toolGrp);
   carriedBlockGroup = new THREE.Group();
   carriedBlockGroup.position.set(0, 1.22, -0.36);
-  heroGrp.add(carriedBlockGroup);
-  playerLimbs = {
-    lLeg: u.lLeg, rLeg: u.rLeg,
-    lArm: u.lArm, rArm: u.rArm,
-    lKnee, rKnee, lElbow, rElbow,
-    head: u.head,
-    axeTool: toolGrp,
-    baseScale: g.scale.clone()
-  };
-  u.episodeHero = 'miracle';
+  const torsoAttach = (u.torsoPivot && u.torsoPivot.getObjectByName('torsoPivotContent')) || heroGrp;
+  torsoAttach.add(carriedBlockGroup);
+
+  playerLimbs = Object.assign({}, u, { axeTool: toolGrp });
   heroGrp.userData = u;
   if (window.ep4CharacterAnimator) window.ep4CharacterAnimator.reset();
   return heroGrp;
 };
 
 // -------------------------------------------------------------------------
-// 3-2. 에피소드 4 플레이어 부드러운 상태 머신 애니메이터 (CharacterAnimator)
-//      - Idle(대기) / Walk(걷기) / Jump(상승·하강) / Land(0.2초 스쿼시 착지 반동) 가중치 THREE.MathUtils.damp 블렌딩
+// 3-2. 에피소드 4 플레이어 부드러운 전신 상태 머신 애니메이터 (CharacterAnimator)
+//      - Idle / Walk-Run 연속 보폭 / Jump / Land(0.2초 스쿼시) / Chop / Emote 24채널 damp 블렌딩
+//      - 무릎·발목(힐-토)·팔꿈치·손목·허리 비틀림·선회 뱅킹·망토/배낭 보조 모션 통합 제어
 //      - 탭 전환 등에서 dt 급등 시 관절 꺾임 방지를 위해 Math.min(dt, 0.05) 클램핑 강제
 // -------------------------------------------------------------------------
 class CharacterAnimator {
@@ -6663,21 +6897,36 @@ class CharacterAnimator {
   }
 
   reset() {
-    this.weights = { idle: 1, walk: 0, jump: 0, land: 0 };
+    this.weights = { idle: 1, walk: 0, jump: 0, land: 0, chop: 0 };
     this.idlePhase = 0;
     this.walkPhase = 0;
     this.landTimer = 0;
     this.landDuration = 0.20;
+    this.emoteKind = null;
+    this.emoteTimer = 0;
+    this.emoteDuration = 1.65;
+    this.prevFacingYaw = null;
+    this.turnVel = 0;
     this.pose = {
       lLegX: 0, rLegX: 0,
       lKneeX: 0, rKneeX: 0,
+      lAnkleX: 0, rAnkleX: 0,
       lArmX: 0, rArmX: 0,
       lArmZ: 0, rArmZ: 0,
       lElbowX: 0, rElbowX: 0,
-      headX: 0,
+      lWristX: 0, rWristX: 0,
+      torsoPitch: 0, torsoYaw: 0, torsoRoll: 0, torsoBobY: 0,
+      headX: 0, headY: 0, headZ: 0,
+      capeX: 0.04, scarfX: 0.02, packY: 0,
       scaleY: 1, scaleXZ: 1
     };
     this.debugState = { activeState: 'idle', weights: this.weights, scaleY: 1, landTimer: 0 };
+  }
+
+  triggerEmote(kind = 'wave', duration = 1.65) {
+    this.emoteKind = String(kind || 'wave');
+    this.emoteDuration = Math.max(0.6, duration || 1.65);
+    this.emoteTimer = this.emoteDuration;
   }
 
   update(rawDt, now, state) {
@@ -6687,6 +6936,7 @@ class CharacterAnimator {
 
     // 탭 전환/프레임 드롭 시에도 관절 각도가 튀지 않도록 최대 0.05초로 클램핑
     const dt = Math.min(Math.max(rawDt || 0, 0), 0.05);
+    const tSec = (now || performance.now()) * 0.001;
     const isGrounded = Boolean(state.isGrounded);
     const prevGrounded = (state.prevGrounded !== undefined) ? Boolean(state.prevGrounded) : isGrounded;
     const velY = Number(state.velY) || 0;
@@ -6694,35 +6944,58 @@ class CharacterAnimator {
     const moveSpeed = Math.max(0, Number(state.moveSpeed) || 0);
     const maxSpeed = Math.max(1, Number(state.maxSpeed) || 9.0);
     const isMoving = Boolean(state.isMoving && moveSpeed > 0.15);
+    const isChopping = Boolean(state.isChopping);
+    const hasLongSash = Boolean(limbs.hasLongSash);
 
-    // 1) 착지 반동 트리거 (공중에서 낙하 후 지면 접촉 순간 0.20초 Land 상태 활성화)
+    // 1) 착지 반동, 감정표현 타이머 & 선회 각속도 추적
     if (!prevGrounded && isGrounded && prevVelY < -2.2) {
       this.landTimer = this.landDuration;
     }
     if (this.landTimer > 0) {
       this.landTimer = Math.max(0, this.landTimer - dt);
     }
+    if (this.emoteTimer > 0) {
+      this.emoteTimer = Math.max(0, this.emoteTimer - dt);
+      if (this.emoteTimer <= 0) this.emoteKind = null;
+    }
 
-    // 2) 목표 가중치 결정 (Idle / Walk / Jump / Land)
-    const speedRatio = isMoving ? Math.min(1, moveSpeed / maxSpeed) : 0;
+    if (typeof state.facingYaw === 'number' && Number.isFinite(state.facingYaw)) {
+      if (this.prevFacingYaw !== null && dt > 0.0005) {
+        let dYaw = state.facingYaw - this.prevFacingYaw;
+        while (dYaw > Math.PI) dYaw -= Math.PI * 2;
+        while (dYaw < -Math.PI) dYaw += Math.PI * 2;
+        const rawVel = (Math.abs(dYaw) < 1.2) ? THREE.MathUtils.clamp(dYaw / dt, -5.0, 5.0) : 0;
+        this.turnVel = THREE.MathUtils.damp(this.turnVel, rawVel, 12, dt);
+      }
+      this.prevFacingYaw = state.facingYaw;
+    } else {
+      this.turnVel = THREE.MathUtils.damp(this.turnVel, 0, 12, dt);
+    }
+
+    // 2) 목표 가중치 결정 (Idle / Walk-Run / Jump / Land / Chop)
+    const speedRatio = isMoving ? THREE.MathUtils.clamp(moveSpeed / maxSpeed, 0, 1.35) : 0;
+    const runBlend = THREE.MathUtils.clamp((speedRatio - 0.55) / 0.45, 0, 1);
+    const targetChop = isChopping ? 1 : 0;
     const targetJump = isGrounded ? 0 : 1;
     const targetLand = (isGrounded && this.landTimer > 0) ? Math.min(1, (this.landTimer / this.landDuration) * 1.15) : 0;
-    const targetWalk = isGrounded ? (isMoving ? Math.max(0.25, speedRatio) * (1 - targetLand * 0.45) : 0) : 0;
+    const targetWalk = isGrounded ? (isMoving ? Math.max(0.25, Math.min(1, speedRatio)) * (1 - targetLand * 0.45) : 0) : 0;
     const targetIdle = isGrounded ? Math.max(0, 1 - targetWalk - targetLand * 0.65) : 0;
 
-    // 3) THREE.MathUtils.damp를 이용한 4개 상태 가중치 실시간 보간
+    // 3) THREE.MathUtils.damp를 이용한 상태 가중치 실시간 보간
     this.weights.jump = THREE.MathUtils.damp(this.weights.jump, targetJump, isGrounded ? 15 : 18, dt);
     this.weights.land = THREE.MathUtils.damp(this.weights.land, targetLand, targetLand > this.weights.land ? 24 : 14, dt);
     this.weights.walk = THREE.MathUtils.damp(this.weights.walk, targetWalk, targetWalk > this.weights.walk ? 13 : 11, dt);
     this.weights.idle = THREE.MathUtils.damp(this.weights.idle, targetIdle, 10, dt);
+    this.weights.chop = THREE.MathUtils.damp(this.weights.chop, targetChop, isChopping ? 22 : 12, dt);
 
     const wSum = (this.weights.idle + this.weights.walk + this.weights.jump + this.weights.land) || 1;
     const wIdle = this.weights.idle / wSum;
     const wWalk = this.weights.walk / wSum;
     const wJump = this.weights.jump / wSum;
     const wLand = this.weights.land / wSum;
+    const wChop = this.weights.chop;
 
-    // 4) 위상 진행 (Idle 호흡 & Walk 보폭)
+    // 4) 위상 진행 (Idle 호흡 & 속도 연동 보폭)
     this.idlePhase += dt * 2.3;
     if (isMoving || wWalk > 0.04) {
       const strideSpeed = isMoving ? Math.max(moveSpeed, 1.5) : 3.2 * wWalk;
@@ -6730,123 +7003,277 @@ class CharacterAnimator {
     }
 
     // --- 상태별 목표 관절/스케일 포즈 ---
-    // [Idle] 차분한 호흡 리듬 & 자연스러운 팔 내림
     const breath = Math.sin(this.idlePhase);
+    const idleGlance = Math.sin(this.idlePhase * 0.42) * 0.08;
     const idlePose = {
-      lLegX: 0,
-      rLegX: 0,
-      lKneeX: 0.02 + Math.max(0, breath) * 0.02,
-      rKneeX: 0.02 + Math.max(0, breath) * 0.02,
-      lArmX: breath * 0.04,
-      rArmX: -breath * 0.04,
-      lArmZ: -0.02,
-      rArmZ: 0.02,
-      lElbowX: -0.10,
-      rElbowX: -0.10,
-      headX: breath * 0.025,
+      lLegX: 0, rLegX: 0,
+      lKneeX: 0.03 + Math.max(0, breath) * 0.02,
+      rKneeX: 0.03 + Math.max(0, breath) * 0.02,
+      lAnkleX: -0.02, rAnkleX: -0.02,
+      lArmX: breath * 0.04, rArmX: -breath * 0.04,
+      lArmZ: -0.02, rArmZ: 0.02,
+      lElbowX: -0.12 - Math.max(0, breath) * 0.03,
+      rElbowX: -0.12 - Math.max(0, -breath) * 0.03,
+      lWristX: 0.02, rWristX: 0.02,
+      torsoPitch: breath * 0.015, torsoYaw: 0, torsoRoll: 0,
+      torsoBobY: breath * 0.008,
+      headX: breath * 0.025, headY: idleGlance, headZ: 0,
       scaleY: 1.0 + breath * 0.012,
       scaleXZ: 1.0 - breath * 0.006
     };
 
-    // [Walk] 경쾌한 보행 + 무릎/팔꿈치 굴곡
+    // [Walk -> Run 연속 보행] 힐 스트라이크/토 오프 발목 + 허리 반대 비틀림 + 머리 시선 역보정
     const s = Math.sin(this.walkPhase);
-    const amp = 0.35 + 0.65 * Math.max(speedRatio, 0.45);
+    const c = Math.cos(this.walkPhase);
+    const amp = THREE.MathUtils.lerp(0.45, 1.06, Math.min(1, speedRatio * 0.92));
+    const maxYaw = hasLongSash ? 0.08 : 0.14;
+    const torsoYawWalk = s * THREE.MathUtils.lerp(0.06, maxYaw, runBlend);
     const walkPose = {
-      lLegX: s * 0.64 * amp,
-      rLegX: -s * 0.64 * amp,
-      lKneeX: Math.max(0, Math.sin(this.walkPhase + 0.72)) * 0.56 * amp,
-      rKneeX: Math.max(0, -Math.sin(this.walkPhase + 0.72)) * 0.56 * amp,
-      lArmX: -s * 0.56 * amp,
-      rArmX: s * 0.56 * amp,
-      lArmZ: -0.04,
-      rArmZ: 0.04,
-      lElbowX: -0.18 - Math.max(0, s) * 0.24 * amp,
-      rElbowX: -0.18 - Math.max(0, -s) * 0.24 * amp,
-      headX: 0.03 + Math.abs(s) * 0.03,
-      scaleY: 1.0 + Math.abs(Math.cos(this.walkPhase)) * 0.02,
-      scaleXZ: 1.0 - Math.abs(Math.cos(this.walkPhase)) * 0.01
+      lLegX: s * THREE.MathUtils.lerp(0.56, 0.72, runBlend) * amp,
+      rLegX: -s * THREE.MathUtils.lerp(0.56, 0.72, runBlend) * amp,
+      lKneeX: Math.max(0, Math.sin(this.walkPhase + 0.72)) * THREE.MathUtils.lerp(0.52, 0.82, runBlend) * amp,
+      rKneeX: Math.max(0, -Math.sin(this.walkPhase + 0.72)) * THREE.MathUtils.lerp(0.52, 0.82, runBlend) * amp,
+      lAnkleX: (s > 0 ? -0.20 * s : -0.28 * s) * amp,
+      rAnkleX: (-s > 0 ? 0.20 * s : 0.28 * s) * amp,
+      lArmX: -s * THREE.MathUtils.lerp(0.50, 0.72, runBlend) * amp,
+      rArmX: s * THREE.MathUtils.lerp(0.50, 0.72, runBlend) * amp,
+      lArmZ: -0.04, rArmZ: 0.04,
+      lElbowX: THREE.MathUtils.lerp(-0.18, -0.46, runBlend) - Math.max(0, s) * THREE.MathUtils.lerp(0.24, 0.38, runBlend) * amp,
+      rElbowX: THREE.MathUtils.lerp(-0.18, -0.46, runBlend) - Math.max(0, -s) * THREE.MathUtils.lerp(0.24, 0.38, runBlend) * amp,
+      lWristX: -s * 0.16 * amp,
+      rWristX: s * 0.16 * amp,
+      torsoPitch: THREE.MathUtils.lerp(0.04, 0.14, runBlend),
+      torsoYaw: torsoYawWalk,
+      torsoRoll: c * 0.03 * amp,
+      torsoBobY: Math.abs(s) * THREE.MathUtils.lerp(0.020, 0.046, runBlend),
+      headX: 0.02 + Math.abs(s) * 0.03 - THREE.MathUtils.lerp(0.02, 0.07, runBlend),
+      headY: -torsoYawWalk * 0.72,
+      headZ: -c * 0.015,
+      scaleY: 1.0 + Math.abs(c) * 0.02,
+      scaleXZ: 1.0 - Math.abs(c) * 0.01
     };
 
-    // [Jump] 상승 시 만세 자세 + 무릎 굽힘 + Y 스트레치(Stretch), 하강 시 팔 벌림 + 부드러운 착지 대비
+    // [Jump] 상승 만세·무릎 굽힘·토 포인트 & 하강 착지 대비
     const ascendFactor = THREE.MathUtils.clamp((velY + 1.5) / 6.5, 0, 1);
     const jumpPose = {
       lLegX: THREE.MathUtils.lerp(-0.14, -0.36, ascendFactor),
       rLegX: THREE.MathUtils.lerp(-0.22, -0.44, ascendFactor),
       lKneeX: THREE.MathUtils.lerp(0.32, 0.68, ascendFactor),
       rKneeX: THREE.MathUtils.lerp(0.38, 0.74, ascendFactor),
+      lAnkleX: THREE.MathUtils.lerp(-0.12, 0.34, ascendFactor),
+      rAnkleX: THREE.MathUtils.lerp(-0.10, 0.36, ascendFactor),
       lArmX: THREE.MathUtils.lerp(-0.56, -1.42, ascendFactor),
       rArmX: THREE.MathUtils.lerp(-0.56, -1.42, ascendFactor),
       lArmZ: THREE.MathUtils.lerp(-0.46, -0.26, ascendFactor),
       rArmZ: THREE.MathUtils.lerp(0.46, 0.26, ascendFactor),
       lElbowX: THREE.MathUtils.lerp(-0.22, -0.46, ascendFactor),
       rElbowX: THREE.MathUtils.lerp(-0.22, -0.46, ascendFactor),
-      headX: THREE.MathUtils.lerp(0.08, -0.08, ascendFactor),
+      lWristX: THREE.MathUtils.lerp(-0.14, 0.12, ascendFactor),
+      rWristX: THREE.MathUtils.lerp(-0.14, 0.12, ascendFactor),
+      torsoPitch: THREE.MathUtils.lerp(0.10, -0.10, ascendFactor),
+      torsoYaw: 0, torsoRoll: 0, torsoBobY: 0,
+      headX: THREE.MathUtils.lerp(0.08, -0.10, ascendFactor),
+      headY: 0, headZ: 0,
       scaleY: THREE.MathUtils.lerp(1.03, 1.12, ascendFactor),
       scaleXZ: THREE.MathUtils.lerp(0.985, 0.94, ascendFactor)
     };
 
-    // [Land] 0.2초간 무릎을 굽히며 Y축을 살짝 눌렀다 복원하는 스쿼시(Squash) 반동
+    // [Land] 0.2초 무릎 스쿼시 + 상체 충격 흡수
     const landProgress = this.landDuration > 0 ? Math.max(0, Math.min(1, 1 - this.landTimer / this.landDuration)) : 1;
     const squashPulse = Math.sin(landProgress * Math.PI);
     const landPose = {
-      lLegX: -0.42 * squashPulse,
-      rLegX: -0.42 * squashPulse,
-      lKneeX: 0.78 * squashPulse,
-      rKneeX: 0.78 * squashPulse,
-      lArmX: 0.16 * squashPulse,
-      rArmX: 0.16 * squashPulse,
-      lArmZ: -0.38 * squashPulse,
-      rArmZ: 0.38 * squashPulse,
-      lElbowX: -0.32 * squashPulse,
-      rElbowX: -0.32 * squashPulse,
-      headX: 0.10 * squashPulse,
+      lLegX: -0.42 * squashPulse, rLegX: -0.42 * squashPulse,
+      lKneeX: 0.78 * squashPulse, rKneeX: 0.78 * squashPulse,
+      lAnkleX: -0.18 * squashPulse, rAnkleX: -0.18 * squashPulse,
+      lArmX: 0.16 * squashPulse, rArmX: 0.16 * squashPulse,
+      lArmZ: -0.38 * squashPulse, rArmZ: 0.38 * squashPulse,
+      lElbowX: -0.32 * squashPulse, rElbowX: -0.32 * squashPulse,
+      lWristX: 0.14 * squashPulse, rWristX: 0.14 * squashPulse,
+      torsoPitch: 0.18 * squashPulse, torsoYaw: 0, torsoRoll: 0,
+      torsoBobY: -0.055 * squashPulse,
+      headX: 0.08 * squashPulse, headY: 0, headZ: 0,
       scaleY: 1.0 - 0.15 * squashPulse,
       scaleXZ: 1.0 + 0.09 * squashPulse
     };
 
-    const blend = k => (
-      idlePose[k] * wIdle +
-      walkPose[k] * wWalk +
-      jumpPose[k] * wJump +
-      landPose[k] * wLand
-    );
+    const locoKeys = [
+      'lLegX', 'rLegX', 'lKneeX', 'rKneeX', 'lAnkleX', 'rAnkleX',
+      'lArmX', 'rArmX', 'lArmZ', 'rArmZ', 'lElbowX', 'rElbowX', 'lWristX', 'rWristX',
+      'torsoPitch', 'torsoYaw', 'torsoRoll', 'torsoBobY',
+      'headX', 'headY', 'headZ', 'scaleY', 'scaleXZ'
+    ];
+    const target = {};
+    for (let i = 0; i < locoKeys.length; i++) {
+      const k = locoKeys[i];
+      target[k] = idlePose[k] * wIdle + walkPose[k] * wWalk + jumpPose[k] * wJump + landPose[k] * wLand;
+    }
 
-    const rotDamp = 16;
+    // 선회 뱅킹 & 시선 리드
+    const turnBank = THREE.MathUtils.clamp(-this.turnVel * 0.048, -0.14, 0.14);
+    const turnLead = THREE.MathUtils.clamp(this.turnVel * 0.085, -0.24, 0.24);
+    target.torsoRoll += turnBank;
+    target.headY += turnLead;
+    target.headZ += turnBank * 0.35;
+
+    // [Chop] 전신 도끼질 오버레이 (와인드업 → 힘찬 내려치기 → 회수)
+    if (wChop > 0.02) {
+      const chopDur = Math.max(0.1, Number(state.chopDuration) || 0.35);
+      const chopProg = (typeof state.chopTimer === 'number')
+        ? THREE.MathUtils.clamp(1 - (state.chopTimer / chopDur), 0, 1)
+        : (Math.sin(tSec * 16.0) * 0.5 + 0.5);
+      let chArmX, chElbowX, chWristX, chTorsoYaw, chTorsoPitch, chOffArmX;
+      if (chopProg < 0.28) {
+        const u = chopProg / 0.28;
+        chArmX = THREE.MathUtils.lerp(-0.6, -2.32, u);
+        chElbowX = THREE.MathUtils.lerp(-0.25, -0.90, u);
+        chWristX = THREE.MathUtils.lerp(0.0, -0.38, u);
+        chTorsoYaw = THREE.MathUtils.lerp(0.0, 0.24, u);
+        chTorsoPitch = THREE.MathUtils.lerp(0.04, -0.10, u);
+        chOffArmX = THREE.MathUtils.lerp(0.0, 0.30, u);
+      } else if (chopProg < 0.64) {
+        const u = (chopProg - 0.28) / 0.36;
+        chArmX = THREE.MathUtils.lerp(-2.32, -0.32, u);
+        chElbowX = THREE.MathUtils.lerp(-0.90, -0.16, u);
+        chWristX = THREE.MathUtils.lerp(-0.38, 0.44, u);
+        chTorsoYaw = THREE.MathUtils.lerp(0.24, -0.26, u);
+        chTorsoPitch = THREE.MathUtils.lerp(-0.10, 0.24, u);
+        chOffArmX = THREE.MathUtils.lerp(0.30, -0.25, u);
+      } else {
+        const u = (chopProg - 0.64) / 0.36;
+        chArmX = THREE.MathUtils.lerp(-0.32, -0.85, u);
+        chElbowX = THREE.MathUtils.lerp(-0.16, -0.35, u);
+        chWristX = THREE.MathUtils.lerp(0.44, 0.0, u);
+        chTorsoYaw = THREE.MathUtils.lerp(-0.26, 0.0, u);
+        chTorsoPitch = THREE.MathUtils.lerp(0.24, 0.06, u);
+        chOffArmX = THREE.MathUtils.lerp(-0.25, 0.0, u);
+      }
+      target.lArmX = THREE.MathUtils.lerp(target.lArmX, chArmX, wChop);
+      target.lArmZ = THREE.MathUtils.lerp(target.lArmZ, -0.16, wChop);
+      target.lElbowX = THREE.MathUtils.lerp(target.lElbowX, chElbowX, wChop);
+      target.lWristX = THREE.MathUtils.lerp(target.lWristX, chWristX, wChop);
+      target.rArmX = THREE.MathUtils.lerp(target.rArmX, chOffArmX, wChop);
+      target.rArmZ = THREE.MathUtils.lerp(target.rArmZ, 0.22, wChop);
+      target.rElbowX = THREE.MathUtils.lerp(target.rElbowX, -0.36, wChop);
+      target.torsoYaw = THREE.MathUtils.lerp(target.torsoYaw, chTorsoYaw, wChop);
+      target.torsoPitch = THREE.MathUtils.lerp(target.torsoPitch, chTorsoPitch, wChop);
+      target.lKneeX = THREE.MathUtils.lerp(target.lKneeX, 0.24, wChop * 0.7);
+      target.rKneeX = THREE.MathUtils.lerp(target.rKneeX, 0.24, wChop * 0.7);
+    } else if (this.emoteTimer > 0 && this.emoteKind && !state.skipArms) {
+      // [Emote] 멀티플레이 5종 감정표현 전신 제스처 블렌딩
+      const fade = Math.min(1, this.emoteTimer * 2.5, (this.emoteDuration - this.emoteTimer) * 4.0);
+      const ew = THREE.MathUtils.clamp(fade, 0, 1);
+      if (this.emoteKind === 'wave') {
+        const wv = Math.sin(tSec * 11.0);
+        target.lArmX = THREE.MathUtils.lerp(target.lArmX, -2.35, ew);
+        target.lArmZ = THREE.MathUtils.lerp(target.lArmZ, -0.22 + wv * 0.20, ew);
+        target.lElbowX = THREE.MathUtils.lerp(target.lElbowX, -0.45 + wv * 0.24, ew);
+        target.lWristX = THREE.MathUtils.lerp(target.lWristX, wv * 0.35, ew);
+        target.torsoRoll = THREE.MathUtils.lerp(target.torsoRoll, -0.05, ew);
+      } else if (this.emoteKind === 'cheer') {
+        const wv = Math.sin(tSec * 8.5);
+        const hop = Math.abs(Math.sin(tSec * 6.0));
+        target.lArmX = THREE.MathUtils.lerp(target.lArmX, -2.35 + wv * 0.22, ew);
+        target.rArmX = THREE.MathUtils.lerp(target.rArmX, -2.35 - wv * 0.22, ew);
+        target.lArmZ = THREE.MathUtils.lerp(target.lArmZ, -0.32, ew);
+        target.rArmZ = THREE.MathUtils.lerp(target.rArmZ, 0.32, ew);
+        target.torsoBobY += hop * 0.05 * ew;
+      } else if (this.emoteKind === 'bless') {
+        const gt = Math.sin(tSec * 2.6);
+        target.lArmX = THREE.MathUtils.lerp(target.lArmX, -1.05 + gt * 0.14, ew);
+        target.rArmX = THREE.MathUtils.lerp(target.rArmX, -1.05 - gt * 0.14, ew);
+        target.lArmZ = THREE.MathUtils.lerp(target.lArmZ, -0.28, ew);
+        target.rArmZ = THREE.MathUtils.lerp(target.rArmZ, 0.28, ew);
+        target.lElbowX = THREE.MathUtils.lerp(target.lElbowX, -0.30, ew);
+        target.rElbowX = THREE.MathUtils.lerp(target.rElbowX, -0.30, ew);
+      } else if (this.emoteKind === 'pump') {
+        const pm = Math.sin(tSec * 9.0);
+        target.lArmX = THREE.MathUtils.lerp(target.lArmX, -1.65 + pm * 0.28, ew);
+        target.rArmX = THREE.MathUtils.lerp(target.rArmX, -1.65 - pm * 0.28, ew);
+        target.lElbowX = THREE.MathUtils.lerp(target.lElbowX, -1.12, ew);
+        target.rElbowX = THREE.MathUtils.lerp(target.rElbowX, -1.12, ew);
+      } else if (this.emoteKind === 'beckon') {
+        const bk = Math.sin(tSec * 7.6);
+        target.lArmX = THREE.MathUtils.lerp(target.lArmX, -1.55 + bk * 0.25, ew);
+        target.lElbowX = THREE.MathUtils.lerp(target.lElbowX, -0.75 + bk * 0.35, ew);
+        target.lWristX = THREE.MathUtils.lerp(target.lWristX, -0.28 + bk * 0.30, ew);
+      }
+    }
+
+    if (state.skipArms) {
+      target.torsoPitch = 0;
+      target.torsoYaw = 0;
+      target.torsoRoll = 0;
+      target.torsoBobY = 0;
+    }
+
+    // [보조 물리] 망토 · 스카프 · 배낭 바람 & 관성 반동
+    const speedNorm = THREE.MathUtils.clamp(speedRatio, 0, 1.2);
+    const wind = Math.sin(tSec * (2.6 + speedNorm * 6.5)) * (0.03 + speedNorm * 0.08);
+    const fallFlutter = isGrounded ? 0 : THREE.MathUtils.clamp(-velY * 0.04, -0.05, 0.32);
+    const targetCapeX = THREE.MathUtils.clamp(0.05 + speedNorm * 0.30 + fallFlutter + wind, 0.02, 0.58);
+    const targetScarfX = THREE.MathUtils.clamp(0.02 + speedNorm * 0.07 + fallFlutter * 0.25 + wind * 0.35, 0.0, 0.14);
+    const targetPackY = (wWalk * -Math.abs(c) * 0.024) + (wJump * THREE.MathUtils.clamp(-velY * 0.004, -0.025, 0.025));
+
+    const rotDamp = isChopping ? 22 : 16;
     const scaleDamp = 18;
     const p = this.pose;
-    p.lLegX = THREE.MathUtils.damp(p.lLegX, blend('lLegX'), rotDamp, dt);
-    p.rLegX = THREE.MathUtils.damp(p.rLegX, blend('rLegX'), rotDamp, dt);
-    p.lKneeX = THREE.MathUtils.damp(p.lKneeX, blend('lKneeX'), rotDamp, dt);
-    p.rKneeX = THREE.MathUtils.damp(p.rKneeX, blend('rKneeX'), rotDamp, dt);
-    p.lArmX = THREE.MathUtils.damp(p.lArmX, blend('lArmX'), rotDamp, dt);
-    p.rArmX = THREE.MathUtils.damp(p.rArmX, blend('rArmX'), rotDamp, dt);
-    p.lArmZ = THREE.MathUtils.damp(p.lArmZ, blend('lArmZ'), rotDamp, dt);
-    p.rArmZ = THREE.MathUtils.damp(p.rArmZ, blend('rArmZ'), rotDamp, dt);
-    p.lElbowX = THREE.MathUtils.damp(p.lElbowX, blend('lElbowX'), rotDamp, dt);
-    p.rElbowX = THREE.MathUtils.damp(p.rElbowX, blend('rElbowX'), rotDamp, dt);
-    p.headX = THREE.MathUtils.damp(p.headX, blend('headX'), 12, dt);
-    p.scaleY = THREE.MathUtils.damp(p.scaleY, blend('scaleY'), scaleDamp, dt);
-    p.scaleXZ = THREE.MathUtils.damp(p.scaleXZ, blend('scaleXZ'), scaleDamp, dt);
+    p.lLegX = THREE.MathUtils.damp(p.lLegX, target.lLegX, rotDamp, dt);
+    p.rLegX = THREE.MathUtils.damp(p.rLegX, target.rLegX, rotDamp, dt);
+    p.lKneeX = THREE.MathUtils.damp(p.lKneeX, target.lKneeX, rotDamp, dt);
+    p.rKneeX = THREE.MathUtils.damp(p.rKneeX, target.rKneeX, rotDamp, dt);
+    p.lAnkleX = THREE.MathUtils.damp(p.lAnkleX, target.lAnkleX, rotDamp, dt);
+    p.rAnkleX = THREE.MathUtils.damp(p.rAnkleX, target.rAnkleX, rotDamp, dt);
+    p.lArmX = THREE.MathUtils.damp(p.lArmX, target.lArmX, rotDamp, dt);
+    p.rArmX = THREE.MathUtils.damp(p.rArmX, target.rArmX, rotDamp, dt);
+    p.lArmZ = THREE.MathUtils.damp(p.lArmZ, target.lArmZ, rotDamp, dt);
+    p.rArmZ = THREE.MathUtils.damp(p.rArmZ, target.rArmZ, rotDamp, dt);
+    p.lElbowX = THREE.MathUtils.damp(p.lElbowX, target.lElbowX, rotDamp, dt);
+    p.rElbowX = THREE.MathUtils.damp(p.rElbowX, target.rElbowX, rotDamp, dt);
+    p.lWristX = THREE.MathUtils.damp(p.lWristX, target.lWristX, rotDamp, dt);
+    p.rWristX = THREE.MathUtils.damp(p.rWristX, target.rWristX, rotDamp, dt);
+    p.torsoPitch = THREE.MathUtils.damp(p.torsoPitch, target.torsoPitch, 14, dt);
+    p.torsoYaw = THREE.MathUtils.damp(p.torsoYaw, target.torsoYaw, 14, dt);
+    p.torsoRoll = THREE.MathUtils.damp(p.torsoRoll, target.torsoRoll, 12, dt);
+    p.torsoBobY = THREE.MathUtils.damp(p.torsoBobY, target.torsoBobY, 16, dt);
+    p.headX = THREE.MathUtils.damp(p.headX, target.headX, 12, dt);
+    p.headY = THREE.MathUtils.damp(p.headY, target.headY, 12, dt);
+    p.headZ = THREE.MathUtils.damp(p.headZ, target.headZ, 12, dt);
+    p.capeX = THREE.MathUtils.damp(p.capeX, targetCapeX, 10, dt);
+    p.scarfX = THREE.MathUtils.damp(p.scarfX, targetScarfX, 10, dt);
+    p.packY = THREE.MathUtils.damp(p.packY, targetPackY, 14, dt);
+    p.scaleY = THREE.MathUtils.damp(p.scaleY, target.scaleY, scaleDamp, dt);
+    p.scaleXZ = THREE.MathUtils.damp(p.scaleXZ, target.scaleXZ, scaleDamp, dt);
 
-    // 관절 적용 (스테이지 고유 팔 동작이나 수중/도끼 모션과 충돌하지 않도록 선택적 스킵 지원)
+    // 관절 적용 (스테이지 고유 팔 동작이나 노 젓기 IK와 충돌하지 않도록 skipArms 존중)
     limbs.lLeg.rotation.x = p.lLegX;
     limbs.rLeg.rotation.x = p.rLegX;
     if (limbs.lKnee) limbs.lKnee.rotation.x = p.lKneeX;
     if (limbs.rKnee) limbs.rKnee.rotation.x = p.rKneeX;
+    if (limbs.lAnkle) limbs.lAnkle.rotation.x = p.lAnkleX;
+    if (limbs.rAnkle) limbs.rAnkle.rotation.x = p.rAnkleX;
 
     if (!state.skipArms) {
-      if (!state.isChopping) {
-        limbs.lArm.rotation.x = p.lArmX;
-        limbs.lArm.rotation.z = p.lArmZ;
-        if (limbs.lElbow) limbs.lElbow.rotation.x = p.lElbowX;
-      }
+      limbs.lArm.rotation.x = p.lArmX;
+      limbs.lArm.rotation.z = p.lArmZ;
+      if (limbs.lElbow) limbs.lElbow.rotation.x = p.lElbowX;
+      if (limbs.lWrist) limbs.lWrist.rotation.x = p.lWristX;
+
       limbs.rArm.rotation.x = p.rArmX;
       limbs.rArm.rotation.z = p.rArmZ;
       if (limbs.rElbow) limbs.rElbow.rotation.x = p.rElbowX;
+      if (limbs.rWrist) limbs.rWrist.rotation.x = p.rWristX;
     }
 
+    if (limbs.torsoPivot) {
+      limbs.torsoPivot.rotation.set(p.torsoPitch, p.torsoYaw, p.torsoRoll);
+      limbs.torsoPivot.position.y = 0.96 + p.torsoBobY;
+    }
+    if (limbs.capePivot) limbs.capePivot.rotation.x = p.capeX;
+    if (limbs.scarfPivot) limbs.scarfPivot.rotation.x = p.scarfX;
+    if (limbs.packPivot) limbs.packPivot.position.y = 1.32 + p.packY;
+
     if (limbs.head) {
-      limbs.head.rotation.x = p.headX;
+      limbs.head.rotation.set(p.headX, p.headY, p.headZ);
     }
 
     if (state.playerGroup && state.playerGroup.scale && !state.skipBodyScale) {
@@ -6859,16 +7286,20 @@ class CharacterAnimator {
 
     let dominant = 'idle';
     let bestW = wIdle;
-    if (wWalk > bestW) { bestW = wWalk; dominant = 'walk'; }
+    if (wWalk > bestW) { bestW = wWalk; dominant = runBlend > 0.4 ? 'run' : 'walk'; }
     if (wJump > bestW) { bestW = wJump; dominant = 'jump'; }
     if (wLand > bestW) { bestW = wLand; dominant = 'land'; }
+    if (wChop > 0.35) { dominant = 'chop'; }
     this.debugState = {
       activeState: dominant,
-      weights: { idle: +wIdle.toFixed(3), walk: +wWalk.toFixed(3), jump: +wJump.toFixed(3), land: +wLand.toFixed(3) },
+      weights: { idle: +wIdle.toFixed(3), walk: +wWalk.toFixed(3), jump: +wJump.toFixed(3), land: +wLand.toFixed(3), chop: +wChop.toFixed(3) },
       scaleY: +p.scaleY.toFixed(3),
       scaleXZ: +p.scaleXZ.toFixed(3),
       landTimer: +this.landTimer.toFixed(3),
-      lKneeX: +p.lKneeX.toFixed(3)
+      lKneeX: +p.lKneeX.toFixed(3),
+      lAnkleX: +p.lAnkleX.toFixed(3),
+      lWristX: +p.lWristX.toFixed(3),
+      torsoYaw: +p.torsoYaw.toFixed(3)
     };
   }
 }

@@ -6,7 +6,7 @@
 // =========================================================================
 
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep3_st1_2 = '3.12.3';
+window.__GAME_BUILD_VERSIONS__.ep3_st1_2 = '3.12.6';
 
 function getDavidStage1GroundHeight(x, z) {
   if (z >= DAVID_HILL_SLOPE_SOUTH_Z) return DAVID_HILL_TOP_Y;

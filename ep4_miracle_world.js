@@ -4,7 +4,7 @@
 // - 계단으로 건물 2층 등반 후 인접한 옆 건물 옥상·2층으로 점프 이동할 수 있는 근접 마을 배치
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_world = '3.12.3';
+window.__GAME_BUILD_VERSIONS__.ep4_world = '3.12.6';
 
 window.miracleOpenWorldIntroFlyover = {
   active: false,
@@ -10121,6 +10121,7 @@ function buildMiracleOpenWorld(restoreSavedPos = false) {
   if (s1Ui) s1Ui.classList.add('hidden');
   loadMiracleNotebookProgress();
   miracleSubMode = 'openworld';
+  miracleActiveMiniState = {};
   miracleActiveMinigameId = null;
   miracleActiveFieldEvent = null;
   miracleAmbientProps = [];
@@ -10271,6 +10272,29 @@ function buildMiracleOpenWorld(restoreSavedPos = false) {
   const owTimerBox = document.getElementById('hud-timer-box');
   if (owTimerBox) { owTimerBox.classList.add('hidden'); owTimerBox.classList.remove('flex'); }
 
+  const isOpeningIntroOrPreview = Boolean(
+    window.__isBuildingOpeningPreview ||
+    window.__ep4OpeningVideoActive ||
+    (window.miracleOpenWorldIntroFlyover && window.miracleOpenWorldIntroFlyover.active) ||
+    (typeof MiracleGuideUI !== 'undefined' && MiracleGuideUI && MiracleGuideUI.suppressedDuringIntro)
+  );
+  const hudTopEl = document.getElementById('hud-top');
+  if (!isOpeningIntroOrPreview && (restoreSavedPos || (hudTopEl && !hudTopEl.classList.contains('hidden')))) {
+    if (typeof setInGameHudControlsVisible === 'function') {
+      setInGameHudControlsVisible(true);
+    } else {
+      const joyEl = document.getElementById('joystick-zone');
+      const camEl = document.getElementById('cam-bottom-bar');
+      const actEl = document.getElementById('action-zone');
+      if (joyEl) joyEl.style.display = 'block';
+      if (camEl) camEl.style.display = 'flex';
+      if (actEl) actEl.style.display = 'flex';
+    }
+    if (typeof syncOverlayModalBodyClass === 'function') {
+      syncOverlayModalBodyClass();
+    }
+  }
+
   if (typeof playMiracleOpenWorldOgg === 'function') {
     playMiracleOpenWorldOgg();
   }
@@ -10289,8 +10313,9 @@ window.returnToMiracleOpenWorld = function () {
   if (wf) wf.style.opacity = '0';
   if (bf) bf.style.opacity = '0';
   if (s1Ui) s1Ui.classList.add('hidden');
-  if (typeof setInGameHudControlsVisible === 'function') setInGameHudControlsVisible(true);
   buildMiracleOpenWorld(true);
+  if (typeof setInGameHudControlsVisible === 'function') setInGameHudControlsVisible(true);
+  if (typeof syncOverlayModalBodyClass === 'function') syncOverlayModalBodyClass();
   startStageBgm(currentStage);
   if (typeof playMiracleOpenWorldOgg === 'function') playMiracleOpenWorldOgg();
 };

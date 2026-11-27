@@ -7,7 +7,7 @@
 // =========================================================================
 
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep3_base = '3.12.3';
+window.__GAME_BUILD_VERSIONS__.ep3_base = '3.12.6';
 
 const DAVID_SCRIPTURE = {
   1: {
