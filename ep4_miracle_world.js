@@ -4,7 +4,7 @@
 // - 계단으로 건물 2층 등반 후 인접한 옆 건물 옥상·2층으로 점프 이동할 수 있는 근접 마을 배치
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_world = '3.12.6';
+window.__GAME_BUILD_VERSIONS__.ep4_world = '3.14.1';
 
 window.miracleOpenWorldIntroFlyover = {
   active: false,
@@ -707,7 +707,8 @@ function buildSoftLowPolyWorldTerrain() {
     const onBethsaidaHillTrail = (mx >= 2 && mx <= 90 && Math.abs(mz - bethRoadTargetZ) < 3.6);
     const onGalileePierTrail = (mx >= -88 && mx <= roadCenterX + 2 && Math.abs(mz - (-68 + Math.sin(mx * 0.06) * 2.5)) < 3.5);
     const onJerichoBranch = (mz > -12 && mz < 6 && mx > -34 && mx < 56);
-    const onGolgothaTrail = (mz > 52 && mz < 82 && Math.abs(mx - (-8 - (mz - 52) * 1.8)) < 4.0);
+    const onGolgothaTrail = (mz > 52 && mz < 82 && Math.abs(mx - (-8 - (mz - 52) * 1.8)) < 4.0) ||
+      (mx >= -40 && mx <= -18 && Math.abs(mz - (68 + (-20 - mx) * 0.22)) < 3.4);
     const onOliveMountTrail = (mx >= 10 && mx <= 90 && Math.abs(mz - (58 + (mx - 10) * 0.2)) < 3.6);
 
     const shoreLineX = (typeof window.getMiracleWestShoreLineX === 'function')
@@ -927,8 +928,26 @@ function buildSoftLowPolyWorldTerrain() {
 // -------------------------------------------------------------------------
 // 4. 길가 고대 유대 건축물 행렬 (인접 건물 옥상·2층 점프 이동이 가능한 클러스터 포함) & 생태계 스폰
 // -------------------------------------------------------------------------
+function isNearMpVillageZone(x, z, pad = 7.5) {
+  if (!window.isMiracleMultiplayerMode) return false;
+  if (Math.hypot(x - 0.0, z + 6.0) < Math.max(5.5, pad - 1.0)) return true; // 마을 중앙 게시판 광장
+  if (Math.hypot(x + 32.0, z - 4.0) < Math.max(8.5, pad + 1.5)) return true; // 5단계 우물 연동 농사 밭
+  if (Math.hypot(x - 32.0, z + 30.0) < Math.max(9.0, pad + 2.0)) return true; // 양떼 목장
+  if (Math.hypot(x - 16.5, z + 4.0) < Math.max(7.5, pad)) return true; // 축제 파티장 광장
+  if (Math.hypot(x - 0.0, z - 3.0) < Math.max(4.5, pad - 2.0)) return true; // 은혜의 광장 분수
+  const shopSpots = (window.MiracleMpVillage && Array.isArray(window.MiracleMpVillage.SHOPS_ORDER))
+    ? window.MiracleMpVillage.SHOPS_ORDER.map(id => window.MiracleMpVillage.PROJECTS[id].pos)
+    : [{ x: -15.5, z: -22.0 }, { x: 15.5, z: -20.5 }, { x: -15.5, z: 10.5 }, { x: 15.5, z: 10.5 }];
+  for (let i = 0; i < shopSpots.length; i++) {
+    if (Math.hypot(x - shopSpots[i].x, z - shopSpots[i].z) < pad) return true;
+  }
+  return false;
+}
+window.isNearMpVillageZone = isNearMpVillageZone;
+
 function buildMiracleRoadsideVillagesAndForests() {
   miracleWanderingActors = [];
+  const isMpMode = Boolean(window.isMiracleMultiplayerMode);
 
   // 건물 간 최소 보행 통로(2.4m 이상)를 확보하여 건물 사이에 끼는 현상을 방지하고,
   // 예루살렘 성전 주변 건물은 충분히 뒤로 물러나 현실적인 광장 공간을 형성하도록 배치
@@ -946,25 +965,31 @@ function buildMiracleRoadsideVillagesAndForests() {
     // [클러스터 4: 가버나움 중풍병자 집(22, -52) 주변 (넓은 골목 간격 확보)]
     { x:  11.6, z: -52.0, v: 2, yaw:  0.0,         sc: 0.94 },
     { x:  35.5, z: -46.0, v: 1, yaw: -0.25,        sc: 0.98, m: 'stonebrick' },
-    // [클러스터 5: 중북부 순례길 양옆 가옥 — 동측 계단끼리 겹치지 않도록 간격 확장]
+    // [클러스터 5: 중북부 순례길 양옆 가옥 — 온라인 멀티플레이 모드에서는 양젖·생선 가게 터 확보 위해 해당 가옥 비움]
     { x: -15.0, z: -32.2, v: 1, yaw:  Math.PI / 2, sc: 0.98 },
-    { x: -15.0, z: -22.2, v: 4, yaw:  Math.PI / 2, sc: 0.95, m: 'stonebrick' },
+    ...(isMpMode ? [] : [
+      { x: -15.0, z: -22.2, v: 4, yaw:  Math.PI / 2, sc: 0.95, m: 'stonebrick' },
+      { x:  15.0, z: -20.2, v: 0, yaw: -Math.PI / 2, sc: 0.96 }
+    ]),
     { x:  15.0, z: -33.8, v: 3, yaw: -Math.PI / 2, sc: 0.98 },
-    { x:  15.0, z: -20.2, v: 0, yaw: -Math.PI / 2, sc: 0.96 },
-    // [클러스터 6: 사마리아 · 여리고 입구 가옥 — 계단 겹침 해소]
-    { x:  16.0, z:  -9.2, v: 0, yaw: -Math.PI / 2, sc: 0.96, m: 'stonebrick' },
-    { x:  16.0, z:   1.2, v: 3, yaw: -Math.PI / 2, sc: 0.98 },
+    // [클러스터 6: 사마리아 · 여리고 입구 가옥 — 온라인 모드에서는 동측 옷가게·파티장 광장 확보 위해 일부 비움]
+    ...(isMpMode ? [] : [
+      { x:  16.0, z:  -9.2, v: 0, yaw: -Math.PI / 2, sc: 0.96, m: 'stonebrick' },
+      { x:  16.0, z:   1.2, v: 3, yaw: -Math.PI / 2, sc: 0.98 }
+    ]),
     { x:  52.5, z: -11.8, v: 1, yaw: -Math.PI / 2, sc: 0.98 },
     { x:  52.5, z:   1.6, v: 0, yaw: -Math.PI / 2, sc: 0.96, m: 'stonebrick' },
     // [기본맵 vs 멀티플레이 맵 구분]
     // 개인 기본맵에서는 원래 있던 인근 가옥 2채((52.5, 11.4), (72.0, 8.0))를 그대로 복구하고,
     // 온라인 멀티플레이 맵에서만 두 채를 비워 확장형 대형 반석 부지(63, 18)를 확보!
-    ...(window.isMiracleMultiplayerMode ? [] : [
+    ...(isMpMode ? [] : [
       { x: 52.5, z: 11.4, v: 2, yaw: -Math.PI / 2, sc: 0.95 },
       { x: 72.0, z:  8.0, v: 1, yaw: -1.15,        sc: 0.96, m: 'stonebrick' }
     ]),
-    // [클러스터 7: 유대 광야 ~ 예루살렘 성문 앞 가옥 — 계단 겹침 해소]
-    { x: -15.0, z:  10.6, v: 0, yaw:  Math.PI / 2, sc: 0.96 },
+    // [클러스터 7: 유대 광야 ~ 예루살렘 성문 앞 가옥 — 온라인 모드에서는 곡물 가게 터(-15.5, 10.5) 비움]
+    ...(isMpMode ? [] : [
+      { x: -15.0, z:  10.6, v: 0, yaw:  Math.PI / 2, sc: 0.96 }
+    ]),
     { x: -15.0, z:  24.2, v: 3, yaw:  Math.PI / 2, sc: 0.98, m: 'stonebrick' },
     { x: -15.0, z:  36.6, v: 1, yaw:  Math.PI / 2, sc: 0.96 },
     { x:  15.5, z:  32.0, v: 2, yaw: -Math.PI / 2, sc: 0.95 },
@@ -992,19 +1017,21 @@ function buildMiracleRoadsideVillagesAndForests() {
   });
 
   createLowPolyWoodenCart(-9.5, -48, 0.25);
-  createLowPolyWoodenCart( 9.8,  -8, -0.35);
+  if (!isMpMode) {
+    createLowPolyWoodenCart( 9.8,  -8, -0.35);
+    createOrganicStreetPropCluster(-10.4, -26.5,  0.2, 33);
+    createOrganicStreetPropCluster( 10.6, -24.5, -0.3, 44);
+    // 개인 오픈월드 전용 장식 시장 가판대 4종 (온라인 마을에서는 플레이어가 직접 상점 4곳을 건축!)
+    createStandaloneMarketStall(-9.6, -63.0,  Math.PI * 0.5,  0, true,  301);
+    createStandaloneMarketStall( 9.8, -40.5, -Math.PI * 0.5,  1, false, 317);
+    createStandaloneMarketStall(-9.6,   2.5,  Math.PI * 0.5,  2, true,  333);
+    createStandaloneMarketStall(10.0,  19.0, -Math.PI * 0.5,  3, true,  349);
+  }
   createLowPolyWoodenCart(-9.2,  30, 0.18);
   createOrganicStreetPropCluster(-10.8, -82.0,  0.4, 11);
   createOrganicStreetPropCluster(  8.8, -74.0, -0.5, 22);
-  createOrganicStreetPropCluster(-10.4, -26.5,  0.2, 33);
-  createOrganicStreetPropCluster( 10.6, -24.5, -0.3, 44);
   createOrganicStreetPropCluster(-10.4,  20.0,  0.5, 55);
   createOrganicStreetPropCluster( 23.0,  49.0, -0.4, 66);
-  // 레퍼런스 이미지 스타일의 활기찬 길가 시장 가판대(일부 농도차 스트라이프 천막 + 과일·향신료·토기·직물 진열)
-  createStandaloneMarketStall(-9.6, -63.0,  Math.PI * 0.5,  0, true,  301); // 청과·과일 상점 (스트라이프)
-  createStandaloneMarketStall( 9.8, -40.5, -Math.PI * 0.5,  1, false, 317); // 곡식·향신료 상점 (아마포)
-  createStandaloneMarketStall(-9.6,   2.5,  Math.PI * 0.5,  2, true,  333); // 토기·올리브유 상점 (스트라이프)
-  createStandaloneMarketStall(10.0,  19.0, -Math.PI * 0.5,  3, true,  349); // 빵·직물 상점 (스트라이프)
   // 짐을 실은 당나귀들은 정지 프롭이 아니라 마을 길가를 살아 움직이며 순찰하도록 wanderingConfigs로 이동 배치!
 
   if (typeof addLowPolyCanopyTree === 'function') {
@@ -1035,7 +1062,8 @@ function buildMiracleRoadsideVillagesAndForests() {
     if (Math.hypot(tx + 22, tz - 91) < 13.0) return;
     if (isNearSowerFarmPlot(tx, tz, 9.0)) return;
     if (isNearMustardPlot(tx, tz, 6.2)) return;
-    if (Math.hypot(tx - 63, tz - 18) < 12.5) return;
+    if (isNearMpVillageZone(tx, tz, 7.5)) return;
+    if (Math.hypot(tx - 63, tz - 18) < 13.5) return;
     const sc = 1.0 + (i % 3) * 0.18;
     const m = addLowPolyOliveTree(tx, tz, sc, true);
     registerMiracleHarvestNode('wood', tx, tz, m, sc);
@@ -1054,7 +1082,8 @@ function buildMiracleRoadsideVillagesAndForests() {
     if (Math.hypot(cx + 22, cz - 91) < 13.0) return;
     if (isNearSowerFarmPlot(cx, cz, 9.0)) return;
     if (isNearMustardPlot(cx, cz, 6.2)) return;
-    if (Math.hypot(cx - 63, cz - 18) < 12.5) return;
+    if (isNearMpVillageZone(cx, cz, 7.5)) return;
+    if (Math.hypot(cx - 63, cz - 18) < 13.5) return;
     const sc = 0.95 + (i % 3) * 0.22;
     const m = addLowPolyCypressPineTree(cx, cz, sc, true);
     registerMiracleHarvestNode('wood', cx, cz, m, sc);
@@ -1068,7 +1097,8 @@ function buildMiracleRoadsideVillagesAndForests() {
     if (Math.hypot(px + 22, pz - 91) < 13.0) return;
     if (isNearSowerFarmPlot(px, pz, 9.0)) return;
     if (isNearMustardPlot(px, pz, 6.2)) return;
-    if (Math.hypot(px - 63, pz - 18) < 12.5) return;
+    if (isNearMpVillageZone(px, pz, 7.5)) return;
+    if (Math.hypot(px - 63, pz - 18) < 13.5) return;
     const sc = 1.05 + (i % 2) * 0.18;
     const m = addLowPolyPalmTree(px, pz, sc, true);
     registerMiracleHarvestNode('wood', px, pz, m, sc);
@@ -1081,7 +1111,8 @@ function buildMiracleRoadsideVillagesAndForests() {
   cactusSpots.forEach(([sx, sz], i) => {
     if (isNearSowerFarmPlot(sx, sz, 8.0)) return;
     if (isNearMustardPlot(sx, sz, 6.0)) return;
-    if (Math.hypot(sx - 63, sz - 18) < 12.0) return;
+    if (isNearMpVillageZone(sx, sz, 7.5)) return;
+    if (Math.hypot(sx - 63, sz - 18) < 13.0) return;
     addLowPolyCactusAndScrub(sx, sz, 0.9 + (i % 3) * 0.15);
   });
 
@@ -1094,7 +1125,8 @@ function buildMiracleRoadsideVillagesAndForests() {
   rockSpots.forEach(([rx, rz, rad], idx) => {
     if (isNearSowerFarmPlot(rx, rz, 8.0)) return;
     if (isNearMustardPlot(rx, rz, 6.0)) return;
-    if (Math.hypot(rx - 63, rz - 18) < 12.0) return;
+    if (isNearMpVillageZone(rx, rz, 7.5)) return;
+    if (Math.hypot(rx - 63, rz - 18) < 13.0) return;
     if (Math.abs(rx - getMiracleMainRoadCenterX(rz)) < 7.2) return;
     if (Math.hypot(rx - 10.0, rz - 19.0) < 6.0 || Math.hypot(rx + 9.6, rz - 2.5) < 5.5) return;
     const m = addLowPolyRock(rx, rz, rad, 0.78, idx % 2 === 0 ? '#94a3b8' : '#8c8275', true);
@@ -1125,6 +1157,7 @@ function buildMiracleRoadsideVillagesAndForests() {
       const fx = -74 + ((f * 41) % 170);
       const fz = -96 + ((f * 59) % 192);
       if (Math.abs(fx - getMiracleMainRoadCenterX(fz)) < 5.5) continue;
+      if (isNearMpVillageZone(fx, fz, 7.0)) continue;
       addLowPolyWildflowerCluster(fx, fz, 0.95 + (f % 3) * 0.18);
     }
   }
@@ -1247,6 +1280,7 @@ function buildMiracleOuterMountainIsraelFlora() {
     if (Math.hypot(x - 63, z - 18) < 13.5) return false;   // 반석 건축지
     if (typeof isNearSowerFarmPlot === 'function' && isNearSowerFarmPlot(x, z, 10.5)) return false;
     if (typeof isNearMustardPlot === 'function' && isNearMustardPlot(x, z, 6.2)) return false;
+    if (typeof isNearMpVillageZone === 'function' && isNearMpVillageZone(x, z, 7.5)) return false;
     const bethZ = -52 - Math.max(0, Math.min(1, (x - 6) / 82)) * 30 + Math.sin(x * 0.08) * 3.2;
     if (x >= 2 && x <= 92 && Math.abs(z - bethZ) < 5.2) return false;
     if (x >= 10 && x <= 92 && Math.abs(z - (58 + (x - 10) * 0.2)) < 5.2) return false;
@@ -1647,16 +1681,18 @@ function buildMiracleRegionalLandmarks() {
   // 3) 동북쪽 외곽 '오병이어 전망 언덕' (x = 88, z = -82, 높이 약 14.5m — 마을과 바다가 한눈에 내려다보이는 언덕)
   const bethTopY = getMiracleOpenWorldGroundHeight(88, -82);
   addLowPolyRock(88, -86, 2.2, 0.65, '#cbd5e1', true);
-  for (let i = 0; i < 10; i++) {
-    const ang = (i / 10) * Math.PI * 1.2 + Math.PI * 0.4;
-    const rad = 7.0 + (i % 2) * 3.5;
-    const px = 88 + Math.cos(ang) * rad;
-    const pz = -82 + Math.sin(ang) * rad;
-    const py = getMiracleOpenWorldGroundHeight(px, pz);
-    const listener = createLowPolyPersonMesh(i % 3 === 0 ? 'woman' : (i % 4 === 0 ? 'child' : 'villager'), i + 30);
-    listener.position.set(px, py, pz);
-    listener.lookAt(88, bethTopY + 1.0, -82);
-    worldGroup.add(listener);
+  if (!window.isMiracleMultiplayerMode) {
+    for (let i = 0; i < 10; i++) {
+      const ang = (i / 10) * Math.PI * 1.2 + Math.PI * 0.4;
+      const rad = 7.0 + (i % 2) * 3.5;
+      const px = 88 + Math.cos(ang) * rad;
+      const pz = -82 + Math.sin(ang) * rad;
+      const py = getMiracleOpenWorldGroundHeight(px, pz);
+      const listener = createLowPolyPersonMesh(i % 3 === 0 ? 'woman' : (i % 4 === 0 ? 'child' : 'villager'), i + 30);
+      listener.position.set(px, py, pz);
+      listener.lookAt(88, bethTopY + 1.0, -82);
+      worldGroup.add(listener);
+    }
   }
 
   // [B. 중부 사마리아 · 여리고 · 광야 권역]
@@ -1825,7 +1861,10 @@ function buildMiracleRegionalLandmarks() {
 
   // [C. 남부 예루살렘 · 성전 · 다락방 · 골고다 · 빈 무덤 · 감람산 권역]
   // 1) & 2) 예루살렘 외곽 계단 성문(z = 46) + 예루살렘 성전 복합 단지(z = 72) 통합 빌드
-  buildLowPolyJerusalemTempleComplex();
+  //        (온라인 협동 마을에서는 헌금으로 5단계 점진 건축!)
+  if (!window.isMiracleMultiplayerMode) {
+    buildLowPolyJerusalemTempleComplex();
+  }
   if (Array.isArray(window.miracleBuildingBounds)) {
     window.miracleBuildingBounds.push(
       { minX: -12.5, maxX: 12.5, minZ: 42.0, maxZ: 48.2, cx: 0, cz: 46 },  // 외곽 성문
@@ -1842,8 +1881,8 @@ function buildMiracleRegionalLandmarks() {
     addLowPolyVillageHouse(-24, 58, 8.8, 4.3, 7.0, '#f2e3c9', '#c89654', true, 1, 0);
   }
 
-  // 4) 넓어진 골고다 언덕(x = -62, z = 78) 위의 비정형 소프트 로우폴리 세 십자가 — 스테이지 3 클리어 후 등장!
-  const isStage3Cleared = Boolean(miracleMainStagesCleared[3] || miracleMainStagesCleared[4] || miracleIsPostResurrection);
+  // 4) 넓어진 골고다 언덕(x = -62, z = 78) 위의 비정형 소프트 로우폴리 세 십자가 — 개인 탐험 스테이지 3 클리어 후 등장 (온라인 마을 제외)
+  const isStage3Cleared = !window.isMiracleMultiplayerMode && Boolean(miracleMainStagesCleared[3] || miracleMainStagesCleared[4] || miracleIsPostResurrection);
   miracleGolgothaCrossesGroup = new THREE.Group();
   [[-62, 78, 1.38, 0.0], [-68.5, 79.5, 1.05, 0.22], [-55.5, 79.5, 1.05, -0.20]].forEach(([cx, cz, sc, ry], ci) => {
     const cy = getMiracleOpenWorldGroundHeight(cx, cz);
@@ -1924,7 +1963,7 @@ function buildMiracleRegionalLandmarks() {
     grassBlade.rotation.set((g % 3 - 1) * 0.18, g * 0.7, ((g + 1) % 3 - 1) * 0.20);
     miracleTombCoverGroup.add(grassBlade);
   }
-  miracleTombCoverGroup.visible = !isStage3Cleared;
+  miracleTombCoverGroup.visible = !window.isMiracleMultiplayerMode && !isStage3Cleared;
   worldGroup.add(miracleTombCoverGroup);
 
   // 6) 외곽 숲, 하늘 구름 22개, 그리고 하늘을 자유롭게 날아다니는 소프트 로우폴리 새 16마리 배치
@@ -1938,7 +1977,8 @@ function buildMiracleRegionalLandmarks() {
     if (Math.hypot(tx + 22, tz - 91) < 13.0) continue;
     if (isNearSowerFarmPlot(tx, tz, 9.5)) continue;
     if (isNearMustardPlot(tx, tz, 6.2)) continue;
-    if (Math.hypot(tx - 63, tz - 18) < 13.0) continue;
+    if (Math.hypot(tx - 63, tz - 18) < 13.5) continue;
+    if (isNearMpVillageZone(tx, tz, 7.5)) continue;
     let outerTree = null;
     if (i % 3 === 0) outerTree = addLowPolyCypressPineTree(tx, tz, 1.15, true);
     else if (i % 4 === 0) outerTree = addLowPolyPalmTree(tx, tz, 1.15, true);
@@ -2006,6 +2046,23 @@ function createMiracleSpotMarker(x, z, colorHex, iconTitle, npcPreset = 'discipl
   let ring = null;
   let kneeAura = null;
 
+  const buildTerrainConformingRingGeo = (innerR, outerR, segs) => {
+    const geo = new THREE.RingGeometry(innerR, outerR, segs, 2);
+    geo.rotateX(-Math.PI / 2);
+    const posAttr = geo.attributes && geo.attributes.position;
+    if (posAttr) {
+      for (let i = 0; i < posAttr.count; i++) {
+        const vx = posAttr.getX(i);
+        const vz = posAttr.getZ(i);
+        const gh = getMiracleOpenWorldGroundHeight(x + vx, z + vz);
+        posAttr.setY(i, (gh - by) + 0.06);
+      }
+      posAttr.needsUpdate = true;
+      geo.computeVertexNormals();
+    }
+    return geo;
+  };
+
   if (useTallBeam) {
     const beamGeo = new THREE.CylinderGeometry(1.08, 1.08, 48, 16, 1, true);
     beamGeo.translate(0, 24, 0);
@@ -2020,11 +2077,16 @@ function createMiracleSpotMarker(x, z, colorHex, iconTitle, npcPreset = 'discipl
     beam.position.set(0, 0.02, 0);
 
     ring = new THREE.Mesh(
-      new THREE.RingGeometry(1.35, 1.95, 24),
-      new THREE.MeshBasicMaterial({ color: colorHex, side: THREE.DoubleSide })
+      buildTerrainConformingRingGeo(1.35, 1.95, 24),
+      new THREE.MeshBasicMaterial({
+        color: colorHex,
+        side: THREE.DoubleSide,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -1
+      })
     );
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.set(0, 0.06, 0);
+    ring.position.set(0, 0, 0);
     grp.add(beam, ring);
   } else {
     if (typeof createIrregularKneeLightAura === 'function') {
@@ -2032,11 +2094,16 @@ function createMiracleSpotMarker(x, z, colorHex, iconTitle, npcPreset = 'discipl
       grp.add(kneeAura);
     } else {
       ring = new THREE.Mesh(
-        new THREE.RingGeometry(1.15, 1.65, 20),
-        new THREE.MeshBasicMaterial({ color: colorHex, side: THREE.DoubleSide })
+        buildTerrainConformingRingGeo(1.15, 1.65, 20),
+        new THREE.MeshBasicMaterial({
+          color: colorHex,
+          side: THREE.DoubleSide,
+          polygonOffset: true,
+          polygonOffsetFactor: -1,
+          polygonOffsetUnits: -1
+        })
       );
-      ring.rotation.x = -Math.PI / 2;
-      ring.position.set(0, 0.06, 0);
+      ring.position.set(0, 0, 0);
       grp.add(ring);
     }
   }
@@ -2178,7 +2245,7 @@ function spawnMiracleMainStageSpots() {
     {
       stageNum: 3,
       subModeKey: 'main3_cross',
-      x: -36, z: 68,
+      x: -20, z: 68,
       color: 0xf43f5e,
       npcPreset: 'female_1',
       title: '✝️ [메인 스테이지 3] 십자가 사건: 골고다로 가는 길',
@@ -9588,21 +9655,23 @@ function buildMiracleNightEnvironmentProps() {
     }
   };
 
-  // 1) 예루살렘 성전 외곽 성문·본관 청동 화로 불꽃 4기 + 성전 주변 독립 화롯대 6기 (총 10기)
-  const gateY = getMiracleOpenWorldGroundHeight(0, 46);
-  const templeY = getMiracleOpenWorldGroundHeight(0, 72);
-  const mountedBowls = [
-    { x: -2.65, y: gateY + 1.38, z: 44.45 },
-    { x:  2.65, y: gateY + 1.38, z: 44.45 },
-    { x: -4.10, y: templeY + 1.74, z: 62.80 },
-    { x:  4.10, y: templeY + 1.74, z: 62.80 }
-  ];
-  mountedBowls.forEach((b, idx) => {
-    const fl = createTempleBowlFlameProp(0.95);
-    fl.group.position.set(b.x, b.y, b.z);
-    worldGroup.add(fl.group);
-    registerFire(fl, b.x, b.y, b.z, 0xff8c2b, 2.50, 16.5, idx * 1.1, 0.55);
-  });
+  // 1) 예루살렘 성전 외곽 성문·본관 청동 화로 불꽃 4기 (온라인 마을에서는 성전 5단계 완공 시 자체 생성!)
+  if (!window.isMiracleMultiplayerMode) {
+    const gateY = getMiracleOpenWorldGroundHeight(0, 46);
+    const templeY = getMiracleOpenWorldGroundHeight(0, 72);
+    const mountedBowls = [
+      { x: -2.65, y: gateY + 1.38, z: 44.45 },
+      { x:  2.65, y: gateY + 1.38, z: 44.45 },
+      { x: -4.10, y: templeY + 1.74, z: 62.80 },
+      { x:  4.10, y: templeY + 1.74, z: 62.80 }
+    ];
+    mountedBowls.forEach((b, idx) => {
+      const fl = createTempleBowlFlameProp(0.95);
+      fl.group.position.set(b.x, b.y, b.z);
+      worldGroup.add(fl.group);
+      registerFire(fl, b.x, b.y, b.z, 0xff8c2b, 2.50, 16.5, idx * 1.1, 0.55);
+    });
+  }
 
   const standaloneBraziers = [
     [-6.0, 39.5], [6.0, 39.5],
@@ -10146,19 +10215,27 @@ function buildMiracleOpenWorld(restoreSavedPos = false) {
   scene.background = new THREE.Color(miracleIsPostResurrection ? 0x60a5fa : 0x7dd3fc);
   scene.fog = new THREE.Fog(miracleIsPostResurrection ? 0xbae6fd : 0xbae6fd, 125, 360);
 
+  const isMpWorld = Boolean(window.isMiracleMultiplayerMode);
   buildSoftLowPolyWorldTerrain();
   buildMiracleRegionalLandmarks();
   buildMiracleRoadsideVillagesAndForests();
   buildMiracleNightEnvironmentProps();
-  buildMiracleNightPatrolSoldiers();
-  spawnMiracleMainStageSpots();
-  spawnMiracleOptionalEventSpots();
-  spawnMiracleRumorNpcs();
+  if (!isMpWorld) {
+    buildMiracleNightPatrolSoldiers();
+    spawnMiracleMainStageSpots();
+    spawnMiracleOptionalEventSpots();
+    spawnMiracleRumorNpcs();
+  } else {
+    miracleStageSpots = [];
+    miracleEventSpots = [];
+    miracleRumorNpcs = [];
+    miraclePatrolSoldiers = [];
+  }
   if (typeof window.syncMiracleTimeHUD === 'function') window.syncMiracleTimeHUD();
 
-  // 씨 뿌리기 미션 모든 단계 완료 후 심은 곡식 밭만 복원 (미완료 시 자동 성장 방지!)
+  // 씨 뿌리기 미션 모든 단계 완료 후 심은 곡식 밭만 복원 (미완료 시 자동 성장 방지 · 온라인 마을 제외!)
   loadMiracleSowerHistoryFromStorage();
-  if (Array.isArray(window.miracleSowerHistory) && window.miracleSowerHistory.length > 0) {
+  if (!isMpWorld && Array.isArray(window.miracleSowerHistory) && window.miracleSowerHistory.length > 0) {
     window.miracleSowerHistory.forEach(item => {
       if (item && item.allStepsCompleted === true) {
         const elapsedSec = Math.max(0, (Date.now() - (item.plantedAt || Date.now())) / 1000);
@@ -10170,7 +10247,7 @@ function buildMiracleOpenWorld(restoreSavedPos = false) {
   // 부활 이후 갈릴리 바닷가 아침식사 미션 완료 후 남은 불꺼진 모닥불(숯이 된 나무·재) 영구 복원!
   window.miracleBurntCampfireMeshes = [];
   loadMiracleBurntCampfiresFromStorage();
-  if (Array.isArray(window.miracleBurntCampfires) && window.miracleBurntCampfires.length > 0) {
+  if (!isMpWorld && Array.isArray(window.miracleBurntCampfires) && window.miracleBurntCampfires.length > 0) {
     window.miracleBurntCampfires.forEach(cf => {
       spawnPersistentBurntCampfire(cf.x, cf.z, false);
     });
@@ -10180,7 +10257,7 @@ function buildMiracleOpenWorld(restoreSavedPos = false) {
   const hasBuilderDone =
     (typeof miracleCompletedMissionIds !== 'undefined' && miracleCompletedMissionIds.has('par_builder')) ||
     (typeof miracleCollectedIds !== 'undefined' && miracleCollectedIds.has('par_builder'));
-  if (!window.isMiracleMultiplayerMode && hasBuilderDone) {
+  if (!isMpWorld && hasBuilderDone) {
     const bSpot = Array.isArray(miracleEventSpots) ? miracleEventSpots.find(s => s && s.id === 'par_builder') : null;
     const rx = (bSpot ? bSpot.x : 52) + (bSpot && bSpot.targetOffset ? bSpot.targetOffset.x : 5);
     const rz = (bSpot ? bSpot.z : 24) + (bSpot && bSpot.targetOffset ? bSpot.targetOffset.z : -3);
@@ -10193,20 +10270,20 @@ function buildMiracleOpenWorld(restoreSavedPos = false) {
   const hasMustardDone =
     (typeof miracleCompletedMissionIds !== 'undefined' && miracleCompletedMissionIds.has('par_mustard')) ||
     (typeof miracleCollectedIds !== 'undefined' && miracleCollectedIds.has('par_mustard'));
-  if (Array.isArray(window.miracleMustardHistory) && window.miracleMustardHistory.length > 0) {
+  if (!isMpWorld && Array.isArray(window.miracleMustardHistory) && window.miracleMustardHistory.length > 0) {
     window.miracleMustardHistory.forEach(item => {
       if (item && item.allStepsCompleted === true) {
         const elapsedSec = Math.max(0, (Date.now() - (item.plantedAt || Date.now())) / 1000);
         spawnPersistentMustardShrub(item.x, item.z, elapsedSec);
       }
     });
-  } else if (hasMustardDone) {
+  } else if (!isMpWorld && hasMustardDone) {
     const mSpot = Array.isArray(miracleEventSpots) ? miracleEventSpots.find(s => s && s.id === 'par_mustard') : null;
     const mx = (mSpot ? mSpot.x : 42) + (mSpot && mSpot.targetOffset ? mSpot.targetOffset.x : 4);
     const mz = (mSpot ? mSpot.z : -20) + (mSpot && mSpot.targetOffset ? mSpot.targetOffset.z : 0);
     spawnPersistentMustardShrub(mx, mz, MIRACLE_MUSTARD_GROW_DURATION_SEC);
   }
-  if (hasMustardDone) {
+  if (!isMpWorld && hasMustardDone) {
     const mSpot = Array.isArray(miracleEventSpots) ? miracleEventSpots.find(s => s && s.id === 'par_mustard') : null;
     if (mSpot) mSpot._treeGrown = true;
   }
@@ -10451,15 +10528,16 @@ function updateMiracleOpenWorldFrame(dt, now) {
   // 대화창을 닫은 직후(1.8초 이내)에는 다른/같은 캐릭터 대화가 곧바로 다시 열리지 않도록 전역 쿨타임 보호
   const dialogGraceReady = (now - (miracleDialogState.lastClosedAt || 0)) >= 1800;
 
+  const isMpModeNow = Boolean(window.isMiracleMultiplayerMode);
   const allUnlocked = (typeof isMiracleAllStagesUnlocked === 'function' && isMiracleAllStagesUnlocked());
   const activeStageNum = getNextActiveMainStageNumber();
-  const isStage3Cleared = Boolean(allUnlocked || miracleMainStagesCleared[3] || miracleMainStagesCleared[4] || miracleIsPostResurrection);
+  const isStage3Cleared = !isMpModeNow && Boolean(allUnlocked || miracleMainStagesCleared[3] || miracleMainStagesCleared[4] || miracleIsPostResurrection);
   const isFieldMissionActive = Boolean(miracleActiveFieldEvent);
   const isNightTimeNow = Boolean(window.MiracleDayNight && typeof window.MiracleDayNight.isNight === 'function' && window.MiracleDayNight.isNight());
   let currentActiveStageSpot = null;
 
   // [이전 스테이지 클리어 확인 동기화 보완 + 미션 중 타 스테이지 진입 불가 & 머리 위 태그 일시 해제 + 2회차 전체 해금]
-  miracleStageSpots.forEach((sp, idx) => {
+  if (!isMpModeNow) miracleStageSpots.forEach((sp, idx) => {
     if (sp.beam && sp.beam.visible) {
       const pulse = 1.0 + Math.sin(now * 0.004 + idx) * 0.15;
       sp.beam.scale.set(pulse, 1, pulse);
@@ -10612,7 +10690,7 @@ function updateMiracleOpenWorldFrame(dt, now) {
     }
   });
 
-  miracleEventSpots.forEach((ev) => {
+  if (!isMpModeNow) miracleEventSpots.forEach((ev) => {
     if (ev.isNightOnly) {
       const keepVisible = isNightTimeNow || (isFieldMissionActive && miracleActiveFieldEvent.spot === ev);
       if (ev.group) ev.group.visible = keepVisible;
@@ -10699,7 +10777,7 @@ function updateMiracleOpenWorldFrame(dt, now) {
     }
   });
 
-  miracleRumorNpcs.forEach((rn) => {
+  if (!isMpModeNow) miracleRumorNpcs.forEach((rn) => {
     updateMiracleActorWalkAI(rn, dt, now, 3.4);
     rn.pos.set(rn.mesh.position.x, rn.mesh.position.y + 0.5, rn.mesh.position.z);
 

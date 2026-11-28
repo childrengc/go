@@ -4,7 +4,7 @@
 // - 스테이지 3(십자가 사건): 넓어진 골고다 언덕 정상 고원과 세 십자가 등장 연출 적용
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_stages = '3.12.6';
+window.__GAME_BUILD_VERSIONS__.ep4_stages = '3.14.1';
 
 // 스테이지 1 완만한 곡선 해안선 X 계산기 (중앙 선착장 x≈20에서 북/남 양쪽으로 갈수록 뒤쪽(+X)으로 부드럽게 만곡)
 function getGalileeStage1ShoreX(wz) {
@@ -5902,9 +5902,58 @@ window.isPlayerMovementLocked = function () {
   return prev || stage3Lock;
 };
 
+window.__EP4_STAGE3_JESUS_LABEL_EXTRA_Y__ = { carryingCross: 1.45, walking: 1.15 };
+
+function getStage3JesusLabelAnchor(pos, carryingCross) {
+  const extraY = carryingCross
+    ? window.__EP4_STAGE3_JESUS_LABEL_EXTRA_Y__.carryingCross
+    : window.__EP4_STAGE3_JESUS_LABEL_EXTRA_Y__.walking;
+  return new THREE.Vector3(pos.x, pos.y + extraY, pos.z);
+}
+
+function syncMiracleStage3JumpBtnState(locked) {
+  const btn = document.getElementById('jump-action-btn');
+  if (!btn) return;
+  if (locked) {
+    btn.style.opacity = '0.38';
+    btn.style.filter = 'grayscale(0.75)';
+    btn.dataset.jumpLocked = '1';
+  } else {
+    btn.style.opacity = '';
+    btn.style.filter = '';
+    delete btn.dataset.jumpLocked;
+  }
+}
+window.syncMiracleStage3JumpBtnState = syncMiracleStage3JumpBtnState;
+
+if (!window.__ep4Stage3JumpLockInstalled) {
+  window.__ep4Stage3JumpLockInstalled = true;
+  const _ep4StagesOrigJumpLock = window.isPlayerJumpLocked;
+  window.isPlayerJumpLocked = function () {
+    if (typeof _ep4StagesOrigJumpLock === 'function' && _ep4StagesOrigJumpLock()) return true;
+    if (
+      typeof currentEpisode !== 'undefined' &&
+      currentEpisode === 'miracle' &&
+      typeof miracleSubMode !== 'undefined' &&
+      miracleSubMode === 'main3_cross' &&
+      typeof miracleActiveMiniState !== 'undefined' &&
+      miracleActiveMiniState &&
+      (
+        miracleActiveMiniState.phase === 'pickup_cross' ||
+        miracleActiveMiniState.phase === 'carry' ||
+        miracleActiveMiniState.phase === 'raise_cross'
+      )
+    ) {
+      return true;
+    }
+    return false;
+  };
+}
+
 function openMiracleStage3CrossFailModal() {
   const st = miracleActiveMiniState;
   if (st) st.phase = 'failed';
+  syncMiracleStage3JumpBtnState(false);
   isPlaying = false;
   isTimeAttackActive = false;
   if (typeof miracleDialogState !== 'undefined' && miracleDialogState.active) {
@@ -6029,7 +6078,11 @@ function updateMiracleMainStage3Frame(dt, now) {
     updateMiracleDynamicSun(dt, now);
   }
   const st = miracleActiveMiniState;
-  if (!st || st.phase === 'failed') return;
+  if (!st || st.phase === 'failed') {
+    syncMiracleStage3JumpBtnState(false);
+    return;
+  }
+  syncMiracleStage3JumpBtnState(Boolean(typeof window.isPlayerJumpLocked === 'function' && window.isPlayerJumpLocked()));
   if (typeof window.isMissionGuideBubbleBlockingAction === 'function' && window.isMissionGuideBubbleBlockingAction()) return;
   let nextGuidePos = null;
   if (Array.isArray(st.campfires)) {
@@ -6154,7 +6207,7 @@ function updateMiracleMainStage3Frame(dt, now) {
 
       nextGuidePos = st.jesusMesh.position;
       const jd = Math.hypot(playerPos.x - jPos.x, playerPos.z - jPos.z);
-      updateWorldLabelPos(st.jesusLabel, jPos, jd < MIRACLE_STAGE_TAG_DIST);
+      updateWorldLabelPos(st.jesusLabel, getStage3JesusLabelAnchor(jPos, true), jd < MIRACLE_STAGE_TAG_DIST);
 
       if (jd < 3.1 && !dialogOpen && st.carryPromptCooldown <= 0) {
         st.carryPromptCooldown = 3.5;
@@ -6210,7 +6263,7 @@ function updateMiracleMainStage3Frame(dt, now) {
         });
       }
       nextGuidePos = jPos;
-      updateWorldLabelPos(st.jesusLabel, jPos, true);
+      updateWorldLabelPos(st.jesusLabel, getStage3JesusLabelAnchor(jPos, true), true);
 
       const distToJesus = Math.hypot(playerPos.x - jPos.x, playerPos.z - jPos.z);
       if (distToJesus < 1.85) {
@@ -6351,7 +6404,7 @@ function updateMiracleMainStage3Frame(dt, now) {
         animateEscortSoldier(sol, px, pz, Math.PI, false, false);
       });
     }
-    if (st.jesusMesh) updateWorldLabelPos(st.jesusLabel, st.jesusMesh.position, true);
+    if (st.jesusMesh) updateWorldLabelPos(st.jesusLabel, getStage3JesusLabelAnchor(st.jesusMesh.position, true), true);
     nextGuidePos = st.goalPos;
 
     if (p >= 1.0) {
@@ -6514,7 +6567,7 @@ function updateMiracleMainStage3Frame(dt, now) {
           }
         }
       }
-      updateWorldLabelPos(st.jesusLabel, st.jesusMesh.position, true);
+      updateWorldLabelPos(st.jesusLabel, getStage3JesusLabelAnchor(st.jesusMesh.position, false), true);
     }
 
     // 로마 군인 3명: 반대로 가면 따라오지 않고 제자리에 서서 플레이어를 바라봄! 정상으로 오를 때만 함께 행군!
@@ -6639,6 +6692,7 @@ function updateMiracleMainStage3Frame(dt, now) {
 
     if (t >= (st.raiseDuration || 2.55)) {
       st.phase = 'golgotha_arrived';
+      syncMiracleStage3JumpBtnState(false);
       miracleMainStagesCleared[3] = true;
       saveMiracleNotebookProgress();
       if (typeof window.recordMiracleMissionCompleted === 'function') {

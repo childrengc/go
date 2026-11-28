@@ -5,7 +5,7 @@
 // =========================================================================
 
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.core = '3.12.6';
+window.__GAME_BUILD_VERSIONS__.core = '3.14.1';
 
 function installEp4MattePhongSpecGuard() {
   if (typeof THREE !== 'undefined' && THREE.ShaderChunk && THREE.ShaderChunk.lights_phong_pars_fragment) {
@@ -8757,6 +8757,16 @@ function playerJump() {
   if (typeof window.isMissionGuideBubbleBlockingAction === 'function' && window.isMissionGuideBubbleBlockingAction()) return;
   if (!isPlaying || stage2CountdownActive || doveCutscene.active || pillarCutscene.active || seaPartingCutscene.active || sinaiCutscene.active) return;
   if (typeof window.isPlayerMovementLocked === 'function' && window.isPlayerMovementLocked()) return;
+  if (typeof window.isPlayerJumpLocked === 'function' && window.isPlayerJumpLocked()) {
+    const nowMs = Date.now();
+    if (!window._lastJumpLockedToastAt || nowMs - window._lastJumpLockedToastAt > 2200) {
+      window._lastJumpLockedToastAt = nowMs;
+      if (typeof showToast === 'function') {
+        showToast('✝️ 무거운 십자가를 들고 있어 점프할 수 없어요!');
+      }
+    }
+    return;
+  }
   if (isGrounded || playerPos.y <= getSupportHeight(playerPos.x, playerPos.z, playerPos.y) + 0.18) {
     playerVelY = (currentEpisode === 'exodus' && currentStage === 3) ? 9.6 : 11.5;
     isGrounded = false; playSfx('jump');

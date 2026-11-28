@@ -5,7 +5,7 @@
 // - 멀티플레이 미션 1: 반석 위의 집 확장형 (돌 20 + 나무 20, 도끼질 5회 / 돌 캐기 5회, 완료 시 말씀 출력)
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_mp = '3.12.6';
+window.__GAME_BUILD_VERSIONS__.ep4_mp = '3.14.1';
 
 // [선택적 온라인 릴레이 설정] 무료 Firebase Realtime Database URL을 넣으면 서로 다른 기기 간 실시간 온라인 접속!
 // 예: window.MP_FIREBASE_DB_URL = 'https://your-church-game-default-rtdb.asia-southeast1.firebasedatabase.app';
@@ -681,8 +681,8 @@ const MiracleMultiplayer = {
         </div>
 
         <div class="mp-mission-banner p-2 rounded-2xl bg-sky-50 border border-sky-300 text-left text-[11px] text-sky-950 mb-2 leading-snug shrink-0">
-          <b>🏗️ 협동 미션 1 — 반석 위의 집 확장형:</b>
-          외곽 나무(도끼질 5회 → 🪵나무 1)와 바위(채굴 5회 → 🪨돌 1)를 캐서 <b>돌 20개 + 나무 20개</b>를 함께 모아 집을 세워 보세요!
+          <b>🏘️ 협동 온라인 마을 — 우리가 함께 세우는 성경 마을:</b>
+          나무(도끼질 5회)·돌(채굴 5회)을 모아 <b>대형 2층 반석 위의 집</b>과 <b>상점 4곳(양젖·생선·곡물·옷)</b>을 함께 짓고, <b>마을 일지</b>와 <b>중앙 게시판</b>에 발자취를 남겨 보세요!
         </div>
 
         <button id="mp-enter-world-btn" type="button" onclick="window.MiracleMultiplayer.enterMultiplayerWorld()"
@@ -758,23 +758,27 @@ const MiracleMultiplayer = {
     hud.className = 'hidden fixed right-2 sm:right-3 z-20 flex flex-col items-end gap-1 pointer-events-auto';
     hud.style.top = '84px';
     hud.innerHTML = `
-      <div class="w-[170px] sm:w-[186px] p-2 rounded-2xl bg-slate-900/86 border border-emerald-400/85 text-white shadow-lg backdrop-blur-sm text-left">
+      <div class="w-[178px] sm:w-[196px] p-2 rounded-2xl bg-slate-900/86 border border-emerald-400/85 text-white shadow-lg backdrop-blur-sm text-left">
         <div class="flex items-center justify-between gap-1 cursor-pointer" onclick="window.MiracleMultiplayer.toggleQuestCard()">
-          <span class="font-jua text-[11px] text-amber-300 truncate">🏗️ 공동#1 반석의 집</span>
+          <span id="mp-hud-focus-title" class="font-jua text-[11px] text-amber-300 truncate">🏗️ 반석 위의 집</span>
           <button id="mp-quest-toggle" type="button" class="text-[10px] text-slate-300 leading-none px-1">▴</button>
         </div>
         <div id="mp-quest-body" class="mt-1 space-y-1">
           <div class="flex items-center justify-between text-[10px] font-jua">
-            <span class="text-sky-300">🪨 <b id="mp-hud-stone">0/20</b></span>
-            <span class="text-amber-300">🪵 <b id="mp-hud-wood">0/20</b></span>
+            <span class="text-sky-300"><span id="mp-hud-stone-lbl">🪨</span> <b id="mp-hud-stone">0/20</b></span>
+            <span class="text-amber-300"><span id="mp-hud-wood-lbl">🪵</span> <b id="mp-hud-wood">0/20</b></span>
           </div>
           <div class="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
             <div id="mp-hud-prog" class="h-full bg-gradient-to-r from-emerald-400 to-amber-300 transition-all duration-200" style="width:0%"></div>
           </div>
           <div class="flex items-center justify-between gap-1">
-            <span id="mp-hud-carry" class="text-[9px] text-emerald-200 font-bold truncate">🎒 🪨0 · 🪵0</span>
-            <button type="button" onclick="window.MiracleMultiplayer.teleportNearRockSite()"
-                    class="px-1.5 py-0.5 rounded-md bg-amber-400 hover:bg-amber-300 text-slate-950 font-jua text-[9px] shrink-0">⛰️ 이동</button>
+            <span id="mp-hud-carry" class="text-[9px] text-emerald-200 font-bold truncate">🎒 🪵0 · 🪨0</span>
+            <div class="flex items-center gap-0.5 shrink-0">
+              <button type="button" onclick="window.MiracleMpVillage && window.MiracleMpVillage.openJournalModal('coop')"
+                      class="px-1.5 py-0.5 rounded-md bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-jua text-[9px]">📖 일지</button>
+              <button type="button" onclick="window.MiracleMultiplayer.teleportNearFocusedSite()"
+                      class="px-1.5 py-0.5 rounded-md bg-amber-400 hover:bg-amber-300 text-slate-950 font-jua text-[9px]">📍 이동</button>
+            </div>
           </div>
         </div>
       </div>
@@ -852,10 +856,10 @@ const MiracleMultiplayer = {
     this.active = true;
     window.isMiracleMultiplayerMode = true;
 
-    // 멀티플레이 방 미션 상태 초기화 또는 저장 상태 로드
+    // 멀티플레이 온라인 마을 방 상태 로드 & Pull-Before-Push 클라우드 동기화 시작
     this.loadRoomMissionFromLocal();
 
-    // 화면 숨기고 에피소드 4 오픈월드 입장 (전용 멀티플레이 모드!)
+    // 화면 숨기고 에피소드 4 온라인 마을 입장
     ['screen-opening', 'screen-class', 'screen-map'].forEach(id => {
       const el = document.getElementById(id);
       if (el) { el.classList.add('hidden'); el.classList.remove('flex'); }
@@ -890,11 +894,14 @@ const MiracleMultiplayer = {
       buildMiracleOpenWorld(false);
     }
 
-    // 멀티플레이 플레이어를 확장 반석 부지 근처(x=50, z=24)에 안전하게 배치
-    const sx = 50, sz = 24;
+    // 온라인 마을 중앙 광장(중앙 게시판 x=0, z=-6 및 4곳 상점 터 정면)에 배치
+    const sx = 0.0, sz = -14.0;
     const sy = (typeof getMiracleOpenWorldGroundHeight === 'function') ? getMiracleOpenWorldGroundHeight(sx, sz) : 0.25;
     if (typeof playerPos !== 'undefined' && playerPos) {
       playerPos.set(sx, sy, sz);
+      if (typeof playerFacing !== 'undefined') playerFacing = 0;
+      if (typeof cameraYaw !== 'undefined') cameraYaw = 0;
+      if (typeof cameraTargetYaw !== 'undefined') cameraTargetYaw = 0;
       if (typeof playerGroup !== 'undefined' && playerGroup) playerGroup.position.copy(playerPos);
       if (typeof snapCameraToPlayer === 'function') snapCameraToPlayer();
     }
@@ -908,7 +915,7 @@ const MiracleMultiplayer = {
 
     if (typeof playSfx === 'function') playSfx('clear');
     if (typeof showToast === 'function') {
-      showToast(`🌐 [${this.roomId}] 멀티플레이 입장! 나무(5회 도끼질)·돌(5회 채굴)을 각 20개 모아 반석 위의 집을 완성하세요!`);
+      showToast(`🌐 [${this.roomId}] 온라인 마을 입장! 건물·상점 건축, 낚시·농사·목축, 성전 헌금 & 마을 꾸미기를 함께 즐겨요!`);
     }
   },
 
@@ -925,6 +932,10 @@ const MiracleMultiplayer = {
     this.active = false;
     window.isMiracleMultiplayerMode = false;
     window.selectedMiracleHeroPreset = { preset: 'hero', idx: 0 };
+    if (window.MiracleMpVillage) {
+      window.MiracleMpVillage.closeJournalModal();
+      window.MiracleMpVillage.closeBulletinModal();
+    }
 
     if (this.channel) {
       try { this.channel.close(); } catch (e) {}
@@ -952,6 +963,9 @@ const MiracleMultiplayer = {
     if (typeof window.updateMiracleMiniNavigatorUI === 'function') {
       window.updateMiracleMiniNavigatorUI({ visible: false });
     }
+    if (typeof updateMiracleNotebookHudBadge === 'function') {
+      updateMiracleNotebookHudBadge();
+    }
   },
 
   getRoomStorageKey() {
@@ -959,6 +973,10 @@ const MiracleMultiplayer = {
   },
 
   loadRoomMissionFromLocal() {
+    if (window.MiracleMpVillage && typeof window.MiracleMpVillage.initRoom === 'function') {
+      window.MiracleMpVillage.initRoom(this.roomId);
+      return;
+    }
     this.mission.stoneDeposited = 0;
     this.mission.woodDeposited = 0;
     this.mission.carryStone = 0;
@@ -979,6 +997,10 @@ const MiracleMultiplayer = {
   },
 
   saveRoomMissionToLocal() {
+    if (window.MiracleMpVillage && typeof window.MiracleMpVillage.saveLocalState === 'function') {
+      window.MiracleMpVillage.saveLocalState();
+      return;
+    }
     try {
       localStorage.setItem(this.getRoomStorageKey(), JSON.stringify({
         stone: this.mission.stoneDeposited,
@@ -990,6 +1012,10 @@ const MiracleMultiplayer = {
   },
 
   resetRockHouseMission() {
+    if (window.MiracleMpVillage && typeof window.MiracleMpVillage.resetRoomVillage === 'function') {
+      window.MiracleMpVillage.resetRoomVillage();
+      return;
+    }
     this.mission.stoneDeposited = 0;
     this.mission.woodDeposited = 0;
     this.mission.carryStone = 0;
@@ -1030,6 +1056,9 @@ const MiracleMultiplayer = {
         }
       });
     }
+    const v = window.MiracleMpVillage;
+    const myKey = v ? v.getMyPlayerKey() : this.peerId;
+    const myRec = v && v.contribs ? v.contribs[myKey] : null;
     this.broadcastMessage({
       type: 'hello',
       peerId: this.peerId,
@@ -1038,7 +1067,12 @@ const MiracleMultiplayer = {
       idx: (window.selectedMiracleHeroPreset && window.selectedMiracleHeroPreset.idx) || 0,
       stone: this.mission.stoneDeposited,
       wood: this.mission.woodDeposited,
-      completed: this.mission.completed
+      completed: this.mission.completed,
+      resetEpoch: v ? v.resetEpoch : 0,
+      contribs: myRec ? { [myKey]: myRec } : undefined,
+      footprints: v ? v.footprints : undefined,
+      decorations: v ? v.decorations : undefined,
+      farm: v ? v.farm : undefined
     });
   },
 
@@ -1051,23 +1085,6 @@ const MiracleMultiplayer = {
     try {
       localStorage.setItem('ep4_mp_evt_' + this.roomId, JSON.stringify(payload));
     } catch (e) {}
-    const fbBase = String(window.MP_FIREBASE_DB_URL || '').replace(/\/+$/, '');
-    if (fbBase && msg && msg.type === 'mission_sync') {
-      const roomKey = encodeURIComponent(this.roomId);
-      try {
-        fetch(`${fbBase}/mp_rooms/${roomKey}/mission.json`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            stone: this.mission.stoneDeposited,
-            wood: this.mission.woodDeposited,
-            completed: this.mission.completed,
-            reset: Boolean(msg.reset),
-            ts: Date.now()
-          })
-        }).catch(() => {});
-      } catch (e) {}
-    }
   },
 
   handleIncomingMessage(msg) {
@@ -1146,20 +1163,36 @@ const MiracleMultiplayer = {
       }
     }
 
+    if (msg.type === 'village_sync' || msg.type === 'hello') {
+      if (window.MiracleMpVillage && (msg.contribs || msg.footprints || msg.decorations || msg.farm || msg.news || typeof msg.resetEpoch === 'number')) {
+        window.MiracleMpVillage.applyRoomSnapshot(msg, { fromCloud: Boolean(msg.fromCloud) });
+      }
+    }
+
+    if (msg.type === 'village_news' && msg.item) {
+      if (window.MiracleMpVillage) {
+        window.MiracleMpVillage.applyRoomSnapshot({ news: [msg.item] }, { fromCloud: false });
+      }
+    }
+
     if (msg.type === 'mission_sync' || msg.type === 'hello') {
       if (typeof msg.stone === 'number' && typeof msg.wood === 'number') {
-        const nextStone = msg.reset ? msg.stone : Math.max(this.mission.stoneDeposited, Math.min(this.mission.stoneReq, msg.stone));
-        const nextWood = msg.reset ? msg.wood : Math.max(this.mission.woodDeposited, Math.min(this.mission.woodReq, msg.wood));
-        const changed = (nextStone !== this.mission.stoneDeposited || nextWood !== this.mission.woodDeposited || Boolean(msg.reset));
-        this.mission.stoneDeposited = nextStone;
-        this.mission.woodDeposited = nextWood;
-        if (msg.reset) this.mission.completed = false;
-        if (changed) {
-          this.saveRoomMissionToLocal();
-          this.rebuildGrandRockHouseVisuals();
-          this.syncHUD();
-          if (!this.mission.completed && this.mission.stoneDeposited >= this.mission.stoneReq && this.mission.woodDeposited >= this.mission.woodReq) {
-            this.completeRockHouseMission();
+        if (window.MiracleMpVillage && msg.fromCloud && !msg.contribs) {
+          window.MiracleMpVillage.applyRoomSnapshot({ mission: msg }, { fromCloud: true });
+        } else if (!window.MiracleMpVillage) {
+          const nextStone = msg.reset ? msg.stone : Math.max(this.mission.stoneDeposited, Math.min(this.mission.stoneReq, msg.stone));
+          const nextWood = msg.reset ? msg.wood : Math.max(this.mission.woodDeposited, Math.min(this.mission.woodReq, msg.wood));
+          const changed = (nextStone !== this.mission.stoneDeposited || nextWood !== this.mission.woodDeposited || Boolean(msg.reset));
+          this.mission.stoneDeposited = nextStone;
+          this.mission.woodDeposited = nextWood;
+          if (msg.reset) this.mission.completed = false;
+          if (changed) {
+            this.saveRoomMissionToLocal();
+            this.rebuildGrandRockHouseVisuals();
+            this.syncHUD();
+            if (!this.mission.completed && this.mission.stoneDeposited >= this.mission.stoneReq && this.mission.woodDeposited >= this.mission.woodReq) {
+              this.completeRockHouseMission();
+            }
           }
         }
       }
@@ -1228,39 +1261,125 @@ const MiracleMultiplayer = {
 
   getNavigatorTarget() {
     if (!this.active) return null;
+    const v = window.MiracleMpVillage;
+    if (v) {
+      // 1) 들고 있는 상점 판매용 생산품(양젖/물고기/밀단/양털)이 있으면 해당 상점으로 즉시 안내
+      if (v.GOODS_ORDER && v.GOODS_META) {
+        for (let i = 0; i < v.GOODS_ORDER.length; i++) {
+          const gid = v.GOODS_ORDER[i];
+          if ((v.bag[gid] || 0) > 0) {
+            const meta = v.GOODS_META[gid];
+            const shopProj = v.PROJECTS[meta.shopId];
+            if (shopProj && v.getBuildProgress(meta.shopId).completed) {
+              const sy = (typeof getMiracleOpenWorldGroundHeight === 'function') ? getMiracleOpenWorldGroundHeight(shopProj.pos.x, shopProj.pos.z) : 0.25;
+              return { pos: new THREE.Vector3(shopProj.pos.x, sy, shopProj.pos.z), label: `${shopProj.icon} ${shopProj.name} 납품` };
+            }
+          }
+        }
+      }
+
+      // 2) 성전이 미완공이고 보유 공동기금 달란트가 있으면 성전 헌금함 안내
+      const econ = (typeof v.getEconomySummary === 'function') ? v.getEconomySummary() : null;
+      if (v.areAllBuildsCompleted() && econ) {
+        if (!econ.templeCompleted && econ.availableTalents > 0) {
+          const oPos = v.ACTIVITY_SPOTS.temple.offerPos;
+          const oy = (typeof getMiracleOpenWorldGroundHeight === 'function') ? getMiracleOpenWorldGroundHeight(oPos.x, oPos.z) : 0.25;
+          return { pos: new THREE.Vector3(oPos.x, oy, oPos.z), label: '⛪ 성전 헌금함' };
+        }
+        if (v.isActivityUnlocked('farm')) {
+          const st = v.farm ? (v.farm.step || 0) : 0;
+          if (st === 3 && (v.bag.waterBucket || 0) <= 0) {
+            const wPos = v.ACTIVITY_SPOTS.well.pos;
+            const wy = (typeof getMiracleOpenWorldGroundHeight === 'function') ? getMiracleOpenWorldGroundHeight(wPos.x, wPos.z) : 0.25;
+            return { pos: new THREE.Vector3(wPos.x, wy, wPos.z), label: '💧 야곱의 우물' };
+          }
+          if (st === 2 && (v.bag.seed || 0) <= 0) {
+            const sb = v.ACTIVITY_SPOTS.seed_bush.positions[0];
+            const sy = (typeof getMiracleOpenWorldGroundHeight === 'function') ? getMiracleOpenWorldGroundHeight(sb.x, sb.z) : 0.25;
+            return { pos: new THREE.Vector3(sb.x, sy, sb.z), label: '🌱 들판 씨앗 수풀' };
+          }
+          const fm = v.ACTIVITY_SPOTS.farm.pos;
+          const fy = (typeof getMiracleOpenWorldGroundHeight === 'function') ? getMiracleOpenWorldGroundHeight(fm.x, fm.z) : 0.25;
+          return { pos: new THREE.Vector3(fm.x, fy, fm.z), label: '🌱 5단계 농사 밭' };
+        }
+        const bPos = v.BULLETIN_POS;
+        const by = (typeof getMiracleOpenWorldGroundHeight === 'function') ? getMiracleOpenWorldGroundHeight(bPos.x, bPos.z) : 0.25;
+        return { pos: new THREE.Vector3(bPos.x, by, bPos.z), label: '📌 마을 중앙 게시판' };
+      }
+
+      let fid = v.getNextIncompleteBuildId();
+      let proj = v.PROJECTS[fid] || v.PROJECTS.rock_house;
+      let pr = v.getBuildProgress(fid);
+      if ((v.bag.wood > 0 && pr.wood < pr.woodReq) || (v.bag.stone > 0 && pr.stone < pr.stoneReq)) {
+        const sy = (typeof getMiracleOpenWorldGroundHeight === 'function') ? getMiracleOpenWorldGroundHeight(proj.pos.x, proj.pos.z) : 0.25;
+        return { pos: new THREE.Vector3(proj.pos.x, sy, proj.pos.z), label: `${proj.icon} ${proj.name}` };
+      }
+      // 포커스된 현장 외 다른 미완공 현장에 현재 들고 있는 재료가 필요하면 가장 가까운 현장으로 안내
+      if (v.bag.wood > 0 || v.bag.stone > 0) {
+        for (let i = 0; i < v.PROJECT_ORDER.length; i++) {
+          const cid = v.PROJECT_ORDER[i];
+          const cp = v.getBuildProgress(cid);
+          if (!cp.completed && ((v.bag.wood > 0 && cp.wood < cp.woodReq) || (v.bag.stone > 0 && cp.stone < cp.stoneReq))) {
+            const cProj = v.PROJECTS[cid];
+            const cy = (typeof getMiracleOpenWorldGroundHeight === 'function') ? getMiracleOpenWorldGroundHeight(cProj.pos.x, cProj.pos.z) : 0.25;
+            return { pos: new THREE.Vector3(cProj.pos.x, cy, cProj.pos.z), label: `${cProj.icon} ${cProj.name}` };
+          }
+        }
+      }
+      const needStone = Math.max(0, pr.stoneReq - pr.stone);
+      const needWood = Math.max(0, pr.woodReq - pr.wood);
+      const preferKind = (needStone > needWood) ? 'stone' : (needWood > 0 ? 'wood' : 'stone');
+      const nodes = Array.isArray(window.miracleHarvestNodes) ? window.miracleHarvestNodes : [];
+      let best = null, bestD = Infinity;
+      for (let i = 0; i < nodes.length; i++) {
+        const nd = nodes[i];
+        if (!nd || nd.depleted) continue;
+        if (needStone > 0 && needWood > 0 && nd.kind !== preferKind) continue;
+        if (needStone === 0 && nd.kind === 'stone') continue;
+        if (needWood === 0 && nd.kind === 'wood') continue;
+        const d = Math.hypot(playerPos.x - nd.x, playerPos.z - nd.z);
+        if (d < bestD) { bestD = d; best = nd; }
+      }
+      if (best) {
+        return {
+          pos: new THREE.Vector3(best.x, best.y || 0.25, best.z),
+          label: best.kind === 'wood' ? '🪵 가까운 나무' : '🪨 가까운 바위'
+        };
+      }
+      const sy = (typeof getMiracleOpenWorldGroundHeight === 'function') ? getMiracleOpenWorldGroundHeight(proj.pos.x, proj.pos.z) : 0.25;
+      return { pos: new THREE.Vector3(proj.pos.x, sy, proj.pos.z), label: `${proj.icon} ${proj.name}` };
+    }
     const site = window.MIRACLE_GRAND_BEDROCK_POS || { x: 63, z: 18 };
     const sy = (typeof getMiracleOpenWorldGroundHeight === 'function') ? getMiracleOpenWorldGroundHeight(site.x, site.z) : 0.25;
-    if (this.mission.completed || this.mission.carryStone > 0 || this.mission.carryWood > 0) {
-      return {
-        pos: new THREE.Vector3(site.x, sy, site.z),
-        label: this.mission.completed ? '🏠 반석 위의 집' : '⛰️ 반석 집터'
-      };
-    }
-    const needStone = Math.max(0, this.mission.stoneReq - this.mission.stoneDeposited);
-    const needWood = Math.max(0, this.mission.woodReq - this.mission.woodDeposited);
-    const preferKind = (needStone > needWood) ? 'stone' : (needWood > 0 ? 'wood' : 'stone');
-    const nodes = Array.isArray(window.miracleHarvestNodes) ? window.miracleHarvestNodes : [];
-    let best = null, bestD = Infinity;
-    for (let i = 0; i < nodes.length; i++) {
-      const nd = nodes[i];
-      if (!nd || nd.depleted) continue;
-      if (needStone > 0 && needWood > 0 && nd.kind !== preferKind) continue;
-      if (needStone === 0 && nd.kind === 'stone') continue;
-      if (needWood === 0 && nd.kind === 'wood') continue;
-      const d = Math.hypot(playerPos.x - nd.x, playerPos.z - nd.z);
-      if (d < bestD) { bestD = d; best = nd; }
-    }
-    if (best) {
-      return {
-        pos: new THREE.Vector3(best.x, best.y || 0.25, best.z),
-        label: best.kind === 'wood' ? '🪵 가까운 나무' : '🪨 가까운 바위'
-      };
-    }
     return { pos: new THREE.Vector3(site.x, sy, site.z), label: '⛰️ 반석 집터' };
+  },
+
+  teleportNearFocusedSite() {
+    if (!this.active) return;
+    const v = window.MiracleMpVillage;
+    if (v) {
+      if (v.areAllBuildsCompleted()) {
+        const econ = v.getEconomySummary();
+        if (!econ.templeCompleted) {
+          v.teleportToActivity('temple');
+          return;
+        }
+        v.teleportToActivity('bulletin');
+        return;
+      }
+      const fid = v.getNextIncompleteBuildId();
+      v.teleportToProject(fid);
+      return;
+    }
+    this.teleportNearRockSite();
   },
 
   teleportNearRockSite() {
     if (!this.active) return;
+    if (window.MiracleMpVillage) {
+      window.MiracleMpVillage.teleportToProject('rock_house');
+      return;
+    }
     const site = window.MIRACLE_GRAND_BEDROCK_POS || { x: 63, z: 18 };
     const tx = site.x - 10.5, tz = site.z + 4.0;
     const ty = (typeof getMiracleOpenWorldGroundHeight === 'function') ? getMiracleOpenWorldGroundHeight(tx, tz) : 0.25;
@@ -1275,42 +1394,19 @@ const MiracleMultiplayer = {
 
   onOpenWorldBuilt() {
     if (!this.active) return;
-    const site = window.MIRACLE_GRAND_BEDROCK_POS || { x: 63, z: 18 };
-    const by = (typeof getMiracleOpenWorldGroundHeight === 'function') ? getMiracleOpenWorldGroundHeight(site.x, site.z) : 0.25;
-
-    const siteGrp = new THREE.Group();
-    const ring = new THREE.Mesh(
-      new THREE.RingGeometry(6.8, 7.6, 32),
-      new THREE.MeshBasicMaterial({ color: 0x34d399, side: THREE.DoubleSide, transparent: true, opacity: 0.80 })
-    );
-    ring.rotation.x = -Math.PI * 0.5;
-    ring.position.y = 0.86;
-    siteGrp.add(ring);
-
-    const houseGrp = new THREE.Group();
-    houseGrp.position.y = 0.80;
-    siteGrp.add(houseGrp);
-
-    siteGrp.position.set(site.x, by, site.z);
-    if (typeof worldGroup !== 'undefined' && worldGroup) worldGroup.add(siteGrp);
-
-    if (this.mission.siteLabel) this.mission.siteLabel.remove();
-    const sLbl = (typeof createWorldLabel === 'function')
-      ? createWorldLabel(`🏗️ [협동] 반석 위의 집 (🪨${this.mission.stoneDeposited}/20 · 🪵${this.mission.woodDeposited}/20)`)
-      : null;
-
-    this.mission.siteGroup = siteGrp;
-    this.mission.houseGroup = houseGrp;
-    this.mission.siteRing = ring;
-    this.mission.siteLabel = sLbl;
-    this.mission.builtStage = -1;
+    if (window.MiracleMpVillage && typeof window.MiracleMpVillage.onOpenWorldBuilt === 'function') {
+      window.MiracleMpVillage.onOpenWorldBuilt();
+      this.mission.siteGroup = window.MiracleMpVillage.houseSiteGroup;
+      this.mission.houseGroup = window.MiracleMpVillage.houseGroup;
+      this.mission.siteRing = window.MiracleMpVillage.houseRing;
+      this.mission.siteLabel = window.MiracleMpVillage.houseLabel;
+    }
 
     // 기존 접속 친구들 메시 다시 부착
     this.remotePlayers.forEach(rp => {
       if (rp.mesh && typeof worldGroup !== 'undefined' && worldGroup) worldGroup.add(rp.mesh);
     });
 
-    this.rebuildGrandRockHouseVisuals();
     this.ensureMultiplayerHUD();
     const badge = document.getElementById('mp-online-badge');
     if (badge) badge.classList.remove('hidden');
@@ -1323,81 +1419,15 @@ const MiracleMultiplayer = {
     if (typeof guideArrowGroup !== 'undefined' && guideArrowGroup) {
       guideArrowGroup.visible = false;
     }
+    if (typeof updateMiracleNotebookHudBadge === 'function') {
+      updateMiracleNotebookHudBadge();
+    }
     this.syncHUD();
   },
 
   rebuildGrandRockHouseVisuals() {
-    const hGrp = this.mission.houseGroup;
-    if (!hGrp) return;
-    const total = this.mission.stoneDeposited + this.mission.woodDeposited;
-    const done = (this.mission.stoneDeposited >= this.mission.stoneReq && this.mission.woodDeposited >= this.mission.woodReq);
-    const stage = done ? 5 : (total >= 32 ? 4 : (total >= 22 ? 3 : (total >= 12 ? 2 : (total >= 4 ? 1 : 0))));
-    if (stage === this.mission.builtStage) return;
-    this.mission.builtStage = stage;
-
-    while (hGrp.children.length > 0) hGrp.remove(hGrp.children[0]);
-
-    const mkOrg = (w, h, d, col, x, y, z, seed) => {
-      const geo = (typeof createOrganicBoxGeo === 'function')
-        ? createOrganicBoxGeo(w, h, d, seed, 0.06, 0.96, 2)
-        : new THREE.BoxGeometry(w, h, d);
-      return createLowPolyMesh(geo, col, x, y, z, true);
-    };
-
-    // Stage 1: 반석 주춧돌 기초 & 네 모서리 석조 기둥
-    if (stage >= 1) {
-      hGrp.add(mkOrg(8.8, 0.65, 7.2, '#b8a993', 0, 0.32, 0, 910));
-      [[-4.0, -3.2], [4.0, -3.2], [-4.0, 3.2], [4.0, 3.2]].forEach(([px, pz], i) => {
-        hGrp.add(mkOrg(0.95, 2.2, 0.95, '#d4bc94', px, 1.4, pz, 915 + i));
-      });
-    }
-    // Stage 2: 1층 견고한 비정형 석재 벽체 & 아치 목재 문
-    if (stage >= 2) {
-      hGrp.add(mkOrg(8.2, 3.4, 6.6, '#ead8b8', 0, 2.2, 0, 920));
-      hGrp.add(mkOrg(1.9, 2.5, 0.35, '#6b3818', 0, 1.75, 3.35, 922));
-      [-2.6, 2.6].forEach((wx, wi) => {
-        const win = createLowPolyMesh(new THREE.BoxGeometry(1.1, 1.1, 0.22), '#f59e0b', wx, 2.35, 3.32, false);
-        win.userData._emissiveGlow = true;
-        hGrp.add(win);
-      });
-    }
-    // Stage 3: 백향목 지붕 들보 + 1층 옥상 난간 + 측면 석재 계단
-    if (stage >= 3) {
-      hGrp.add(mkOrg(8.8, 0.36, 7.2, '#cfa972', 0, 4.05, 0, 925));
-      for (let b = -3; b <= 3; b++) {
-        const beam = createLowPolyMesh(new THREE.CylinderGeometry(0.12, 0.13, 7.45, 5), '#6b4226', b * 1.15, 3.84, 0, false);
-        beam.rotation.x = Math.PI * 0.5;
-        hGrp.add(beam);
-      }
-      // 동측 외벽 돌계단
-      for (let s = 0; s < 6; s++) {
-        hGrp.add(mkOrg(1.25, 0.42, 0.85, '#c6aa80', 4.85, 0.55 + s * 0.58, 2.2 - s * 0.72, 930 + s));
-      }
-    }
-    // Stage 4: 2층 햇살 다락방 & 아마포 차양
-    if (stage >= 4) {
-      hGrp.add(mkOrg(5.4, 2.8, 4.4, '#f3e5cb', -1.2, 5.55, -0.8, 940));
-      hGrp.add(mkOrg(5.8, 0.32, 4.8, '#d4bc94', -1.2, 7.05, -0.8, 942));
-      const upWin = createLowPolyMesh(new THREE.BoxGeometry(1.3, 1.0, 0.22), '#fde047', -1.2, 5.65, 1.45, false);
-      upWin.userData._emissiveGlow = true;
-      hGrp.add(upWin);
-      if (typeof createOrganicLinenAwningGroup === 'function' && typeof MIRACLE_LINEN_SHADES !== 'undefined') {
-        const awn = createOrganicLinenAwningGroup(3.4, 1.8, MIRACLE_LINEN_SHADES[2], '#6b4226', 945, 0.18, true, 2.3);
-        awn.position.set(2.2, 5.9, 1.2);
-        hGrp.add(awn);
-      }
-    }
-    // Stage 5: 완공된 영광의 반석 위의 집 (황금 지붕 테두리 + 등불 + 감람나무 화분)
-    if (stage >= 5) {
-      hGrp.add(mkOrg(6.0, 0.22, 5.0, '#eab308', -1.2, 7.28, -0.8, 950));
-      [-3.8, 3.8].forEach((lx) => {
-        const pot = createLowPolyMesh(new THREE.CylinderGeometry(0.32, 0.24, 0.45, 6), '#b86232', lx, 0.78, 3.9, false);
-        const bush = createLowPolyMesh(new THREE.DodecahedronGeometry(0.42, 0), '#4d7c0f', lx, 1.24, 3.9, false);
-        hGrp.add(pot, bush);
-      });
-      if (this.mission.siteRing && this.mission.siteRing.material) {
-        this.mission.siteRing.material.color.setHex(0xfacc15);
-      }
+    if (window.MiracleMpVillage && typeof window.MiracleMpVillage.rebuildGrandRockHouseVisuals === 'function') {
+      window.MiracleMpVillage.rebuildGrandRockHouseVisuals();
     }
   },
 
@@ -1427,40 +1457,122 @@ const MiracleMultiplayer = {
     if (this.harvestCooldown > 0) return;
 
     const tgt = this.nearestTarget;
-    if (tgt.kind === 'deliver') {
-      const addStone = Math.min(this.mission.carryStone, this.mission.stoneReq - this.mission.stoneDeposited);
-      const addWood = Math.min(this.mission.carryWood, this.mission.woodReq - this.mission.woodDeposited);
-      if (addStone <= 0 && addWood <= 0) {
-        if (typeof showToast === 'function') showToast('✨ 필요한 재료를 모두 모았어요!');
+    const v = window.MiracleMpVillage;
+    if (tgt.kind === 'bulletin' && v) {
+      v.openBulletinModal();
+      this.harvestCooldown = 0.25;
+      return;
+    }
+
+    if ((tgt.kind === 'deliver_build' || tgt.kind === 'deliver') && v) {
+      const bid = tgt.buildId || 'rock_house';
+      const proj = tgt.project || v.PROJECTS[bid];
+      const res = v.recordDeposit(bid, v.bag.wood, v.bag.stone);
+      if (res.addWood <= 0 && res.addStone <= 0) {
+        if (typeof showToast === 'function') showToast('✨ 이 현장의 필요한 재료를 이미 모두 모았어요!');
         return;
       }
-      this.mission.stoneDeposited += addStone;
-      this.mission.woodDeposited += addWood;
-      this.mission.carryStone = Math.max(0, this.mission.carryStone - addStone);
-      this.mission.carryWood = Math.max(0, this.mission.carryWood - addWood);
       if (typeof playerChopAnimTimer !== 'undefined') playerChopAnimTimer = 0.35;
       if (typeof playSfx === 'function') playSfx('build');
-      const site = window.MIRACLE_GRAND_BEDROCK_POS || { x: 63, z: 18 };
-      this.spawnHitParticles(site.x, getMiracleOpenWorldGroundHeight(site.x, site.z) + 1.0, site.z, '#facc15');
-      this.saveRoomMissionToLocal();
-      this.rebuildGrandRockHouseVisuals();
-      this.syncHUD();
-      this.broadcastMessage({
-        type: 'mission_sync',
-        peerId: this.peerId,
-        stone: this.mission.stoneDeposited,
-        wood: this.mission.woodDeposited,
-        completed: this.mission.completed
-      });
-
-      if (typeof showToast === 'function') {
-        showToast(`🏗️ 반석 위에 재료를 쌓았어요! (🪨 ${this.mission.stoneDeposited}/20 · 🪵 ${this.mission.woodDeposited}/20)`);
+      const pos = (proj && proj.pos) ? proj.pos : { x: 63, z: 18 };
+      const py = (typeof getMiracleOpenWorldGroundHeight === 'function') ? getMiracleOpenWorldGroundHeight(pos.x, pos.z) : 0.25;
+      this.spawnHitParticles(pos.x, py + 1.0, pos.z, '#facc15');
+      if (typeof showToast === 'function' && !res.justCompleted) {
+        const pr = v.getBuildProgress(bid);
+        showToast(`${proj.icon} ${proj.name}에 쌓았어요! (🪵${pr.wood}/${pr.woodReq} · 🪨${pr.stone}/${pr.stoneReq})`);
       }
-
-      if (!this.mission.completed && this.mission.stoneDeposited >= this.mission.stoneReq && this.mission.woodDeposited >= this.mission.woodReq) {
-        this.completeRockHouseMission();
-      }
+      this.updateHarvestButtonUI();
       this.harvestCooldown = 0.25;
+      return;
+    }
+
+    if (tgt.kind === 'deliver_goods' && v) {
+      v.deliverGoodsToShop(tgt.shopId);
+      const pos = (tgt.project && tgt.project.pos) ? tgt.project.pos : { x: 0, z: 0 };
+      const py = (typeof getMiracleOpenWorldGroundHeight === 'function') ? getMiracleOpenWorldGroundHeight(pos.x, pos.z) : 0.25;
+      if (typeof playerChopAnimTimer !== 'undefined') playerChopAnimTimer = 0.28;
+      this.spawnHitParticles(pos.x, py + 1.0, pos.z, '#34d399');
+      this.syncHUD();
+      this.updateHarvestButtonUI();
+      this.harvestCooldown = 0.25;
+      return;
+    }
+
+    if (tgt.kind === 'offer_temple' && v) {
+      const res = v.offerTalentsToTemple();
+      if (res.offered > 0) {
+        const op = v.ACTIVITY_SPOTS.temple.offerPos;
+        const oy = (typeof getMiracleOpenWorldGroundHeight === 'function') ? getMiracleOpenWorldGroundHeight(op.x, op.z) : 0.25;
+        this.spawnHitParticles(op.x, oy + 1.2, op.z, '#facc15');
+      }
+      this.syncHUD();
+      this.updateHarvestButtonUI();
+      this.harvestCooldown = 0.28;
+      return;
+    }
+
+    if (tgt.kind === 'fish_spot' && v) {
+      const res = v.performFishingAction();
+      if (res.ok) {
+        const fp = v.ACTIVITY_SPOTS.fishing.pos;
+        if (typeof playerChopAnimTimer !== 'undefined') playerChopAnimTimer = 0.26;
+        this.spawnHitParticles(fp.x - 2.2, 0.2, fp.z, '#38bdf8');
+      }
+      this.syncHUD();
+      this.updateHarvestButtonUI();
+      this.harvestCooldown = 0.25;
+      return;
+    }
+
+    if (tgt.kind === 'draw_water' && v) {
+      const res = v.performWellWaterAction();
+      if (res.ok) {
+        const wp = v.ACTIVITY_SPOTS.well.pos;
+        const wy = (typeof getMiracleOpenWorldGroundHeight === 'function') ? getMiracleOpenWorldGroundHeight(wp.x, wp.z) : 0.25;
+        this.spawnHitParticles(wp.x, wy + 1.0, wp.z, '#38bdf8');
+      }
+      this.syncHUD();
+      this.updateHarvestButtonUI();
+      this.harvestCooldown = 0.28;
+      return;
+    }
+
+    if (tgt.kind === 'find_seed' && v) {
+      const res = v.performFindSeedAction();
+      if (res.ok && tgt.bushPos) {
+        const by = (typeof getMiracleOpenWorldGroundHeight === 'function') ? getMiracleOpenWorldGroundHeight(tgt.bushPos.x, tgt.bushPos.z) : 0.25;
+        this.spawnHitParticles(tgt.bushPos.x, by + 0.6, tgt.bushPos.z, '#facc15');
+      }
+      this.syncHUD();
+      this.updateHarvestButtonUI();
+      this.harvestCooldown = 0.28;
+      return;
+    }
+
+    if (tgt.kind === 'farm_plot' && v) {
+      const res = v.performFarmAction();
+      if (res.ok) {
+        const fm = v.ACTIVITY_SPOTS.farm.pos;
+        const fy = (typeof getMiracleOpenWorldGroundHeight === 'function') ? getMiracleOpenWorldGroundHeight(fm.x, fm.z) : 0.25;
+        if (typeof playerChopAnimTimer !== 'undefined') playerChopAnimTimer = 0.28;
+        this.spawnHitParticles(fm.x, fy + 0.5, fm.z, tgt.step === 3 ? '#38bdf8' : '#eab308');
+      }
+      this.syncHUD();
+      this.updateHarvestButtonUI();
+      this.harvestCooldown = 0.26;
+      return;
+    }
+
+    if (tgt.kind === 'sheep_care' && v) {
+      const res = v.performPastureAction(tgt.sheep);
+      if (res.ok && tgt.sheep && tgt.sheep.mesh) {
+        const mp = tgt.sheep.mesh.position;
+        if (typeof playerChopAnimTimer !== 'undefined') playerChopAnimTimer = 0.26;
+        this.spawnHitParticles(mp.x, mp.y + 0.7, mp.z, tgt.careKind === 'milk' ? '#f8fafc' : '#fbcfe8');
+      }
+      this.syncHUD();
+      this.updateHarvestButtonUI();
+      this.harvestCooldown = 0.26;
       return;
     }
 
@@ -1469,13 +1581,18 @@ const MiracleMultiplayer = {
     if (!node || node.depleted) return;
 
     const isWood = (node.kind === 'wood');
-    if (isWood && this.mission.carryWood >= this.mission.maxCarryEach) {
-      if (typeof showToast === 'function') showToast('🎒 나무를 가득(5개) 들었어요! 넓은 반석 부지에 먼저 가져다 놓으세요!');
+    const maxWood = v ? v.maxCarryWood : this.mission.maxCarryEach;
+    const maxStone = v ? v.maxCarryStone : this.mission.maxCarryEach;
+    const curWood = v ? v.bag.wood : this.mission.carryWood;
+    const curStone = v ? v.bag.stone : this.mission.carryStone;
+
+    if (isWood && curWood >= maxWood) {
+      if (typeof showToast === 'function') showToast(`🎒 나무를 가득(${maxWood}개) 들었어요! 반석이나 상점 터에 먼저 쌓아 보세요!`);
       if (typeof playSfx === 'function') playSfx('wrong');
       return;
     }
-    if (!isWood && this.mission.carryStone >= this.mission.maxCarryEach) {
-      if (typeof showToast === 'function') showToast('🎒 돌을 가득(5개) 들었어요! 넓은 반석 부지에 먼저 가져다 놓으세요!');
+    if (!isWood && curStone >= maxStone) {
+      if (typeof showToast === 'function') showToast(`🎒 돌을 가득(${maxStone}개) 들었어요! 반석이나 상점 터에 먼저 쌓아 보세요!`);
       if (typeof playSfx === 'function') playSfx('wrong');
       return;
     }
@@ -1485,7 +1602,6 @@ const MiracleMultiplayer = {
     if (typeof playerChopAnimTimer !== 'undefined') playerChopAnimTimer = 0.28;
     if (typeof playSfx === 'function') playSfx(isWood ? 'axe' : 'hammer');
 
-    // 타격 시 나무/바위가 움찔거리는 탄성 피드백 + 파편 파티클
     node.hp = Math.max(0, node.hp - 1);
     const doneHits = node.maxHp - node.hp;
     if (node.mesh) {
@@ -1499,13 +1615,13 @@ const MiracleMultiplayer = {
       node.respawnTimer = 22.0;
       if (node.mesh) node.mesh.visible = false;
       if (isWood) {
-        this.mission.carryWood++;
+        if (v) { v.bag.wood++; v.saveBagLocal(); } else { this.mission.carryWood++; }
         if (typeof playSfx === 'function') playSfx('rescue');
-        if (typeof showToast === 'function') showToast(`🪵 나무 1개 획득! (들고 있음 🪵${this.mission.carryWood}/${this.mission.maxCarryEach}) · 반석 부지에 쌓으세요!`);
+        if (typeof showToast === 'function') showToast(`🪵 나무 1개 획득! (가방 🪵${v ? v.bag.wood : this.mission.carryWood}/${maxWood}) · 반석·상점 터에 쌓으세요!`);
       } else {
-        this.mission.carryStone++;
+        if (v) { v.bag.stone++; v.saveBagLocal(); } else { this.mission.carryStone++; }
         if (typeof playSfx === 'function') playSfx('rescue');
-        if (typeof showToast === 'function') showToast(`🪨 돌 1개 획득! (들고 있음 🪨${this.mission.carryStone}/${this.mission.maxCarryEach}) · 반석 부지에 쌓으세요!`);
+        if (typeof showToast === 'function') showToast(`🪨 돌 1개 획득! (가방 🪨${v ? v.bag.stone : this.mission.carryStone}/${maxStone}) · 반석·상점 터에 쌓으세요!`);
       }
       this.syncHUD();
     } else {
@@ -1517,44 +1633,17 @@ const MiracleMultiplayer = {
   },
 
   completeRockHouseMission() {
-    this.mission.completed = true;
-    this.saveRoomMissionToLocal();
-    this.rebuildGrandRockHouseVisuals();
-    this.syncHUD();
-    this.broadcastMessage({
-      type: 'mission_sync',
-      peerId: this.peerId,
-      stone: this.mission.stoneDeposited,
-      wood: this.mission.woodDeposited,
-      completed: true
-    });
-
-    // 완공된 대형 반석 위의 집 안에 갇히지 않도록 전면 안전 지대로 이동
-    const site = window.MIRACLE_GRAND_BEDROCK_POS || { x: 63, z: 18 };
-    const safeX = site.x - 10.5, safeZ = site.z + 5.5;
-    if (typeof playerPos !== 'undefined' && playerPos && Math.hypot(playerPos.x - site.x, playerPos.z - site.z) < 9.0) {
-      playerPos.set(safeX, getMiracleOpenWorldGroundHeight(safeX, safeZ), safeZ);
-      if (typeof playerGroup !== 'undefined' && playerGroup) playerGroup.position.copy(playerPos);
-      if (typeof snapCameraToPlayer === 'function') snapCameraToPlayer();
-    }
-
-    if (typeof playSfx === 'function') playSfx('clear');
-    if (typeof openMiracleDialog === 'function') {
-      openMiracleDialog({
-        speaker: '예수님 · 반석 위의 집 완성!',
-        category: 'word',
-        badgeLabel: '📖 멀티플레이 협동 미션 완료 말씀',
-        text: '"그러므로 누구든지 나의 이 말을 듣고 행하는 자는 그 집을 반석 위에 지은 지혜로운 사람 같으리니 비가 내리고 창수가 나고 바람이 불어 그 집에 부딪치되 무너지지 아니하나니 이는 주추를 반석 위에 놓은 까닭이요" (마태복음 7장 24~25절)',
-        btnText: '🙌 아멘! 반석 위의 집 감상하기',
-        replayText: '🔄 다시 함께 짓기',
-        onReplay: () => this.resetRockHouseMission()
-      });
+    if (window.MiracleMpVillage) {
+      window.MiracleMpVillage.showCompletionVerseDialog('rock_house');
     }
   },
 
   syncHUD() {
     const cntEl = document.getElementById('mp-online-count-text');
     const rmEl = document.getElementById('mp-online-room-text');
+    const titleEl = document.getElementById('mp-hud-focus-title');
+    const stLblEl = document.getElementById('mp-hud-stone-lbl');
+    const wdLblEl = document.getElementById('mp-hud-wood-lbl');
     const stEl = document.getElementById('mp-hud-stone');
     const wdEl = document.getElementById('mp-hud-wood');
     const progEl = document.getElementById('mp-hud-prog');
@@ -1562,21 +1651,49 @@ const MiracleMultiplayer = {
     const onlineCount = 1 + this.remotePlayers.size;
     if (cntEl) cntEl.textContent = `접속 중 ${onlineCount}명`;
     if (rmEl) rmEl.textContent = `· ${this.roomId}`;
-    if (stEl) stEl.textContent = `${this.mission.stoneDeposited}/${this.mission.stoneReq}`;
-    if (wdEl) wdEl.textContent = `${this.mission.woodDeposited}/${this.mission.woodReq}`;
-    if (progEl) {
-      const pct = Math.min(100, Math.round(((this.mission.stoneDeposited + this.mission.woodDeposited) / (this.mission.stoneReq + this.mission.woodReq)) * 100));
-      progEl.style.width = `${pct}%`;
-    }
-    if (crEl) {
-      crEl.textContent = this.mission.completed
-        ? '🎉 완공 완료!'
-        : `🎒 🪨${this.mission.carryStone} · 🪵${this.mission.carryWood}`;
-    }
-    if (this.mission.siteLabel) {
-      this.mission.siteLabel.innerHTML = this.mission.completed
-        ? '🏠✨ [완공] 반석 위에 세운 지혜로운 집!'
-        : `🏗️ [협동] 반석 위의 집 (🪨${this.mission.stoneDeposited}/20 · 🪵${this.mission.woodDeposited}/20)`;
+
+    const v = window.MiracleMpVillage;
+    if (v) {
+      const econ = (typeof v.getEconomySummary === 'function') ? v.getEconomySummary() : { offeredToTemple: 0, templePct: 0, availableTalents: 0, templeCompleted: false };
+      if (v.areAllBuildsCompleted()) {
+        if (titleEl) titleEl.textContent = econ.templeCompleted ? '⛪ 예루살렘 성전 완공!' : `⛪ 예루살렘 성전 (${econ.templeStage}/5)`;
+        if (stLblEl) stLblEl.textContent = '🪙';
+        if (wdLblEl) wdLblEl.textContent = '💰';
+        if (stEl) stEl.textContent = `${econ.offeredToTemple}/${v.TEMPLE_TARGET_TALENTS}`;
+        if (wdEl) wdEl.textContent = `${econ.availableTalents}달란트`;
+        if (progEl) progEl.style.width = `${econ.templePct}%`;
+        if (crEl) {
+          crEl.textContent = `🎒 🐟${v.bag.fish} 🌾${v.bag.wheat} 🥛${v.bag.milk} 🧶${v.bag.wool}`;
+        }
+      } else {
+        const fid = v.getNextIncompleteBuildId();
+        const proj = v.PROJECTS[fid] || v.PROJECTS.rock_house;
+        const pr = v.getBuildProgress(fid);
+        if (titleEl) titleEl.textContent = `${proj.icon} ${proj.name}`;
+        if (stLblEl) stLblEl.textContent = '🪨';
+        if (wdLblEl) wdLblEl.textContent = '🪵';
+        if (stEl) stEl.textContent = `${pr.stone}/${pr.stoneReq}`;
+        if (wdEl) wdEl.textContent = `${pr.wood}/${pr.woodReq}`;
+        if (progEl) progEl.style.width = `${pr.pct}%`;
+        if (crEl) {
+          crEl.textContent = `🎒 🪵${v.bag.wood} 🪨${v.bag.stone} · 🪙${econ.availableTalents}`;
+        }
+      }
+      v.updateAllWorldLabels();
+    } else {
+      if (stLblEl) stLblEl.textContent = '🪨';
+      if (wdLblEl) wdLblEl.textContent = '🪵';
+      if (stEl) stEl.textContent = `${this.mission.stoneDeposited}/${this.mission.stoneReq}`;
+      if (wdEl) wdEl.textContent = `${this.mission.woodDeposited}/${this.mission.woodReq}`;
+      if (progEl) {
+        const pct = Math.min(100, Math.round(((this.mission.stoneDeposited + this.mission.woodDeposited) / (this.mission.stoneReq + this.mission.woodReq)) * 100));
+        progEl.style.width = `${pct}%`;
+      }
+      if (crEl) {
+        crEl.textContent = this.mission.completed
+          ? '🎉 완공 완료!'
+          : `🎒 🪨${this.mission.carryStone} · 🪵${this.mission.carryWood}`;
+      }
     }
     this.positionRightHud();
   },
@@ -1591,9 +1708,73 @@ const MiracleMultiplayer = {
     }
     wrap.classList.remove('hidden');
     const tgt = this.nearestTarget;
-    if (tgt.kind === 'deliver') {
-      btn.textContent = `🏗️ 반석 위에 쌓기! (🪨+${this.mission.carryStone} 🪵+${this.mission.carryWood})`;
+    const v = window.MiracleMpVillage;
+    if (tgt.kind === 'bulletin') {
+      btn.textContent = '📌 마을 중앙 게시판 보기 (소식)';
+      btn.className = 'mc-btn px-5 py-2.5 rounded-2xl bg-amber-300 hover:bg-amber-200 border-2 border-white text-slate-950 font-jua text-sm sm:text-base shadow-2xl';
+    } else if (tgt.kind === 'deliver_build' || tgt.kind === 'deliver') {
+      const proj = tgt.project || (v && v.PROJECTS.rock_house);
+      const cw = v ? v.bag.wood : this.mission.carryWood;
+      const cs = v ? v.bag.stone : this.mission.carryStone;
+      btn.textContent = `${proj ? proj.icon : '🏗️'} ${proj ? proj.name : '반석 위'}에 쌓기! (🪵+${cw} 🪨+${cs})`;
       btn.className = 'mc-btn px-5 py-2.5 rounded-2xl bg-emerald-400 hover:bg-emerald-300 border-2 border-white text-slate-950 font-jua text-sm sm:text-base shadow-2xl animate-pulse';
+    } else if (tgt.kind === 'deliver_goods') {
+      btn.textContent = `${tgt.good.icon} ${tgt.project.name}에 납품하기! (${tgt.qty}개 · 개당 🪙${tgt.good.price})`;
+      btn.className = 'mc-btn px-5 py-2.5 rounded-2xl bg-emerald-400 hover:bg-emerald-300 border-2 border-white text-slate-950 font-jua text-sm sm:text-base shadow-2xl animate-pulse';
+    } else if (tgt.kind === 'offer_temple') {
+      if (tgt.templeCompleted) {
+        btn.textContent = '⛪ 예루살렘 성전 완공 완료!';
+        btn.className = 'mc-btn px-5 py-2.5 rounded-2xl bg-amber-200 border-2 border-white text-slate-950 font-jua text-sm sm:text-base shadow-2xl';
+      } else if (tgt.canOffer) {
+        btn.textContent = `🪙 성전 건축에 헌금하기! (+${tgt.availableTalents} 달란트)`;
+        btn.className = 'mc-btn px-5 py-2.5 rounded-2xl bg-yellow-300 hover:bg-yellow-200 border-2 border-white text-slate-950 font-jua text-sm sm:text-base shadow-2xl animate-pulse';
+      } else {
+        btn.textContent = '🪙 성전 헌금함 (상점 판매로 달란트를 모아 오세요!)';
+        btn.className = 'mc-btn px-5 py-2.5 rounded-2xl bg-slate-200 border-2 border-white text-slate-800 font-jua text-sm sm:text-base shadow-2xl';
+      }
+    } else if (tgt.kind === 'fish_spot') {
+      if (!tgt.unlocked) {
+        btn.textContent = '🔒 생선 가게 완공 시 낚시터 해금';
+        btn.className = 'mc-btn px-5 py-2.5 rounded-2xl bg-slate-300 border-2 border-white text-slate-800 font-jua text-sm sm:text-base shadow-2xl';
+      } else {
+        btn.textContent = `🎣 갈릴리 물고기 낚기 (${tgt.hits || 0}/3)`;
+        btn.className = 'mc-btn px-5 py-2.5 rounded-2xl bg-sky-400 hover:bg-sky-300 border-2 border-white text-slate-950 font-jua text-sm sm:text-base shadow-2xl';
+      }
+    } else if (tgt.kind === 'draw_water') {
+      btn.textContent = tgt.unlocked
+        ? `💧 야곱의 우물 물 긷기 (보유 ${v ? v.bag.waterBucket : 0}/${v ? v.maxCarryWater : 3})`
+        : '🔒 곡물 가게 완공 시 농사용 우물 해금';
+      btn.className = `mc-btn px-5 py-2.5 rounded-2xl ${tgt.unlocked ? 'bg-cyan-400 hover:bg-cyan-300 text-slate-950' : 'bg-slate-300 text-slate-800'} border-2 border-white font-jua text-sm sm:text-base shadow-2xl`;
+    } else if (tgt.kind === 'find_seed') {
+      btn.textContent = '🔍 들판 수풀에서 밀 씨앗 찾기!';
+      btn.className = 'mc-btn px-5 py-2.5 rounded-2xl bg-lime-400 hover:bg-lime-300 border-2 border-white text-slate-950 font-jua text-sm sm:text-base shadow-2xl animate-pulse';
+    } else if (tgt.kind === 'farm_plot') {
+      if (!tgt.unlocked) {
+        btn.textContent = '🔒 곡물 가게 완공 시 5단계 농사 해금';
+        btn.className = 'mc-btn px-5 py-2.5 rounded-2xl bg-slate-300 border-2 border-white text-slate-800 font-jua text-sm sm:text-base shadow-2xl';
+      } else {
+        const sub = tgt.subProgress || 0;
+        const labels = [
+          `🪨 밭 돌 골라내기 (${sub}/3)`,
+          `🌿 가시 넝쿨 치우기 (${sub}/3)`,
+          (v && v.bag.seed > 0) ? `🌱 씨앗 뿌리기 (${sub}/3 · 씨앗 ${v.bag.seed})` : '🔍 옆 수풀에서 씨앗을 먼저 찾아오세요!',
+          (v && v.bag.waterBucket > 0) ? `💧 우물 물주기 (${sub}/3 · 물 ${v.bag.waterBucket})` : '💧 야곱의 우물에서 물을 길어 오세요!',
+          '🌾 황금 밀단 수확하기!'
+        ];
+        btn.textContent = labels[tgt.step] || labels[0];
+        btn.className = 'mc-btn px-5 py-2.5 rounded-2xl bg-emerald-400 hover:bg-emerald-300 border-2 border-white text-slate-950 font-jua text-sm sm:text-base shadow-2xl';
+      }
+    } else if (tgt.kind === 'sheep_care') {
+      if (!tgt.unlocked) {
+        btn.textContent = tgt.careKind === 'milk' ? '🔒 양젖 가게 완공 시 해금' : '🔒 옷가게 완공 시 해금';
+        btn.className = 'mc-btn px-5 py-2.5 rounded-2xl bg-slate-300 border-2 border-white text-slate-800 font-jua text-sm sm:text-base shadow-2xl';
+      } else if (tgt.sheep && tgt.sheep.cooldown > 0) {
+        btn.textContent = `🐑 쉬는 중 (${Math.ceil(tgt.sheep.cooldown)}초)`;
+        btn.className = 'mc-btn px-5 py-2.5 rounded-2xl bg-slate-200 border-2 border-white text-slate-700 font-jua text-sm sm:text-base shadow-2xl';
+      } else {
+        btn.textContent = tgt.careKind === 'milk' ? '🥛 신선한 양젖 짜기!' : '🧶 포근한 양털 깎기!';
+        btn.className = 'mc-btn px-5 py-2.5 rounded-2xl bg-amber-300 hover:bg-amber-200 border-2 border-white text-slate-950 font-jua text-sm sm:text-base shadow-2xl';
+      }
     } else if (tgt.kind === 'wood') {
       const done = tgt.node.maxHp - tgt.node.hp;
       btn.textContent = `🪓 나무 도끼질 (${done}/5)`;
@@ -1655,41 +1836,38 @@ const MiracleMultiplayer = {
       if (this.localEmote.timer <= 0 && localBub) localBub.classList.add('hidden');
     }
 
-    // 2) 채집 노드(나무/외곽 바위) 재생성 & 흔들림 복구 + 가장 가까운 인터랙션 대상 탐색
+    // 2) 채집 노드(나무/외곽 바위) 재생성 & 흔들림 복구 + 온라인 마을 객체 프레임 업데이트 + 가장 가까운 인터랙션 대상 탐색
+    const v = window.MiracleMpVillage;
+    if (v && typeof v.updateFrame === 'function') {
+      v.updateFrame(dt, now);
+    }
+
     const nodes = Array.isArray(window.miracleHarvestNodes) ? window.miracleHarvestNodes : [];
-    let bestTarget = null;
+    const hasBuildsRemaining = v ? !v.areAllBuildsCompleted() : !this.mission.completed;
+    let bestTarget = v ? v.findNearestActionTarget() : null;
     let bestDist = 4.2;
 
-    // 반석 위의 집 재료 전달 범위 체크 우선 (반석 기반 충돌 외곽 바로 앞에서 쾌적하게 전달!)
-    const site = window.MIRACLE_GRAND_BEDROCK_POS || { x: 63, z: 18 };
-    const distSite = Math.hypot(playerPos.x - site.x, playerPos.z - site.z);
-    if (this.mission.siteLabel && typeof updateWorldLabelPos === 'function') {
-      const sy = getMiracleOpenWorldGroundHeight(site.x, site.z);
-      updateWorldLabelPos(this.mission.siteLabel, new THREE.Vector3(site.x, sy + 2.4, site.z), distSite < 32.0);
-    }
-    if (!this.mission.completed && distSite < 10.6 && (this.mission.carryStone > 0 || this.mission.carryWood > 0)) {
-      bestTarget = { kind: 'deliver', dist: distSite };
-    } else if (!this.mission.completed) {
-      for (let i = 0; i < nodes.length; i++) {
-        const nd = nodes[i];
-        if (nd._shakeTimer > 0) {
-          nd._shakeTimer -= dt;
-          if (nd._shakeTimer <= 0 && nd.mesh) {
+    for (let i = 0; i < nodes.length; i++) {
+      const nd = nodes[i];
+      if (nd._shakeTimer > 0) {
+        nd._shakeTimer -= dt;
+        if (nd._shakeTimer <= 0 && nd.mesh) {
+          nd.mesh.scale.set(nd.baseScaleX, nd.baseScaleY, nd.baseScaleZ);
+        }
+      }
+      if (nd.depleted) {
+        nd.respawnTimer -= dt;
+        if (nd.respawnTimer <= 0) {
+          nd.depleted = false;
+          nd.hp = nd.maxHp;
+          if (nd.mesh) {
+            nd.mesh.visible = true;
             nd.mesh.scale.set(nd.baseScaleX, nd.baseScaleY, nd.baseScaleZ);
           }
         }
-        if (nd.depleted) {
-          nd.respawnTimer -= dt;
-          if (nd.respawnTimer <= 0) {
-            nd.depleted = false;
-            nd.hp = nd.maxHp;
-            if (nd.mesh) {
-              nd.mesh.visible = true;
-              nd.mesh.scale.set(nd.baseScaleX, nd.baseScaleY, nd.baseScaleZ);
-            }
-          }
-          continue;
-        }
+        continue;
+      }
+      if (!bestTarget && hasBuildsRemaining) {
         const d = Math.hypot(playerPos.x - nd.x, playerPos.z - nd.z);
         if (d < bestDist) {
           bestDist = d;
@@ -1800,7 +1978,28 @@ const MiracleMultiplayer = {
     const roomKey = encodeURIComponent(this.roomId);
     const myName = (typeof explorerDisplayName !== 'undefined' && explorerDisplayName) ? explorerDisplayName : (window.explorerName || '대원');
     const sel = window.selectedMiracleHeroPreset || { preset: 'hero', idx: 0 };
+    const v = window.MiracleMpVillage;
     try {
+      // Pull-Before-Push: 방 전체 스냅샷(contribs/footprints/news/meta/players) 먼저 조회 후 합산 병합
+      const res = await fetch(`${base}/mp_rooms/${roomKey}.json`);
+      const data = res && res.ok ? await res.json() : null;
+      if (data && v && typeof v.applyRoomSnapshot === 'function') {
+        v.applyRoomSnapshot(data, { fromCloud: true });
+      } else if (v) {
+        v.firebaseHydrated = true;
+      }
+
+      if (data && data.players) {
+        Object.keys(data.players).forEach(pid => {
+          const p = data.players[pid];
+          if (!p || pid === this.peerId || Date.now() - (p.ts || 0) > 15000) return;
+          this.handleIncomingMessage(Object.assign({ type: 'state', peerId: pid, roomId: this.roomId }, p));
+        });
+      }
+      if (data && data.mission) {
+        this.handleIncomingMessage(Object.assign({ type: 'mission_sync', peerId: 'relay', roomId: this.roomId, fromCloud: true }, data.mission));
+      }
+
       await fetch(`${base}/mp_rooms/${roomKey}/players/${this.peerId}.json`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -1813,17 +2012,9 @@ const MiracleMultiplayer = {
           ts: Date.now()
         })
       });
-      const res = await fetch(`${base}/mp_rooms/${roomKey}.json`);
-      const data = await res.json();
-      if (data && data.players) {
-        Object.keys(data.players).forEach(pid => {
-          const p = data.players[pid];
-          if (!p || pid === this.peerId || Date.now() - (p.ts || 0) > 15000) return;
-          this.handleIncomingMessage(Object.assign({ type: 'state', peerId: pid, roomId: this.roomId }, p));
-        });
-      }
-      if (data && data.mission) {
-        this.handleIncomingMessage(Object.assign({ type: 'mission_sync', peerId: 'relay', roomId: this.roomId }, data.mission));
+
+      if (v && v.firebaseHydrated && v.contribDirty) {
+        await v.syncMyContribToCloud();
       }
     } catch (e) {}
   }

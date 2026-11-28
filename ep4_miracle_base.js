@@ -4,7 +4,7 @@
 // - 확장된 오픈월드 지형 고도 계산기(넓어진 골고다 언덕 포함) 및 소프트 로우 폴리곤 자연물 팩토리
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.ep4_base = '3.12.6';
+window.__GAME_BUILD_VERSIONS__.ep4_base = '3.14.1';
 window.EP4_VOICE_VOLUME = 0.75;
 
 // =========================================================================
@@ -4752,21 +4752,22 @@ function createGoldenAuraGroup(colorHex = 0xfde047, radius = 1.65) {
   return auraGrp;
 }
 
-// [반석 위의 집 확장형] 멀티플레이 협동 건축까지 수용하는 초대형 다단 소프트 로우폴리 반석 부지 (~18m × 16m)
+// [반석 위의 집 확장형] 멀티플레이 협동 대형 2층 회관(+외부 돌계단)까지 수용하는 초대형 다단 소프트 로우폴리 반석 부지
 function createWideBedrockFormation(cx, cz) {
   const by = getBaseGroundHeight(cx, cz);
   const grp = new THREE.Group();
   const rockCols = ['#94a3b8', '#cbd5e1', '#78716c', '#a8a29e', '#b8b0a4', '#8b95a5'];
+  const isMpWalkable = Boolean(window.isMiracleMultiplayerMode);
 
   // 1) 하단 넓은 암반 기층(Lower Terraced Bedrock Apron)
   const lowerSlabs = [
-    { x:  0.0, z:  0.0, w: 15.6, h: 0.56, d: 13.8, col: '#8b95a5', rot: 0.04 },
-    { x: -6.2, z:  2.8, w:  6.4, h: 0.46, d:  5.8, col: '#94a3b8', rot: -0.22 },
-    { x:  6.4, z: -2.6, w:  6.6, h: 0.48, d:  5.8, col: '#a8a29e', rot: 0.28 },
-    { x: -5.4, z: -4.4, w:  6.2, h: 0.44, d:  5.2, col: '#78716c', rot: 0.36 },
-    { x:  5.6, z:  4.2, w:  6.0, h: 0.44, d:  5.2, col: '#b8b0a4', rot: -0.32 },
-    { x:  0.2, z: -6.2, w:  8.8, h: 0.40, d:  4.0, col: '#94a3b8', rot: 0.08 },
-    { x: -0.3, z:  6.3, w:  8.6, h: 0.38, d:  4.0, col: '#a8a29e', rot: -0.06 }
+    { x:  0.4, z:  0.0, w: 17.6, h: 0.56, d: 15.2, col: '#8b95a5', rot: 0.03 },
+    { x: -6.8, z:  3.0, w:  6.6, h: 0.46, d:  6.0, col: '#94a3b8', rot: -0.20 },
+    { x:  7.2, z: -2.6, w:  6.8, h: 0.48, d:  6.2, col: '#a8a29e', rot: 0.22 },
+    { x: -5.8, z: -4.8, w:  6.4, h: 0.44, d:  5.4, col: '#78716c', rot: 0.30 },
+    { x:  6.4, z:  4.4, w:  6.4, h: 0.44, d:  5.4, col: '#b8b0a4', rot: -0.26 },
+    { x:  0.2, z: -6.8, w:  9.8, h: 0.40, d:  4.2, col: '#94a3b8', rot: 0.06 },
+    { x: -0.3, z:  6.9, w:  9.6, h: 0.38, d:  4.2, col: '#a8a29e', rot: -0.05 }
   ];
   lowerSlabs.forEach((sl, i) => {
     const m = createLowPolyMesh(createOrganicBoxGeo(sl.w, sl.h, sl.d, 800 + i * 19, 0.11, 0.86, 2), sl.col, sl.x, sl.h * 0.38, sl.z, true);
@@ -4774,31 +4775,41 @@ function createWideBedrockFormation(cx, cz) {
     grp.add(m);
   });
 
-  // 2) 중앙 단단한 반석 대지(Upper Flat Foundation Plateau) + 4모서리 다듬은 주춧돌 받침
-  const upperPlateau = createLowPolyMesh(createOrganicBoxGeo(11.8, 0.52, 10.2, 860, 0.07, 0.92, 2), '#cbd5e1', 0, 0.54, 0, true);
-  upperPlateau.rotation.y = 0.02;
+  // 2) 중앙 단단한 반석 대지(Upper Flat Foundation Plateau — 동쪽 외부 계단 발판까지 여유롭게 확장) + 4모서리 주춧돌 받침
+  const upperPlateau = createLowPolyMesh(createOrganicBoxGeo(14.8, 0.54, 11.4, 860, 0.05, 0.94, 2), '#cbd5e1', 0.65, 0.56, 0, true);
+  upperPlateau.rotation.y = 0.01;
   grp.add(upperPlateau);
 
-  [[-4.8, -4.1], [4.8, -4.1], [-4.8, 4.1], [4.8, 4.1]].forEach(([px, pz], pi) => {
+  [[-5.8, -4.6], [5.8, -4.6], [-5.8, 4.6], [5.8, 4.6]].forEach(([px, pz], pi) => {
     const plinth = createLowPolyMesh(createOrganicBoxGeo(1.45, 0.32, 1.45, 870 + pi, 0.08, 0.92, 1), '#d6cfc2', px, 0.88, pz, true);
     plinth.rotation.y = pi * 0.15;
     grp.add(plinth);
   });
 
-  // 3) 서쪽·남쪽 반석 오르막 석재 디딤계단(자연석 3단)
+  // 3) 서쪽·남쪽 반석 오르막 석재 디딤계단(자연석 3단 — 멀티플레이에서는 실제로 밟고 올라설 수 있는 계단 플랫폼 등록!)
   for (let s = 0; s < 3; s++) {
-    const stW = createLowPolyMesh(createOrganicBoxGeo(1.15, 0.24, 3.6 - s * 0.3, 880 + s, 0.08, 0.94, 1), s % 2 === 0 ? '#d6cfc2' : '#b8b0a4', -6.8 + s * 0.72, 0.16 + s * 0.22, 0.2, false);
-    const stS = createLowPolyMesh(createOrganicBoxGeo(3.8 - s * 0.3, 0.24, 1.15, 885 + s, 0.08, 0.94, 1), s % 2 === 0 ? '#d6cfc2' : '#b8b0a4', 0, 0.16 + s * 0.22, 6.2 - s * 0.72, false);
+    const wx = -8.0 + s * 0.72;
+    const sz = 6.9 - s * 0.72;
+    const stepTop = 0.28 + s * 0.26;
+    const stW = createLowPolyMesh(createOrganicBoxGeo(1.25, 0.26, 3.8 - s * 0.25, 880 + s, 0.07, 0.95, 1), s % 2 === 0 ? '#d6cfc2' : '#b8b0a4', wx, stepTop - 0.12, 0.2, false);
+    const stS = createLowPolyMesh(createOrganicBoxGeo(4.2 - s * 0.25, 0.26, 1.25, 885 + s, 0.07, 0.95, 1), s % 2 === 0 ? '#d6cfc2' : '#b8b0a4', 0, stepTop - 0.12, sz, false);
     grp.add(stW, stS);
+
+    if (isMpWalkable && typeof platforms !== 'undefined' && Array.isArray(platforms)) {
+      platforms.push(
+        { minX: cx + wx - 0.75, maxX: cx + wx + 0.75, minZ: cz - 1.9, maxZ: cz + 2.3, topY: by + stepTop },
+        { minX: cx - 2.2, maxX: cx + 2.2, minZ: cz + sz - 0.75, maxZ: cz + sz + 0.75, topY: by + stepTop }
+      );
+    }
   }
 
-  // 4) 반석 외곽을 감싸는 웅장한 비정형 바위 덩어리(18개) + 바위 틈 이끼/풀포기(10개)
+  // 4) 반석 외곽을 감싸는 웅장한 비정형 바위 덩어리(18개) + 바위 틈 이끼/풀포기
   for (let i = 0; i < 18; i++) {
     const ang = (i / 18) * Math.PI * 2 + 0.18;
     // 서쪽(-X) 및 남쪽(+Z) 계단 진입구 비워두기
-    if (Math.abs(Math.cos(ang) + 1) < 0.12 || Math.abs(Math.sin(ang) - 1) < 0.12) continue;
-    const radX = 8.4 + (i % 3) * 1.05;
-    const radZ = 7.4 + ((i + 1) % 3) * 0.95;
+    if (Math.abs(Math.cos(ang) + 1) < 0.20 || Math.abs(Math.sin(ang) - 1) < 0.20) continue;
+    const radX = 9.4 + (i % 3) * 1.05;
+    const radZ = 8.2 + ((i + 1) % 3) * 0.95;
     const boulder = createLowPolyMesh(
       new THREE.DodecahedronGeometry(0.85 + (i % 3) * 0.28, 0),
       rockCols[i % rockCols.length],
@@ -4818,11 +4829,23 @@ function createWideBedrockFormation(cx, cz) {
   mergeStaticLowPolyGroupToVertexColor(grp, { registerWall: false, castShadow: true });
   grp.traverse(ch => { if (ch.isMesh) ch.receiveShadow = true; });
   grp.position.set(cx, by - 0.06, cz);
-  grp.userData.bedrockRadius = 9.2;
-  grp.userData.bedrockStyle = 'expanded_grand_v11';
+  grp.userData.bedrockRadius = 9.8;
+  grp.userData.bedrockStyle = 'expanded_grand_walkable_v13';
   worldGroup.add(grp);
-  // 멀티플레이 공동 건설 반석 터 & 건축 구역 전체를 단단한 충돌체로 등록해 캐릭터 통과 원천 차단!
-  if (typeof colliders !== 'undefined' && Array.isArray(colliders)) {
+
+  if (isMpWalkable) {
+    // 온라인 멀티플레이에서는 플레이어가 반석 계단을 올라 대지 위 및 대형 2층 반석의 집으로 걸어 들어갈 수 있음!
+    if (typeof platforms !== 'undefined' && Array.isArray(platforms)) {
+      platforms.push({
+        minX: cx - 6.8,
+        maxX: cx + 8.1,
+        minZ: cz - 5.7,
+        maxZ: cz + 5.7,
+        topY: by + 0.80,
+        isBedrockPlateau: true
+      });
+    }
+  } else if (typeof colliders !== 'undefined' && Array.isArray(colliders)) {
     colliders.push({
       minX: cx - 6.8,
       maxX: cx + 6.8,
@@ -6109,17 +6132,30 @@ function updateMiracleNotebookHudBadge() {
   positionMiracleLeftHudBelowTopBar();
   updateMiracleGuideButtonVisibility();
 
-  const total = getMiracleNotebookTotalCount();
+  const isMpVillage = Boolean(window.isMiracleMultiplayerMode && window.MiracleMpVillage);
+  const total = isMpVillage
+    ? window.MiracleMpVillage.getTotalActiveFootprints()
+    : getMiracleNotebookTotalCount();
+  const countVal = isMpVillage
+    ? window.MiracleMpVillage.getUnlockedFootprintCount()
+    : miracleCollectedIds.size;
+
   const btnCountEl = document.getElementById('miracle-notebook-count');
   if (btnCountEl) {
-    btnCountEl.textContent = `${miracleCollectedIds.size}/${total}`;
+    btnCountEl.textContent = `${countVal}/${total}`;
   }
   if (modalCountEl) {
-    modalCountEl.textContent = `${miracleCollectedIds.size} / ${total}`;
+    modalCountEl.textContent = `${countVal} / ${total}`;
   }
   const nbBtn = document.getElementById('miracle-notebook-btn');
   if (nbBtn) {
-    nbBtn.setAttribute('aria-label', `탐험수첩 (${miracleCollectedIds.size}/${total})`);
+    const linesEl = nbBtn.querySelector('.book-title-lines');
+    if (linesEl) {
+      linesEl.innerHTML = isMpVillage
+        ? '<span>마을</span><span>일지</span>'
+        : '<span>탐험</span><span>수첩</span>';
+    }
+    nbBtn.setAttribute('aria-label', isMpVillage ? `마을 일지 (${countVal}/${total})` : `탐험수첩 (${countVal}/${total})`);
   }
 
   const isParableMode =
@@ -6215,6 +6251,10 @@ window.updateMiracleMiniNavigatorUI = function (info) {
 };
 
 window.openMiracleNotebookModal = function (tabKey = 'all') {
+  if (window.isMiracleMultiplayerMode && window.MiracleMpVillage && typeof window.MiracleMpVillage.openJournalModal === 'function') {
+    window.MiracleMpVillage.openJournalModal(tabKey === 'all' ? 'coop' : tabKey);
+    return;
+  }
   ensureMiracleCustomUI();
   if (typeof setHudMenuOpen === 'function') setHudMenuOpen(false);
   if (typeof hideMissionGuideBubbleImmediately === 'function') hideMissionGuideBubbleImmediately();
@@ -6551,6 +6591,9 @@ function hideAllMiracleCustomUI() {
     flareLayer.style.display = 'none';
   }
   miracleDialogState.active = false;
+  if (typeof window.syncMiracleStage3JumpBtnState === 'function') {
+    window.syncMiracleStage3JumpBtnState(false);
+  }
   if (typeof updateMiracleGuideButtonVisibility === 'function') {
     updateMiracleGuideButtonVisibility();
   }

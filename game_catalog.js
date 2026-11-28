@@ -4,7 +4,7 @@
 // - 새 발자취 카드(fp_6, fp_7 등)·미션·수첩 항목 추가 시 이 파일만 수정하면 자동 반영됩니다.
 // =========================================================================
 window.__GAME_BUILD_VERSIONS__ = window.__GAME_BUILD_VERSIONS__ || {};
-window.__GAME_BUILD_VERSIONS__.catalog = '3.12.6';
+window.__GAME_BUILD_VERSIONS__.catalog = '3.14.1';
 
 window.BIBLE_GAME_CATALOG = {
   episodesOrder: ['noah', 'exodus', 'david', 'miracle'],

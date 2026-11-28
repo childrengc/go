@@ -25,7 +25,7 @@
       <div class="text-5xl mb-3">🔐</div>
       <div class="flex items-center justify-center gap-2 mb-1">
         <h1 class="font-jua text-2xl text-amber-300">어린이부 관리자 페이지</h1>
-        <span id="admin-login-version-badge" class="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/50 text-amber-300 font-jua text-[11px]">v3.12.6</span>
+        <span id="admin-login-version-badge" class="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/50 text-amber-300 font-jua text-[11px]">v3.14.1</span>
       </div>
       <p class="text-xs text-slate-300 mb-4">광릉내 재림교회 어린이부 · 선생님 전용 비밀번호를 입력하세요</p>
       <input id="admin-pw-input" type="password" placeholder="비밀번호 입력"
@@ -48,7 +48,7 @@
         <div>
           <div class="flex flex-wrap items-center gap-2">
             <h1 class="font-jua text-xl sm:text-2xl text-amber-300">출발! 탐험대! 관리자 시스템</h1>
-            <span id="admin-version-badge" class="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/50 text-amber-300 font-jua text-xs">v3.12.6</span>
+            <span id="admin-version-badge" class="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/50 text-amber-300 font-jua text-xs">v3.14.1</span>
           </div>
           <p class="text-xs text-slate-400">광릉내 재림교회 어린이부 · 스테이지 즉시 이동, 탐험수첩·발자취 조회/수정 및 접속 기록 관리</p>
         </div>
@@ -880,7 +880,7 @@ function doPost(e) {
     </div>
   </div>
 
-  <script src="game_catalog.js?v=3.12.6"></script>
+  <script src="game_catalog.js?v=3.14.1"></script>
   <script>
     const ADMIN_PASSWORD = '3412';
     const GOOGLE_SHEET_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbxAcGwFLUxFM-BLZGQpUjWMRhQklklXFXdGILvD-SbMgvGulElPgJ0ynyabd-tsC5ex/exec';
@@ -1188,7 +1188,7 @@ function doPost(e) {
       { key: 'senior', label: '🍎 소년반' }
     ];
 
-    const ADMIN_GAME_VERSION = '3.12.6';
+    const ADMIN_GAME_VERSION = '3.14.1';
     (function syncAdminVersionBadges() {
       const label = 'v' + ADMIN_GAME_VERSION;
       const b1 = document.getElementById('admin-version-badge');
